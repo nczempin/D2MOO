@@ -997,103 +997,93 @@ void __fastcall MONSTERSPAWN_SetupBossMods(D2UnkMonCreateStrc* pMonCreate, D2Uni
 
 //1.10: Inlined
 //1.14d: 0x005B21B0
-//void __fastcall MONSTERSPAWN_SetupNormalMods(D2UnkMonCreateStrc* pMonCreate, D2UnitStrc* pUnit)
-//{
-//    v64 = v58->nMonsterId;
-//    v65 = v58->pGame;
-//    if (v64 >= 0)
-//    {
-//        if (v64 < sgptDataTables->nMonStatsTxtRecordCount)
-//        {
-//            v66 = &sgptDataTables->pMonStatsTxt[v64];
-//            if (v66)
-//                v64 = v66->nBaseId;
-//        }
-//        if (v64 >= 0 && v64 < sgptDataTables->nMonStatsTxtRecordCount)
-//        {
-//            if (v64 > MONSTER_BONEPRISON4)
-//            {
-//                switch (v64)
-//                {
-//                case MONSTER_TRAP_MELEE:
-//                    goto LABEL_148;
-//                case MONSTER_ANCIENTBARB1:
-//                case MONSTER_ANCIENTBARB2:
-//                case MONSTER_ANCIENTBARB3:
-//                    goto LABEL_150;
-//                default:
-//                    goto LABEL_152;
-//                case MONSTER_SUICIDEMINION1:
-//                    v77 = 0;
-//                    v75 = MONUMOD_FREEZINDEATH;
-//                    break;
-//                case MONSTER_REANIMATEDHORDE1:
-//                    v77 = 0;
-//                    v75 = MONUMOD_SELFRESURRECT;
-//                    break;
-//                case MONSTER_FROZENHORROR1:
-//                    v77 = 0;
-//                    v75 = MONUMOD_ICESHATTERDEATH;
-//                    break;
-//                }
-//            }
-//            else
-//            {
-//                if (v64 >= MONSTER_BONEPRISON1)
-//                {
-//                    v77 = 0;
-//                    v75 = MONUMOD_KILLMINIONSDEATH;
-//                }
-//                else
-//                {
-//                    if (v64 > MONSTER_MUMMY1)
-//                    {
-//                        if (v64 == MONSTER_DURIEL)
-//                        {
-//                            D2GAME_BOSSES_AssignUMod_6FC6FF10(v65, v60, 11, 0);
-//LABEL_150:
-//                            v77 = 1;
-//                            v75 = MONUMOD_QUESTMOD;
-//                        }
-//                        else
-//                        {
-//                            if (v64 <= MONSTER_EVILHOLE5 || v64 > MONSTER_TRAP_LIGHTNING)
-//                                goto LABEL_152;
-//LABEL_148:
-//                            v77 = 0;
-//                            v75 = MONUMOD_SPCDAMAGE;
-//                        }
-//                    }
-//                    else
-//                    {
-//                        if (v64 == MONSTER_MUMMY1)
-//                        {
-//                            v77 = 0;
-//                            v75 = MONUMOD_POISDEATH;
-//                        }
-//                        else
-//                        {
-//                            if (v64 == MONSTER_BRUTE2)
-//                            {
-//                                v77 = 0;
-//                                v75 = MONUMOD_IGNOREAC;
-//                            }
-//                            else
-//                            {
-//                                if (v64 != MONSTER_SCARAB1)
-//                                    goto LABEL_152;
-//                                v77 = 0;
-//                                v75 = MONUMOD_CHARGEDBOLTS;
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//            D2GAME_BOSSES_AssignUMod_6FC6FF10(v65, v60, v75, v77);
-//        }
-//    }
-//LABEL_152:
-//}
+void __fastcall MONSTERSPAWN_SetupNormalMods(D2UnkMonCreateStrc* pMonCreate, D2UnitStrc* pUnit)
+{
+    int32_t nMonsterId = pMonCreate->nMonsterId;
+    D2GameStrc* pGame = pMonCreate->pGame;
+    if (nMonsterId < 0)
+    {
+        return;
+    }
+
+    if (nMonsterId < sgptDataTables->nMonStatsTxtRecordCount)
+    {
+        nMonsterId = sgptDataTables->pMonStatsTxt[nMonsterId].nBaseId;
+    }
+
+    if (nMonsterId < 0 || nMonsterId >= sgptDataTables->nMonStatsTxtRecordCount)
+    {
+        return;
+    }
+
+    int32_t nUMod = 0;
+    int32_t bUnique = 0;
+    if (nMonsterId > MONSTER_BONEPRISON4)
+    {
+        switch (nMonsterId)
+        {
+        case MONSTER_TRAP_MELEE:
+            nUMod = MONUMOD_SPCDAMAGE;
+            break;
+        case MONSTER_ANCIENTBARB1:
+        case MONSTER_ANCIENTBARB2:
+        case MONSTER_ANCIENTBARB3:
+            bUnique = 1;
+            nUMod = MONUMOD_QUESTMOD;
+            break;
+        case MONSTER_SUICIDEMINION1:
+            nUMod = MONUMOD_FREEZINDEATH;
+            break;
+        case MONSTER_REANIMATEDHORDE1:
+            nUMod = MONUMOD_SELFRESURRECT;
+            break;
+        case MONSTER_FROZENHORROR1:
+            nUMod = MONUMOD_ICESHATTERDEATH;
+            break;
+        default:
+            return;
+        }
+    }
+    else if (nMonsterId >= MONSTER_BONEPRISON1)
+    {
+        nUMod = MONUMOD_KILLMINIONSDEATH;
+    }
+    else if (nMonsterId > MONSTER_MUMMY1)
+    {
+        if (nMonsterId == MONSTER_DURIEL)
+        {
+            D2GAME_BOSSES_AssignUMod_6FC6FF10(pGame, pUnit, 11, 0);
+            bUnique = 1;
+            nUMod = MONUMOD_QUESTMOD;
+        }
+        else if (nMonsterId > MONSTER_EVILHOLE5 && nMonsterId <= MONSTER_TRAP_LIGHTNING)
+        {
+            nUMod = MONUMOD_SPCDAMAGE;
+        }
+        else
+        {
+            return;
+        }
+    }
+    else if (nMonsterId == MONSTER_MUMMY1)
+    {
+        nUMod = MONUMOD_POISDEATH;
+    }
+    else if (nMonsterId == MONSTER_BRUTE2)
+    {
+        nUMod = MONUMOD_IGNOREAC;
+    }
+    else if (nMonsterId == MONSTER_SCARAB1)
+    {
+        nUMod = MONUMOD_CHARGEDBOLTS;
+    }
+    else
+    {
+        return;
+    }
+
+    D2GAME_BOSSES_AssignUMod_6FC6FF10(pGame, pUnit, nUMod, bUnique);
+}
 
 //D2Game.0x6FC69C00
 void __fastcall sub_6FC69C00(D2UnkMonCreateStrc* pMonCreate, D2UnitStrc* pUnit)
