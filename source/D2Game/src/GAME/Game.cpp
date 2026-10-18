@@ -72,7 +72,11 @@ uint32_t dword_6FD45848;
 int32_t dword_6FD2CA10 = 1;
 char gszEmptyString_6FD447EC[8];
 
-int32_t gnGamesGUIDs_6FD447F8[1024];
+// The same 1024 slots as hGameArray_6FD447F8, read as game GUIDs (a game's GUID is its handle's
+// hash value): the original keeps one array at 0x6FD447F8, which GAME_SendGameInit fills and the
+// update loops (GAME_UpdateGamesProgress, GAME_UpdateClients) walk.
+static_assert(sizeof(HGAMEDATA) == sizeof(int32_t), "a game handle is its 32-bit GUID");
+int32_t (&gnGamesGUIDs_6FD447F8)[1024] = reinterpret_cast<int32_t(&)[1024]>(hGameArray_6FD447F8);
 
 BOOL gbAllowTimeoutDisconnection_6FD2CA00 = TRUE;
 
