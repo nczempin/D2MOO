@@ -813,15 +813,16 @@ struct D2GSPacketSrv1C		//size of 0x05
 //	int32_t nValue;				//0x06
 //};
 
-struct D2GSPacketSrvStat	//size of 0x04 (originally 0x03)
+template<typename T>
+struct D2GSPacketSrvStat	//size of 0x03, 0x04 or 0x06 by value type (one more with 16-bit stat ids)
 {
 	uint8_t nHeader;		//0x00
-	PacketStatId nStat;		//0x01 
-	uint8_t nValue;			//0x03 (Originally 0x02)
+	PacketStatId nStat;		//0x01
+	T nValue;				//0x03 (Originally 0x02)
 };
-using D2GSPacketSrv1D = D2GSPacketSrvStat;
-using D2GSPacketSrv1E = D2GSPacketSrvStat;
-using D2GSPacketSrv1F = D2GSPacketSrvStat;
+using D2GSPacketSrv1D = D2GSPacketSrvStat<uint8_t>;
+using D2GSPacketSrv1E = D2GSPacketSrvStat<uint16_t>;
+using D2GSPacketSrv1F = D2GSPacketSrvStat<uint32_t>;
 
 
 struct D2GSPacketSrv20		//size of 0x0B (originally 0x0A)
