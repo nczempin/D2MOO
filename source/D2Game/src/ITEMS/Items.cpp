@@ -2260,6 +2260,9 @@ void __fastcall D2GAME_DropTC_6FC51360(D2GameStrc* pGame, D2UnitStrc* pMonster, 
                         ++pOld;
                         ++pCurrent;
                     }
+
+                    // the entry is a treasure class, now on the stack: its nItemId is no item
+                    continue;
                 }
 
                 const int16_t nItemId = pTCExInfo->nItemId;
