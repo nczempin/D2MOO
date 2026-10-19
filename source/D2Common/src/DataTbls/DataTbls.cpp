@@ -615,7 +615,15 @@ void* __stdcall DATATBLS_CompileTxt(HD2ARCHIVE hArchive, const char* szName, D2B
 	char szFilePath[MAX_PATH] = {};
 
 	dwDataSize = 0;
-	if (sgptDataTables->bCompileTxt)
+	if (getenv("D2MOO_EXCEL_DIR"))
+	{
+		fprintf(stderr, "excel: %s\n", szName);
+		fflush(stderr);
+	}
+
+	// compiled to a .bin only for a .bin load: a text load parses the text below, and parsing it
+	// twice would enter each code in the tables' code links twice
+	if (sgptDataTables->bCompileTxt && DATATBLS_LoadFromBin)
 	{
 		if (_strcmpi(szName, "leveldefs"))
 		{
@@ -638,7 +646,11 @@ void* __stdcall DATATBLS_CompileTxt(HD2ARCHIVE hArchive, const char* szName, D2B
 		FOG_FreeBinFile(pBinFile);
 
 		wsprintfA(szFilePath, "%s\\%s%s", "DATA\\GLOBAL\\EXCEL", szName, ".bin");
-		fopen_s(&pFile, szFilePath, "wb");
+		// tables from D2MOO_EXCEL_DIR are not compiled to files next to the game's
+		if (!getenv("D2MOO_EXCEL_DIR"))
+		{
+			fopen_s(&pFile, szFilePath, "wb");
+		}
 		if (pFile)
 		{
 			FileLockAndWrite(&nRecordCount, 4, 1, pFile);
@@ -818,6 +830,14 @@ void __stdcall DATATBLS_LoadAllTxts(HD2ARCHIVE hArchive, int a2, int a3)
 		{ "ExpRatio", TXTFIELD_DWORD, 0, 28, NULL },
 		{ "end", TXTFIELD_NONE, 0, 0, NULL },
 	};
+
+	// tables from D2MOO_EXCEL_DIR are text: read them as text, as the -txt switch would, with the
+	// code tables that only a text load builds
+	if (getenv("D2MOO_EXCEL_DIR"))
+	{
+		DATATBLS_LoadFromBin = FALSE;
+		sgptDataTables->bCompileTxt = TRUE;
+	}
 
 	DATATBLS_LoadSomeTxts(hArchive);
 	DATATBLS_LoadItemTypesTxt(hArchive);

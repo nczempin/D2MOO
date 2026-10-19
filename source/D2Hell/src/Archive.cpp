@@ -29,6 +29,7 @@
 #include "Archive.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
 
@@ -154,8 +155,36 @@ void __fastcall ARCHIVE_ReadFileToBuffer(HD2ARCHIVE hArchive, HSFILE hFile, void
  */
 void* __fastcall ARCHIVE_AllocateBufferAndReadFile(HD2ARCHIVE hArchive, const char* szFilePath, size_t* pdwBytesWritten, const char* szSrcPath, int nLine)
 {
+	// D2MOO_EXCEL_DIR: the data tables (DATA\GLOBAL\EXCEL\...) from that directory when it has
+	// them, ahead of the archives, so the server can run on another game's tables (such as D2R's,
+	// extracted from its storage)
+	static const char szExcelPrefix[] = "DATA\\GLOBAL\\EXCEL\\";
+	if (const char* szExcelDir = getenv("D2MOO_EXCEL_DIR"))
+	{
+		if (!_strnicmp(szFilePath, szExcelPrefix, sizeof(szExcelPrefix) - 1))
+		{
+			char szDiskPath[MAX_PATH] = {};
+			wsprintfA(szDiskPath, "%s\\%s", szExcelDir, szFilePath + sizeof(szExcelPrefix) - 1);
+			FILE* pFile = nullptr;
+			if (!fopen_s(&pFile, szDiskPath, "rb") && pFile)
+			{
+				fseek(pFile, 0, SEEK_END);
+				const size_t dwDiskSize = (size_t)ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				void* pDiskBuffer = FOG_Alloc(dwDiskSize + 800, szSrcPath, nLine, 0);
+				const size_t dwRead = pDiskBuffer ? fread(pDiskBuffer, 1, dwDiskSize, pFile) : 0;
+				fclose(pFile);
+				if (pDiskBuffer && pdwBytesWritten != nullptr)
+				{
+					*pdwBytesWritten = dwRead;
+				}
+				return pDiskBuffer;
+			}
+		}
+	}
+
 	HSFILE hFile;
-	
+
 	BOOL bOpenFileSucceeded = ARCHIVE_OpenFile(hArchive, szFilePath, &hFile, FALSE);
 	if (!bOpenFileSucceeded)
 	{
