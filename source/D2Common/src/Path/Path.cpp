@@ -403,10 +403,11 @@ int __stdcall D2Common_10142(D2DynamicPathStrc* pPath, D2UnitStrc* pUnit, int bA
 				tPathInfo.pStartRoom = pPath->pRoom;
 				tPathInfo.pTargetRoom = COLLISION_GetRoomBySubTileCoordinates(tPathInfo.pStartRoom, tPathInfo.tTargetCoord.X, tPathInfo.tTargetCoord.Y);
 
-				if (tPathInfo.pStartRoom && 
-#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
-					tPathInfo.pTargetRoom && // Optimization done in 1.13
-#endif
+				// No path to a target in a room that is not active: 1.12 checks it as 1.13 does
+				// (D2Common 1.12, 0x6FD9EA60), so an NPC walking to a node in an unloaded room
+				// stays where it is instead of walking to the edge of the active rooms.
+				if (tPathInfo.pStartRoom &&
+					tPathInfo.pTargetRoom &&
 					(PATH_IsTargetDestinationAllowed(&tPathInfo, pUnit) || bAllowInTown))
 				{
 					tPathInfo.nPathType = pPath->dwPathType;
