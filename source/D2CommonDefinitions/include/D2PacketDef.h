@@ -1999,12 +1999,12 @@ struct D2GSPacketSrvA6		//variable size
 							//variable data
 };
 
-struct D2GSPacketSrvA7		//size of 0x08 (originally 0x07)
+struct D2GSPacketSrvA7		//size of 0x07, as the client's size table has it (1.12 D2Net #10002)
 {
 	uint8_t nHeader;			//0x00
 	uint8_t nUnitType;			//0x01
 	int32_t nUnitId;			//0x02
-	uint16_t nState;			//0x06
+	uint8_t nState;				//0x06
 };
 
 struct D2GSPacketSrvA8		//Variable Size
@@ -2013,8 +2013,8 @@ struct D2GSPacketSrvA8		//Variable Size
 	uint8_t nUnitType;			//0x01
 	int32_t nUnitId;			//0x02
 	uint8_t nSize;				//0x06
-	uint16_t nState;			//0x07 - originally a uint8_t
-	uint8_t pStream[512];		//0x09
+	uint8_t nState;				//0x07, a byte as in the original: nSize counts an 8-byte header
+	uint8_t pStream[512];		//0x08
 };
 
 //struct D2GSPacketSrvA7	//size of 0x07
@@ -2043,12 +2043,12 @@ struct D2GSPacketSrvA8		//Variable Size
 //	uint8_t nState;		//0x06
 //};
 
-struct D2GSPacketSrvA9		//size of 0x08 (originally 0x07)
+struct D2GSPacketSrvA9		//size of 0x07, as the client's size table has it (1.12 D2Net #10002)
 {
 	uint8_t nHeader;			//0x00
 	uint8_t nUnitType;			//0x01
 	int32_t nUnitId;			//0x02
-	uint16_t nState;			//0x06
+	uint8_t nState;				//0x06
 };
 
 struct D2GSPacketSrvAA		//variable size
