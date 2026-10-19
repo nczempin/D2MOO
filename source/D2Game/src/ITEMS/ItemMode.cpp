@@ -5179,13 +5179,16 @@ int32_t __fastcall D2GAME_Transmogrify_6FC4A660(D2GameStrc* pGame, D2UnitStrc* p
 }
 
 //D2Game.0x6FC4A9B0
-int32_t __fastcall sub_6FC4A9B0(D2GameStrc* pGame, D2UnitStrc* pUnit, D2UnitStrc* pItem, uint8_t nBodyLoc)
+int32_t __fastcall sub_6FC4A9B0(D2GameStrc* pGame, D2UnitStrc* pUnit, D2UnitStrc* pItem, int32_t bSkipRequirementCheck)
 {
-    int32_t a3 = 0;
-    if (!sub_6FC42F20(pUnit, pItem, &a3, nBodyLoc))
+    // the body location the item goes to is the one sub_6FC42F20 finds free for it
+    int32_t nFreeBodyLoc = 0;
+    if (!sub_6FC42F20(pUnit, pItem, &nFreeBodyLoc, bSkipRequirementCheck))
     {
         return 0;
     }
+
+    const uint8_t nBodyLoc = (uint8_t)nFreeBodyLoc;
 
     if (!INVENTORY_PlaceItemInBodyLoc(pUnit->pInventory, pItem, nBodyLoc))
     {
