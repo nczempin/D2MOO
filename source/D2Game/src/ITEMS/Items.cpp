@@ -2216,8 +2216,9 @@ void __fastcall D2GAME_DropTC_6FC51360(D2GameStrc* pGame, D2UnitStrc* pMonster, 
                     {
                         nUpperBound = nIndex;
                     }
-                    else // nRand == pTC->pInfo[nIndex].nProb
+                    else // nRand == pTC->pInfo[nIndex].nProb: the roll is this entry's first value
                     {
+                        nLowerBound = nIndex + 1;
                         break;
                     }
                 }
