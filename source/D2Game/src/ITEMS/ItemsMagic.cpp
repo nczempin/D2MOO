@@ -1039,7 +1039,9 @@ int32_t __fastcall sub_6FC549F0(D2UnitStrc* pItem, D2ItemDropStrc* pItemDrop)
 
     if (ITEMS_HasDurability(pItem))
     {
-        const int32_t nMaxDurability = std::max(pItemsTxtRecord->nDurability / 3, 1);
+        // A third for the old item format; 33 % for LoD's (D2Game 1.12 has the two as two functions,
+        // 0x6FCD04E0 and 0x6FCD0B50, picked by the item's format): leather armor's 24 is 7, not 8
+        const int32_t nMaxDurability = ITEMS_GetItemFormat(pItem) >= 1 ? std::max(33 * pItemsTxtRecord->nDurability / 100, 1) : std::max(pItemsTxtRecord->nDurability / 3, 1);
         const int32_t nDurability = std::max(ITEMS_RollLimitedRandomNumber(&pItem->pSeed, nMaxDurability / 2) + nMaxDurability / 2, 1u);
         STATLIST_SetUnitStat(pItem, STAT_DURABILITY, nDurability, 0);
         STATLIST_SetUnitStat(pItem, STAT_MAXDURABILITY, nMaxDurability, 0);
