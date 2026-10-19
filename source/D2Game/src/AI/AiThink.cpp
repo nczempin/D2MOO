@@ -11678,7 +11678,10 @@ void __fastcall AITHINK_Fn058_Navi(D2GameStrc* pGame, D2UnitStrc* pUnit, D2AiTic
 		return;
 	}
 
-	int32_t bCloseToTarget = 0;
+	// The original leaves this flag uninitialized (D2Game 1.12, 0x6FCFA977) and sub_6FCCFD70 only
+	// ever sets it, so it holds what the stack held, which was a stack address in every call
+	// measured: the check passes whether the player is close or not. It starts set here to match.
+	int32_t bCloseToTarget = 1;
 	D2UnitStrc* pPlayer = sub_6FCCFD70(pGame, pUnit, &bCloseToTarget);
 	if (pPlayer && pPlayer->dwUnitType == UNIT_PLAYER && !PLAYER_IsBusy(pPlayer) && (ITEMS_RollRandomNumber(&pUnit->pSeed) % 3) && bCloseToTarget)
 	{
