@@ -96,7 +96,7 @@ decltype(T::pStat) __fastcall StatArray_InsertStat(void* pMemPool, T* pStatsArra
 	if (insertionIdx < pStatsArray->nStatCount)
 	{
 		// Move memory by 1 slot so that we can insert our stat
-		memmove(&pStatsArray->pStat[insertionIdx + 1], &pStatsArray->pStat[insertionIdx], (pStatsArray->nStatCount - insertionIdx) * sizeof(D2StatStrc));
+		memmove(&pStatsArray->pStat[insertionIdx + 1], &pStatsArray->pStat[insertionIdx], (pStatsArray->nStatCount - insertionIdx) * sizeof(*pStatsArray->pStat));
 	}
 
 	pStatsArray->pStat[insertionIdx] = {}; // Default init to 0
