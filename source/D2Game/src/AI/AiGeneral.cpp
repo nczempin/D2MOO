@@ -573,7 +573,11 @@ void __fastcall AIGENERAL_UpdateMinionList(D2UnitStrc* pUnit)
 	{
 		for (D2MinionListStrc* i = pAiControl->pMinionList; i; i = i->pNext)
 		{
-			AIGENERAL_SetOwnerData(pAiControl->pGame, SUNIT_GetServerUnit(pAiControl->pGame, UNIT_MONSTER, i->dwMinionGUID), -1, UNIT_MONSTER, 0, 0);
+			// a minion already removed from the game has no owner data to clear, as in the loop below
+			if (D2UnitStrc* pMinion = SUNIT_GetServerUnit(pAiControl->pGame, UNIT_MONSTER, i->dwMinionGUID))
+			{
+				AIGENERAL_SetOwnerData(pAiControl->pGame, pMinion, -1, UNIT_MONSTER, 0, 0);
+			}
 		}
 		return;
 	}
