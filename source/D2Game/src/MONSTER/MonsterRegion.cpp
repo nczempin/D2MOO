@@ -650,7 +650,8 @@ void __fastcall D2GAME_PopulateRoom_6FC67190(D2GameStrc* pGame, D2ActiveRoomStrc
                 DUNGEON_GameTileToSubtileCoords(&drlgCoord.nPosX, &drlgCoord.nPosY);
                 DUNGEON_GameTileToSubtileCoords(&drlgCoord.nWidth, &drlgCoord.nHeight);
 
-                for (int32_t i = (drlgCoord.nWidth - drlgCoord.nPosX) / 3 * (drlgCoord.nHeight - drlgCoord.nPosY) / 3; i > 0; --i)
+                // one density roll per 3x3 subtiles, each side divided by 3 on its own
+                for (int32_t i = ((drlgCoord.nHeight - drlgCoord.nPosY) / 3) * ((drlgCoord.nWidth - drlgCoord.nPosX) / 3); i > 0; --i)
                 {
                     if ((ITEMS_RollRandomNumber(&pGame->pGameSeed) % 100000) <= pMonsterRegion->dwMonDen)
                     {
