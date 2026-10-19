@@ -625,7 +625,7 @@ void __fastcall sub_6FC752A0(D2UnitStrc* pUnit, D2ClientStrc* pClient)
     if (pUnit)
     {
         nObjectGUID = pUnit->dwUnitId;
-        bTargetable = pUnit->dwFlags & UNITFLAG_TARGETABLE;
+        bTargetable = (pUnit->dwFlags & UNITFLAG_TARGETABLE) != 0;   // 0 or 1 in the 0x0E, as the original sends it
     }
 
     D2GAME_PACKETS_SendPacket0x0E_6FC3C8E0(pClient, 0xEu, 2, nObjectGUID, 3, bTargetable, (uint16_t)pUnit->dwAnimMode);
