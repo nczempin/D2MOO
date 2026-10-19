@@ -96,16 +96,17 @@ int __fastcall MONSTERS_HirelingInit(BOOL bExpansion, D2UnitStrc* pMonster, int 
 
 		pHirelingInit->nId = pHirelingTxtRecord->nId;
 
+		// 1.12's (D2Common 1.12, 0x6FD89910, #11103): the hireling is the unit's level less 5 plus a
+		// roll below 5 (the low 32 bits, unsigned), at least level 2, and grows from its Hireling.txt
+		// level by the difference
 		nLevel = STATLIST_UnitGetStatValue(pMonster, STAT_LEVEL, 0);
-		nRand = (int)SEED_RollRandomNumber(&pSeed) % 5;
-		if (nRand >= nLevel - pHirelingTxtRecord->nHirelingLevel)
+		nRand = (int)((uint32_t)SEED_RollRandomNumber(&pSeed) % 5);
+		nLevelUps = nRand - 5 + nLevel;
+		if (nLevelUps < 2)
 		{
-			nLevelUps = nLevel - pHirelingTxtRecord->nHirelingLevel;
+			nLevelUps = 2;
 		}
-		else
-		{
-			nLevelUps = nRand;
-		}
+		nLevelUps -= pHirelingTxtRecord->nHirelingLevel;
 		pHirelingInit->nLevel = pHirelingTxtRecord->nHirelingLevel + nLevelUps;
 
 		pHirelingInit->nHitpoints = nLevelUps * pHirelingTxtRecord->dwHitpointsPerLvl + pHirelingTxtRecord->dwHitpoints;
