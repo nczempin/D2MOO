@@ -6330,7 +6330,8 @@ void __fastcall ITEMS_SerializeItemCompact(D2UnitStrc* pItem, D2BitBufferStrc* p
 		}
 		ITEMS_WriteBitsToBitstream(pBuffer, nY, 4);
 
-		ITEMS_WriteBitsToBitstream(pBuffer, (ITEMS_GetInvPage(pItem) + 1), 3);
+		// a byte sum, as the original's: no page (0xFF) is written as 0, not clamped to 7
+		ITEMS_WriteBitsToBitstream(pBuffer, (uint8_t)(ITEMS_GetInvPage(pItem) + 1), 3);
 	}
 
 	if (ITEMS_GetItemFlags(pItem) & IFLAG_ISEAR)
