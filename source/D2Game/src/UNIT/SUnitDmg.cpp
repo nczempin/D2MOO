@@ -638,25 +638,21 @@ void __fastcall SUNITDMG_FillDamageValues(D2GameStrc* pGame, D2UnitStrc* pAttack
 		pDamage->dwStunLen += nSrcDam * STATLIST_UnitGetStatValue(pAttacker, STAT_STUNLENGTH, 0) / 128;
 	}
 
-	//TODO: Burn damage
+	// Burning damage. The original takes the ids of STAT_BURNINGMIN and STAT_BURNINGMAX (316, 317)
+	// where their values were meant (DAMAGE_CalculatePercentageValue(316, 0) + 316), so each hit adds
+	// 316 / 128 and draws once from the attacker's seed for a roll below 1. Kept as it is: the draw
+	// moves every later roll of the attacker.
+	int32_t nBurnDamage = nSrcDam * pDamage->dwBurnDamage + STAT_BURNINGMIN;
+	if (STAT_BURNINGMAX > STAT_BURNINGMIN)
+	{
+		nBurnDamage += ITEMS_RollLimitedRandomNumber(&pAttacker->pSeed, STAT_BURNINGMAX - STAT_BURNINGMIN);
+	}
 
-	//v90 = nSrcDam * pDamage->dwBurnDamage;
-	//v91 = DAMAGE_CalculatePercentageValue(316, 0) + 316;
-	//v92 = DAMAGE_CalculatePercentageValue(317, 0) + 317;
-	//v93 = v91 + v90;
-	//if (v92 > v91)
-	//{
-	//	v93 += ITEMS_RollLimitedRandomNumber(&pAttacker->pSeed, v92 - v91);
-	//}
-
-	//v94 = v93 & ((v93 < 0) - 1);
-	//v95 = (((BYTE4(v94) & 0x7F) + (int32_t)v94) >> 7) + pDamage->dwBurnDamage;
-	//LODWORD(v94) = pDamage->dwBurnLen;
-	//pDamage->dwBurnDamage = v95;
-	//if ((_DWORD)v94)
-	//{
-	//	pDamage->dwBurnLen += nSrcDam * STATLIST_UnitGetStatValue(pAttacker, STAT_FIRELENGTH, 0) / 128;
-	//}
+	pDamage->dwBurnDamage += std::max(nBurnDamage, 0) / 128;
+	if (pDamage->dwBurnLen)
+	{
+		pDamage->dwBurnLen += nSrcDam * STATLIST_UnitGetStatValue(pAttacker, STAT_FIRELENGTH, 0) / 128;
+	}
 
 	if ((pAttacker->dwUnitType == UNIT_PLAYER || nHirelingTypeId) && !(pDamage->wResultFlags & DAMAGERESULTFLAG_32))
 	{
