@@ -2966,8 +2966,12 @@ int32_t __fastcall OBJECTS_OperateHandler(D2GameStrc* pGame, D2UnitStrc* pPlayer
         }
 
         const ObjOperateFunction pOperateFn = gpObjOperateFnTable[pObjectTxtRecord->nOperateFn];
-
-        D2_ASSERT(pOperateFn);
+        if (!pOperateFn)
+        {
+            // OperateFn 0 (and the other unused slots): the object does nothing when operated, as
+            // the game's server answers a player operating a dummy object (Objects.txt 103)
+            return 0;
+        }
 
         D2ObjOperateFnStrc pObjOperate = {};
 
