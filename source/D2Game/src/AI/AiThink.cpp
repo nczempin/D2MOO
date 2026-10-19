@@ -10937,8 +10937,10 @@ void __fastcall AITHINK_Fn032_Npc(D2GameStrc* pGame, D2UnitStrc* pUnit, D2AiTick
 //D2Game.0x6FCE69A0
 uint8_t __fastcall sub_6FCE69A0(D2GameStrc* pGame, D2UnitStrc* pUnit, D2AiTickParamStrc* pAiTickParam)
 {
-	//TODO: v18, dword_6FD4DD88
-	int32_t dword_6FD4DD88 = 0;
+	//TODO: v18
+	// The original's counter of these walks home is a global (D2Game 1.12, 0x6FD31F80), shared by
+	// all NPCs: every fourth walk takes path type 5, the others path type 7.
+	static int32_t dword_6FD4DD88 = 0;
 
 	int32_t nAnimMode = 0;
 	int32_t v18 = 0;
