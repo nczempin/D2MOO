@@ -274,6 +274,8 @@ void __fastcall sub_6FC65C70(D2GameStrc* pGame, D2UnitStrc* pMonster, D2ClientSt
             nUnitLife |= 0x80u;
         }
 
+        // the 0x69 packet carries the life where the other modes carry the direction
+        nDirection = nUnitLife;
         v39 = LOBYTE(pMonster->dwLastHitClass);
         break;
     }
