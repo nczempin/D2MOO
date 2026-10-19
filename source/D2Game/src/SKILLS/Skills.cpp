@@ -1082,7 +1082,7 @@ int32_t __fastcall D2GAME_SKILLMANA_Consume_6FD10A50(D2GameStrc* pGame, D2UnitSt
         }
 
         int32_t nManaCost = 0;
-        if (nSkillLevel > 1)
+        if (nSkillLevel > 0)
         {
             nManaCost = (pSkillsTxtRecord->wMana + (nSkillLevel - 1) * pSkillsTxtRecord->wLevelMana) << pSkillsTxtRecord->nManaShift;
         }
