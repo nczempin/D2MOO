@@ -124,7 +124,9 @@ void __fastcall DRLGLOGIC_InitializeDrlgCoordList(D2DrlgRoomStrc* pDrlgRoom, D2D
 				tDRLGLogicUnkStrc.nFlags = (tDRLGLogicUnkStrc.field_18 & 0xFFFFFFF) | 0x10000000;
 
 				D2C_PackedTileInformation nFloorPackedInfo = { (uint32_t)DRLGGRID_GetGridEntry(tDRLGLogicUnkStrc.pFloorGrid, i, j) };
-				if((nFloorPackedInfo.nTileStyle == 30 && nFloorPackedInfo.nWallLayer == 0) || nFloorPackedInfo.bHidden)
+				// as D2Common 1.12 (0x6FD74810) tests it: tile sequence 0 and a style of 30 or 31
+				// (62, 63), or hidden
+				if ((nFloorPackedInfo.nPackedValue & 0x1E0FF00) == 0x1E00000 || nFloorPackedInfo.bHidden)
 				{
 					tDRLGLogicUnkStrc.nFlags |= 0x20000000;
 				}
