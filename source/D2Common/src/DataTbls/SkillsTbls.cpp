@@ -777,7 +777,7 @@ void __fastcall DATATBLS_LoadSkills_SkillDescTxt(HD2ARCHIVE hArchive)
 			}
 		}
 
-		if (sgptDataTables->bCompileTxt && sgptDataTables->pSkillsCode)
+		if (sgptDataTables->bCompileTxt && sgptDataTables->pSkillsCode && !getenv("D2MOO_EXCEL_DIR"))
 		{
 			wsprintfA(szFileName, "%s\\%s.bin", "DATA\\GLOBAL\\EXCEL", "skillscode");
 			fopen_s(&pSkillsCodeBin, szFileName, "wb");
@@ -790,13 +790,27 @@ void __fastcall DATATBLS_LoadSkills_SkillDescTxt(HD2ARCHIVE hArchive)
 		}
 	}
 
-	wsprintfA(szFileName, "%s\\%s%s", "DATA\\GLOBAL\\EXCEL", "skillscode", ".bin");
+	// tables from D2MOO_EXCEL_DIR keep the formulas their text compiled to: the records point into
+	// that code, and the archives' skillscode.bin is another table's
+	const BOOL bKeepCode = getenv("D2MOO_EXCEL_DIR") != nullptr;
 	size_t dwSize;
-	sgptDataTables->pSkillsCode = (FOGASTNodeStrc*)ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(hArchive, szFileName, &dwSize);
-	sgptDataTables->nSkillsCodeSizeEx = dwSize;
-	sgptDataTables->nSkillsCodeSize = dwSize;
+	if (bKeepCode)
+	{
+		sgptDataTables->nSkillsCodeSizeEx = sgptDataTables->nSkillsCodeSize;
+	}
+	else
+	{
+		wsprintfA(szFileName, "%s\\%s%s", "DATA\\GLOBAL\\EXCEL", "skillscode", ".bin");
+		sgptDataTables->pSkillsCode = (FOGASTNodeStrc*)ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(hArchive, szFileName, &dwSize);
+		sgptDataTables->nSkillsCodeSizeEx = dwSize;
+		sgptDataTables->nSkillsCodeSize = dwSize;
+	}
 
-	if (sgptDataTables->bCompileTxt && sgptDataTables->pSkillDescCode)
+	if (bKeepCode)
+	{
+		sgptDataTables->nSkillDescCodeSizeEx = sgptDataTables->nSkillDescCodeSize;
+	}
+	else if (sgptDataTables->bCompileTxt && sgptDataTables->pSkillDescCode)
 	{
 		wsprintfA(szFileName, "%s\\%s.bin", "DATA\\GLOBAL\\EXCEL", "skilldesccode");
 		fopen_s(&pSkillDescCodeBin, szFileName, "wb");
@@ -808,10 +822,13 @@ void __fastcall DATATBLS_LoadSkills_SkillDescTxt(HD2ARCHIVE hArchive)
 		D2_FREE_POOL(nullptr, sgptDataTables->pSkillDescCode);
 	}
 
-	wsprintfA(szFileName, "%s\\%s%s", "DATA\\GLOBAL\\EXCEL", "skilldesccode", ".bin");
-	sgptDataTables->pSkillDescCode = (FOGASTNodeStrc*)ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(hArchive, szFileName, &dwSize);
-	sgptDataTables->nSkillDescCodeSizeEx = dwSize;
-	sgptDataTables->nSkillDescCodeSize = dwSize;
+	if (!bKeepCode)
+	{
+		wsprintfA(szFileName, "%s\\%s%s", "DATA\\GLOBAL\\EXCEL", "skilldesccode", ".bin");
+		sgptDataTables->pSkillDescCode = (FOGASTNodeStrc*)ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(hArchive, szFileName, &dwSize);
+		sgptDataTables->nSkillDescCodeSizeEx = dwSize;
+		sgptDataTables->nSkillDescCodeSize = dwSize;
+	}
 
 	sgptDataTables->nClassSkillCount = (int*)D2_CALLOC_POOL(NULL, 7 * sizeof(int));
 

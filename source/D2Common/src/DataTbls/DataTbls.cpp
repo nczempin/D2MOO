@@ -155,6 +155,14 @@ void __fastcall DATATBLS_GetBinFileHandle(HD2ARCHIVE hArchive, const char* szFil
 
 	wsprintfA(szFilePath, "%s\\%s.bin", "DATA\\GLOBAL\\EXCEL", szFile);
 
+	// tables from D2MOO_EXCEL_DIR keep the code their text compiled to: the records point into it,
+	// and the archives' compiled code is another table's
+	if (getenv("D2MOO_EXCEL_DIR") && sgptDataTables->bCompileTxt && *ppFileHandle)
+	{
+		*pSizeEx = *pSize;
+		return;
+	}
+
 	if (sgptDataTables->bCompileTxt && *ppFileHandle)
 	{
 		fopen_s(&pFile, szFilePath, "wb");
@@ -696,6 +704,20 @@ void* __stdcall DATATBLS_CompileTxt(HD2ARCHIVE hArchive, const char* szName, D2B
 	if (pRecordCount)
 	{
 		*pRecordCount = nRecordCount;
+	}
+
+	// D2MOO_DUMP_TABLES: each table's records as loaded, to <dir>\<name>.<record size>.rec, to set
+	// one table source (the archives' .bin, a directory's text) against another field by field
+	if (const char* szDumpDir = getenv("D2MOO_DUMP_TABLES"))
+	{
+		char szDumpPath[MAX_PATH] = {};
+		wsprintfA(szDumpPath, "%s\\%s.%u.rec", szDumpDir, szName, (unsigned)dwSize);
+		FILE* pDump = nullptr;
+		if (!fopen_s(&pDump, szDumpPath, "wb") && pDump)
+		{
+			fwrite(pTxt, dwSize, nRecordCount, pDump);
+			fclose(pDump);
+		}
 	}
 
 	return pTxt;
