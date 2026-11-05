@@ -433,7 +433,7 @@ D2DrlgLevelStrc* __fastcall DRLG_AllocLevel(D2DrlgStrc* pDrlg, int nLevelId)
 		DRLGOUTDOORS_AllocOutdoorInfo(pLevel);
 		break;
 	default:
-		D2_UNREACHABLE;
+		break;
 	}
 
 	pLevel->pNextLevel = pDrlg->pLevel;

@@ -51,7 +51,7 @@ int32_t dword_6FA81454;
 int32_t dword_6FA81458;
 
 int32_t dword_6FA84680;
-int32_t dword_6FA7E040;
+int32_t dword_6FA7E040 = -1;
 
 uint8_t byte_6FA85220[32][32][32];
 
@@ -134,10 +134,11 @@ void __fastcall sub_6FA71130(uint8_t* a1, uint8_t* a2, uint8_t* a3)
     {
         uint8_t* v5 = &a1[dword_6FA7E0DC[i]];
         uint8_t* v6 = &a2[dword_6FA7E064[i]];
-        v6[3] = a3[v5[3]];
-        v6[2] = a3[v5[2]];
-        v6[1] = a3[v5[1]];
-        v6[0] = a3[v5[0]];
+        const int nValues = dword_6FA7E0A0[i];
+        for (int j = nValues - 1; j >= 0; --j)
+        {
+            v6[j] = a3[v5[j]];
+        }
         a2 += dword_6FA81450;
     }
 }
@@ -302,7 +303,7 @@ void __fastcall sub_6FA71D90(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, u
                     v16 = 0;
 
                 v17 = dword_6FA8469C - v15;
-                v19 = v17 & (v17 <= 0 - 1);
+                v19 = v17 & ((v17 <= 0) - 1);
 
                 if (v19 < v13)
                     v13 = v19;

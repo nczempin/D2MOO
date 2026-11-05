@@ -10,6 +10,7 @@
 #include <D2StrTable.h>
 #include <D2Gfx.h>
 #include <Texture.h>
+#include <Tile.h>
 #include <Window.h>
 #include <D2CMP.h>
 #include <D2Sound.h>
@@ -19,6 +20,11 @@
 #include <D2WinFont.h>
 #include <D2WinPalette.h>
 #include <D2DataTbls.h>
+#include <DataTbls/LevelsIds.h>
+#include <D2Dungeon.h>
+#include <Drlg/D2DrlgDrlg.h>
+#include <Drlg/D2DrlgPreset.h>
+#include <Drlg/D2DrlgRoomTile.h>
 #include <D2Collision.h>
 #include <D2Log.h>
 #include <Client.h>
@@ -66,6 +72,7 @@ static D2CellFileStrc* gpPlayerClassNu1 = nullptr;
 static D2CellFileStrc* gpPlayerClassFw = nullptr;
 static D2CompositeUnitStrc* gpPlayerCompIdle = nullptr;
 static D2CompositeUnitStrc* gpPlayerCompWalk = nullptr;
+static D2DrlgActStrc* gpClientAct = nullptr;
 
 static const char* const kClassNu1Paths[7] = {
 	"DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu1",
@@ -194,6 +201,13 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 	case WM_LBUTTONUP:
 		gbMouseLeftHeld = false;
 		return 0;
+	case WM_KEYUP:
+		if (wParam == VK_SNAPSHOT)
+		{
+			D2Win_10168_WINMAIN_CreateScreenshot();
+			return 0;
+		}
+		break;
 	case WM_KEYDOWN:
 		if (wParam == VK_ESCAPE)
 		{
@@ -415,8 +429,74 @@ static void InitInGameAssets()
 
 	gfPlayerWorldX = 0.0f;
 	gfPlayerWorldY = 0.0f;
-	gfTargetWorldX = 0.0f;
-	gfTargetWorldY = 0.0f;
+
+	if (gpClientAct)
+	{
+		DUNGEON_FreeAct(gpClientAct);
+		gpClientAct = nullptr;
+	}
+	gpClientAct = DUNGEON_AllocAct(0, 0x112A2026u, FALSE, nullptr, 0, nullptr, LEVEL_ROGUEENCAMPMENT, nullptr, nullptr);
+	if (gpClientAct)
+	{
+		int nSpawnSubX = 0;
+		int nSpawnSubY = 0;
+		D2ActiveRoomStrc* pSpawnRoom = DUNGEON_FindActSpawnLocationEx(
+			gpClientAct,
+			LEVEL_ROGUEENCAMPMENT,
+			11,
+			&nSpawnSubX,
+			&nSpawnSubY,
+			2);
+		if (!pSpawnRoom || (nSpawnSubX == 0 && nSpawnSubY == 0))
+		{
+			pSpawnRoom = DUNGEON_FindActSpawnLocationEx(
+				gpClientAct,
+				LEVEL_ROGUEENCAMPMENT,
+				0,
+				&nSpawnSubX,
+				&nSpawnSubY,
+				2);
+		}
+		if (D2DrlgLevelStrc* pTownLevel = DRLG_GetLevel(DUNGEON_GetDrlgFromAct(gpClientAct), LEVEL_ROGUEENCAMPMENT))
+		{
+			for (D2DrlgRoomStrc* pDrlgRoom = pTownLevel->pFirstRoomEx; pDrlgRoom; pDrlgRoom = pDrlgRoom->pDrlgRoomNext)
+			{
+				DUNGEON_StreamRoomAtCoords(gpClientAct, pDrlgRoom->nTileXPos, pDrlgRoom->nTileYPos);
+			}
+		}
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
+		{
+			bool bFoundCampfire = false;
+			for (D2PresetUnitStrc* pPreset = pRoom->pDrlgRoom ? pRoom->pDrlgRoom->pPresetUnits : nullptr; pPreset; pPreset = pPreset->pNext)
+			{
+				if (pPreset->nUnitType == UNIT_OBJECT && (pPreset->nIndex == 39 || pPreset->nIndex == 266))
+				{
+					nSpawnSubX = pRoom->tCoords.nSubtileX + pPreset->nXpos + 4;
+					nSpawnSubY = pRoom->tCoords.nSubtileY + pPreset->nYpos + 4;
+					if (pPreset->nIndex == 39)
+					{
+						bFoundCampfire = true;
+						break;
+					}
+				}
+			}
+			if (bFoundCampfire)
+			{
+				break;
+			}
+		}
+		if (nSpawnSubX != 0 || nSpawnSubY != 0)
+		{
+			int nClientX = nSpawnSubX;
+			int nClientY = nSpawnSubY;
+			DUNGEON_GameSubtileToClientCoords(&nClientX, &nClientY);
+			gfPlayerWorldX = static_cast<float>(nClientX);
+			gfPlayerWorldY = static_cast<float>(nClientY);
+		}
+	}
+
+	gfTargetWorldX = gfPlayerWorldX;
+	gfTargetWorldY = gfPlayerWorldY;
 	gnPlayerDir = 0;
 	gbPlayerMoving = false;
 	gbMouseLeftHeld = false;
@@ -433,6 +513,11 @@ static void FreeCellPtr(D2CellFileStrc** ppCell)
 
 static void ShutdownInGameAssets()
 {
+	if (gpClientAct)
+	{
+		DUNGEON_FreeAct(gpClientAct);
+		gpClientAct = nullptr;
+	}
 	D2Win_10146();
 	gpPlayerCompIdle = nullptr;
 	gpPlayerCompWalk = nullptr;
@@ -608,77 +693,349 @@ static void UpdatePlayerMovement()
 	gfPlayerWorldX += (fDx / fDist) * fStep;
 	gfPlayerWorldY += (fDy / fDist) * fStep;
 
-	// Map movement vector to D2's 8-direction COF index (0=SW, 1=NW, 2=NE, 3=SE, 4=S, 5=W, 6=N, 7=E)
+	// Map movement vector to D2's 8-direction COF index (0=S, 1=SW, 2=W, 3=NW, 4=N, 5=NE, 6=E, 7=SE)
 	const float fAngleDeg = std::atan2(fDy, fDx) * (180.0f / 3.14159265f);
 	if (fAngleDeg >= 67.5f && fAngleDeg < 112.5f)
 	{
-		gnPlayerDir = 4; // S
+		gnPlayerDir = 0; // S
 	}
 	else if (fAngleDeg >= 112.5f && fAngleDeg < 157.5f)
 	{
-		gnPlayerDir = 0; // SW
+		gnPlayerDir = 1; // SW
 	}
 	else if (fAngleDeg >= 157.5f || fAngleDeg < -157.5f)
 	{
-		gnPlayerDir = 5; // W
+		gnPlayerDir = 2; // W
 	}
 	else if (fAngleDeg >= -157.5f && fAngleDeg < -112.5f)
 	{
-		gnPlayerDir = 1; // NW
+		gnPlayerDir = 3; // NW
 	}
 	else if (fAngleDeg >= -112.5f && fAngleDeg < -67.5f)
 	{
-		gnPlayerDir = 6; // N
+		gnPlayerDir = 4; // N
 	}
 	else if (fAngleDeg >= -67.5f && fAngleDeg < -22.5f)
 	{
-		gnPlayerDir = 2; // NE
+		gnPlayerDir = 5; // NE
 	}
 	else if (fAngleDeg >= -22.5f && fAngleDeg < 22.5f)
 	{
-		gnPlayerDir = 7; // E
+		gnPlayerDir = 6; // E
 	}
 	else
 	{
-		gnPlayerDir = 3; // SE
+		gnPlayerDir = 7; // SE
 	}
 }
 
-static void DrawRogueEncampmentGround()
+static uint32_t PackThreeCharToken(const char* szStr)
 {
-	// Isometric tile grid scrolling with player world position
-	const int32_t nCamX = static_cast<int32_t>(gfPlayerWorldX);
-	const int32_t nCamY = static_cast<int32_t>(gfPlayerWorldY);
-
-	for (int32_t ty = -12; ty <= 12; ++ty)
+	char aBytes[4] = { ' ', ' ', ' ', ' ' };
+	if (szStr && szStr[0])
 	{
-		for (int32_t tx = -12; tx <= 12; ++tx)
+		aBytes[0] = szStr[0];
+		if (szStr[1])
 		{
-			const int32_t nIsoX = 400 + (tx - ty) * 64 - nCamX;
-			const int32_t nIsoY = 280 + (tx + ty) * 32 - nCamY;
-			if (nIsoX < -80 || nIsoX > 880 || nIsoY < -40 || nIsoY > 580)
+			aBytes[1] = szStr[1];
+			if (szStr[2])
+			{
+				aBytes[2] = szStr[2];
+			}
+		}
+	}
+	uint32_t dwOut = 0;
+	std::memcpy(&dwOut, aBytes, sizeof(uint32_t));
+	return dwOut;
+}
+
+static void DrawPresetUnitsInRoom(D2ActiveRoomStrc* pRoom, int32_t nCamX, int32_t nCamY)
+{
+	static const uint32_t kNpcCompOrder[7] = {
+		'  GL', '  RT', '  DH', '  AR', '  AL', '  HR', '  HL'
+	};
+	const DWORD dwTick = GetTickCount();
+
+	for (D2PresetUnitStrc* pPreset = (pRoom && pRoom->pDrlgRoom) ? pRoom->pDrlgRoom->pPresetUnits : nullptr; pPreset; pPreset = pPreset->pNext)
+	{
+		int nWorldX = pRoom->tCoords.nSubtileX + pPreset->nXpos;
+		int nWorldY = pRoom->tCoords.nSubtileY + pPreset->nYpos;
+		DUNGEON_GameSubtileToClientCoords(&nWorldX, &nWorldY);
+
+		const int32_t nScreenX = nWorldX - nCamX + 400;
+		const int32_t nScreenY = nWorldY - nCamY + 280;
+		if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 760)
+		{
+			continue;
+		}
+
+		if (pPreset->nUnitType == UNIT_OBJECT)
+		{
+			D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pPreset->nIndex);
+			if (!pObjTxt || !pObjTxt->nDraw || !pObjTxt->szToken[0])
 			{
 				continue;
 			}
-			const bool bPath = (tx >= -1 && tx <= 1) || (ty >= -1 && ty <= 1);
-			const uint8_t nColor = bPath ? 0x16 : (((tx + ty) & 1) ? 0x84 : 0x86);
-			D2GFX_DrawBoxAlpha(nIsoX - 60, nIsoY - 28, nIsoX + 60, nIsoY + 28, nColor, 180);
+			const uint32_t dwTok = PackThreeCharToken(pObjTxt->szToken);
+			const bool bUseOperating = (pPreset->nMode == 1 || pObjTxt->dwFrameCnt[1] > 0);
+			const uint32_t dwMode = bUseOperating ? PackThreeCharToken("ON") : PackThreeCharToken("NU");
+
+			D2GfxDataStrc tObjGfx = {};
+			tObjGfx.nUnitType = UNIT_OBJECT;
+			tObjGfx.nUnitIndex = pPreset->nIndex;
+			tObjGfx.nDirection = 0;
+			tObjGfx.dwName[0] = dwTok;
+			tObjGfx.dwName[1] = '  RT';
+			tObjGfx.dwName[2] = ' til';
+			tObjGfx.dwName[3] = dwMode;
+			tObjGfx.dwName[4] = ' hth';
+
+			if (!D2CMP_SpriteValidate(&tObjGfx, 0, TRUE) && bUseOperating)
+			{
+				tObjGfx.dwName[3] = PackThreeCharToken("NU");
+				D2CMP_SpriteValidate(&tObjGfx, 0, TRUE);
+			}
+			if (tObjGfx.pCurrentCell)
+			{
+				tObjGfx.nFrame = (tObjGfx.nMaxFrames > 0) ? ((dwTick / 55u) % static_cast<uint32_t>(tObjGfx.nMaxFrames)) : 0;
+				if (D2CMP_SpriteValidate(&tObjGfx, 0, TRUE))
+				{
+					TEXTURE_CelDrawShadow(&tObjGfx, nScreenX - 2, nScreenY);
+					TEXTURE_CelDraw(&tObjGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+				}
+			}
+
+			// Fire / Torch flame overlay layer (S1 / S2)
+			for (int sIdx = 0; sIdx < 2; ++sIdx)
+			{
+				D2GfxDataStrc tFlameGfx = {};
+				tFlameGfx.nUnitType = UNIT_OBJECT;
+				tFlameGfx.nUnitIndex = pPreset->nIndex;
+				tFlameGfx.nDirection = 0;
+				tFlameGfx.dwName[0] = dwTok;
+				tFlameGfx.dwName[1] = (sIdx == 0) ? '  1S' : '  2S';
+				tFlameGfx.dwName[2] = ' til';
+				tFlameGfx.dwName[3] = dwMode;
+				tFlameGfx.dwName[4] = ' hth';
+				if (!D2CMP_SpriteValidate(&tFlameGfx, 0, TRUE) && bUseOperating)
+				{
+					tFlameGfx.dwName[3] = PackThreeCharToken("NU");
+					D2CMP_SpriteValidate(&tFlameGfx, 0, TRUE);
+				}
+				if (tFlameGfx.pCurrentCell)
+				{
+					tFlameGfx.nFrame = (tFlameGfx.nMaxFrames > 0) ? ((dwTick / 45u) % static_cast<uint32_t>(tFlameGfx.nMaxFrames)) : 0;
+					if (D2CMP_SpriteValidate(&tFlameGfx, 0, TRUE))
+					{
+						TEXTURE_CelDraw(&tFlameGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_MODULATE, nullptr);
+					}
+				}
+			}
+		}
+		else if (pPreset->nUnitType == UNIT_MONSTER)
+		{
+			D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pPreset->nIndex);
+			if (!pMonTxt || !pMonTxt->dwCode)
+			{
+				continue;
+			}
+			for (int pass = 0; pass < 2; ++pass)
+			{
+				for (int c = 0; c < 7; ++c)
+				{
+					D2GfxDataStrc tMonGfx = {};
+					tMonGfx.nUnitType = UNIT_MONSTER;
+					tMonGfx.nUnitIndex = pPreset->nIndex;
+					tMonGfx.nDirection = 0;
+					tMonGfx.dwName[0] = pMonTxt->dwCode;
+					tMonGfx.dwName[1] = kNpcCompOrder[c];
+					tMonGfx.dwName[2] = ' til';
+					tMonGfx.dwName[3] = '  UN';
+					tMonGfx.dwName[4] = ' hth';
+					if (D2CMP_SpriteValidate(&tMonGfx, 0, TRUE))
+					{
+						tMonGfx.nFrame = (tMonGfx.nMaxFrames > 0) ? ((dwTick / 70u) % static_cast<uint32_t>(tMonGfx.nMaxFrames)) : 0;
+						if (D2CMP_SpriteValidate(&tMonGfx, 0, TRUE))
+						{
+							if (pass == 0)
+							{
+								TEXTURE_CelDrawShadow(&tMonGfx, nScreenX - 2, nScreenY);
+							}
+							else
+							{
+								TEXTURE_CelDraw(&tMonGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+							}
+						}
+					}
+				}
+			}
 		}
 	}
+}
 
-	// Town Campfire at world origin (80, -30)
-	if (gpHudCampfire)
+int32_t __stdcall TILE_ShadowTileDraw(D2TileLibraryEntryStrc* pTile, int32_t nXPos, int32_t nYPos, DrawMode eDrawMode, int32_t nScreenPanels);
+
+static void DrawRogueEncampmentGround(bool bUpperLayerPass)
+{
+	if (!gpClientAct)
 	{
-		const int32_t nFireX = 400 + 80 - nCamX;
-		const int32_t nFireY = 280 + 10 - nCamY;
-		if (nFireX > -120 && nFireX < 920 && nFireY > 0 && nFireY < 620)
+		return;
+	}
+
+	const int32_t nCamX = static_cast<int32_t>(gfPlayerWorldX);
+	const int32_t nCamY = static_cast<int32_t>(gfPlayerWorldY);
+
+	D2GfxLightExStrc aFloorLightEx[64];
+	std::memset(aFloorLightEx, 0xFF, sizeof(aFloorLightEx));
+
+	D2GfxLightStrc aWallLight[8];
+	std::memset(aWallLight, 0xFF, sizeof(aWallLight));
+
+	if (!bUpperLayerPass)
+	{
+		// Pass 1: Floor tiles (ground level)
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
 		{
-			const uint32_t nFireFrames = D2CMP_CelFileGetCelsPerDirection(gpHudCampfire);
-			D2GfxDataStrc tFireGfx = {};
-			tFireGfx.pCellFile = gpHudCampfire;
-			tFireGfx.nDirection = 0;
-			tFireGfx.nFrame = nFireFrames ? ((GetTickCount() / 40) % nFireFrames) : 0;
-			TEXTURE_CelDraw(&tFireGfx, nFireX - 55, nFireY + 20, 0xFFFFFFFFu, DRAWMODE_MODULATE, nullptr);
+			int nFloors = 0;
+			D2DrlgTileDataStrc* pFloors = DUNGEON_GetFloorTilesFromRoom(pRoom, &nFloors);
+			if (!pFloors || nFloors <= 0)
+			{
+				continue;
+			}
+			for (int i = 0; i < nFloors; ++i)
+			{
+				const D2DrlgTileDataStrc& td = pFloors[i];
+				if (!td.pTile || (td.dwFlags & MAPTILE_HIDDEN))
+				{
+					continue;
+				}
+				const int32_t nScreenX = td.nWidth + 80 - nCamX + 400;
+				const int32_t nScreenY = td.nHeight - 80 - nCamY + 280;
+				if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 760)
+				{
+					continue;
+				}
+				D2GFX_FloorTileDraw(td.pTile, aFloorLightEx, nScreenX, nScreenY, td.nWidth, td.nHeight, 0xFF, 0, nullptr);
+			}
+		}
+
+		// Pass 2: Shadow tiles (stored in room roof/shadow tile list)
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
+		{
+			int nShadows = 0;
+			D2DrlgTileDataStrc* pShadows = DUNGEON_GetRoofTilesFromRoom(pRoom, &nShadows);
+			if (!pShadows || nShadows <= 0)
+			{
+				continue;
+			}
+			for (int i = 0; i < nShadows; ++i)
+			{
+				const D2DrlgTileDataStrc& td = pShadows[i];
+				if (!td.pTile || (td.dwFlags & MAPTILE_HIDDEN))
+				{
+					continue;
+				}
+				const int32_t nScreenX = td.nWidth - nCamX + 400;
+				const int32_t nScreenY = td.nHeight - nCamY + 280;
+				if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 760)
+				{
+					continue;
+				}
+				TILE_ShadowTileDraw(td.pTile, nScreenX, nScreenY, DRAWMODE_TRANSHIGHLIGHT, 0);
+			}
+		}
+
+		// Pass 3: Lower walls (behind player) and background walls
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
+		{
+			int nWalls = 0;
+			D2DrlgTileDataStrc* pWalls = DUNGEON_GetWallTilesFromRoom(pRoom, &nWalls);
+			if (!pWalls || nWalls <= 0)
+			{
+				continue;
+			}
+			for (int i = 0; i < nWalls; ++i)
+			{
+				const D2DrlgTileDataStrc& td = pWalls[i];
+				if (!td.pTile || td.nTileType == TILETYPE_ROOF || (td.dwFlags & MAPTILE_HIDDEN))
+				{
+					continue;
+				}
+				const bool bLowerWall = (td.nTileType >= TILETYPE_LEFT_WALL_DOWN) || (td.nHeight <= nCamY);
+				if (!bLowerWall)
+				{
+					continue;
+				}
+				const int32_t nScreenX = td.nWidth - nCamX + 400;
+				const int32_t nScreenY = td.nHeight - nCamY + 280;
+				if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 860)
+				{
+					continue;
+				}
+				TILE_TileDrawLit(td.pTile, nScreenX, nScreenY, aWallLight, 0);
+			}
+		}
+
+		// Pass 4: Preset town objects (campfire, torches, stash, waypoint) and NPCs
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
+		{
+			DrawPresetUnitsInRoom(pRoom, nCamX, nCamY);
+		}
+	}
+	else
+	{
+		// Pass 5: Upper walls (in front of player) and Roofs
+		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
+		{
+			int nWalls = 0;
+			D2DrlgTileDataStrc* pWalls = DUNGEON_GetWallTilesFromRoom(pRoom, &nWalls);
+			if (!pWalls || nWalls <= 0)
+			{
+				continue;
+			}
+			for (int i = 0; i < nWalls; ++i)
+			{
+				const D2DrlgTileDataStrc& td = pWalls[i];
+				if (!td.pTile)
+				{
+					continue;
+				}
+				if (td.nTileType == TILETYPE_ROOF)
+				{
+					const int32_t nRoofH = D2CMP_TileGetRoofHeight(td.pTile);
+					const int32_t nScreenX = td.nWidth + 80 - nCamX + 400;
+					const int32_t nScreenY = td.nHeight - nRoofH - 80 - nCamY + 280;
+					if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 860)
+					{
+						continue;
+					}
+					D2GFX_FloorTileDraw(td.pTile, aFloorLightEx, nScreenX, nScreenY, td.nWidth, td.nHeight, 0xFF, 0, nullptr);
+					continue;
+				}
+				if (td.dwFlags & MAPTILE_HIDDEN)
+				{
+					continue;
+				}
+				const bool bLowerWall = (td.nTileType >= TILETYPE_LEFT_WALL_DOWN) || (td.nHeight <= nCamY);
+				if (bLowerWall)
+				{
+					continue;
+				}
+				const int32_t nScreenX = td.nWidth - nCamX + 400;
+				const int32_t nScreenY = td.nHeight - nCamY + 280;
+				if (nScreenX < -160 || nScreenX > 960 || nScreenY < -160 || nScreenY > 860)
+				{
+					continue;
+				}
+				if (nScreenX > 280 && nScreenX < 520 && nScreenY > 240 && nScreenY < 420)
+				{
+					TILE_TileDrawTrans(td.pTile, nScreenX, nScreenY, aWallLight, 0, 0x80);
+				}
+				else
+				{
+					TILE_TileDrawLit(td.pTile, nScreenX, nScreenY, aWallLight, 0);
+				}
+			}
 		}
 	}
 }
@@ -742,12 +1099,15 @@ static void RenderInGameFrame()
 
 	D2GFX_ClearScreen(0);
 
-	// 1. Rogue Encampment Ground & Campfire
-	DrawRogueEncampmentGround();
+	// 1. Rogue Encampment Ground, Shadows, Lower Walls & Preset Units
+	DrawRogueEncampmentGround(false);
 
-	// 2. Player Composite Character at screen center (400, 295)
+	// 2. Player Composite Character at screen center (400, 280)
 	D2CompositeUnitStrc* pActiveComp = (gbPlayerMoving && gpPlayerCompWalk) ? gpPlayerCompWalk : gpPlayerCompIdle;
-	DrawCompositeCharacter(pActiveComp, 400, 295, gnPlayerDir);
+	DrawCompositeCharacter(pActiveComp, 400, 280, gnPlayerDir);
+
+	// 3. Rogue Encampment Upper Walls & Roofs
+	DrawRogueEncampmentGround(true);
 
 	// 3. Player Overhead Name Banner & Area Title
 	Unicode wszArea[128] = {};

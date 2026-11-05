@@ -476,6 +476,19 @@ D2CMP_DLL_DECL D2CellFileStrc* __stdcall D2CMP_CelGetHandle(D2GfxDataStrc* pData
 	{
 		return nullptr;
 	}
+	if (pData->pCellFile)
+	{
+		D2CellFileStrc* pCellFile = pData->pCellFile;
+		int32_t nFileDir = D2CMP_CelGameDirToFileDir((int32_t)pData->nDirection, pCellFile->nDirections);
+		int32_t nFrame = (pCellFile->nFrames > 0) ? ((int32_t)pData->nFrame % pCellFile->nFrames) : 0;
+		int32_t idx = nFileDir * pCellFile->nFrames + nFrame;
+		if (idx >= 0 && idx < pCellFile->nDirections * pCellFile->nFrames)
+		{
+			pData->pCurrentCell = pCellFile->pGfxCells[idx];
+			return (D2CellFileStrc*)pData->pCurrentCell;
+		}
+		return nullptr;
+	}
 	if (pData->pCurrentCell)
 	{
 		return (D2CellFileStrc*)pData->pCurrentCell;
@@ -609,7 +622,7 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelDrawShadow(
 
 	// Isometric skew shadow rendering (bottom-up scanlines, each scanline pair shifts X by -1)
 	const int32_t nCellH = (int32_t)pCell->dwHeight;
-	const int32_t nStartX = nXPos + pCell->nXOffset;
+	const int32_t nStartX = nXPos + pCell->nXOffset + (pCell->nYOffset >> 1);
 	const int32_t nBottomY = nYPos + (pCell->nYOffset >> 1);
 
 	const uint8_t* pSrc = pCell->pPixels;
@@ -829,14 +842,14 @@ static int32_t MapNumDirsToTableRow(int32_t nNumDirs)
 {
 	switch (nNumDirs)
 	{
-	case 1:  return 0;
-	case 2:  return 1;
-	case 4:  return 2;
-	case 8:  return 3;
-	case 16: return 4;
-	case 32: return 5;
-	case 64: return 6;
-	default: return 3;
+	case 1:  return 1;
+	case 2:  return 2;
+	case 4:  return 3;
+	case 8:  return 4;
+	case 16: return 5;
+	case 32: return 6;
+	case 64: return 7;
+	default: return 0;
 	}
 }
 
@@ -1377,7 +1390,7 @@ D2CMP_DLL_DECL int __stdcall D2CMP_10088_GetTiles(
 	int32_t hashIdx = ((nStyle << 5) + (nSequence << 2) + nType) & 0x7F;
 	int nFound = 0;
 
-	for (int slot = 0; slot < 32 && ppTileLibraryHash[slot]; ++slot)
+	for (int slot = 0; slot < 32 && ppTileLibraryHash[slot] && nFound < nTileListSize; ++slot)
 	{
 		D2TileLibraryHashStrc* pHash = ppTileLibraryHash[slot];
 		for (D2TileLibraryHashNodeStrc* pNode = pHash->pNodes[hashIdx]; pNode; pNode = pNode->pPrev)
@@ -1390,10 +1403,6 @@ D2CMP_DLL_DECL int __stdcall D2CMP_10088_GetTiles(
 				}
 			}
 		}
-		if (nFound > 0)
-		{
-			break;
-		}
 	}
 	return nFound;
 }
@@ -1401,7 +1410,18 @@ D2CMP_DLL_DECL int __stdcall D2CMP_10088_GetTiles(
 // 1.12a: 0x6FE1D330 (#10024, 1.10f #10087)
 D2CMP_DLL_DECL void __stdcall D2CMP_10087_LoadTileLibrarySlot(D2TileLibraryHashStrc** ppTileLibraryHash, const char* szFileName)
 {
-	D2CMP_TileProjectsLoadLibrary(ppTileLibraryHash, szFileName);
+	if (!ppTileLibraryHash || !szFileName)
+	{
+		return;
+	}
+	for (int slot = 0; slot < 32; ++slot)
+	{
+		if (!ppTileLibraryHash[slot])
+		{
+			D2CMP_TileProjectsLoadLibrary(&ppTileLibraryHash[slot], szFileName);
+			return;
+		}
+	}
 }
 
 // ============================================================================
@@ -1650,11 +1670,822 @@ D2CMP_DLL_DECL void __stdcall D2CMP_SpriteCacheNoop2()
 {
 }
 
+struct D2SpriteCacheEntryStrc
+{
+	char szKey[260];
+	D2CellFileStrc* pCellFile;
+	int32_t bSeparateCells;
+	int32_t bNotFound;
+	D2SpriteCacheEntryStrc* pNext;
+};
+
+static D2SpriteCacheEntryStrc* gpSpriteCacheBuckets[256] = {};
+
+static const uint8_t kDccBitsTable[16] = {
+	0, 1, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 26, 28, 30, 32
+};
+
+struct DccBitStream
+{
+	const uint8_t* pData;
+	uint32_t nByteLen;
+	uint32_t nBitPos;
+
+	uint32_t ReadBits(uint32_t nBits)
+	{
+		if (nBits == 0)
+		{
+			return 0;
+		}
+		uint32_t val = 0;
+		for (uint32_t i = 0; i < nBits; ++i)
+		{
+			const uint32_t pos = nBitPos++;
+			const uint32_t byteIdx = pos >> 3;
+			if (byteIdx < nByteLen)
+			{
+				const uint32_t bit = (pData[byteIdx] >> (pos & 7u)) & 1u;
+				val |= (bit << i);
+			}
+		}
+		return val;
+	}
+
+	int32_t ReadSigned(uint32_t nBits)
+	{
+		if (nBits == 0)
+		{
+			return 0;
+		}
+		const uint32_t u = ReadBits(nBits);
+		if (nBits < 32 && (u & (1u << (nBits - 1))))
+		{
+			return static_cast<int32_t>(u | (~0u << nBits));
+		}
+		return static_cast<int32_t>(u);
+	}
+};
+
+struct DccFrameHeader
+{
+	uint32_t nVar0;
+	int32_t nWidth;
+	int32_t nHeight;
+	int32_t nXOffset;
+	int32_t nYOffset;
+	uint32_t nOptionalBytes;
+	uint32_t nCodedBytes;
+	uint32_t bBottomUp;
+	int32_t nXMin;
+	int32_t nXMax;
+	int32_t nYMin;
+	int32_t nYMax;
+};
+
+struct DccDirCellState
+{
+	uint8_t* pLastPix;
+	int32_t nLastW;
+	int32_t nLastH;
+	int32_t nLastCanvasX;
+	int32_t nLastCanvasY;
+	int32_t bVisited;
+};
+
+static D2GfxCellStrc* EncodeCanvasRectToGfxCell(
+	const uint8_t* pCanvas,
+	int32_t nCanvasStride,
+	int32_t nRelX,
+	int32_t nRelY,
+	int32_t nWidth,
+	int32_t nHeight,
+	int32_t nXOffset,
+	int32_t nYOffset,
+	uint32_t bBottomUp)
+{
+	if (nWidth <= 0 || nHeight <= 0)
+	{
+		D2GfxCellStrc* pEmpty = (D2GfxCellStrc*)D2_CALLOC(0x24);
+		pEmpty->dwWidth = 1;
+		pEmpty->dwHeight = 1;
+		pEmpty->nXOffset = nXOffset;
+		pEmpty->nYOffset = nYOffset;
+		pEmpty->dwLength = 1;
+		pEmpty->pPixels[0] = 0x80;
+		return pEmpty;
+	}
+
+	const size_t nMaxRle = static_cast<size_t>(nWidth * 2 + 4) * static_cast<size_t>(nHeight);
+	uint8_t* pTempRle = (uint8_t*)D2_ALLOC(nMaxRle);
+	size_t nRleLen = 0;
+
+	for (int32_t rowIdx = 0; rowIdx < nHeight; ++rowIdx)
+	{
+		const int32_t srcY = bBottomUp ? (nRelY + rowIdx) : (nRelY + nHeight - 1 - rowIdx);
+		const uint8_t* pRow = pCanvas + srcY * nCanvasStride + nRelX;
+
+		int32_t x = 0;
+		while (x < nWidth)
+		{
+			int32_t transStart = x;
+			while (x < nWidth && pRow[x] == 0)
+			{
+				++x;
+			}
+			if (x >= nWidth)
+			{
+				break;
+			}
+			int32_t transCount = x - transStart;
+			while (transCount > 0)
+			{
+				const int32_t chunk = (transCount > 0x7F) ? 0x7F : transCount;
+				pTempRle[nRleLen++] = static_cast<uint8_t>(0x80 | chunk);
+				transCount -= chunk;
+			}
+
+			int32_t opqStart = x;
+			while (x < nWidth && pRow[x] != 0)
+			{
+				++x;
+			}
+			int32_t opqCount = x - opqStart;
+			int32_t opqPos = opqStart;
+			while (opqCount > 0)
+			{
+				const int32_t chunk = (opqCount > 0x7F) ? 0x7F : opqCount;
+				pTempRle[nRleLen++] = static_cast<uint8_t>(chunk);
+				memcpy(&pTempRle[nRleLen], &pRow[opqPos], static_cast<size_t>(chunk));
+				nRleLen += static_cast<size_t>(chunk);
+				opqPos += chunk;
+				opqCount -= chunk;
+			}
+		}
+		pTempRle[nRleLen++] = 0x80;
+	}
+
+	D2GfxCellStrc* pCell = (D2GfxCellStrc*)D2_CALLOC(0x20 + nRleLen);
+	pCell->bFlip = bBottomUp ? 1 : 0;
+	pCell->dwWidth = static_cast<uint32_t>(nWidth);
+	pCell->dwHeight = static_cast<uint32_t>(nHeight);
+	pCell->nXOffset = nXOffset;
+	pCell->nYOffset = nYOffset;
+	pCell->dwLength = static_cast<uint32_t>(nRleLen);
+	if (nRleLen > 0)
+	{
+		memcpy(pCell->pPixels, pTempRle, nRleLen);
+	}
+	D2_FREE(pTempRle);
+	return pCell;
+}
+
+// 1.12a: 0x6FE1EA00 - Decode one DCC direction stream into nFramesPerDir D2GfxCellStrc cells
+static bool DecodeDccDirection(
+	const uint8_t* pDirData,
+	uint32_t nDirMaxBytes,
+	int32_t nFramesPerDir,
+	D2GfxCellStrc** ppOutCells)
+{
+	if (!pDirData || nDirMaxBytes < 8 || nFramesPerDir <= 0 || nFramesPerDir > 512)
+	{
+		return false;
+	}
+
+	DccBitStream bsMain = { pDirData, nDirMaxBytes, 0 };
+	const uint32_t dwOutSizeCoded = bsMain.ReadBits(32);
+	D2_MAYBE_UNUSED(dwOutSizeCoded);
+	const uint32_t nCompressionFlags = bsMain.ReadBits(2);
+	const uint32_t nVar0Bits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nWidthBits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nHeightBits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nXOffsetBits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nYOffsetBits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nOptionalBytesBits = kDccBitsTable[bsMain.ReadBits(4)];
+	const uint32_t nCodedBytesBits = kDccBitsTable[bsMain.ReadBits(4)];
+
+	DccFrameHeader* aFrames = (DccFrameHeader*)D2_CALLOC(sizeof(DccFrameHeader) * static_cast<size_t>(nFramesPerDir));
+	int32_t dirXMin = 0x7FFFFFFF;
+	int32_t dirYMin = 0x7FFFFFFF;
+	int32_t dirXMax = -0x7FFFFFFF;
+	int32_t dirYMax = -0x7FFFFFFF;
+	uint32_t totalOptionalBytes = 0;
+
+	for (int32_t f = 0; f < nFramesPerDir; ++f)
+	{
+		DccFrameHeader& fh = aFrames[f];
+		fh.nVar0 = bsMain.ReadBits(nVar0Bits);
+		fh.nWidth = static_cast<int32_t>(bsMain.ReadBits(nWidthBits));
+		fh.nHeight = static_cast<int32_t>(bsMain.ReadBits(nHeightBits));
+		fh.nXOffset = bsMain.ReadSigned(nXOffsetBits);
+		fh.nYOffset = bsMain.ReadSigned(nYOffsetBits);
+		fh.nOptionalBytes = bsMain.ReadBits(nOptionalBytesBits);
+		fh.nCodedBytes = bsMain.ReadBits(nCodedBytesBits);
+		fh.bBottomUp = bsMain.ReadBits(1);
+		totalOptionalBytes += fh.nOptionalBytes;
+
+		const int32_t hOff = fh.bBottomUp ? 0 : fh.nHeight;
+		fh.nXMin = fh.nXOffset;
+		fh.nXMax = fh.nXMin + fh.nWidth;
+		fh.nYMin = fh.nYOffset - hOff;
+		fh.nYMax = fh.nYMin + fh.nHeight;
+
+		if (fh.nWidth > 0 && fh.nHeight > 0)
+		{
+			if (fh.nXMin < dirXMin) dirXMin = fh.nXMin;
+			if (fh.nXMax > dirXMax) dirXMax = fh.nXMax;
+			if (fh.nYMin < dirYMin) dirYMin = fh.nYMin;
+			if (fh.nYMax > dirYMax) dirYMax = fh.nYMax;
+		}
+	}
+
+	if (totalOptionalBytes > 0)
+	{
+		bsMain.nBitPos = (bsMain.nBitPos + 7u) & ~7u;
+		bsMain.nBitPos += totalOptionalBytes * 8u;
+	}
+
+	const uint32_t nEqualCellsBits = (nCompressionFlags & 2u) ? bsMain.ReadBits(20) : 0;
+	const uint32_t nPixelMaskBits = bsMain.ReadBits(20);
+	const uint32_t nEncodingTypeBits = (nCompressionFlags & 1u) ? bsMain.ReadBits(20) : 0;
+	const uint32_t nRawPixelCodesBits = (nCompressionFlags & 1u) ? bsMain.ReadBits(20) : 0;
+
+	uint8_t aPixelValues[256] = {};
+	int nColors = 0;
+	for (int i = 0; i < 256; ++i)
+	{
+		if (bsMain.ReadBits(1))
+		{
+			aPixelValues[nColors++] = static_cast<uint8_t>(i);
+		}
+	}
+
+	const uint32_t posEqualCells = bsMain.nBitPos;
+	const uint32_t posPixelMask = posEqualCells + nEqualCellsBits;
+	const uint32_t posEncodingType = posPixelMask + nPixelMaskBits;
+	const uint32_t posRawPixelCodes = posEncodingType + nEncodingTypeBits;
+	const uint32_t posPixelCodeDisp = posRawPixelCodes + nRawPixelCodesBits;
+
+	const int32_t dirW = (dirXMax > dirXMin) ? (dirXMax - dirXMin) : 0;
+	const int32_t dirH = (dirYMax > dirYMin) ? (dirYMax - dirYMin) : 0;
+	if (dirW <= 0 || dirH <= 0)
+	{
+		for (int32_t f = 0; f < nFramesPerDir; ++f)
+		{
+			ppOutCells[f] = EncodeCanvasRectToGfxCell(nullptr, 0, 0, 0, 0, 0, aFrames[f].nXOffset, aFrames[f].nYOffset, aFrames[f].bBottomUp);
+		}
+		D2_FREE(aFrames);
+		return true;
+	}
+
+	const int32_t nCellsW = ((dirW + 3) >> 2) + 1;
+	const int32_t nCellsH = ((dirH + 3) >> 2) + 1;
+	const int32_t nTotalDirCells = nCellsW * nCellsH;
+
+	// Count upper bound on frame cell visits across all frames
+	int32_t nMaxCellVisits = 0;
+	for (int32_t f = 0; f < nFramesPerDir; ++f)
+	{
+		if (aFrames[f].nWidth > 0 && aFrames[f].nHeight > 0)
+		{
+			nMaxCellVisits += ((aFrames[f].nWidth >> 2) + 2) * ((aFrames[f].nHeight >> 2) + 2);
+		}
+	}
+	if (nMaxCellVisits <= 0)
+	{
+		nMaxCellVisits = 1;
+	}
+
+	uint8_t* pPixelBuffer = (uint8_t*)D2_CALLOC(static_cast<size_t>(nMaxCellVisits) * 4u);
+	DccDirCellState* aDirCells = (DccDirCellState*)D2_CALLOC(sizeof(DccDirCellState) * static_cast<size_t>(nTotalDirCells));
+
+	// Stage 1 (0x6FE1DF50): Decode 4-color palettes for each frame cell visit
+	DccBitStream bsEqualCells = { pDirData, nDirMaxBytes, posEqualCells };
+	DccBitStream bsPixelMask = { pDirData, nDirMaxBytes, posPixelMask };
+	DccBitStream bsEncodingType = { pDirData, nDirMaxBytes, posEncodingType };
+	DccBitStream bsRawPixelCodes = { pDirData, nDirMaxBytes, posRawPixelCodes };
+	DccBitStream bsPixelCodeDisp = { pDirData, nDirMaxBytes, posPixelCodeDisp };
+
+	uint8_t* pPixWrite = pPixelBuffer;
+	for (int32_t f = 0; f < nFramesPerDir; ++f)
+	{
+		const DccFrameHeader& fh = aFrames[f];
+		if (fh.nWidth <= 0 || fh.nHeight <= 0)
+		{
+			continue;
+		}
+		const int32_t relX = fh.nXMin - dirXMin;
+		const int32_t relY = fh.nYMin - dirYMin;
+		const int32_t cellX0 = relX >> 2;
+		const int32_t cellY0 = relY >> 2;
+		const int32_t wFirst = 4 - (relX & 3);
+		const int32_t hFirst = 4 - (relY & 3);
+
+		int32_t curY = 0;
+		int32_t rowCellY = cellY0;
+		int32_t cellH = (hFirst + 1 < fh.nHeight) ? hFirst : fh.nHeight;
+		while (curY < fh.nHeight)
+		{
+			int32_t curX = 0;
+			int32_t colCellX = cellX0;
+			int32_t cellW = (wFirst + 1 < fh.nWidth) ? wFirst : fh.nWidth;
+			while (curX < fh.nWidth)
+			{
+				const int32_t cellIdx = rowCellY * nCellsW + colCellX;
+				DccDirCellState& dcell = aDirCells[cellIdx];
+				uint8_t* oldPix = dcell.pLastPix;
+				uint32_t nMask = 0x0Fu;
+
+				bool bSkipEqual = false;
+				if (oldPix != nullptr)
+				{
+					if ((nCompressionFlags & 2u) && bsEqualCells.ReadBits(1) != 0)
+					{
+						bSkipEqual = true;
+					}
+					else
+					{
+						nMask = bsPixelMask.ReadBits(4);
+					}
+				}
+
+				if (!bSkipEqual)
+				{
+					uint8_t* curPix = pPixWrite;
+					pPixWrite += 4;
+
+					const uint32_t bRawEncoding = (nMask != 0 && (nCompressionFlags & 1u)) ? bsEncodingType.ReadBits(1) : 0;
+					uint8_t curCode = 0;
+					int edi = 4;
+					while (edi > 0)
+					{
+						--edi;
+						if (nMask & (1u << edi))
+						{
+							uint8_t bl = 0;
+							if (bRawEncoding)
+							{
+								bl = static_cast<uint8_t>(bsRawPixelCodes.ReadBits(8));
+								curPix[edi] = bl;
+							}
+							else
+							{
+								bl = curCode;
+								uint32_t disp = 0;
+								do
+								{
+									disp = bsPixelCodeDisp.ReadBits(4);
+									bl = static_cast<uint8_t>(bl + disp);
+								} while (disp == 15u);
+								curPix[edi] = bl;
+							}
+
+							if (bl == curCode)
+							{
+								// Early stop: shift already-decoded masked slots (ecx > edi) into lowest masked slots (eax)
+								int ecx = edi;
+								int eax = -1;
+								for (;;)
+								{
+									do { ++ecx; } while (ecx < 4 && !(nMask & (1u << ecx)));
+									if (ecx >= 4)
+									{
+										break;
+									}
+									do { ++eax; } while (!(nMask & (1u << eax)));
+									curPix[eax] = curPix[ecx];
+								}
+								for (;;)
+								{
+									do { ++eax; } while (eax < 4 && !(nMask & (1u << eax)));
+									if (eax >= 4)
+									{
+										break;
+									}
+									curPix[eax] = 0;
+								}
+								while (edi > 0)
+								{
+									--edi;
+									if (!(nMask & (1u << edi)))
+									{
+										curPix[edi] = oldPix ? oldPix[edi] : 0;
+									}
+								}
+								break;
+							}
+							curCode = bl;
+						}
+						else
+						{
+							curPix[edi] = oldPix ? oldPix[edi] : 0;
+						}
+					}
+					dcell.pLastPix = curPix;
+				}
+
+				curX += cellW;
+				++colCellX;
+				cellW = (curX + 5 < fh.nWidth) ? 4 : (fh.nWidth - curX);
+			}
+			curY += cellH;
+			++rowCellY;
+			cellH = (curY + 5 < fh.nHeight) ? 4 : (fh.nHeight - curY);
+		}
+	}
+
+	// Translate all decoded color codes in pPixelBuffer through aPixelValues (0x6FE1EF65)
+	const size_t nTotalPixBytes = static_cast<size_t>(pPixWrite - pPixelBuffer);
+	for (size_t i = 0; i < nTotalPixBytes; ++i)
+	{
+		pPixelBuffer[i] = aPixelValues[pPixelBuffer[i]];
+	}
+
+	// Stage 2 (0x6FE1DB60): Fill direction canvas cell-by-cell and RLE-encode each frame
+	uint8_t* pDirCanvas = (uint8_t*)D2_CALLOC(static_cast<size_t>(dirW) * static_cast<size_t>(dirH));
+	memset(aDirCells, 0, sizeof(DccDirCellState) * static_cast<size_t>(nTotalDirCells));
+	bsEqualCells.nBitPos = posEqualCells;
+	const uint8_t* pPixRead = pPixelBuffer;
+
+	for (int32_t f = 0; f < nFramesPerDir; ++f)
+	{
+		const DccFrameHeader& fh = aFrames[f];
+		if (fh.nWidth <= 0 || fh.nHeight <= 0)
+		{
+			ppOutCells[f] = EncodeCanvasRectToGfxCell(nullptr, 0, 0, 0, 0, 0, fh.nXOffset, fh.nYOffset, fh.bBottomUp);
+			continue;
+		}
+		const int32_t relX = fh.nXMin - dirXMin;
+		const int32_t relY = fh.nYMin - dirYMin;
+		const int32_t cellX0 = relX >> 2;
+		const int32_t cellY0 = relY >> 2;
+		const int32_t wFirst = 4 - (relX & 3);
+		const int32_t hFirst = 4 - (relY & 3);
+
+		int32_t curY = 0;
+		int32_t rowCellY = cellY0;
+		int32_t cellH = (hFirst + 1 < fh.nHeight) ? hFirst : fh.nHeight;
+		while (curY < fh.nHeight)
+		{
+			int32_t curX = 0;
+			int32_t colCellX = cellX0;
+			int32_t cellW = (wFirst + 1 < fh.nWidth) ? wFirst : fh.nWidth;
+			while (curX < fh.nWidth)
+			{
+				const int32_t cellIdx = rowCellY * nCellsW + colCellX;
+				DccDirCellState& dcell = aDirCells[cellIdx];
+				const int32_t canvasX = relX + curX;
+				const int32_t canvasY = relY + curY;
+
+				bool bEqualCell = false;
+				if (dcell.bVisited && (nCompressionFlags & 2u))
+				{
+					bEqualCell = (bsEqualCells.ReadBits(1) != 0);
+				}
+
+				if (bEqualCell)
+				{
+					if (cellW != dcell.nLastW || cellH != dcell.nLastH)
+					{
+						for (int32_t y = 0; y < cellH; ++y)
+						{
+							memset(&pDirCanvas[(canvasY + y) * dirW + canvasX], 0, static_cast<size_t>(cellW));
+						}
+					}
+					else if (canvasX != dcell.nLastCanvasX || canvasY != dcell.nLastCanvasY)
+					{
+						for (int32_t y = 0; y < cellH; ++y)
+						{
+							memcpy(
+								&pDirCanvas[(canvasY + y) * dirW + canvasX],
+								&pDirCanvas[(dcell.nLastCanvasY + y) * dirW + dcell.nLastCanvasX],
+								static_cast<size_t>(cellW));
+						}
+					}
+				}
+				else
+				{
+					const uint8_t* pix = pPixRead;
+					pPixRead += 4;
+
+					uint32_t nBits = 0;
+					if (pix[1] != pix[0])
+					{
+						nBits = (pix[2] != pix[1]) ? 2u : 1u;
+					}
+
+					if (nBits == 0)
+					{
+						const uint8_t c0 = pix[0];
+						for (int32_t y = 0; y < cellH; ++y)
+						{
+							memset(&pDirCanvas[(canvasY + y) * dirW + canvasX], c0, static_cast<size_t>(cellW));
+						}
+					}
+					else
+					{
+						for (int32_t y = 0; y < cellH; ++y)
+						{
+							uint8_t* pRow = &pDirCanvas[(canvasY + y) * dirW + canvasX];
+							for (int32_t x = 0; x < cellW; ++x)
+							{
+								const uint32_t idx = bsPixelCodeDisp.ReadBits(nBits);
+								pRow[x] = pix[idx & 3u];
+							}
+						}
+					}
+				}
+
+				dcell.bVisited = true;
+				dcell.nLastW = cellW;
+				dcell.nLastH = cellH;
+				dcell.nLastCanvasX = canvasX;
+				dcell.nLastCanvasY = canvasY;
+
+				curX += cellW;
+				++colCellX;
+				cellW = (curX + 5 < fh.nWidth) ? 4 : (fh.nWidth - curX);
+			}
+			curY += cellH;
+			++rowCellY;
+			cellH = (curY + 5 < fh.nHeight) ? 4 : (fh.nHeight - curY);
+		}
+
+		ppOutCells[f] = EncodeCanvasRectToGfxCell(
+			pDirCanvas,
+			dirW,
+			relX,
+			relY,
+			fh.nWidth,
+			fh.nHeight,
+			fh.nXOffset,
+			fh.nYOffset,
+			fh.bBottomUp);
+	}
+
+	D2_FREE(pDirCanvas);
+	D2_FREE(aDirCells);
+	D2_FREE(pPixelBuffer);
+	D2_FREE(aFrames);
+	return true;
+}
+
+static D2CellFileStrc* DecodeDccToCellFile(const uint8_t* pFileBytes, uint32_t nFileSize)
+{
+	if (!pFileBytes || nFileSize < 19 || pFileBytes[0] != 0x74)
+	{
+		return nullptr;
+	}
+	const int32_t nDirections = pFileBytes[2];
+	const int32_t nFramesPerDir = *reinterpret_cast<const int32_t*>(&pFileBytes[3]);
+	if (nDirections <= 0 || nDirections > 64 || nFramesPerDir <= 0 || nFramesPerDir > 512)
+	{
+		return nullptr;
+	}
+	if (nFileSize < static_cast<uint32_t>(15 + 4 * nDirections))
+	{
+		return nullptr;
+	}
+
+	const int32_t nTotalCells = nDirections * nFramesPerDir;
+	D2CellFileStrc* pCellFile = (D2CellFileStrc*)D2_CALLOC(sizeof(D2CellFileStrc) + sizeof(D2GfxCellStrc*) * static_cast<size_t>(nTotalCells));
+	pCellFile->dwVersion = 6;
+	pCellFile->dwTermination = 0xB00B1E5;
+	pCellFile->nDirections = nDirections;
+	pCellFile->nFrames = nFramesPerDir;
+
+	const uint32_t* aDirOffsets = reinterpret_cast<const uint32_t*>(&pFileBytes[15]);
+	for (int32_t d = 0; d < nDirections; ++d)
+	{
+		const uint32_t dirOff = aDirOffsets[d];
+		if (dirOff >= nFileSize)
+		{
+			D2CMP_CelFileFree(pCellFile);
+			return nullptr;
+		}
+		if (!DecodeDccDirection(pFileBytes + dirOff, nFileSize - dirOff, nFramesPerDir, &pCellFile->pGfxCells[d * nFramesPerDir]))
+		{
+			D2CMP_CelFileFree(pCellFile);
+			return nullptr;
+		}
+	}
+	return pCellFile;
+}
+
+static bool BuildSpriteBasePath(const D2GfxDataStrc* pData, char* szOutBase, size_t nMaxLen)
+{
+	if (!pData || !szOutBase || nMaxLen == 0)
+	{
+		return false;
+	}
+	szOutBase[0] = '\0';
+
+	if (pData->pName && pData->pName[0])
+	{
+		if (_strnicmp(pData->pName, "DATA\\", 5) == 0)
+		{
+			SStrCopy(szOutBase, pData->pName, static_cast<int>(nMaxLen));
+		}
+		else if (pData->nUnitType == 3)
+		{
+			snprintf(szOutBase, nMaxLen, "DATA\\GLOBAL\\MISSILES\\%s", pData->pName);
+		}
+		else if (pData->nUnitType == 4)
+		{
+			snprintf(szOutBase, nMaxLen, "DATA\\GLOBAL\\ITEMS\\%s", pData->pName);
+		}
+		else if (pData->nUnitType == 5)
+		{
+			snprintf(szOutBase, nMaxLen, "DATA\\GLOBAL\\OVERLAYS\\%s", pData->pName);
+		}
+		else
+		{
+			SStrCopy(szOutBase, pData->pName, static_cast<int>(nMaxLen));
+		}
+		const size_t nLen = strlen(szOutBase);
+		if (nLen > 4 && (_stricmp(szOutBase + nLen - 4, ".dcc") == 0 || _stricmp(szOutBase + nLen - 4, ".dc6") == 0))
+		{
+			szOutBase[nLen - 4] = '\0';
+		}
+		return szOutBase[0] != '\0';
+	}
+
+	if (pData->dwName[0] == 0)
+	{
+		return false;
+	}
+
+	auto TrimToken = [](uint32_t dwVal, char (&szOut)[5])
+	{
+		const char* p = reinterpret_cast<const char*>(&dwVal);
+		int k = 0;
+		for (int i = 0; i < 4; ++i)
+		{
+			if (p[i] != '\0' && p[i] != ' ')
+			{
+				szOut[k++] = p[i];
+			}
+		}
+		szOut[k] = '\0';
+	};
+
+	char szTok[5] = {};
+	char szComp[5] = {};
+	char szArmor[5] = {};
+	char szMode[5] = {};
+	char szHitClass[5] = {};
+	TrimToken(pData->dwName[0], szTok);
+	TrimToken(pData->dwName[1], szComp);
+	TrimToken(pData->dwName[2], szArmor);
+	TrimToken(pData->dwName[3], szMode);
+	TrimToken(pData->dwName[4], szHitClass);
+
+	if (!szTok[0] || !szComp[0] || !szMode[0])
+	{
+		return false;
+	}
+	if (!szArmor[0])
+	{
+		strcpy(szArmor, "lit");
+	}
+	if (!szHitClass[0])
+	{
+		strcpy(szHitClass, "hth");
+	}
+
+	const char* szBaseDir = "DATA\\GLOBAL\\CHARS";
+	if (pData->nUnitType == 2)
+	{
+		szBaseDir = "DATA\\GLOBAL\\OBJECTS";
+	}
+	else if (pData->nUnitType == 1 || pData->nUnitIndex >= 7)
+	{
+		szBaseDir = "DATA\\GLOBAL\\MONSTERS";
+	}
+
+	snprintf(
+		szOutBase,
+		nMaxLen,
+		"%s\\%s\\%s\\%s%s%s%s%s",
+		szBaseDir,
+		szTok,
+		szComp,
+		szTok,
+		szComp,
+		szArmor,
+		szMode,
+		szHitClass);
+	return true;
+}
+
+static D2CellFileStrc* LookupOrLoadCompositeSprite(const D2GfxDataStrc* pData)
+{
+	char szBase[260] = {};
+	if (!BuildSpriteBasePath(pData, szBase, sizeof(szBase)))
+	{
+		return nullptr;
+	}
+
+	uint32_t dwHash = 2166136261u;
+	for (const char* p = szBase; *p; ++p)
+	{
+		const uint8_t c = static_cast<uint8_t>((*p >= 'a' && *p <= 'z') ? (*p - 32) : *p);
+		dwHash = (dwHash ^ c) * 16777619u;
+	}
+	const uint32_t bucket = dwHash & 0xFFu;
+
+	for (D2SpriteCacheEntryStrc* pEntry = gpSpriteCacheBuckets[bucket]; pEntry; pEntry = pEntry->pNext)
+	{
+		if (SStrCmpI(pEntry->szKey, szBase, sizeof(pEntry->szKey)) == 0)
+		{
+			return pEntry->bNotFound ? nullptr : pEntry->pCellFile;
+		}
+	}
+
+	D2CellFileStrc* pLoadedCellFile = nullptr;
+	bool bSeparateCells = false;
+
+	char szFullPath[268] = {};
+	snprintf(szFullPath, sizeof(szFullPath), "%s.dcc", szBase);
+	HSFILE hFile = nullptr;
+	if (FOG_FOpenFile(szFullPath, &hFile))
+	{
+		const uint32_t dwSize = FOG_FGetFileSize(hFile, nullptr);
+		if (dwSize >= 19)
+		{
+			uint8_t* pBuf = (uint8_t*)D2_ALLOC(dwSize);
+			int nRead = 0;
+			FOG_FReadFile(hFile, pBuf, dwSize, &nRead, 0, 0, 0);
+			FOG_FCloseFile(hFile);
+			pLoadedCellFile = DecodeDccToCellFile(pBuf, dwSize);
+			D2_FREE(pBuf);
+			bSeparateCells = (pLoadedCellFile != nullptr);
+		}
+		else
+		{
+			FOG_FCloseFile(hFile);
+		}
+	}
+
+	if (!pLoadedCellFile)
+	{
+		snprintf(szFullPath, sizeof(szFullPath), "%s.dc6", szBase);
+		if (FOG_FOpenFile(szFullPath, &hFile))
+		{
+			const uint32_t dwSize = FOG_FGetFileSize(hFile, nullptr);
+			if (dwSize >= sizeof(D2CellFileStrc))
+			{
+				D2CellFileStrc* pRaw = (D2CellFileStrc*)D2_ALLOC(dwSize);
+				int nRead = 0;
+				FOG_FReadFile(hFile, pRaw, dwSize, &nRead, 0, 0, 0);
+				FOG_FCloseFile(hFile);
+				D2CMP_CelFileNormalize(pRaw, &pLoadedCellFile, __FILE__, __LINE__, -1, 0);
+				bSeparateCells = false;
+			}
+			else
+			{
+				FOG_FCloseFile(hFile);
+			}
+		}
+	}
+
+	D2SpriteCacheEntryStrc* pNewEntry = D2_CALLOC_STRC(D2SpriteCacheEntryStrc);
+	SStrCopy(pNewEntry->szKey, szBase, sizeof(pNewEntry->szKey));
+	pNewEntry->pCellFile = pLoadedCellFile;
+	pNewEntry->bSeparateCells = bSeparateCells;
+	pNewEntry->bNotFound = (pLoadedCellFile == nullptr);
+	pNewEntry->pNext = gpSpriteCacheBuckets[bucket];
+	gpSpriteCacheBuckets[bucket] = pNewEntry;
+
+	return pLoadedCellFile;
+}
+
 // 1.12a: 0x6FE22710 (#10098, 1.10f #10053)
 D2CMP_DLL_DECL void __stdcall D2CMP_FlushSpriteCache(BOOL bRealloc)
 {
 	D2_MAYBE_UNUSED(bRealloc);
 	D2CMP_SpriteFreeAsyncLoads();
+	for (int i = 0; i < 256; ++i)
+	{
+		D2SpriteCacheEntryStrc* pEntry = gpSpriteCacheBuckets[i];
+		gpSpriteCacheBuckets[i] = nullptr;
+		while (pEntry)
+		{
+			D2SpriteCacheEntryStrc* pNext = pEntry->pNext;
+			if (pEntry->pCellFile)
+			{
+				if (pEntry->bSeparateCells)
+				{
+					D2CMP_CelFileFree(pEntry->pCellFile);
+				}
+				else
+				{
+					D2CMP_CelFileFreeSerialized(pEntry->pCellFile);
+				}
+			}
+			D2_FREE(pEntry);
+			pEntry = pNext;
+		}
+	}
 	gdwHeaderCacheUsed_6FE3AB08 = 0;
 	gdwFrameCacheUsed_6FE3AB14 = 0;
 }
@@ -1687,10 +2518,15 @@ D2CMP_DLL_DECL BOOL __stdcall D2CMP_SpriteCacheLoadInit(D2GfxDataStrc* pData)
 	{
 		return FALSE;
 	}
-	if (pData->pCellFile)
+	D2CellFileStrc* pCellFile = pData->pCellFile;
+	if (!pCellFile)
 	{
-		pData->nMaxDirections = pData->pCellFile->nDirections;
-		pData->nMaxFrames = pData->pCellFile->nFrames;
+		pCellFile = LookupOrLoadCompositeSprite(pData);
+	}
+	if (pCellFile)
+	{
+		pData->nMaxDirections = pCellFile->nDirections;
+		pData->nMaxFrames = pCellFile->nFrames;
 		return TRUE;
 	}
 	return FALSE;
@@ -1708,11 +2544,16 @@ D2CMP_DLL_DECL BOOL __stdcall D2CMP_SpriteValidate(D2GfxDataStrc* pData, int32_t
 	D2CellFileStrc* pCellFile = pData->pCellFile;
 	if (!pCellFile)
 	{
-		return FALSE;
+		pCellFile = LookupOrLoadCompositeSprite(pData);
+		if (!pCellFile)
+		{
+			pData->pCurrentCell = nullptr;
+			return FALSE;
+		}
 	}
 	pData->nMaxDirections = pCellFile->nDirections;
 	pData->nMaxFrames = pCellFile->nFrames;
-	int32_t nFileDir = D2CMP_CelNormalDirToFileDir((int32_t)pData->nDirection, pCellFile->nDirections);
+	int32_t nFileDir = D2CMP_CelGameDirToFileDir((int32_t)pData->nDirection, pCellFile->nDirections);
 	int32_t nFrame = (pCellFile->nFrames > 0) ? ((int32_t)pData->nFrame % pCellFile->nFrames) : 0;
 	int32_t idx = nFileDir * pCellFile->nFrames + nFrame;
 	if (idx >= 0 && idx < pCellFile->nDirections * pCellFile->nFrames)
