@@ -20,7 +20,11 @@ target_link_libraries(Game
 	D2Sound
 	D2MCPClient
 )
-set_target_properties(Game PROPERTIES OUTPUT_NAME Game.D2MOO)
+set_target_properties(Game PROPERTIES
+  OUTPUT_NAME Game.D2MOO
+  VS_DEBUGGER_COMMAND_ARGUMENTS "-w"
+  VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:Game>"
+)
 
 if(D2MOO_WITH_STATIC_TESTS)
   target_sources(Game

@@ -385,8 +385,7 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 	D2Win_10014_SetWndProc(D2Client_WndProc);
 	HD2ARCHIVE hArchive = D2Win_GetArchive();
 
-	char szFolder[16] = {};
-	if (!STRTABLE_Initialize(0, szFolder, FOG_IsExpansion()))
+	if (!STRTABLE_Initialize(0, nullptr, FOG_IsExpansion()))
 	{
 		return D2CLIENT_MODULE_NONE;
 	}

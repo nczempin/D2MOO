@@ -233,34 +233,51 @@ static void __fastcall FastCmpDrawCell_6FE261B0(const D2DrawContextStrc* pCtx, c
 
 	const int32_t nStartX = pCtx->nXPos + pCell->nXOffset;
 	const int32_t nBottomY = pCtx->nYPos + pCell->nYOffset;
-	const int32_t nTopY = nBottomY - nCellH + 1;
-
 	const int32_t nClipLeft = (pCtx->nCropLeft > 0) ? pCtx->nCropLeft : 0;
 	const int32_t nClipRight = (pCtx->nCropRight > 0 && pCtx->nCropRight <= pCtx->nSurfaceWidth) ? pCtx->nCropRight : pCtx->nSurfaceWidth;
-	const int32_t nClipTop = (pCtx->nSkipLines > 0) ? pCtx->nSkipLines : 0;
-	const int32_t nClipBottom = (pCtx->nDrawLines > 0 && pCtx->nDrawLines <= pCtx->nSurfaceHeight) ? pCtx->nDrawLines : pCtx->nSurfaceHeight;
 
-	if (nStartX >= nClipRight || nStartX + nCellW <= nClipLeft || nTopY >= nClipBottom || nBottomY < nClipTop)
+	const int32_t nSkipLines = (pCtx->nSkipLines > 0) ? pCtx->nSkipLines : 0;
+	const int32_t nDrawLines = (pCtx->nDrawLines > 0 && pCtx->nDrawLines <= nCellH - nSkipLines) ? pCtx->nDrawLines : (nCellH - nSkipLines);
+	if (nDrawLines <= 0 || nStartX >= nClipRight || nStartX + nCellW <= nClipLeft)
 	{
 		return;
 	}
+
+	const bool bTopDown = (pCell->bFlip & 1) != 0;
+	const int32_t nStepY = bTopDown ? 1 : -1;
+	int32_t curY = bTopDown ? (nBottomY - nCellH + 1 + nSkipLines) : (nBottomY - nSkipLines);
 
 	const uint8_t* pSrc = pCell->pPixels;
 	const uint8_t* pSrcEnd = pSrc + pCell->dwLength;
 	const uint8_t* pPal = pCtx->pPaletteTable;
 	const uint8_t* pDarken = pCtx->pDarkenTable;
-	const int32_t nDrawMode = pCtx->nDrawMode;
+	const uint8_t* pTransTable = reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(static_cast<uint32_t>(pCtx->nDrawMode)));
+	const bool bHasTransTable = (reinterpret_cast<uintptr_t>(pTransTable) >= 0x10000u);
+
+	for (int32_t skipped = 0; skipped < nSkipLines && pSrc < pSrcEnd;)
+	{
+		uint8_t ctrl = *pSrc++;
+		if (ctrl == 0x80)
+		{
+			++skipped;
+		}
+		else if (ctrl < 0x80)
+		{
+			pSrc += ctrl;
+		}
+	}
 
 	int32_t curX = nStartX;
-	int32_t curY = nTopY;
+	int32_t linesDrawn = 0;
 
-	while (pSrc < pSrcEnd && curY <= nBottomY)
+	while (pSrc < pSrcEnd && linesDrawn < nDrawLines)
 	{
 		uint8_t ctrl = *pSrc++;
 		if (ctrl == 0x80)
 		{
 			curX = nStartX;
-			++curY;
+			curY += nStepY;
+			++linesDrawn;
 		}
 		else if (ctrl > 0x80)
 		{
@@ -269,7 +286,7 @@ static void __fastcall FastCmpDrawCell_6FE261B0(const D2DrawContextStrc* pCtx, c
 		else
 		{
 			int32_t count = ctrl;
-			if (curY >= nClipTop && curY < nClipBottom)
+			if (curY >= 0 && curY < pCtx->nSurfaceHeight)
 			{
 				uint8_t* pRow = pCtx->pSurfaceBits + curY * pCtx->nSurfaceWidth;
 				for (int32_t i = 0; i < count && pSrc < pSrcEnd; ++i)
@@ -279,26 +296,15 @@ static void __fastcall FastCmpDrawCell_6FE261B0(const D2DrawContextStrc* pCtx, c
 					{
 						if (pPal)
 						{
-							if (nDrawMode == 0 || nDrawMode == 1 || nDrawMode == 2)
-							{
-								px = pPal[(uint32_t(px) << 8) + pRow[curX]];
-							}
-							else if (nDrawMode == 3)
-							{
-								px = pPal[px];
-							}
-							else if (nDrawMode == 6)
-							{
-								px = pPal[(uint32_t(pRow[curX]) << 8) + px];
-							}
-							else
-							{
-								px = pPal[px];
-							}
+							px = pPal[px];
 						}
 						if (pDarken)
 						{
 							px = pDarken[px];
+						}
+						if (bHasTransTable)
+						{
+							px = pTransTable[(uint32_t(pRow[curX]) << 8) + px];
 						}
 						pRow[curX] = px;
 					}
@@ -327,15 +333,17 @@ static BOOL __fastcall CodecDecompressCellToRaw_6FE1A400(const D2GfxCellStrc* pC
 
 	const uint8_t* pSrc = pCell->pPixels;
 	const uint8_t* pSrcEnd = pSrc + pCell->dwLength;
+	const bool bTopDown = (pCell->bFlip & 1) != 0;
+	const int32_t stepY = bTopDown ? 1 : -1;
 	int32_t x = 0;
-	int32_t y = 0;
-	while (pSrc < pSrcEnd && y < h)
+	int32_t y = bTopDown ? 0 : (h - 1);
+	while (pSrc < pSrcEnd && y >= 0 && y < h)
 	{
 		uint8_t ctrl = *pSrc++;
 		if (ctrl == 0x80)
 		{
 			x = 0;
-			++y;
+			y += stepY;
 		}
 		else if (ctrl > 0x80)
 		{
@@ -345,7 +353,7 @@ static BOOL __fastcall CodecDecompressCellToRaw_6FE1A400(const D2GfxCellStrc* pC
 		{
 			for (uint8_t i = 0; i < ctrl && pSrc < pSrcEnd; ++i)
 			{
-				if (x < w && y < h)
+				if (x < w && y >= 0 && y < h)
 				{
 					pOutBuffer[y * w + x] = *pSrc;
 				}
@@ -519,10 +527,11 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelDrawEx(
 	ctx.pSurfaceBits = pSurfaceBits;
 	ctx.nSurfaceHeight = nSurfaceHeight;
 	ctx.nSurfaceWidth = nSurfaceWidth;
-	ctx.nDrawLines = nDrawLines;
-	ctx.nSkipLines = nSkipLines;
+	ctx.nSkipLines = nDrawLines;
+	ctx.nDrawLines = nSkipLines;
+	ctx.pDarkenTable = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(static_cast<uint32_t>(nUnused)));
 	ctx.nDrawMode = nDrawMode;
-	ctx.pPaletteTable = D2CMP_MixPalette((uint8_t)nDrawMode, 0);
+	ctx.pPaletteTable = reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(static_cast<uint32_t>(nUnused2)));
 	FastCmpDrawCell_6FE261B0(&ctx, pCell);
 }
 
@@ -562,11 +571,11 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelDraw(
 	ctx.pSurfaceBits = pSurfaceBits;
 	ctx.nSurfaceHeight = nSurfaceHeight;
 	ctx.nSurfaceWidth = nSurfaceWidth;
-	ctx.nDrawLines = nSurfaceHeight;
+	ctx.nDrawLines = (int32_t)pCell->dwHeight;
 	ctx.nSkipLines = 0;
 	ctx.pDarkenTable = pDarkenTable;
 	ctx.nDrawMode = nDrawMode;
-	ctx.pPaletteTable = pPaletteTable ? (const uint8_t*)pPaletteTable : D2CMP_MixPalette((uint8_t)nDrawMode, 0);
+	ctx.pPaletteTable = (const uint8_t*)pPaletteTable;
 	FastCmpDrawCell_6FE261B0(&ctx, pCell);
 }
 
@@ -598,16 +607,15 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelDrawShadow(
 		return;
 	}
 
-	// Isometric skew shadow rendering (each scanline shifts X by -1, skips odd rows)
+	// Isometric skew shadow rendering (bottom-up scanlines, each scanline pair shifts X by -1)
 	const int32_t nCellH = (int32_t)pCell->dwHeight;
-	const int32_t nStartX = nXPos + pCell->nXOffset - (nCellH >> 1);
+	const int32_t nStartX = nXPos + pCell->nXOffset;
 	const int32_t nBottomY = nYPos + (pCell->nYOffset >> 1);
-	const int32_t nTopY = nBottomY - (nCellH >> 1) + 1;
 
 	const uint8_t* pSrc = pCell->pPixels;
 	const uint8_t* pSrcEnd = pSrc + pCell->dwLength;
 	int32_t srcY = 0;
-	int32_t curY = nTopY;
+	int32_t curY = nBottomY;
 	int32_t rowStartX = nStartX;
 	int32_t curX = rowStartX;
 
@@ -622,8 +630,8 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelDrawShadow(
 			++srcY;
 			if ((srcY & 1) == 0)
 			{
-				++curY;
-				++rowStartX;
+				--curY;
+				--rowStartX;
 			}
 			curX = rowStartX;
 		}

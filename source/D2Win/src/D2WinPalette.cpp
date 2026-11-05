@@ -83,11 +83,12 @@ int32_t __fastcall sub_6F8AE5E0(const char* szDatFileName, const char* szPL2File
 	D2PaletteTableStrc paletteTable = {};
 
 	uint8_t* pDatFile = (uint8_t*)ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(D2Win_GetArchive(), szDatFileName, nullptr);
+	const uint8_t* pDatCursor = pDatFile;
 	for (int32_t i = 0; i < std::size(paletteTable.datFilePalette); ++i)
 	{
-		paletteTable.datFilePalette[i].peBlue = *pDatFile++;
-		paletteTable.datFilePalette[i].peGreen = *pDatFile++;
-		paletteTable.datFilePalette[i].peRed = *pDatFile++;
+		paletteTable.datFilePalette[i].peBlue = *pDatCursor++;
+		paletteTable.datFilePalette[i].peGreen = *pDatCursor++;
+		paletteTable.datFilePalette[i].peRed = *pDatCursor++;
 		paletteTable.datFilePalette[i].peFlags = 0;
 	}
 

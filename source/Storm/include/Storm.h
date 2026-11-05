@@ -296,13 +296,13 @@ D2FUNC_DLL_NP(STORM, SFileGetArchiveInfo, int, __stdcall, (int a1, int a2, int a
 D2FUNC_DLL_NP(STORM, SFileSetPlatform, char, __stdcall, (char a1), 0x19230);  //Storm.#278
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileLoadFile, int, __stdcall, (char *Str, int, int, int, LONG lDistanceToMove), 0x17380);  //Storm.#279
+STORM_DLL_DECL int __stdcall SFileLoadFile(char *Str, int a2, int a3, int a4, LONG lDistanceToMove);  //Storm.#279
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileUnloadFile, BOOL, __stdcall, (void *buffer), 0x19240);  //Storm.#280
+STORM_DLL_DECL BOOL __stdcall SFileUnloadFile(void *buffer);  //Storm.#280
 
 /// Imported by ['D2Direct3D.dll', 'D2Gdi.dll', 'D2Glide.dll', 'D2DDraw.dll']
-D2FUNC_DLL_NP(STORM, SFileLoadFileEx, int, __stdcall, (int, char *Str, int, int, int, char, LONG lDistanceToMove), 0x173e0);  //Storm.#281
+STORM_DLL_DECL int __stdcall SFileLoadFileEx(int a1, char *Str, int a3, int a4, int a5, char a6, LONG lDistanceToMove);  //Storm.#281
 
 /// Imported by ['Fog.dll']
 D2FUNC_DLL_NP(STORM, SFilePrioritizeRequest, void, __stdcall, (int a1, int a2), 0x186f0);  //Storm.#282
@@ -329,7 +329,7 @@ D2FUNC_DLL_NP(STORM, SFileFileExists, DWORD, __stdcall, (HANDLE hFile), 0x14790)
 D2FUNC_DLL_NP(STORM, SFileFileExistsEx, int, __stdcall, (int, int, int, int, LONG lDistanceToMove, int, int), 0x18940);  //Storm.#289
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileReadFileEx2, int, __stdcall, (int, char *Str, int, int, int, char, LONG lDistanceToMove, int), 0x17410);  //Storm.#290
+STORM_DLL_DECL int __stdcall SFileReadFileEx2(int a1, char *Str, int a3, int a4, int a5, char a6, LONG lDistanceToMove, int a8);  //Storm.#290
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, StormDestroy, BOOL, __cdecl, (), 0x2b300);  //Storm.#301

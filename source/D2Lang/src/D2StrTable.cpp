@@ -171,8 +171,11 @@ D2C_Language STRTABLE_GetLanguage()
 	gbTableLanguageInitialized = true;
 	// Read locale from file.
 	unsigned char* pBuffer = (unsigned char*) ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(ghArchive, "data\\local\\use", nullptr);
-	gnTableLanguage = static_cast<D2C_Language>(*pBuffer);
-	D2_FREE(pBuffer);
+	if (pBuffer)
+	{
+		gnTableLanguage = static_cast<D2C_Language>(*pBuffer);
+		D2_FREE(pBuffer);
+	}
 
 	if (gnTableLanguage >= NUM_LANGUAGES)
 	{
@@ -516,7 +519,7 @@ BOOL __fastcall STRTABLE_Initialize(int nUnused, const char* szLanguage, BOOL bE
 	}
 
 	char szLangCode[16] = {};
-	if (szLanguage != nullptr)
+	if (szLanguage != nullptr && szLanguage[0] != '\0')
 	{
 		strcpy(szLangCode, szLanguage);
 	}

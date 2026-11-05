@@ -683,8 +683,7 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 	D2Win_10015();
 	(void)D2Win_GetArchive();
 
-	char szFolder[16] = {};
-	STRTABLE_Initialize(0, szFolder, FOG_IsExpansion());
+	STRTABLE_Initialize(0, nullptr, FOG_IsExpansion());
 
 	D2LAUNCH_LoadSprites(FALSE);
 	CURSOR_SetCellFile(gpCursorCellFile);

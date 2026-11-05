@@ -177,25 +177,80 @@ BOOL __fastcall FOG_CreatePathHierarchy(char* szPath)
 	return TRUE;
 }
 
+static bool FOG_TryGetLocalGameDir(char* pPathBuffer, size_t nBufferSize)
+{
+	if (!pPathBuffer || nBufferSize == 0)
+	{
+		return false;
+	}
+
+	char szCandidate[MAX_PATH] = {};
+	if (GetModuleFileNameA(nullptr, szCandidate, MAX_PATH) != 0)
+	{
+		szCandidate[MAX_PATH - 1] = '\0';
+		char* pLastSlash = const_cast<char*>(SStrChrR(static_cast<const char*>(szCandidate), '\\'));
+		if (pLastSlash)
+		{
+			pLastSlash[1] = '\0';
+			char szProbe[MAX_PATH] = {};
+			SStrCopy(szProbe, szCandidate, sizeof(szProbe));
+			SStrNCat(szProbe, "d2data.mpq", sizeof(szProbe));
+			if (GetFileAttributesA(szProbe) != INVALID_FILE_ATTRIBUTES)
+			{
+				SStrCopy(pPathBuffer, szCandidate, nBufferSize);
+				return true;
+			}
+		}
+	}
+
+	if (GetCurrentDirectoryA(MAX_PATH, szCandidate) != 0)
+	{
+		szCandidate[MAX_PATH - 1] = '\0';
+		const size_t nLen = static_cast<size_t>(SStrLen(szCandidate));
+		if (nLen > 0 && szCandidate[nLen - 1] != '\\' && nLen + 1 < sizeof(szCandidate))
+		{
+			szCandidate[nLen] = '\\';
+			szCandidate[nLen + 1] = '\0';
+		}
+		char szProbe[MAX_PATH] = {};
+		SStrCopy(szProbe, szCandidate, sizeof(szProbe));
+		SStrNCat(szProbe, "d2data.mpq", sizeof(szProbe));
+		if (GetFileAttributesA(szProbe) != INVALID_FILE_ATTRIBUTES)
+		{
+			SStrCopy(pPathBuffer, szCandidate, nBufferSize);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // 1.10f: Fog.0x6FF61900 (#10115)
 // 1.12a: Fog.0x6FF6F060 (#10115)
 size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 {
-	if (!SRegLoadString("Diablo II", "Save Path", 0, pPathBuffer, static_cast<unsigned int>(nBufferSize)))
+	if (FOG_TryGetLocalGameDir(pPathBuffer, nBufferSize))
 	{
-		pPathBuffer[0] = '\0';
-	}
-
-	if (GetFileAttributesA(pPathBuffer) == INVALID_FILE_ATTRIBUTES)
-	{
-		pPathBuffer[0] = '\0';
-	}
-
-	if (pPathBuffer[0] == '\0')
-	{
-		FOG_GetInstallPath(pPathBuffer, nBufferSize);
 		SStrNCat(pPathBuffer, "save\\", static_cast<int>(nBufferSize));
-		SRegSaveString("Diablo II", "Save Path", 0, pPathBuffer);
+	}
+	else
+	{
+		if (!SRegLoadString("Diablo II", "Save Path", 0, pPathBuffer, static_cast<unsigned int>(nBufferSize)))
+		{
+			pPathBuffer[0] = '\0';
+		}
+
+		if (GetFileAttributesA(pPathBuffer) == INVALID_FILE_ATTRIBUTES)
+		{
+			pPathBuffer[0] = '\0';
+		}
+
+		if (pPathBuffer[0] == '\0')
+		{
+			FOG_GetInstallPath(pPathBuffer, nBufferSize);
+			SStrNCat(pPathBuffer, "save\\", static_cast<int>(nBufferSize));
+			SRegSaveString("Diablo II", "Save Path", 0, pPathBuffer);
+		}
 	}
 
 	if (nBufferSize != 0)
@@ -218,26 +273,29 @@ size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 // 1.12a: Fog.0x6FF6EF60 (#10116)
 BOOL __fastcall FOG_GetInstallPath(char* pPathBuffer, size_t nBufferSize)
 {
-	if (!SRegLoadString("Diablo II", "InstallPath", 0, pPathBuffer, static_cast<unsigned int>(nBufferSize)))
+	if (!FOG_TryGetLocalGameDir(pPathBuffer, nBufferSize))
 	{
-		pPathBuffer[0] = '\0';
-	}
-
-	if (GetFileAttributesA(pPathBuffer) == INVALID_FILE_ATTRIBUTES)
-	{
-		pPathBuffer[0] = '\0';
-	}
-
-	if (pPathBuffer[0] == '\0')
-	{
-		GetModuleFileNameA(nullptr, pPathBuffer, static_cast<DWORD>(nBufferSize));
-		pPathBuffer[nBufferSize - 1] = '\0';
-		char* pLastSlash = const_cast<char*>(SStrChrR(static_cast<const char*>(pPathBuffer), '\\'));
-		if (pLastSlash)
+		if (!SRegLoadString("Diablo II", "InstallPath", 0, pPathBuffer, static_cast<unsigned int>(nBufferSize)))
 		{
-			pLastSlash[1] = '\0';
+			pPathBuffer[0] = '\0';
 		}
-		SRegSaveString("Diablo II", "InstallPath", 0, pPathBuffer);
+
+		if (GetFileAttributesA(pPathBuffer) == INVALID_FILE_ATTRIBUTES)
+		{
+			pPathBuffer[0] = '\0';
+		}
+
+		if (pPathBuffer[0] == '\0')
+		{
+			GetModuleFileNameA(nullptr, pPathBuffer, static_cast<DWORD>(nBufferSize));
+			pPathBuffer[nBufferSize - 1] = '\0';
+			char* pLastSlash = const_cast<char*>(SStrChrR(static_cast<const char*>(pPathBuffer), '\\'));
+			if (pLastSlash)
+			{
+				pLastSlash[1] = '\0';
+			}
+			SRegSaveString("Diablo II", "InstallPath", 0, pPathBuffer);
+		}
 	}
 
 	if (nBufferSize != 0)

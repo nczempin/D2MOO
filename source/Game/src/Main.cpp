@@ -669,40 +669,9 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 	tCfg.pAllowExpansionCallback = AllowExpansion;
 #endif
 
-	if(!tCfg.b3DFX && !tCfg.bWindow && !tCfg.bOpenGL && !tCfg.bD3D)
+	if(!tCfg.b3DFX && !tCfg.bWindow && !tCfg.bOpenGL && !tCfg.bD3D && !tCfg.bRave)
 	{
-		memcpy(szRegPathVid, REG_PATH_VIDEO, sizeof(REG_PATH_VIDEO));
-
-		HKEY hKey;
-		if((ERROR_SUCCESS == RegOpenKeyExA(HKEY_CURRENT_USER, szRegPathVid, 0, KEY_QUERY_VALUE, &hKey)) ||
-		   (ERROR_SUCCESS == RegOpenKeyExA(HKEY_LOCAL_MACHINE, szRegPathVid, 0, KEY_QUERY_VALUE, &hKey)) )
-		{
-			DWORD dwRegType = REG_DWORD_LITTLE_ENDIAN;
-			DWORD dwValue;
-			DWORD dwCbData = sizeof(dwValue);
-			if(ERROR_SUCCESS == RegQueryValueExA(hKey, REG_VAL_RENDER, NULL, &dwRegType, (LPBYTE)&dwValue, &dwCbData))
-			{
-				switch(dwValue)
-				{
-					case 1:
-						tCfg.bD3D = TRUE;
-						break;
-					case 2:
-						tCfg.bOpenGL = TRUE;
-						break;
-					case 3:
-						tCfg.b3DFX = TRUE;
-						break;
-					case 4:
-						tCfg.bWindow = TRUE;
-						break;
-					default: // Rave
-						break;
-				}
-
-				RegCloseKey(hKey);
-			}
-		}
+		tCfg.bWindow = TRUE;
 	}
 
 #if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11

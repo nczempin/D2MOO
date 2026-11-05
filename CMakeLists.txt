@@ -60,10 +60,18 @@ endif()
 # It is always easier to navigate in an IDE when projects are organized in folders.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+if(D2MOO_IS_ROOT_PROJECT AND NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+endif()
+
 # 3rd party dependencies
 add_subdirectory(external)
 
 add_subdirectory(source)
+
+if(D2MOO_IS_ROOT_PROJECT)
+  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Game)
+endif()
 
 if(ENABLE_D2DETOURS_EMBEDDED_PATCHES AND D2DETOURS_EMBEDDED_PATCHES_DIR)
   add_subdirectory(${D2DETOURS_EMBEDDED_PATCHES_DIR} ${D2DETOURS_EMBEDDED_PATCHES_BINARY_DIR})

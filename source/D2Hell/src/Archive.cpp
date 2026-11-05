@@ -281,7 +281,7 @@ D2ArchiveHandleStrc* __fastcall ARCHIVE_LoadMPQFile(const char* szModuleName, co
 	pMpqHandle->hArchive = NULL;
 	while (1)
 	{
-		pMpqHandle->hArchive = ARCHIVE_FindAndOpenArchive(pMpqHandle->szPath, szFileName, szModuleName, szLabel, nPriority, hFile != 0);
+		pMpqHandle->hArchive = ARCHIVE_FindAndOpenArchive(pMpqHandle->szPath, szModuleName, szFileName, szLabel, nPriority, hFile != 0);
 		if (pMpqHandle->hArchive)
 		{
 			return pMpqHandle;

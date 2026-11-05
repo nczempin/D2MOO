@@ -741,6 +741,8 @@ static void* __fastcall D2GDI_GetDrawPaletteTable(DrawMode eDrawMode, int32_t* p
 	case DRAWMODE_BURN:
 		return gpPaletteTables->pLuminancePalette;
 	case DRAWMODE_NORMAL:
+		return nullptr;
+	case DRAWMODE_TRANSHIGHLIGHT:
 		return gpPaletteTables->pDarkBlendPalette;
 	default:
 		return nullptr;
