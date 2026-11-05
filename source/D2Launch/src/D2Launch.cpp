@@ -41,6 +41,22 @@ static D2CellFileStrc* gpLogoFireLeft = nullptr;         // 0x6FA654C8
 static D2CellFileStrc* gpLogoBlackRight = nullptr;       // 0x6FA654CC
 static D2CellFileStrc* gpLogoFireRight = nullptr;        // 0x6FA654D0
 
+// 1.12a: 0x6FA60E50 / 0x6FA60EA0
+static D2AnimatedImageDescriptor gAnimLogoLeft[5] = {
+	{ &gpLogoBlackLeft, &gpLogoFireLeft, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackLeft, &gpLogoFireLeft, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackLeft, &gpLogoFireLeft, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackLeft, &gpLogoFireLeft, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackLeft, &gpLogoFireLeft, DRAWMODE_MODULATE, 1 },
+};
+static D2AnimatedImageDescriptor gAnimLogoRight[5] = {
+	{ &gpLogoBlackRight, &gpLogoFireRight, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackRight, &gpLogoFireRight, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackRight, &gpLogoFireRight, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackRight, &gpLogoFireRight, DRAWMODE_MODULATE, 1 },
+	{ &gpLogoBlackRight, &gpLogoFireRight, DRAWMODE_MODULATE, 1 },
+};
+
 static constexpr int kMaxLaunchControls = 64;
 static D2WinControlStrc* gapLaunchControls[kMaxLaunchControls] = {};
 static D2LaunchCharNodeStrc* gpCharListHead = nullptr;
@@ -100,14 +116,14 @@ void __fastcall D2LAUNCH_LoadSprites(BOOL bReload)
 
 	const BOOL bExpansion = FOG_IsExpansion();
 	gpBgTitleScreen = ARCHIVE_LoadCellFile(
-		bExpansion ? "DATA\\GLOBAL\\UI\\FrontEnd\\ExpansionTitleScreen" : "DATA\\GLOBAL\\UI\\FrontEnd\\TitleScreen",
-		4);
+		bExpansion ? "DATA\\GLOBAL\\UI\\FrontEnd\\trademarkscreenEXP" : "DATA\\GLOBAL\\UI\\FrontEnd\\trademark",
+		0);
 	gpBgGameSelect = ARCHIVE_LoadCellFile(
-		bExpansion ? "DATA\\GLOBAL\\UI\\FrontEnd\\gameselectscreenEXP" : "DATA\\GLOBAL\\UI\\FrontEnd\\gameselectscreen",
-		4);
+		bExpansion ? "DATA\\GLOBAL\\UI\\FrontEnd\\gameselectscreenEXP" : "DATA\\GLOBAL\\UI\\FrontEnd\\TitleScreen",
+		0);
 	gpBtnWideBlank = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\WideButtonBlank", 0);
 	gpBtnMediumBlank = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\MediumButtonBlank", 0);
-	gpBtnTallBlank = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\TallButtonBlank", 0);
+	gpBtnTallBlank = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\CharSelect\\TallButtonBlank", 0);
 	gpBtnCancelBlank = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\CancelButtonBlank", 0);
 	gpLogoBlackLeft = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\D2LogoBlackLeft", 0);
 	gpLogoFireLeft = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\D2LogoFireLeft", 0);
@@ -469,11 +485,47 @@ static int __stdcall D2LAUNCH_OnLogoClick(SMSGHANDLER_PARAMS* pMsg)
 	return 1;
 }
 
+static void CreateBackgroundImageControl(D2CellFileStrc** ppBgCellFile, int(__stdcall* pfClick)(SMSGHANDLER_PARAMS*))
+{
+	D2WinControlInitStrc tImg = {};
+	tImg.nType = D2WIN_IMAGE;
+	tImg.nX = 0;
+	tImg.nY = 599;
+	tImg.nWidth = 800;
+	tImg.nHeight = 600;
+	tImg.ppCellFile = ppBgCellFile;
+	tImg.field_20 = pfClick;
+	tImg.field_28 = reinterpret_cast<void*>(pfClick);
+	RegisterControl(CONTROL_Create(&tImg));
+}
+
+static void CreateBurningLogoControls()
+{
+	D2WinControlInitStrc tLogoLeft = {};
+	tLogoLeft.nType = D2WIN_ANIMIMAGE;
+	tLogoLeft.nX = 400;
+	tLogoLeft.nY = 120;
+	tLogoLeft.nWidth = 181;
+	tLogoLeft.nHeight = 170;
+	tLogoLeft.field_24 = gAnimLogoLeft;
+	RegisterControl(CONTROL_Create(&tLogoLeft));
+
+	D2WinControlInitStrc tLogoRight = {};
+	tLogoRight.nType = D2WIN_ANIMIMAGE;
+	tLogoRight.nX = 400;
+	tLogoRight.nY = 120;
+	tLogoRight.nWidth = 188;
+	tLogoRight.nHeight = 177;
+	tLogoRight.field_24 = gAnimLogoRight;
+	RegisterControl(CONTROL_Create(&tLogoRight));
+}
+
 // 1.12a: 0x6FA58150
 void __stdcall D2LAUNCH_EnterLogoScreen()
 {
 	D2LAUNCH_DestroyAllControls();
-	BACKGROUND_SetCellFile(gpBgTitleScreen);
+	CreateBackgroundImageControl(&gpBgTitleScreen, D2LAUNCH_OnLogoClick);
+	CreateBurningLogoControls();
 
 	D2WinControlInitStrc tBtnInit = {};
 	tBtnInit.nType = D2WIN_BUTTON;
@@ -493,7 +545,8 @@ void __stdcall D2LAUNCH_EnterMainMenu(int32_t nUnused)
 {
 	(void)nUnused;
 	D2LAUNCH_DestroyAllControls();
-	BACKGROUND_SetCellFile(gpBgGameSelect);
+	CreateBackgroundImageControl(&gpBgGameSelect, nullptr);
+	CreateBurningLogoControls();
 
 	D2WinControlInitStrc tBtn = {};
 	tBtn.nType = D2WIN_BUTTON;
@@ -597,7 +650,7 @@ static void EnumerateSavedCharacters()
 BOOL __stdcall D2LAUNCH_EnterCharSelect()
 {
 	D2LAUNCH_DestroyAllControls();
-	BACKGROUND_SetCellFile(gpBgGameSelect);
+	CreateBackgroundImageControl(&gpBgGameSelect, nullptr);
 	EnumerateSavedCharacters();
 
 	D2WinControlInitStrc tBtn = {};
@@ -640,7 +693,7 @@ BOOL __stdcall D2LAUNCH_EnterCharSelect()
 BOOL __stdcall D2LAUNCH_EnterCharCreate()
 {
 	D2LAUNCH_DestroyAllControls();
-	BACKGROUND_SetCellFile(gpBgGameSelect);
+	CreateBackgroundImageControl(&gpBgGameSelect, nullptr);
 	gnSelectedCreateClass = 0;
 
 	D2WinControlInitStrc tBtn = {};

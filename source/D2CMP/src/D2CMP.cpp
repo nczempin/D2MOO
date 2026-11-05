@@ -1642,9 +1642,9 @@ D2CMP_DLL_DECL const char* __stdcall D2CMP_GetGfxFileExtension(BOOL bAllowCompre
 {
 	if (bAllowCompressed && gbCompressedDataMode_6FE37EF4)
 	{
-		return "dc6";
+		return ".dcc";
 	}
-	return "dcc";
+	return ".dc6";
 }
 
 // 1.12a: 0x6FE22330 (#10029)
@@ -1668,7 +1668,7 @@ D2CMP_DLL_DECL void __stdcall D2CMP_SpriteCacheBuildFilename(char* szDest, const
 	{
 		return;
 	}
-	snprintf(szDest, nMaxLen, "%s.%s", szSrc, D2CMP_GetGfxFileExtension(bAllowCompressed));
+	snprintf(szDest, nMaxLen, "%s%s", szSrc, D2CMP_GetGfxFileExtension(bAllowCompressed));
 }
 
 // 1.12a: 0x6FE229E0 (#10003, 1.10f #10052)
