@@ -12,6 +12,7 @@
 #include <D2WinMain.h>
 #include <D2WinArchive.h>
 #include <D2MCPClient.h>
+#include <BnClient.h>
 
 // Thanks to galaxyhaxz for providing the base to work on ! https://github.com/galaxyhaxz/d2src
 
@@ -517,7 +518,7 @@ int GAMEAPI GameStart(HINSTANCE hInstance, D2ConfigStrc* pCfg, D2_MODULES nModTy
 	D2MCPClientCloseMCP();
 
 	if(pCfg->pComInterface)
-		(*(void (**)(void))(ptrdiff_t(pCfg->pComInterface) + 12))();
+		pCfg->pComInterface->CloseBNetConnection();
 
 	FOG_DestroyMemoryPoolSystem(nullptr);
 
@@ -624,6 +625,9 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 	if (HANDLE hEvent = OpenEventA(EVENT_MODIFY_STATE, TRUE, GAME_OK))
 	{
 		SetEvent(hEvent);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
+		CloseHandle(hEvent);
+#endif
 	}
 
 	SaveCmdLine((const char**)&lpArgvCmd);
@@ -642,7 +646,11 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 	char* lpArgvDupe = (char*)D2_ALLOC(argvLen);
 	SStrCopy(lpArgvDupe, lpArgvCmd, argvLen);
 	
-	int nChosenModule = MODULE_NONE;
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
+	D2_MODULES nChosenModule = MODULE_LAUNCHER;
+#else
+	D2_MODULES nChosenModule = MODULE_NONE;
+#endif
 
 	for (char* pCurrentParam = strtok(lpArgvDupe, "-"); pCurrentParam; pCurrentParam = strtok(0, "-")) // NOLINT(clang-diagnostic-deprecated-declarations)
 	{
@@ -650,7 +658,7 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 		{
 			if (0 == strncmp(pCurrentParam, lpszModuleType[i], strlen(lpszModuleType[i])) && i != MODULE_CLIENT)
 			{
-				nChosenModule = i;
+				nChosenModule = (D2_MODULES)i;
 			}
 		}
 	}
@@ -697,7 +705,11 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 		}
 	}
 
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
+	return GameStart(ghCurrentProcess, &tCfg, nChosenModule);
+#else
 	return GameStart(ghCurrentProcess, &tCfg, MODULE_LAUNCHER);
+#endif
 }
 
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, INT nShowCmd)

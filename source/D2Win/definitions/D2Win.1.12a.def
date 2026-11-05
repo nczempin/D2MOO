@@ -6,15 +6,15 @@ EXPORTS
 	D2Win_10003														@10064
 	D2Win_10004														@10018
 	D2Win_10005														@10127
-	D2Win_10006_ClearDrawCaches										@10169
+	D2Win_10006_ClearDrawCaches										@10088
 	BACKGROUND_SetCellFile											@10193
 	D2Win_10008														@10087
 	D2Win_10009														@10074
-	D2Win_10010														@10103
-	CURSOR_SetCellFile												@10144
+	D2Win_10010														@10089
+	CURSOR_SetCellFile												@10079
 	D2Win_10012														@10068
 	CONTROL_SetCellFile												@10021
-	D2Win_10014_SetWndProc											@10079
+	D2Win_10014_SetWndProc											@10144
 	D2Win_10015														@10057
 	D2Win_10016														@10203
 	CONTROL_Create													@10098
@@ -29,7 +29,7 @@ EXPORTS
 	D2Win_10026_CONTROL_CheckThirdFlag								@10205
 	D2Win_10027_CONTROL_ToggleThirdFlag								@10184
 	D2Win_10028														@10033
-	D2Win_10029														@10089
+	D2Win_10029														@10103
 	D2Win_10030_CONTROL_ToggleFourthFlag							@10140
 	D2Win_10031														@10004
 	D2Win_IsMouseButtonPressed										@10024
@@ -58,7 +58,7 @@ EXPORTS
 	D2Win_10055														@10067
 	D2Win_10056														@10019
 	D2Win_10057														@10164
-	D2Win_10058_0													@10142
+	D2Win_10058_0													@10152
 	D2Win_10059														@10016
 	D2Win_10060														@10028
 	D2Win_10061														@10118
@@ -74,36 +74,36 @@ EXPORTS
 	D2Win_10071_EDITBOX_Destroy										@10155
 	D2Win_10072														@10113
 	D2Win_10073														@10054
-	D2Win_10074														@10176
+	D2Win_10074														@10047
 	D2Win_10075														@10095
 	D2Win_10076														@10108
-	D2Win_10077_EDITBOX_GetText										@10075
+	D2Win_10077_EDITBOX_GetText										@10207
 	D2Win_10078_IsNumber											@10032
 	D2Win_10079_IsLetter											@10175
-	D2Win_10080_EDITBOX_SetNextEditBox														@10206
+	D2Win_10080_EDITBOX_SetNextEditBox														@10176
 	D2Win_10081														@10065
 	D2Win_10082														@10035
 	D2Win_10083														@10034
 	IMAGE2_Create													@10198
-	IMAGE_Destroy													@10112
+	IMAGE_Destroy													@10187
 	IMAGE_SetCellFile												@10066
 	IMAGE_SetCoordinates											@10114
 	IMAGE_SetFrame													@10083
 	IMAGE_ForceNormalDrawMode										@10154
 	IMAGE_GetFrameCount												@10070
 	PROGRESSBAR_Create												@10086
-	PROGRESSBAR_Destroy												@10099
-	PROGRESSBAR_SetProgress											@10152
+	PROGRESSBAR_Destroy												@10141
+	PROGRESSBAR_SetProgress											@10142
 	POPUP_Create													@10162
 	POPUP_Destroy													@10056
 	POPUP_AddLine													@10165
-	SMACK_Create													@10187
-	SMACK_Destroy													@10055
-	SMACK_Decode													@10207
+	SMACK_Create													@10013
+	SMACK_Destroy													@10099
+	SMACK_Decode													@10055
 	SMACK_SetCoordinates											@10120
 	SMACK_DeleteFile												@10044
 	ANIMIMAGE_Create												@10149
-	ANIMIMAGE_Destroy												@10047
+	ANIMIMAGE_Destroy												@10078
 	D2Win_10104														@10134
 	ANIMIMAGE_SetIsRunning											@10199
 	D2Win_10106														@10104
@@ -119,14 +119,14 @@ EXPORTS
 	D2Win_10116														@10160
 	D2Win_10117_DrawText											@10001
 	D2Win_10118_DrawBlendedText										@10192
-	D2Win_10119_DrawCroppedText										@10105
+	D2Win_10119_DrawCroppedText										@10040
 	D2Win_10120														@10195
 	D2Win_10121_GetTextWidth										@10132
 	D2Win_10122														@10041
 	D2Win_10123														@10147
 	D2Win_10124														@10201
 	D2Win_10125														@10146
-	D2Win_10126_DrawTextFromCache									@10052
+	D2Win_10126_DrawTextFromCache									@10131
 	D2Win_10127_SetFont												@10010
 	D2Win_10128														@10166
 	D2Win_10129_DrawFramedText										@10031
@@ -141,11 +141,11 @@ EXPORTS
 	D2Win_10138														@10148
 	LIST_GetSelectedDataIndex										@10200
 	LIST_GetDataFromIndex											@10006
-	D2Win_10141														@10170
+	D2Win_10141														@10100
 	D2Win_10142_CompUnitDestroy										@10137
 	D2Win_10143														@10084
-	D2Win_10144														@10131
-	D2Win_10145														@10040
+	D2Win_10144														@10052
+	D2Win_10145														@10105
 	D2Win_10146														@10197
 	D2Win_10147														@10039
 ;	D2Win_10148														@10148
@@ -176,36 +176,36 @@ EXPORTS
 	ARCHIVE_UnloadExpansionArchives									@10080
 	ARCHIVE_ShowInsertPlayDiscMessage								@10194
 	D2Win_10175_GetPL2Shift											@10048
-	D2Win_10176														@10078
+	D2Win_10176														@10206
 	D2Win_10177														@10136
-	D2Win_10178														@10126
-	D2Win_10179														@10141
+	D2Win_10178														@10112
+	D2Win_10179														@10075
 	D2Win_10180														@10159
-	TIMER_Destroy													@10012
+	TIMER_Destroy													@10126
 	D2Win_10182														@10081
 	ARCHIVE_ShowInsertCinematicsDisc								@10111
 	D2Win_10184														@10071
 	D2Win_10185														@10090
 	BUTTON_SetText													@10002
-	D2Win_10187														@10058
+	D2Win_10187														@10053
 	D2Win_10188														@10107
-	BUTTON_SetStringId												@10100
-	D2Win_10190														@10007
+	BUTTON_SetStringId												@10012
+	D2Win_10190														@10085
 	D2Win_10191														@10183
-	D2Win_10192														@10060
-	D2Win_10193														@10063
-	D2Win_10194														@10185
+	D2Win_10192														@10058
+	D2Win_10193														@10007
+	D2Win_10194														@10060
 	D2Win_10195														@10042
 	D2Win_10196														@10051
 	D2Win_10197														@10150
 	D2Win_10198														@10026
 	D2Win_10199														@10117
 	D2Win_10200														@10020
-	D2Win_10201														@10088
+	D2Win_10201														@10170
 	D2Win_10202														@10189
 	D2Win_10203_TEXTBOX												@10143
-	D2Win_10204														@10085
+	D2Win_10204														@10063
 	ARCHIVE_ShowInsertExpansionDiscMessage							@10011
-	D2Win_10206														@10013
-	D2Win_10207														@10000
-	D2Win_10208														@10053
+	D2Win_10206														@10000
+	D2Win_10207														@10169
+	D2Win_10208														@10185

@@ -4303,8 +4303,14 @@ int32_t __fastcall D2GAME_PACKET_Handler_6FC89320(D2GameStrc* pGame, D2UnitStrc*
         { D2GAME_PACKETCALLBACK_Rcv0x61_DropPickupMercItem_6FC88930, 1 },
         { D2GAME_PACKETCALLBACK_Rcv0x62_ResurrectMerc_6FC86C00, 1 },
         { D2GAME_PACKETCALLBACK_Rcv0x63_ShiftLeftClickItemToBelt_6FC88F80, 1 },
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
+        { nullptr, 0 },
+        { nullptr, 0 },
+        { D2GAME_PACKETCALLBACK_Rcv0x2E_42_43_64_65_6FC89310, 0 },
+#else
         { D2GAME_PACKETCALLBACK_Rcv0x2E_42_43_64_65_6FC89310, 0 },
         { D2GAME_PACKETCALLBACK_Rcv0x2E_42_43_64_65_6FC89310, 0 },
+#endif
     };
 
     const uint8_t nHeader = *(uint8_t*)pPacket;
@@ -4325,6 +4331,9 @@ int32_t __fastcall D2GAME_PACKET_Handler_6FC89320(D2GameStrc* pGame, D2UnitStrc*
         case 0x15u:
         case 0x3Cu:
         case 0x43u:
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
+        case 0x66u:
+#endif
             break;
 
         default:

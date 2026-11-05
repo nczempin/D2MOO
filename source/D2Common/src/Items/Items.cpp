@@ -4718,8 +4718,8 @@ BOOL __stdcall ITEMS_IsEthereal(D2UnitStrc* pItem)
 	return 0;
 }
 
-//D2Common.0x6FDA0370 (#10883)
-BOOL __stdcall ITEMS_GetCompactItemDataFromBitstream(uint8_t* pBitstream, size_t nSize, BOOL bCheckForHeader, D2ItemSaveStrc* pItemSave)
+//1.12a: D2Common.0x6FD776D0 (#11171)
+BOOL __stdcall ITEMS_GetCompactItemDataFromBitstreamVersioned(uint8_t* pBitstream, size_t nSize, BOOL bCheckForHeader, D2ItemSaveStrc* pItemSave, uint32_t dwVersion)
 {
 	D2BitBufferStrc pBuffer = {};
 	int dwCode = 0;
@@ -4758,6 +4758,10 @@ BOOL __stdcall ITEMS_GetCompactItemDataFromBitstream(uint8_t* pBitstream, size_t
 		else
 		{
 			dwCode = BITMANIP_Read(&pBuffer, 32);
+			if ((int32_t)dwVersion <= 92 && dwCode == ' cen')
+			{
+				dwCode = ' gen';
+			}
 		}
 
 		pItemSave->nClassId = DATATBLS_GetItemIdFromItemCode(dwCode);
@@ -4773,6 +4777,13 @@ BOOL __stdcall ITEMS_GetCompactItemDataFromBitstream(uint8_t* pBitstream, size_t
 
 		return TRUE;
 	}
+}
+
+//D2Common.0x6FDA0370 (#10883)
+//1.12a: D2Common.0x6FD77820 (#10910)
+BOOL __stdcall ITEMS_GetCompactItemDataFromBitstream(uint8_t* pBitstream, size_t nSize, BOOL bCheckForHeader, D2ItemSaveStrc* pItemSave)
+{
+	return ITEMS_GetCompactItemDataFromBitstreamVersioned(pBitstream, nSize, bCheckForHeader, pItemSave, 96);
 }
 
 //D2Common.0x6FDA0490 (#10882)

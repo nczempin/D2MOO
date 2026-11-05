@@ -8,8 +8,10 @@ UnimplementedOrdinal_10258=UnimplementedOrdinal @10258;   FOG_10258 @10258 ;gcsC
     gdwBitMasks                 @10259
 UnimplementedOrdinal_10260=UnimplementedOrdinal @10260 NONAME
     gdwInvBitMasks              @10261
-UnimplementedOrdinal_10262=UnimplementedOrdinal @10262 NONAME
-UnimplementedOrdinal_10265=UnimplementedOrdinal @10265 NONAME
+UnimplementedOrdinal_10262=UnimplementedOrdinal @10262;   FOG_10262 @10262 ;gfTimeCriticalSections
+UnimplementedOrdinal_10265=UnimplementedOrdinal @10265;   FOG_10265 @10265 ;gqwCriticalSectionTimer
+UnimplementedOrdinal_10266=UnimplementedOrdinal @10266 NONAME
+UnimplementedOrdinal_10267=UnimplementedOrdinal @10267 NONAME
     FOG_SOCKET_CloseSocket @10000 NONAME
     FOG_SOCKET_WSAStartup @10001 NONAME
     FOG_SOCKET_WSACleanup @10002 NONAME
@@ -187,7 +189,7 @@ UnimplementedOrdinal_10174=UnimplementedOrdinal @10174;   FOG_10174 @10174 NONAM
     FOG_IsWindowsNT @10176 NONAME
     FOG_10177 @10177 NONAME
     FOG_SetHackListEnabled @10178 NONAME
-;    FOG_10179 @10179 NONAME
+UnimplementedOrdinal_10179=UnimplementedOrdinal @10179;   FOG_10179 @10179 NONAME
     FOG_10180 @10180 NONAME
     FOG_10181 @10181 NONAME
     FOG_10182_Return @10182 NONAME

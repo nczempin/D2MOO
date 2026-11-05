@@ -224,13 +224,13 @@ struct D2ClientStrc
 	uint32_t aPingHistory[17];					//0x4B4
 	uint64_t nPingMovingAverage;				//0x4F8
 	uint32_t dwPingsCount;						//0x500
-#ifdef D2_VERSION_113C
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
 	uint32_t unk0x504;							//0x504
 #endif
-	int32_t nExpLoss;							//0x504
-	uint32_t dwLocale;							//0x508
-	uint32_t dwLangId;							//0x50C
-#ifdef D2_VERSION_113C
+	int32_t nExpLoss;							//0x504 (0x508 in 1.11+)
+	uint32_t dwLocale;							//0x508 (0x50C in 1.11+)
+	uint32_t dwLangId;							//0x50C (0x510 in 1.11+)
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
 	uint32_t pad0x514;							//0x514
 #endif
 };

@@ -19,4 +19,9 @@ add_test(
     WORKING_DIRECTORY $<TARGET_PROPERTY:D2CommonTests,VS_DEBUGGER_WORKING_DIRECTORY>
 )
 
+set_tests_properties(D2CommonTests.unittests PROPERTIES
+    ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:D2Common>;PATH=path_list_prepend:$<TARGET_FILE_DIR:Fog>;PATH=path_list_prepend:$<TARGET_FILE_DIR:Storm>;PATH=path_list_prepend:$<TARGET_FILE_DIR:D2CMP>;PATH=path_list_prepend:$<TARGET_FILE_DIR:D2Lang>;PATH=path_list_prepend:$<TARGET_FILE_DIR:D2.Detours>"
+)
+
 

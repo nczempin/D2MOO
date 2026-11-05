@@ -3,7 +3,7 @@
 #include <cstddef>
 
 // Thanks to galaxyhaxz for providing the base to work on ! https://github.com/galaxyhaxz/d2src
-#ifdef D2_VERSION_110F
+#if defined(D2_VERSION_110F) || defined(D2_VERSION_112A)
 static_assert(offsetof(D2ConfigStrc, szCharacterRealm) == 0x227, "");
 static_assert(offsetof(D2ConfigStrc, szGamePassword) == 0x23F, "");
 

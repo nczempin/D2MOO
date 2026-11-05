@@ -64,6 +64,9 @@ void __fastcall TASK_LinkList_Remove(D2LinkStrc* pLink);
 
 
 
+void __stdcall D2Game_10030_Return(int a1);
+void __stdcall D2Game_10031_Return(int a1, int a2, int a3);
+int32_t __stdcall D2Game_10032_Return0(int a1);
 void __stdcall D2Game_10034_Return(int a1);
 void __stdcall D2Game_10060_Return();
 void __stdcall D2Game_10061_Return();

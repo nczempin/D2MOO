@@ -182,13 +182,14 @@ void __stdcall GAME_InitGameDataTable(D2GameDataTableStrc* pGameDataTbl, void* p
 }
 
 //D2Game.0x6FC358E0
+//1.12a: D2Game.0x6FCC5BE0 (#10038)
 void __stdcall GAME_SetServerCallbackFunctions(D2ServerCallbackFunctions* pD2ServerCallbackFunctions)
 {
     if (pD2ServerCallbackFunctions)
     {
         gpD2EventCallbackTable_6FD45830 = pD2ServerCallbackFunctions;
         gbD2ServerCallbackFunctionsInitialized_6FD45834 = 1;
-        //D2COMMON_11277_Return((int32_t)pD2ServerCallbackFunctions->pfLoadComplete);
+        D2COMMON_11277_Return((int32_t)pD2ServerCallbackFunctions->pfLoadComplete);
     }
     else
     {

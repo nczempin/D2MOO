@@ -67,9 +67,9 @@ void __stdcall TASK_FreeAllQueueSlots()
 }
 
 //D2Game.0x6FC405B0 (#10041) 
+//1.12a: D2Game.0x6FC9CBA0 (#10049)
 int __cdecl D2Game_10041_TASK_Create()
 {
-    UNIMPLEMENTED();
     EnterCriticalSection(&gTaskSlotsCriticalSection.cs);
     if (!gpTaskQueueLink.pPrev)
     {
@@ -458,8 +458,27 @@ void __fastcall TASK_LinkList_Remove(D2LinkStrc* pLink)
 
 
 
+void __stdcall D2Game_10030_Return(int a1)
+{
+    D2_MAYBE_UNUSED(a1);
+}
+
+void __stdcall D2Game_10031_Return(int a1, int a2, int a3)
+{
+    D2_MAYBE_UNUSED(a1);
+    D2_MAYBE_UNUSED(a2);
+    D2_MAYBE_UNUSED(a3);
+}
+
+int32_t __stdcall D2Game_10032_Return0(int a1)
+{
+    D2_MAYBE_UNUSED(a1);
+    return 0;
+}
+
 void __stdcall D2Game_10034_Return(int a1)
 {
+    D2_MAYBE_UNUSED(a1);
 }
 
 void __stdcall D2Game_10060_Return()
