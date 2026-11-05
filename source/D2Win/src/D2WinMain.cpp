@@ -845,17 +845,17 @@ void __stdcall D2Win_10019()
 			}
 		}
 
-		for (void* i = D2Win_10147(); i; i = D2Win_10148(i))
+		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
 			sub_6F8A15E0(i);
 		}
 
-		for (void* i = D2Win_10147(); i; i = D2Win_10148(i))
+		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
 			sub_6F8A1890(i, -1);
 		}
 
-		for (void* i = D2Win_10147(); i; i = D2Win_10148(i))
+		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
 			sub_6F8A1D10(i);
 			sub_6F8A2070(i);
