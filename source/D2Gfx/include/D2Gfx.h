@@ -61,25 +61,26 @@ struct D2CellFileStrc
 
 struct D2GfxDataStrc
 {
+#ifdef D2_VERSION_110F
 	D2GfxCellStrc* pCurrentCell;			//0x00
 	D2CellFileStrc* pCellFile;				//0x04
-	uint32_t nFrame;							//0x08
-	uint32_t nDirection;						//0x0C
-	int32_t nMaxDirections;						//0x10
-	int32_t nMaxFrames;							//0x14
-	uint32_t fFlags;							//0x18
+	uint32_t nFrame;						//0x08
+	uint32_t nDirection;					//0x0C
+	int32_t nMaxDirections;					//0x10
+	int32_t nMaxFrames;						//0x14
+	uint32_t fFlags;						//0x18
 	uint8_t fState;							//0x1C
 	union									//0x1D
 	{
 		uint8_t nComponent;
 		uint8_t fItemFlags;
 	};
-	uint8_t unk0x1E;							//0x1E - padding no doubt
-	uint8_t unk0x1F;							//0x1F
-	int32_t nUnitType;							//0x20
-	int32_t nUnitIndex;							//0x24
-	int32_t nMode;								//0x28
-	int32_t nOverlay;							//0x2C
+	uint8_t unk0x1E;						//0x1E - padding no doubt
+	uint8_t unk0x1F;						//0x1F
+	int32_t nUnitType;						//0x20
+	int32_t nUnitIndex;						//0x24
+	int32_t nMode;							//0x28
+	int32_t nOverlay;						//0x2C
 	union
 	{
 		struct
@@ -93,6 +94,40 @@ struct D2GfxDataStrc
 		uint32_t dwName[5];					//0x30
 	};
 	char* pName;							//0x44
+#else
+	uint8_t fState;							//0x00
+	union									//0x01
+	{
+		uint8_t nComponent;
+		uint8_t fItemFlags;
+	};
+	uint8_t unk0x02;						//0x02
+	uint8_t unk0x03;						//0x03
+	int32_t nUnitType;						//0x04
+	int32_t nUnitIndex;						//0x08
+	int32_t nMode;							//0x0C
+	int32_t nOverlay;						//0x10
+	union
+	{
+		struct
+		{
+			char szToken[4];				//0x14
+			char szComponent[4];			//0x18
+			char szArmorType[4];			//0x1C - lit, med, hvy
+			char szMode[4];					//0x20
+			char szHitClass[4];				//0x24
+		};
+		uint32_t dwName[5];					//0x14
+	};
+	char* pName;							//0x28
+	uint32_t fFlags;						//0x2C
+	int32_t nMaxDirections;					//0x30
+	D2GfxCellStrc* pCurrentCell;			//0x34
+	uint32_t nDirection;					//0x38
+	D2CellFileStrc* pCellFile;				//0x3C
+	uint32_t nFrame;						//0x40
+	int32_t nMaxFrames;						//0x44
+#endif
 };
 
 struct D2GfxLightStrc
@@ -134,8 +169,8 @@ struct D2GfxHelperStrc
 	void(__fastcall* pfUnknown)(uint8_t* a1, int32_t a2, int32_t a3, uint8_t a4);
 	void(__fastcall* pfFloorTileDraw)(D2TileLibraryEntryStrc* pTileLibraryEntry, int32_t nX, int32_t nY, D2GfxLightExStrc* pLightEx);
 	void(__fastcall* pfTileDrawLit)(uint8_t* a1, int32_t a2, int32_t a3, int32_t* a4);
-	void(__fastcall* pfDrawBlendedVisTile)(int32_t a1, int32_t a2, int32_t a3, uint8_t a4);
-	void(__fastcall* pfDrawRoofTile)(int32_t a1, int32_t a2, int32_t a3, int32_t* a4, uint8_t a5);
+	void(__fastcall* pfDrawBlendedVisTile)(uint8_t* a1, int32_t a2, int32_t a3, uint8_t a4);
+	void(__fastcall* pfDrawRoofTile)(uint8_t* a1, int32_t a2, int32_t a3, int32_t* a4, uint8_t a5);
 };
 
 struct D2GraphicsInterfaceStrc

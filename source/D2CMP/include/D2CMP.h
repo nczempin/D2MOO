@@ -51,6 +51,19 @@ enum D2TileType
 
 struct D2TileRecordStrc;
 
+struct D2TileLibraryBlockStrc
+{
+	int16_t nPosX;							//0x00
+	int16_t nPosY;							//0x02
+	int16_t unk0x04;							//0x04
+	uint8_t nGridX;							//0x06
+	uint8_t nGridY;							//0x07
+	uint16_t nFormat;							//0x08
+	int32_t nLength;							//0x0A
+	int16_t unk0x0E;							//0x0E
+	uint8_t* dwOffset_pData;					//0x10
+};
+
 struct D2TileLibraryEntryStrc
 {
 	int32_t nLightDirection;					//0x00
@@ -64,18 +77,13 @@ struct D2TileLibraryEntryStrc
 	int32_t nSequence;							//0x1C aka nSubIndex
 	int32_t nRarity_Frame;						//0x20 By default this is the rarity of the tile, for animated tiles this is the frame index.
 	int32_t transparentColorRGB24;				//0x24
-	uint8_t dwTileFlags[4];						//0x28 Collision info
-	int32_t dwBlockOffset_pBlock;				//0x2C
-	int32_t nBlockSize;							//0x30
-	int32_t nBlocks;							//0x34
-	D2TileRecordStrc* pParent;					//0x38
-	uint16_t unk0x3C;							//0x3C
-	uint16_t nCacheIndex;						//0x3E
-	uint32_t unk0x40[4];						//0x40
-	//int32_t field_50;
-	//int32_t field_54;
-	//int32_t field_58;
-	//int32_t field_5C;
+	uint8_t dwTileFlags[32];					//0x28 Collision info (25 subtile bytes + 7 padding)
+	int32_t dwBlockOffset_pBlock;				//0x48
+	int32_t nBlockSize;							//0x4C
+	int32_t nBlocks;							//0x50
+	D2TileLibraryBlockStrc* pBlock;				//0x54
+	const char* szTileName;						//0x58
+	void* pLRUCacheBlock;						//0x5C
 };
 
 struct D2TileStrc
@@ -92,19 +100,6 @@ struct D2TileStrc
 	uint32_t unk0x20[7];						//0x20
 	D2TileRecordStrc* pParent;				//0x3C
 	uint32_t unk0x40[33];						//0x40
-};
-
-struct D2TileLibraryBlockStrc
-{
-	int16_t nPosX;							//0x00
-	int16_t nPosY;							//0x02
-	int16_t unk0x04;							//0x04
-	uint8_t nGridX;							//0x06
-	uint8_t nGridY;							//0x07
-	uint16_t nFormat;							//0x08
-	int32_t nLength;							//0x0A
-	int16_t unk0x0E;							//0x0E
-	int32_t dwOffset_pData;						//0x10
 };
 
 struct D2TileLibraryHashRefStrc
@@ -159,7 +154,13 @@ inline bool TileTypeIsAWallWithDoor(int32_t nTileType)
 
 
 D2FUNC_DLL(D2CMP, GetNearestPaletteIndex, int, __stdcall, (PALETTEENTRY* pPalette, int nPaletteSize, int nRed, int nGreen, int nBlue), 0xAB20)									//D2Cmp.#10004
+D2FUNC_DLL(D2CMP, CelDraw, void, __stdcall, (D2GfxDataStrc* pData, int32_t nXPos, int32_t nYPos, int32_t nCropLeft, uint8_t* pSurfaceBits, int32_t nSurfaceHeight, int32_t nCropRight, int32_t nSurfaceWidth, uint8_t* pDarkenTable, int32_t nDrawMode, void* pPaletteTable), 0x0)	//D2Cmp.#10012 (1.12a #10053)
+D2FUNC_DLL(D2CMP, CelDrawEx, void, __stdcall, (D2GfxDataStrc* pData, int32_t nXPos, int32_t nYPos, int32_t nCropLeft, int32_t nCropRight, uint8_t* pSurfaceBits, int32_t nSurfaceHeight, int32_t nSurfaceWidth, int32_t nUnused, int32_t nDrawMode, int32_t nDrawLines, int32_t nSkipLines, int32_t nUnused2), 0x0)	//D2Cmp.#10013 (1.12a #10093)
+D2FUNC_DLL(D2CMP, CelDrawShadow, void, __stdcall, (D2GfxDataStrc* pData, int32_t nXPos, int32_t nYPos, int32_t nCropLeft, int32_t nCropRight, uint8_t* pSurfaceBits, int32_t nSurfaceHeight, int32_t nSurfaceWidth, uint8_t* pShadowTable, int32_t nUnused), 0x0)	//D2Cmp.#10014 (1.12a #10079)
+D2FUNC_DLL(D2CMP, SpriteValidate, BOOL, __stdcall, (D2GfxDataStrc* pData, int32_t nArg2, BOOL bLoad), 0x0)																			//D2Cmp.#10020
 D2FUNC_DLL(D2CMP, CelFileNormalize, void, __stdcall, (D2CellFileStrc* pFile, D2CellFileStrc** ppOutFile, const char* szFile, int nLine, int nSpecVersion, int nUnused), 0x1EA0)		//D2Cmp.#10024
+D2FUNC_DLL(D2CMP, CmpDoLensEffect, void, __stdcall, (uint8_t* pDest, int32_t nPitch), 0x0)																							//D2Cmp.#10025
+D2FUNC_DLL(D2CMP, TileValidate, BOOL, __stdcall, (D2TileLibraryEntryStrc* pTile, BOOL bLoad, BOOL bAsync), 0x0)																		//D2Cmp.#10026
 D2FUNC_DLL(D2CMP, CelFileFreeHardware, BOOL, __stdcall, (D2CellFileStrc* pFile), 0x2750)																				//D2Cmp.#10032
 D2FUNC_DLL(D2CMP, CelGetHandle, D2CellFileStrc*, __stdcall, (D2GfxDataStrc*), 0x2540)																					//D2Cmp.#10036
 D2FUNC_DLL(D2CMP, CelGetWidth, int, __stdcall, (D2CellFileStrc* pCelFile), 0x25E0)																						//D2Cmp.#10037

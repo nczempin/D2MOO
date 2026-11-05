@@ -512,139 +512,89 @@ void __fastcall sub_6FA72700()
 //D2Gfx.0x6FA72730) --------------------------------------------------------
 void __fastcall D2GFX_DrawVisTile_6FA72730(uint8_t* a1, int32_t nX, int32_t nY)
 {
-//    int32_t v3; // eax@1
-//    int32_t v4; // ebp@1
-//    int32_t v5; // esi@1
-//    int32_t v6; // edx@8
-//    int32_t v7; // ebx@8
-//    int32_t v8; // eax@13
-//    int32_t v9; // ebp@13
-//    int32_t v10; // esi@13
-//    unsigned int32_t v11; // eax@13
-//    void* v12; // edi@16
-//    const void* v13; // esi@16
-//    int32_t v14; // edi@19
-//    int32_t v15; // eax@20
-//    int32_t v16; // ebp@20
-//    int32_t v17; // esi@20
-//    int32_t v18; // eax@20
-//    int32_t v19; // ebx@24
-//    int32_t v20; // ecx@25
-//    int32_t v21; // eax@25
-//    int32_t v22; // esi@27
-//    int32_t v23; // zf@27
-//    int32_t v24; // ecx@27
-//    int32_t v25; // ecx@27
-//    int32_t v26; // esi@27
-//    unsigned int32_t v27; // ecx@29
-//    int32_t v28; // [sp+10h] [bp-Ch]@8
-//    int32_t v29; // [sp+10h] [bp-Ch]@20
-//    int32_t v30; // [sp+14h] [bp-8h]@19
-//    int32_t v31; // [sp+18h] [bp-4h]@1
-//    signed int32_t nYa; // [sp+20h] [bp+4h]@12
-//    signed int32_t nYb; // [sp+20h] [bp+4h]@19
-//
-//    v3 = nY;
-//    v4 = a1;
-//    v5 = nX;
-//    v31 = nX;
-//    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
-//    {
-//        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
-//
-//        v6 = nX + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        v28 = v5 + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        v7 = v5 + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || v5 < dword_6FA846A0 || v5 >= dword_6FA8D234)
-//        {
-//            v14 = nY;
-//            nYb = 0;
-//            v30 = v3;
-//            do
-//            {
-//                v15 = *(_uint8_t*)v4;
-//                v16 = v4 + 1;
-//                v17 = v15;
-//                v18 = *(_uint8_t*)v16;
-//                v4 = v16 + 1;
-//                v29 = v18;
-//                if (v17 || v18)
-//                {
-//                    if (v14 >= dword_6FA8D240)
-//                        return;
-//                    v19 = v17 + v7;
-//                    if (v14 < dword_6FA84690)
-//                    {
-//                        v7 = v18 + v19;
-//                        v4 += v18;
-//                    }
-//                    else
-//                    {
-//                        v20 = v31 + v19 - v6;
-//                        v21 = dword_6FA8D220 - v20;
-//                        if (dword_6FA8D220 - v20 <= 0)
-//                            v21 = 0;
-//                        v22 = dword_6FA8469C - v20;
-//                        v23 = dword_6FA8469C == v20;
-//                        v24 = dword_6FA8469C - v20 < 0;
-//                        LOBYTE(v24) = v24 | v23;
-//                        v25 = v22 & (v24 - 1);
-//                        v26 = v29;
-//                        if (v25 >= v29)
-//                            v25 = v29;
-//                        v27 = v25 - v21;
-//                        if ((signed int32_t)v27 > 0)
-//                        {
-//                            memcpy((void*)(v21 + v19), (const void*)(v21 + v4), v27);
-//                            v26 = v29;
-//                        }
-//                        v14 = v30;
-//                        v4 += v26;
-//                        v7 = v26 + v19;
-//                    }
-//                }
-//                else
-//                {
-//                    ++v14;
-//                    v6 += dword_6FA81450;
-//                    ++nYb;
-//                    v30 = v14;
-//                    v7 = v6;
-//                }
-//            }
-//            while (nYb < 32);
-//        }
-//        else
-//        {
-//            nYa = 32;
-//            do
-//            {
-//                v8 = *(_uint8_t*)v4;
-//                v9 = v4 + 1;
-//                v10 = v8;
-//                v11 = *(_uint8_t*)v9;
-//                v4 = v9 + 1;
-//                if (v10 || v11)
-//                {
-//                    v12 = (void*)(v10 + v7);
-//                    v7 += v11 + v10;
-//                    memcpy(v12, (const void*)v4, 4 * (v11 >> 2));
-//                    v13 = (const void*)(v4 + 4 * (v11 >> 2));
-//                    v6 = v28;
-//                    v4 += v11;
-//                    memcpy((char*)v12 + 4 * (v11 >> 2), v13, v11 & 3);
-//                }
-//                else
-//                {
-//                    v6 += dword_6FA81450;
-//                    --nYa;
-//                    v28 = v6;
-//                    v7 = v6;
-//                }
-//            }
-//            while (nYa);
-//        }
-//    }
+    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
+    {
+        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
+
+        uint8_t* pLine = &gCmnInfo_pBuffer_6FA8144C[dword_6FA846A8[nY + 32]] + nX;
+        uint8_t* pDst = pLine;
+        const uint8_t* pSrc = a1;
+
+        if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || nX < dword_6FA846A0 || nX >= dword_6FA8D234)
+        {
+            int32_t nCurY = nY;
+            for (int32_t nRow = 0; nRow < 32; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    if (nCurY >= dword_6FA8D240)
+                    {
+                        return;
+                    }
+                    pDst += nSkip;
+                    if (nCurY >= dword_6FA84690)
+                    {
+                        const int32_t nCurX = nX + (int32_t)(pDst - pLine);
+                        int32_t nStart = dword_6FA8D220 - nCurX;
+                        if (nStart <= 0)
+                        {
+                            nStart = 0;
+                        }
+                        int32_t nEnd = dword_6FA8469C - nCurX;
+                        if (nEnd <= 0)
+                        {
+                            nEnd = 0;
+                        }
+                        if (nEnd > nCount)
+                        {
+                            nEnd = nCount;
+                        }
+                        const int32_t nCopyLen = nEnd - nStart;
+                        if (nCopyLen > 0)
+                        {
+                            memcpy(pDst + nStart, pSrc + nStart, nCopyLen);
+                        }
+                    }
+                    pDst += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    ++nCurY;
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    ++nRow;
+                }
+            }
+        }
+        else
+        {
+            for (int32_t nRow = 32; nRow > 0; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    pDst += nSkip;
+                    memcpy(pDst, pSrc, nCount);
+                    pDst += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    --nRow;
+                }
+            }
+        }
+    }
 }
 
 //D2Gfx.0x6FA72900
@@ -723,408 +673,251 @@ void __fastcall TILE_TileDrawLit_6FA729D0(uint8_t* a1, int32_t nX, int32_t nY, i
 }
 
 //D2Gfx.0x6FA72B80) --------------------------------------------------------
-void __fastcall D2GFX_DrawBlendedVisTile_6FA72B80(int32_t a1, int32_t nX, int32_t nY, uint8_t nAlpha)
+void __fastcall D2GFX_DrawBlendedVisTile_6FA72B80(uint8_t* a1, int32_t nX, int32_t nY, uint8_t nAlpha)
 {
-//    LPPALETTEENTRY v4; // eax@2
-//    int32_t v5; // esi@7
-//    int32_t v6; // edi@14
-//    int32_t v7; // eax@14
-//    int32_t v8; // edx@19
-//    int32_t v9; // ecx@19
-//    int32_t v10; // ebp@19
-//    int32_t v11; // edx@19
-//    int32_t v12; // esi@22
-//    int32_t v13; // ebx@23
-//    int32_t v14; // ebp@23
-//    int32_t v15; // ebx@26
-//    int32_t v16; // edx@27
-//    int32_t v17; // ecx@27
-//    int32_t v18; // esi@27
-//    int32_t v19; // edx@27
-//    int32_t v20; // ebp@27
-//    int32_t v21; // eax@31
-//    int32_t v22; // esi@32
-//    int32_t v23; // edi@32
-//    int32_t v24; // edx@34
-//    int32_t v25; // edx@34
-//    int32_t v26; // ebp@36
-//    int32_t v27; // ecx@37
-//    int32_t v28; // eax@37
-//    int32_t i; // esi@37
-//    int32_t v30; // ebx@38
-//    int32_t v31; // ebp@38
-//    int32_t v32; // [sp+10h] [bp-14h]@26
-//    int32_t v33; // [sp+14h] [bp-10h]@14
-//    int32_t v34; // [sp+18h] [bp-Ch]@1
-//    int32_t v35; // [sp+1Ch] [bp-8h]@32
-//    int32_t v36; // [sp+20h] [bp-4h]@32
-//    signed int32_t nYa; // [sp+28h] [bp+4h]@18
-//    signed int32_t nYb; // [sp+28h] [bp+4h]@26
-//    LPPALETTEENTRY nAlphaa; // [sp+2Ch] [bp+8h]@7
-//
-//    v34 = nX;
-//    if (nAlpha < 0xC0u)
-//    {
-//        if (nAlpha < 0x80u)
-//        {
-//            if (nAlpha < 0x40u)
-//            {
-//                return;
-//            }
-//            v4 = dword_6FA81448[2];
-//        }
-//        else
-//        {
-//            v4 = dword_6FA81448[1];
-//        }
-//    }
-//    else
-//    {
-//        v4 = *dword_6FA81448;
-//    }
-//    v5 = nY;
-//    nAlphaa = v4;
-//    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
-//    {
-//        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
-//
-//        v6 = nX + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        v33 = nX + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        v7 = nX + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || nX < dword_6FA846A0 || nX >= dword_6FA8D234)
-//        {
-//            v15 = nY;
-//            nYb = 0;
-//            v32 = v5;
-//            do
-//            {
-//                v16 = *(_uint8_t*)a1;
-//                v17 = a1 + 1;
-//                v18 = v16;
-//                v19 = *(_uint8_t*)v17;
-//                a1 = v17 + 1;
-//                v20 = v19;
-//                if (v18 || v19)
-//                {
-//                    if (v15 >= dword_6FA8D240)
-//                    {
-//                        return;
-//                    }
-//                    v21 = v18 + v7;
-//                    if (v15 < dword_6FA84690)
-//                    {
-//                        v7 = v19 + v21;
-//                        a1 += v19;
-//                    }
-//                    else
-//                    {
-//                        v35 = a1 + v19;
-//                        v36 = v21 + v19;
-//                        v22 = v34 + v21 - v6;
-//                        v23 = dword_6FA8D220 - v22;
-//                        if (dword_6FA8D220 - v22 <= 0)
-//                        {
-//                            v23 = 0;
-//                        }
-//                        v24 = dword_6FA8469C - v22 < 0;
-//                        LOBYTE(v24) = dword_6FA8469C - v22 <= 0;
-//                        v25 = (dword_6FA8469C - v22) & (v24 - 1);
-//                        if (v25 < v20)
-//                        {
-//                            v20 = v25;
-//                        }
-//                        v26 = v20 - v23;
-//                        if (v26 > 0)
-//                        {
-//                            v27 = v23 + a1;
-//                            v28 = v23 + v21;
-//                            for (i = v27 + v26; v27 < (unsigned int32_t)i; *(_uint8_t*)(v28 - 1) = *(_uint8_t*)(v30 + v31))
-//                            {
-//                                v30 = *(_uint8_t*)v27;
-//                                v31 = (int32_t)&nAlphaa[64 * *(_uint8_t*)v28];
-//                                ++v27;
-//                                ++v28;
-//                            }
-//                        }
-//                        a1 = v35;
-//                        v7 = v36;
-//                        v15 = v32;
-//                        v6 = v33;
-//                    }
-//                }
-//                else
-//                {
-//                    ++v15;
-//                    v6 += dword_6FA81450;
-//                    ++nYb;
-//                    v32 = v15;
-//                    v33 = v6;
-//                    v7 = v6;
-//                }
-//            }
-//            while (nYb < 32);
-//        }
-//        else
-//        {
-//            nYa = 32;
-//            do
-//            {
-//                v8 = *(_uint8_t*)a1;
-//                v9 = a1 + 1;
-//                v10 = v8;
-//                v11 = *(_uint8_t*)v9;
-//                a1 = v9 + 1;
-//                if (v10 || v11)
-//                {
-//                    v12 = a1 + v11;
-//                    v7 += v10;
-//                    if (a1 < (unsigned int32_t)(a1 + v11))
-//                    {
-//                        do
-//                        {
-//                            v13 = *(_uint8_t*)a1;
-//                            v14 = (int32_t)&nAlphaa[64 * *(_uint8_t*)v7];
-//                            ++a1;
-//                            ++v7;
-//                            *(_uint8_t*)(v7 - 1) = *(_uint8_t*)(v13 + v14);
-//                        }
-//                        while (a1 < (unsigned int32_t)v12);
-//                    }
-//                }
-//                else
-//                {
-//                    v6 += dword_6FA81450;
-//                    --nYa;
-//                    v7 = v6;
-//                }
-//            }
-//            while (nYa);
-//        }
-//    }
+    const uint8_t* pTransPalette = nullptr;
+    if (nAlpha < 0xC0u)
+    {
+        if (nAlpha < 0x80u)
+        {
+            if (nAlpha < 0x40u)
+            {
+                return;
+            }
+            pTransPalette = (const uint8_t*)dword_6FA81448[2];
+        }
+        else
+        {
+            pTransPalette = (const uint8_t*)dword_6FA81448[1];
+        }
+    }
+    else
+    {
+        pTransPalette = (const uint8_t*)dword_6FA81448[0];
+    }
+
+    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
+    {
+        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
+
+        uint8_t* pLine = &gCmnInfo_pBuffer_6FA8144C[dword_6FA846A8[nY + 32]] + nX;
+        uint8_t* pDst = pLine;
+        const uint8_t* pSrc = a1;
+
+        if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || nX < dword_6FA846A0 || nX >= dword_6FA8D234)
+        {
+            int32_t nCurY = nY;
+            for (int32_t nRow = 0; nRow < 32; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    if (nCurY >= dword_6FA8D240)
+                    {
+                        return;
+                    }
+                    pDst += nSkip;
+                    if (nCurY >= dword_6FA84690)
+                    {
+                        const int32_t nCurX = nX + (int32_t)(pDst - pLine);
+                        int32_t nStart = dword_6FA8D220 - nCurX;
+                        if (nStart <= 0)
+                        {
+                            nStart = 0;
+                        }
+                        int32_t nEnd = dword_6FA8469C - nCurX;
+                        if (nEnd <= 0)
+                        {
+                            nEnd = 0;
+                        }
+                        if (nEnd > nCount)
+                        {
+                            nEnd = nCount;
+                        }
+                        const int32_t nCopyLen = nEnd - nStart;
+                        for (int32_t i = 0; i < nCopyLen; ++i)
+                        {
+                            const uint8_t srcVal = pSrc[nStart + i];
+                            const uint8_t dstVal = pDst[nStart + i];
+                            pDst[nStart + i] = pTransPalette[((uint32_t)dstVal << 8) + srcVal];
+                        }
+                    }
+                    pDst += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    ++nCurY;
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    ++nRow;
+                }
+            }
+        }
+        else
+        {
+            for (int32_t nRow = 32; nRow > 0; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    pDst += nSkip;
+                    for (int32_t i = 0; i < nCount; ++i)
+                    {
+                        const uint8_t srcVal = pSrc[i];
+                        const uint8_t dstVal = pDst[i];
+                        pDst[i] = pTransPalette[((uint32_t)dstVal << 8) + srcVal];
+                    }
+                    pDst += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    --nRow;
+                }
+            }
+        }
+    }
 }
 
 //D2Gfx.0x6FA72DC0) --------------------------------------------------------
-void __fastcall D2GFX_DrawRoofTile_6FA72DC0(int32_t a1, int32_t nX, int32_t nY, int32_t* pIntensities, uint8_t nAlpha)
+void __fastcall D2GFX_DrawRoofTile_6FA72DC0(uint8_t* a1, int32_t nX, int32_t nY, int32_t* pIntensities, uint8_t nAlpha)
 {
-//    LPPALETTEENTRY v5; // eax@2
-//    signed int32_t v6; // edi@7
-//    signed int32_t v7; // ebx@7
-//    int32_t v8; // ebp@14
-//    int32_t v9; // edx@14
-//    char* v10; // eax@14
-//    int32_t v11; // esi@14
-//    int32_t v12; // edx@19
-//    int32_t v13; // ecx@19
-//    int32_t v14; // ST20_4@19
-//    int32_t v15; // edx@19
-//    int32_t v16; // edx@19
-//    int32_t v17; // ebx@24
-//    unsigned __int32_t8 v18; // ST34_1@24
-//    int32_t v19; // ebx@24
-//    int32_t v20; // ebx@30
-//    int32_t v21; // esi@34
-//    int32_t v22; // eax@34
-//    int32_t v23; // edi@35
-//    int32_t v24; // ebp@35
-//    int32_t v25; // edi@37
-//    int32_t v26; // edx@37
-//    int32_t v27; // edx@37
-//    int32_t v28; // ebx@39
-//    int32_t v29; // ecx@40
-//    int32_t v30; // esi@40
-//    int32_t i; // edi@40
-//    int32_t v32; // ebx@41
-//    unsigned __int32_t8 v33; // ST38_1@41
-//    int32_t v34; // ebx@41
-//    LPPALETTEENTRY v35; // [sp+10h] [bp-2Ch]@7
-//    signed int32_t v36; // [sp+14h] [bp-28h]@29
-//    int32_t v37; // [sp+18h] [bp-24h]@1
-//    int32_t v38; // [sp+18h] [bp-24h]@19
-//    int32_t v39; // [sp+1Ch] [bp-20h]@7
-//    int32_t v40; // [sp+20h] [bp-1Ch]@7
-//    int32_t v41; // [sp+24h] [bp-18h]@23
-//    int32_t v42; // [sp+24h] [bp-18h]@30
-//    int32_t v43; // [sp+28h] [bp-14h]@14
-//    int32_t v44; // [sp+30h] [bp-Ch]@35
-//    int32_t v45; // [sp+34h] [bp-8h]@35
-//    int32_t v46; // [sp+38h] [bp-4h]@35
-//    signed int32_t nYa; // [sp+40h] [bp+4h]@18
-//    int32_t nYb; // [sp+40h] [bp+4h]@29
-//    int32_t pIntensitiesa; // [sp+44h] [bp+8h]@7
-//    signed int32_t nAlphaa; // [sp+48h] [bp+Ch]@7
-//
-//    v37 = nX;
-//    if (nAlpha < 0xC0u)
-//    {
-//        if (nAlpha < 0x80u)
-//        {
-//            if (nAlpha < 0x40u)
-//            {
-//                return;
-//            }
-//            v5 = dword_6FA81448[2];
-//        }
-//        else
-//        {
-//            v5 = dword_6FA81448[1];
-//        }
-//    }
-//    else
-//    {
-//        v5 = *dword_6FA81448;
-//    }
-//    v35 = v5;
-//    v39 = pIntensities[3] - *pIntensities;
-//    v40 = pIntensities[2] - pIntensities[1];
-//    v6 = 32 * *pIntensities;
-//    v7 = 32 * pIntensities[1];
-//    pIntensitiesa = 32 * *pIntensities;
-//    nAlphaa = v7;
-//    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
-//    {
-//        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
-//
-//        v8 = nX + gCmnInfo_pBuffer_6FA8144C + dword_6FA84728[nY];
-//        v9 = nY;
-//        v10 = (char*)&unk_6FA85220 + 32 * ((v7 >> 8) + 32 * (v6 >> 8));
-//        v43 = v8;
-//        v11 = v8;
-//        if (nY >= dword_6FA8D238 && nY < dword_6FA8D248)
-//        {
-//            if (v37 >= dword_6FA846A0 && v37 < dword_6FA8D234)
-//            {
-//                nYa = 32;
-//                while (1)
-//                {
-//                    v12 = *(_uint8_t*)a1;
-//                    v13 = a1 + 1;
-//                    v14 = v12;
-//                    v15 = *(_uint8_t*)v13;
-//                    a1 = v13 + 1;
-//                    v38 = v15;
-//                    v16 = v14;
-//                    if (v14)
-//                    {
-//                        goto LABEL_23;
-//                    }
-//                    if (v38)
-//                    {
-//                        break;
-//                    }
-//                    --nYa;
-//                    v6 += v39;
-//                    v7 += v40;
-//                    v8 += dword_6FA81450;
-//                    v11 = v8;
-//                    pIntensitiesa = v6;
-//                    nAlphaa = v7;
-//                    v10 = (char*)&unk_6FA85220 + 32 * ((v7 >> 8) + 32 * (v6 >> 8));
-//LABEL_26:
-//                    if (!nYa)
-//                    {
-//                        return;
-//                    }
-//                }
-//                v16 = 0;
-//LABEL_23:
-//                v11 += v16;
-//                v10 += v16;
-//                v41 = a1 + v38;
-//                if (a1 < (unsigned int32_t)(a1 + v38))
-//                {
-//                    do
-//                    {
-//                        v17 = *(_uint8_t*)a1++;
-//                        v18 = *(&byte_6FA81580[256 * (unsigned __int32_t8)*v10] + v17);
-//                        v19 = *(_uint8_t*)v11;
-//                        ++v10;
-//                        ++v11;
-//                        *(_uint8_t*)(v11 - 1) = *(&v35[64 * v18].peRed + v19);
-//                    }
-//                    while (a1 < (unsigned int32_t)v41);
-//                    v7 = nAlphaa;
-//                    v6 = pIntensitiesa;
-//                }
-//                goto LABEL_26;
-//            }
-//            v9 = nY;
-//        }
-//        v36 = 0;
-//        nYb = v9;
-//        do
-//        {
-//            v20 = *(_uint8_t*)(a1 + 1);
-//            v42 = *(_uint8_t*)a1;
-//            a1 += 2;
-//            if (v42 || v20)
-//            {
-//                if (nYb >= dword_6FA8D240)
-//                {
-//                    return;
-//                }
-//                v21 = v42 + v11;
-//                v22 = (int32_t)&v10[v42];
-//                if (nYb < dword_6FA84690)
-//                {
-//                    v11 = v20 + v21;
-//                    v10 = (char*)(v20 + v22);
-//                    a1 += v20;
-//                }
-//                else
-//                {
-//                    v44 = v20 + a1;
-//                    v23 = v37 + v21 - v8;
-//                    v45 = v20 + v21;
-//                    v24 = dword_6FA8D220 - v23;
-//                    v46 = v20 + v22;
-//                    if (dword_6FA8D220 - v23 <= 0)
-//                    {
-//                        v24 = 0;
-//                    }
-//                    v25 = dword_6FA8469C - v23;
-//                    v26 = v25 < 0;
-//                    LOBYTE(v26) = v25 <= 0;
-//                    v27 = v25 & (v26 - 1);
-//                    if (v27 < v20)
-//                    {
-//                        v20 = v27;
-//                    }
-//                    v28 = v20 - v24;
-//                    if (v28 > 0)
-//                    {
-//                        v29 = v24 + a1;
-//                        v30 = v24 + v21;
-//                        for (i = v28 + v29; v29 < (unsigned int32_t)i; *(_uint8_t*)(v30 - 1) = *(&v35[64 * v33].peRed + v34))
-//                        {
-//                            v32 = *(_uint8_t*)v29++;
-//                            v33 = *(&byte_6FA81580[256 * *(_uint8_t*)v22] + v32);
-//                            v34 = *(_uint8_t*)v30;
-//                            ++v22;
-//                            ++v30;
-//                        }
-//                    }
-//                    a1 = v44;
-//                    v11 = v45;
-//                    v10 = (char*)v46;
-//                    v6 = pIntensitiesa;
-//                    v8 = v43;
-//                }
-//            }
-//            else
-//            {
-//                v6 += v39;
-//                ++v36;
-//                nAlphaa += v40;
-//                v8 += dword_6FA81450;
-//                ++nYb;
-//                v43 = v8;
-//                v11 = v8;
-//                pIntensitiesa = v6;
-//                v10 = (char*)&unk_6FA85220 + 32 * ((nAlphaa >> 8) + 32 * (v6 >> 8));
-//            }
-//        }
-//        while (v36 < 32);
-//    }
+    const uint8_t* pTransPalette = nullptr;
+    if (nAlpha < 0xC0u)
+    {
+        if (nAlpha < 0x80u)
+        {
+            if (nAlpha < 0x40u)
+            {
+                return;
+            }
+            pTransPalette = (const uint8_t*)dword_6FA81448[2];
+        }
+        else
+        {
+            pTransPalette = (const uint8_t*)dword_6FA81448[1];
+        }
+    }
+    else
+    {
+        pTransPalette = (const uint8_t*)dword_6FA81448[0];
+    }
+
+    const int32_t nDelta0 = pIntensities[3] - pIntensities[0];
+    const int32_t nDelta1 = pIntensities[2] - pIntensities[1];
+    int32_t nInt0 = 32 * pIntensities[0];
+    int32_t nInt1 = 32 * pIntensities[1];
+
+    if (nY >= dword_6FA8D230 && nY < dword_6FA8D24C && nX >= dword_6FA84688 && nX < dword_6FA85218)
+    {
+        D2_ASSERT(gCmnInfo_pBuffer_6FA8144C);
+
+        uint8_t* pLine = &gCmnInfo_pBuffer_6FA8144C[dword_6FA846A8[nY + 32]] + nX;
+        uint8_t* pDst = pLine;
+        const uint8_t* pSrc = a1;
+        const uint8_t* pGouraud = &byte_6FA85220[nInt0 >> 8][nInt1 >> 8][0];
+
+        if (nY >= dword_6FA8D238 && nY < dword_6FA8D248 && nX >= dword_6FA846A0 && nX < dword_6FA8D234)
+        {
+            for (int32_t nRow = 32; nRow > 0; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    pDst += nSkip;
+                    pGouraud += nSkip;
+                    for (int32_t i = 0; i < nCount; ++i)
+                    {
+                        const uint8_t litVal = stru_6FA81580[pGouraud[i]].unk0x00[pSrc[i]];
+                        const uint8_t dstVal = pDst[i];
+                        pDst[i] = pTransPalette[((uint32_t)litVal << 8) + dstVal];
+                    }
+                    pDst += nCount;
+                    pGouraud += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    --nRow;
+                    nInt0 += nDelta0;
+                    nInt1 += nDelta1;
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    pGouraud = &byte_6FA85220[nInt0 >> 8][nInt1 >> 8][0];
+                }
+            }
+        }
+        else
+        {
+            int32_t nCurY = nY;
+            for (int32_t nRow = 0; nRow < 32; )
+            {
+                const int32_t nSkip = pSrc[0];
+                const int32_t nCount = pSrc[1];
+                pSrc += 2;
+
+                if (nSkip || nCount)
+                {
+                    if (nCurY >= dword_6FA8D240)
+                    {
+                        return;
+                    }
+                    pDst += nSkip;
+                    pGouraud += nSkip;
+                    if (nCurY >= dword_6FA84690)
+                    {
+                        const int32_t nCurX = nX + (int32_t)(pDst - pLine);
+                        int32_t nStart = dword_6FA8D220 - nCurX;
+                        if (nStart <= 0)
+                        {
+                            nStart = 0;
+                        }
+                        int32_t nEnd = dword_6FA8469C - nCurX;
+                        if (nEnd <= 0)
+                        {
+                            nEnd = 0;
+                        }
+                        if (nEnd > nCount)
+                        {
+                            nEnd = nCount;
+                        }
+                        const int32_t nCopyLen = nEnd - nStart;
+                        for (int32_t i = 0; i < nCopyLen; ++i)
+                        {
+                            const uint8_t litVal = stru_6FA81580[pGouraud[nStart + i]].unk0x00[pSrc[nStart + i]];
+                            const uint8_t dstVal = pDst[nStart + i];
+                            pDst[nStart + i] = pTransPalette[((uint32_t)litVal << 8) + dstVal];
+                        }
+                    }
+                    pDst += nCount;
+                    pGouraud += nCount;
+                    pSrc += nCount;
+                }
+                else
+                {
+                    nInt0 += nDelta0;
+                    nInt1 += nDelta1;
+                    ++nRow;
+                    ++nCurY;
+                    pLine += dword_6FA81450;
+                    pDst = pLine;
+                    pGouraud = &byte_6FA85220[nInt0 >> 8][nInt1 >> 8][0];
+                }
+            }
+        }
+    }
 }
 
 //D2Gfx.0x6FA73130
@@ -1205,165 +998,97 @@ void __fastcall sub_6FA73270(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3,
 //D2Gfx.0x6FA73410) --------------------------------------------------------
 void __fastcall D2GFX_FloorTileDraw_6FA73410(D2TileLibraryEntryStrc* pTileLibraryEntry, int32_t nX, int32_t nY, D2GfxLightExStrc* pLightEx)
 {
-//    int32_t v4; // ebx@1
-//    int32_t v5; // edi@1
-//    int32_t v6; // ebp@2
-//    int32_t v7; // ecx@4
-//    int32_t v8; // edx@4
-//    int32_t v9; // esi@4
-//    int32_t v10; // edx@5
-//    int32_t v11; // eax@5
-//    int32_t v12; // ebx@9
-//    signed int32_t v13; // edi@10
-//    D2GfxLightExStrc* v14; // eax@11
-//    int32_t v15; // edi@11
-//    int32_t v16; // edx@11
-//    int32_t v17; // ebx@11
-//    int32_t v18; // ebx@13
-//    int32_t v19; // ebx@15
-//    int32_t v20; // ST58_4@19
-//    int32_t v21; // ecx@19
-//    char v22; // dl@28
-//    int32_t v23; // ecx@28
-//    int32_t v24; // eax@28
-//    int32_t v25; // zf@31
-//    int32_t v26; // ecx@31
-//    int32_t v27; // edx@37
-//    int32_t v28; // sf@37
-//    unsigned __int32_t8 v29; // of@37
-//    unsigned __int32_t8 a5; // [sp+Ch] [bp-54h]@9
-//    int32_t v31; // [sp+10h] [bp-50h]@11
-//    int32_t v32; // [sp+18h] [bp-48h]@2
-//    int32_t v33; // [sp+1Ch] [bp-44h]@15
-//    int32_t v34; // [sp+20h] [bp-40h]@13
-//    int32_t v35; // [sp+24h] [bp-3Ch]@11
-//    int32_t v36; // [sp+28h] [bp-38h]@5
-//    int32_t a3; // [sp+2Ch] [bp-34h]@5
-//    int32_t v38; // [sp+30h] [bp-30h]@1
-//    int32_t v39; // [sp+34h] [bp-2Ch]@1
-//    int32_t v40; // [sp+38h] [bp-28h]@1
-//    int32_t v41; // [sp+44h] [bp-1Ch]@11
-//    int32_t v42; // [sp+48h] [bp-18h]@11
-//    D2TileLibraryEntryStrc* v43; // [sp+4Ch] [bp-14h]@1
-//    int32_t v44; // [sp+50h] [bp-10h]@19
-//    int32_t v45; // [sp+54h] [bp-Ch]@19
-//    int32_t v46; // [sp+58h] [bp-8h]@2
-//    int32_t v47; // [sp+5Ch] [bp-4h]@19
-//
-//    v4 = nX;
-//    v5 = nX + gCmnInfo_pBuffer_6FA8144C + nY * dword_6FA81450;
-//    v39 = nX;
-//    v43 = pTileLibraryEntry;
-//    v40 = nX + gCmnInfo_pBuffer_6FA8144C + nY * dword_6FA81450;
-//    v38 = 0;
-//    if (pTileLibraryEntry->field_50 > 0)
-//    {
-//        v6 = v46;
-//        v32 = 0;
-//        while (1)
-//        {
-//            v7 = v32 + pTileLibraryEntry->field_54;
-//            v8 = *(_WORD*)v7;
-//            v9 = v5 + v8 + dword_6FA81450 * *(_WORD*)(v7 + 2);
-//            if (!(*(_uint8_t*)(v7 + 8) & 1)
-//                || (v10 = v4 + v8,
-//                    v11 = nY + *(_WORD*)(v7 + 2),
-//                    a3 = v10,
-//                    v36 = nY + *(_WORD*)(v7 + 2),
-//                    v11 < dword_6FA8D224)
-//                || v11 >= dword_6FA8D23C
-//                || v10 < dword_6FA8D244
-//                || v10 >= dword_6FA84698)
-//                goto LABEL_37;
-//            v12 = 0;
-//            a5 = 0;
-//            if (!dword_6FA8D250)
-//                break;
-//            LOBYTE(v12) = *(_uint8_t*)(v7 + 7);
-//            v13 = 1;
-//            a5 = pLightEx[*(_uint8_t*)(v7 + 6) + 8 * v12 + 9].nIntensity;
-//LABEL_23:
-//            if (v11 < dword_6FA8D228 || v11 >= dword_6FA84694 || v10 < dword_6FA8468C || v10 >= dword_6FA8D22C)
-//            {
-//                if (v13)
-//                    sub_6FA73130(v7, v10, v11, v9, a5);
-//                else
-//                    sub_6FA73270(v7, v10, v11, v9, (int32_t)&v44);
-//            }
-//            else
-//            {
-//                if (v13)
-//                {
-//                    v22 = *(_uint8_t*)(v7 + 8);
-//                    v23 = *(_uint32_t*)(v7 + 16);
-//                    v24 = (int32_t)&byte_6FA81580[256 * ((unsigned int32_t)a5 >> 3)];
-//                    if (v22 & 4)
-//                        sub_6FA71720(v23, v9, v24, 15);
-//                    else
-//                        sub_6FA71130(v23, v9, v24);
-//                }
-//                else
-//                {
-//                    v25 = (*(_uint8_t*)(v7 + 8) & 4) == 0;
-//                    v26 = *(_uint32_t*)(v7 + 16);
-//                    if (v25)
-//                        sub_6FA71340(v26, v9, 16 * v44, v47 - v44, 16 * v45, v6 - v45);
-//                    else
-//                        sub_6FA71970(v26, v9, 16 * v44, v47 - v44, 16 * v45, v6 - v45, 15, 7);
-//                }
-//            }
-//LABEL_37:
-//            pTileLibraryEntry = v43;
-//            v27 = v43->field_50;
-//            v29 = __OFSUB__(v38 + 1, v27);
-//            v28 = v38++ + 1 - v27 < 0;
-//            v32 += 20;
-//            if (!(v28 ^ v29))
-//                return;
-//            v4 = v39;
-//            v5 = v40;
-//        }
-//        LOBYTE(v12) = *(&pLightEx[8 * *(_uint8_t*)(v7 + 7) + 10].nIntensity + 12 * *(_uint8_t*)(v7 + 6));
-//        v14 = &pLightEx[*(_uint8_t*)(v7 + 6) + 8 * *(_uint8_t*)(v7 + 7)];
-//        v15 = v12;
-//        v42 = v14[11].nIntensity;
-//        v31 = v14[17].nIntensity;
-//        v16 = v14[9].nIntensity;
-//        v35 = v14[18].nIntensity;
-//        v41 = v14[19].nIntensity;
-//        v17 = v12 - v16;
-//        if (v15 - v16 < 0)
-//            v17 = -v17;
-//        v34 = v17;
-//        v18 = v31 - v16;
-//        if (v31 - v16 < 0)
-//            v18 = -v18;
-//        v33 = v18;
-//        v19 = v35 - v15;
-//        if (v35 - v15 < 0)
-//            v19 = -v19;
-//        if (!gGfxSettings.bLowQuality)
-//        {
-//            if (v34 + v33 + v19 >= 10)
-//            {
-//                v20 = v7;
-//                v21 = v14[1].nIntensity;
-//                v44 = (v14[8].nIntensity + v16 + v14[16].nIntensity + v31) >> 2;
-//                v45 = (v16 + v14[2].nIntensity + v15 + v21) >> 2;
-//                v7 = v20;
-//                v6 = (v15 + v42 + v41 + v31) >> 2;
-//                v47 = (v31 + v14[26].nIntensity + v35 + v14[25].nIntensity) >> 2;
-//                v13 = 0;
-//                v46 = v6;
-//LABEL_22:
-//                v11 = v36;
-//                v10 = a3;
-//                goto LABEL_23;
-//            }
-//            v6 = v46;
-//        }
-//        v13 = 1;
-//        a5 = v14[9].nIntensity;
-//        goto LABEL_22;
-//    }
+    uint8_t* pBaseDst = gCmnInfo_pBuffer_6FA8144C + nY * dword_6FA81450 + nX;
+    for (int32_t nBlockIdx = 0; nBlockIdx < pTileLibraryEntry->nBlocks; ++nBlockIdx)
+    {
+        D2TileLibraryBlockStrc* pBlock = &pTileLibraryEntry->pBlock[nBlockIdx];
+        if (!(pBlock->nFormat & 1))
+        {
+            continue;
+        }
+
+        const int32_t nBlockX = nX + pBlock->nPosX;
+        const int32_t nBlockY = nY + pBlock->nPosY;
+        if (nBlockY < dword_6FA8D224 || nBlockY >= dword_6FA8D23C || nBlockX < dword_6FA8D244 || nBlockX >= dword_6FA84698)
+        {
+            continue;
+        }
+
+        uint8_t* pBlockDst = pBaseDst + pBlock->nPosX + dword_6FA81450 * pBlock->nPosY;
+        BOOL bFlatLit = FALSE;
+        uint8_t nFlatIntensity = 0;
+        int32_t aIntensities[4] = {};
+
+        if (dword_6FA8D250)
+        {
+            bFlatLit = TRUE;
+            nFlatIntensity = pLightEx[pBlock->nGridX + 8 * pBlock->nGridY + 9].nIntensity;
+        }
+        else
+        {
+            D2GfxLightExStrc* pCellLight = &pLightEx[pBlock->nGridX + 8 * pBlock->nGridY];
+            const int32_t nI10 = pCellLight[10].nIntensity;
+            const int32_t nI11 = pCellLight[11].nIntensity;
+            const int32_t nI17 = pCellLight[17].nIntensity;
+            const int32_t nI09 = pCellLight[9].nIntensity;
+            const int32_t nI18 = pCellLight[18].nIntensity;
+            const int32_t nI19 = pCellLight[19].nIntensity;
+
+            const int32_t nDiff1 = std::abs(nI10 - nI09);
+            const int32_t nDiff2 = std::abs(nI17 - nI09);
+            const int32_t nDiff3 = std::abs(nI18 - nI10);
+
+            if (!gGfxSettings.bLowQuality && (nDiff1 + nDiff2 + nDiff3 >= 10))
+            {
+                aIntensities[0] = (pCellLight[8].nIntensity + nI09 + pCellLight[16].nIntensity + nI17) >> 2;
+                aIntensities[1] = (nI09 + pCellLight[2].nIntensity + nI10 + pCellLight[1].nIntensity) >> 2;
+                aIntensities[2] = (nI10 + nI11 + nI19 + nI17) >> 2;
+                aIntensities[3] = (nI17 + pCellLight[26].nIntensity + nI18 + pCellLight[25].nIntensity) >> 2;
+                bFlatLit = FALSE;
+            }
+            else
+            {
+                bFlatLit = TRUE;
+                nFlatIntensity = (uint8_t)nI09;
+            }
+        }
+
+        if (nBlockY < dword_6FA8D228 || nBlockY >= dword_6FA84694 || nBlockX < dword_6FA8468C || nBlockX >= dword_6FA8D22C)
+        {
+            if (bFlatLit)
+            {
+                sub_6FA73130(pBlock, nBlockX, nBlockY, pBlockDst, nFlatIntensity);
+            }
+            else
+            {
+                sub_6FA73270(pBlock, nBlockX, nBlockY, pBlockDst, aIntensities);
+            }
+        }
+        else
+        {
+            if (bFlatLit)
+            {
+                uint8_t* pPal = stru_6FA81580[(uint32_t)nFlatIntensity >> 3].unk0x00;
+                if (pBlock->nFormat & 4)
+                {
+                    sub_6FA71720(pBlock->dwOffset_pData, pBlockDst, pPal, 15);
+                }
+                else
+                {
+                    sub_6FA71130(pBlock->dwOffset_pData, pBlockDst, pPal);
+                }
+            }
+            else
+            {
+                if (pBlock->nFormat & 4)
+                {
+                    sub_6FA71970(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1], 15, 7);
+                }
+                else
+                {
+                    sub_6FA71340(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1]);
+                }
+            }
+        }
+    }
 }
