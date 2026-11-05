@@ -67,6 +67,8 @@ struct D2LaunchCharNodeStrc
 	uint16_t wSaveFlags;
 	uint8_t nCharClass;
 	uint8_t nCharLevel;
+	uint8_t nAppearanceComponents[16];
+	uint8_t nAppearanceColors[16];
 	D2LaunchCharNodeStrc* pNext;
 };
 

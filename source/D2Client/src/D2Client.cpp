@@ -1,16 +1,21 @@
 #include "D2Client.h"
 
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <Fog.h>
 #include <Storm.h>
+#include <D2Lang.h>
 #include <D2StrTable.h>
 #include <D2Gfx.h>
+#include <Texture.h>
 #include <Window.h>
 #include <D2CMP.h>
 #include <D2Sound.h>
 #include <D2WinMain.h>
 #include <D2WinArchive.h>
+#include <D2WinComp.h>
 #include <D2WinFont.h>
 #include <D2WinPalette.h>
 #include <D2DataTbls.h>
@@ -37,6 +42,12 @@ static DWORD gdwSessionStartTick = 0;                          // 0x6FBC47A4
 static DWORD gdwSessionLeaveTick = 0;                          // 0x6FBC479C
 static char gszAccountName[16] = "SinglePlayer";               // 0x6FBB33E0
 static char gszCharName[16] = "Hero";                          // 0x6FBB33F8
+static uint8_t gnCharClass = 0;
+static uint8_t gnCharLevel = 1;
+static uint16_t gwCharSaveFlags = 0;
+static uint8_t gaCharComponents[16] = {};
+static uint8_t gaCharColors[16] = {};
+
 static CRITICAL_SECTION gServerThreadLock = {};                // 0x6FBB327C
 static HANDLE ghServerThread = nullptr;                        // 0x6FBB33D8
 static DWORD gdwServerThreadId = 0;                            // 0x6FBB340C
@@ -44,6 +55,75 @@ static volatile int32_t gbStopServerThread = 0;                // 0x6FBCC038
 static volatile int32_t gbRunServerThreadUpdates = 0;          // 0x6FBCC03C
 static D2GameDataTableStrc gLocalGameDataTable = {};           // 0x6FBD0E98
 static uint32_t gLocalGameList[8] = {};                        // 0x6FBCC018
+
+// In-Game HUD & Unit Rendering State
+static D2CellFileStrc* gpHudCtrlPnl = nullptr;
+static D2CellFileStrc* gpHudHlthMana = nullptr;
+static D2CellFileStrc* gpHudOverlap = nullptr;
+static D2CellFileStrc* gpHudCampfire = nullptr;
+static D2CellFileStrc* gpHudCursor = nullptr;
+static D2CellFileStrc* gpPlayerClassNu1 = nullptr;
+static D2CellFileStrc* gpPlayerClassFw = nullptr;
+static D2CompositeUnitStrc* gpPlayerCompIdle = nullptr;
+static D2CompositeUnitStrc* gpPlayerCompWalk = nullptr;
+
+static const char* const kClassNu1Paths[7] = {
+	"DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\sorceress\\sonu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\necromancer\\nenu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\paladin\\panu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\barbarian\\banu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\druid\\dznu1",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\assassin\\asnu1",
+};
+static const char* const kClassFwPaths[7] = {
+	"DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amfw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\sorceress\\sofw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\necromancer\\nefw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\paladin\\pafw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\barbarian\\bafw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\druid\\dzfw",
+	"DATA\\GLOBAL\\UI\\FrontEnd\\assassin\\asfw",
+};
+
+static float gfPlayerWorldX = 0.0f;
+static float gfPlayerWorldY = 0.0f;
+static float gfTargetWorldX = 0.0f;
+static float gfTargetWorldY = 0.0f;
+static uint8_t gnPlayerDir = 0;
+static bool gbPlayerMoving = false;
+static bool gbMouseLeftHeld = false;
+static POINT gMousePos = { 400, 300 };
+
+static const char* const kClassNames[7] = {
+	"Amazon", "Sorceress", "Necromancer", "Paladin", "Barbarian", "Druid", "Assassin"
+};
+
+static const uint32_t kClassTokens[7] = {
+	'  MA', '  OS', '  EN', '  AP', '  AB', '  ZD', '  IA'
+};
+static const uint32_t kModeTokens[20] = {
+	'  TD', '  UN', '  LW', '  NR', '  HG', '  NT', '  WT', '  1A',
+	'  2A', '  LB', '  CS', '  HT', '  KK', '  1S', '  2S', '  3S',
+	'  4S', '  DD', '  HG', '  HG'
+};
+static const uint32_t kCompTokens[16] = {
+	'  DH', '  RT', '  GL', '  AR', '  AL', '  HR', '  HL', '  HS',
+	'  1S', '  2S', '  3S', '  4S', '  5S', '  6S', '  7S', '  8S'
+};
+static const uint32_t kWClassTokens[15] = {
+	0, ' hth', ' th1', ' th2', ' sh1', ' sh2', ' wob', ' wbx',
+	' fts', ' sj1', ' tj1', ' ss1', ' ts1', ' 1th', ' 2th'
+};
+static const uint8_t kDirRemapTable[7][64] = {
+	{ 0 },
+	{ 0 },
+	{ 0, 32 },
+	{ 0, 16, 32, 48 },
+	{ 0, 8, 16, 24, 32, 40, 48, 56 },
+	{ 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60 },
+	{ 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62 },
+};
 
 // 1.12a @10001: 0x6FB4E980
 extern "C" D2CLIENT_DLL_DECL int32_t __stdcall D2Client_10001(int32_t nUnused)
@@ -73,6 +153,19 @@ extern "C" D2CLIENT_DLL_DECL void __stdcall D2Client_10003()
 	WINDOW_UpdatePlacement();
 }
 
+static void SetMoveTargetFromScreenPoint(int32_t nScreenX, int32_t nScreenY)
+{
+	if (nScreenY >= 530)
+	{
+		return;
+	}
+	const float fDx = static_cast<float>(nScreenX - 400);
+	const float fDy = static_cast<float>(nScreenY - 280);
+	gfTargetWorldX = gfPlayerWorldX + fDx;
+	gfTargetWorldY = gfPlayerWorldY + fDy;
+	gbPlayerMoving = true;
+}
+
 // 1.12a: 0x6FB1D200
 static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -83,6 +176,24 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 		gbExitApplication = 1;
 		gnClientState = D2CLIENT_STATE_LEAVE_GAME;
 		return 0;
+	case WM_MOUSEMOVE:
+		gMousePos.x = static_cast<int16_t>(LOWORD(lParam));
+		gMousePos.y = static_cast<int16_t>(HIWORD(lParam));
+		if (gbMouseLeftHeld)
+		{
+			SetMoveTargetFromScreenPoint(gMousePos.x, gMousePos.y);
+		}
+		return 0;
+	case WM_LBUTTONDOWN:
+	case WM_RBUTTONDOWN:
+		gMousePos.x = static_cast<int16_t>(LOWORD(lParam));
+		gMousePos.y = static_cast<int16_t>(HIWORD(lParam));
+		gbMouseLeftHeld = (uMsg == WM_LBUTTONDOWN);
+		SetMoveTargetFromScreenPoint(gMousePos.x, gMousePos.y);
+		return 0;
+	case WM_LBUTTONUP:
+		gbMouseLeftHeld = false;
+		return 0;
 	case WM_KEYDOWN:
 		if (wParam == VK_ESCAPE)
 		{
@@ -90,6 +201,30 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 			gbExitApplication = 0;
 			gnClientState = D2CLIENT_STATE_LEAVE_GAME;
 			return 0;
+		}
+		else if (wParam == VK_LEFT || wParam == 'A')
+		{
+			gfTargetWorldX = gfPlayerWorldX - 120.0f;
+			gfTargetWorldY = gfPlayerWorldY;
+			gbPlayerMoving = true;
+		}
+		else if (wParam == VK_RIGHT || wParam == 'D')
+		{
+			gfTargetWorldX = gfPlayerWorldX + 120.0f;
+			gfTargetWorldY = gfPlayerWorldY;
+			gbPlayerMoving = true;
+		}
+		else if (wParam == VK_UP || wParam == 'W')
+		{
+			gfTargetWorldX = gfPlayerWorldX;
+			gfTargetWorldY = gfPlayerWorldY - 90.0f;
+			gbPlayerMoving = true;
+		}
+		else if (wParam == VK_DOWN || wParam == 'S')
+		{
+			gfTargetWorldX = gfPlayerWorldX;
+			gfTargetWorldY = gfPlayerWorldY + 90.0f;
+			gbPlayerMoving = true;
 		}
 		break;
 	default:
@@ -220,8 +355,386 @@ static void DrainNetworkPackets()
 	}
 }
 
+static void LoadCharacterSaveAppearance()
+{
+	gnCharClass = gpD2Config ? gpD2Config->unpackedCTemp.nCharacterClassId : 0;
+	if (gnCharClass >= 7)
+	{
+		gnCharClass = 0;
+	}
+	gnCharLevel = 1;
+	gwCharSaveFlags = gpD2Config ? gpD2Config->unpackedCTemp.nCharacterSaveFlags : 0x20;
+	std::memset(gaCharComponents, 0xFF, sizeof(gaCharComponents));
+	std::memset(gaCharColors, 0xFF, sizeof(gaCharColors));
+
+	char szSaveDir[MAX_PATH] = {};
+	char szFullPath[MAX_PATH * 2] = {};
+	FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
+	std::snprintf(szFullPath, sizeof(szFullPath), "%s%s.d2s", szSaveDir, gszCharName);
+
+	FILE* pFile = std::fopen(szFullPath, "rb");
+	if (pFile)
+	{
+		uint8_t aHdr[0xB0] = {};
+		const size_t nRead = std::fread(aHdr, 1, sizeof(aHdr), pFile);
+		std::fclose(pFile);
+		if (nRead >= 0xA8 && *reinterpret_cast<const uint32_t*>(&aHdr[0]) == 0xAA55AA55u)
+		{
+			gwCharSaveFlags = static_cast<uint16_t>(*reinterpret_cast<const uint32_t*>(&aHdr[0x24]));
+			if (aHdr[0x28] < 7)
+			{
+				gnCharClass = aHdr[0x28];
+			}
+			if (aHdr[0x2B] > 0)
+			{
+				gnCharLevel = aHdr[0x2B];
+			}
+			std::memcpy(gaCharComponents, &aHdr[0x88], 16);
+			std::memcpy(gaCharColors, &aHdr[0x98], 16);
+		}
+	}
+}
+
+static void InitInGameAssets()
+{
+	D2Win_10177(0);
+	LoadCharacterSaveAppearance();
+
+	gpHudCtrlPnl = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\800ctrlpnl7", 0);
+	gpHudHlthMana = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\hlthmana", 0);
+	gpHudOverlap = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\overlap", 0);
+	gpHudCampfire = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\fire", 0);
+	gpHudCursor = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\CURSOR\\ohand", 0);
+	const uint8_t nSafeClass = (gnCharClass < 7) ? gnCharClass : 0;
+	gpPlayerClassNu1 = ARCHIVE_LoadCellFile(kClassNu1Paths[nSafeClass], 0);
+	gpPlayerClassFw = ARCHIVE_LoadCellFile(kClassFwPaths[nSafeClass], 0);
+
+	D2Win_10146();
+	gpPlayerCompIdle = D2Win_10144(gnCharClass, 5, gaCharComponents, gaCharColors);
+	gpPlayerCompWalk = D2Win_10144(gnCharClass, 6, gaCharComponents, gaCharColors);
+
+	gfPlayerWorldX = 0.0f;
+	gfPlayerWorldY = 0.0f;
+	gfTargetWorldX = 0.0f;
+	gfTargetWorldY = 0.0f;
+	gnPlayerDir = 0;
+	gbPlayerMoving = false;
+	gbMouseLeftHeld = false;
+}
+
+static void FreeCellPtr(D2CellFileStrc** ppCell)
+{
+	if (ppCell && *ppCell)
+	{
+		ARCHIVE_FreeCellFile(*ppCell);
+		*ppCell = nullptr;
+	}
+}
+
+static void ShutdownInGameAssets()
+{
+	D2Win_10146();
+	gpPlayerCompIdle = nullptr;
+	gpPlayerCompWalk = nullptr;
+	FreeCellPtr(&gpPlayerClassNu1);
+	FreeCellPtr(&gpPlayerClassFw);
+	FreeCellPtr(&gpHudCtrlPnl);
+	FreeCellPtr(&gpHudHlthMana);
+	FreeCellPtr(&gpHudOverlap);
+	FreeCellPtr(&gpHudCampfire);
+	FreeCellPtr(&gpHudCursor);
+}
+
+static void PopulateCompositeLayerGfxData(
+	D2CompositeUnitStrc* pComp,
+	D2CofDataStrc* pCofData,
+	uint8_t nComponent,
+	uint8_t nDir,
+	uint32_t nFrame,
+	D2GfxDataStrc* pGfxData)
+{
+	pGfxData->nUnitIndex = pComp->nUnitIndex;
+	pGfxData->nMode = pComp->nMode;
+	pGfxData->nComponent = nComponent;
+	pGfxData->nDirection = nDir;
+	pGfxData->nFrame = nFrame;
+	pGfxData->dwName[0] = (pComp->nUnitIndex >= 0 && pComp->nUnitIndex < 7)
+		? kClassTokens[pComp->nUnitIndex]
+		: '  MA';
+	pGfxData->dwName[1] = (nComponent < 16) ? kCompTokens[nComponent] : '  RT';
+	pGfxData->dwName[2] = pComp->dwArmorType[nComponent] ? pComp->dwArmorType[nComponent] : ' til';
+	pGfxData->dwName[3] = (pComp->nMode >= 0 && pComp->nMode < 20) ? kModeTokens[pComp->nMode] : '  NT';
+	pGfxData->dwName[4] = (pComp->nWClassTokenIndex >= 0 && pComp->nWClassTokenIndex < 15)
+		? kWClassTokens[pComp->nWClassTokenIndex]
+		: ' hth';
+
+	const uint8_t* pLayer = reinterpret_cast<const uint8_t*>(&pCofData[1]);
+	for (int i = 0; i < pCofData->unk0x00; ++i)
+	{
+		if (pLayer[0] == nComponent)
+		{
+			char szWClass[4] = { ' ', ' ', ' ', ' ' };
+			if (pLayer[5])
+			{
+				szWClass[0] = static_cast<char>(pLayer[5]);
+				if (pLayer[6])
+				{
+					szWClass[1] = static_cast<char>(pLayer[6]);
+					if (pLayer[7])
+					{
+						szWClass[2] = static_cast<char>(pLayer[7]);
+					}
+				}
+			}
+			std::memcpy(&pGfxData->dwName[4], szWClass, sizeof(uint32_t));
+			break;
+		}
+		pLayer += 9;
+	}
+	pGfxData->fFlags |= 2u;
+}
+
+static void DrawCompositeCharacter(D2CompositeUnitStrc* pComp, int32_t nScreenX, int32_t nScreenY, uint8_t nDir8)
+{
+	if (!pComp || !pComp->pGfxInfo || !pComp->pGfxInfo->pCofInfo)
+	{
+		return;
+	}
+
+	D2CofInfoStrc* pCofInfo = pComp->pGfxInfo->pCofInfo;
+	while (pCofInfo && pCofInfo->pCofNode->nMode != static_cast<uint32_t>(pComp->nMode))
+	{
+		pCofInfo = pCofInfo->pNext;
+	}
+	if (!pCofInfo || !pCofInfo->pCofNode || !pCofInfo->pCofNode->pCofData)
+	{
+		return;
+	}
+
+	D2CofDataStrc* pCofData = pCofInfo->pCofNode->pCofData;
+	const int nFramesPerDir = pCofData->unk0x01;
+	const int nLayers = pCofData->unk0x00;
+	if (nFramesPerDir <= 0 || nLayers <= 0)
+	{
+		return;
+	}
+
+	const uint8_t nMaxDirs = pCofData->unk0x02 ? pCofData->unk0x02 : 8;
+	const uint8_t nClampedDir = static_cast<uint8_t>(nDir8 % nMaxDirs);
+	unsigned long dwDirRow = 0;
+	if (nMaxDirs)
+	{
+		_BitScanForward(&dwDirRow, nMaxDirs);
+	}
+	const uint8_t nMappedDir = kDirRemapTable[dwDirRow < 7 ? dwDirRow : 3][nClampedDir];
+
+	const uint32_t nFrame = (pComp->unk0x08 >> 8) % static_cast<uint32_t>(nFramesPerDir);
+	const uint8_t* pOrderTable = reinterpret_cast<const uint8_t*>(pCofData) + 28 + nFramesPerDir +
+		nLayers * (nClampedDir * nFramesPerDir + nFrame + 9);
+
+	// Pass 1: Shadows
+	for (int i = 0; i < nLayers; ++i)
+	{
+		const uint8_t nComponent = pOrderTable[i];
+		if (nComponent >= 16)
+		{
+			continue;
+		}
+		D2GfxDataStrc gfxData = {};
+		PopulateCompositeLayerGfxData(pComp, pCofData, nComponent, nMappedDir, nFrame, &gfxData);
+		if (D2CMP_SpriteValidate(&gfxData, 0, TRUE))
+		{
+			TEXTURE_CelDrawShadow(&gfxData, nScreenX - 2, nScreenY);
+		}
+	}
+
+	// Pass 2: Lit Sprite Layers
+	bool bDrewAnyLayer = false;
+	for (int i = 0; i < nLayers; ++i)
+	{
+		const uint8_t nComponent = pOrderTable[i];
+		if (nComponent >= 16)
+		{
+			continue;
+		}
+		D2GfxDataStrc gfxData = {};
+		PopulateCompositeLayerGfxData(pComp, pCofData, nComponent, nMappedDir, nFrame, &gfxData);
+		if (D2CMP_SpriteValidate(&gfxData, 0, TRUE))
+		{
+			bDrewAnyLayer = true;
+			TEXTURE_CelDraw(&gfxData, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+		}
+	}
+
+	if (!bDrewAnyLayer)
+	{
+		D2CellFileStrc* pFallbackCell = (gbPlayerMoving && gpPlayerClassFw) ? gpPlayerClassFw : gpPlayerClassNu1;
+		if (pFallbackCell)
+		{
+			const uint32_t nFrames = D2CMP_CelFileGetCelsPerDirection(pFallbackCell);
+			D2GfxDataStrc tCharGfx = {};
+			tCharGfx.pCellFile = pFallbackCell;
+			tCharGfx.nDirection = 0;
+			tCharGfx.nFrame = nFrames ? ((GetTickCount() / 55) % nFrames) : 0;
+			TEXTURE_CelDrawShadow(&tCharGfx, nScreenX - 32, nScreenY + 35);
+			TEXTURE_CelDraw(&tCharGfx, nScreenX - 30, nScreenY + 35, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+		}
+	}
+
+	const uint32_t nStep = pComp->unk0x10 ? pComp->unk0x10 : 128u;
+	const uint32_t nNextFrame = pComp->unk0x08 + nStep;
+	pComp->unk0x08 = ((nNextFrame >> 8) >= static_cast<uint32_t>(nFramesPerDir - 1)) ? 0 : nNextFrame;
+}
+
+static void UpdatePlayerMovement()
+{
+	if (!gbPlayerMoving)
+	{
+		return;
+	}
+
+	const float fDx = gfTargetWorldX - gfPlayerWorldX;
+	const float fDy = gfTargetWorldY - gfPlayerWorldY;
+	const float fDist = std::sqrt(fDx * fDx + fDy * fDy);
+	if (fDist < 6.0f)
+	{
+		gfPlayerWorldX = gfTargetWorldX;
+		gfPlayerWorldY = gfTargetWorldY;
+		gbPlayerMoving = false;
+		return;
+	}
+
+	const float fStep = 7.0f;
+	gfPlayerWorldX += (fDx / fDist) * fStep;
+	gfPlayerWorldY += (fDy / fDist) * fStep;
+
+	// Map movement vector to D2's 8-direction COF index (0=SW, 1=NW, 2=NE, 3=SE, 4=S, 5=W, 6=N, 7=E)
+	const float fAngleDeg = std::atan2(fDy, fDx) * (180.0f / 3.14159265f);
+	if (fAngleDeg >= 67.5f && fAngleDeg < 112.5f)
+	{
+		gnPlayerDir = 4; // S
+	}
+	else if (fAngleDeg >= 112.5f && fAngleDeg < 157.5f)
+	{
+		gnPlayerDir = 0; // SW
+	}
+	else if (fAngleDeg >= 157.5f || fAngleDeg < -157.5f)
+	{
+		gnPlayerDir = 5; // W
+	}
+	else if (fAngleDeg >= -157.5f && fAngleDeg < -112.5f)
+	{
+		gnPlayerDir = 1; // NW
+	}
+	else if (fAngleDeg >= -112.5f && fAngleDeg < -67.5f)
+	{
+		gnPlayerDir = 6; // N
+	}
+	else if (fAngleDeg >= -67.5f && fAngleDeg < -22.5f)
+	{
+		gnPlayerDir = 2; // NE
+	}
+	else if (fAngleDeg >= -22.5f && fAngleDeg < 22.5f)
+	{
+		gnPlayerDir = 7; // E
+	}
+	else
+	{
+		gnPlayerDir = 3; // SE
+	}
+}
+
+static void DrawRogueEncampmentGround()
+{
+	// Isometric tile grid scrolling with player world position
+	const int32_t nCamX = static_cast<int32_t>(gfPlayerWorldX);
+	const int32_t nCamY = static_cast<int32_t>(gfPlayerWorldY);
+
+	for (int32_t ty = -12; ty <= 12; ++ty)
+	{
+		for (int32_t tx = -12; tx <= 12; ++tx)
+		{
+			const int32_t nIsoX = 400 + (tx - ty) * 64 - nCamX;
+			const int32_t nIsoY = 280 + (tx + ty) * 32 - nCamY;
+			if (nIsoX < -80 || nIsoX > 880 || nIsoY < -40 || nIsoY > 580)
+			{
+				continue;
+			}
+			const bool bPath = (tx >= -1 && tx <= 1) || (ty >= -1 && ty <= 1);
+			const uint8_t nColor = bPath ? 0x16 : (((tx + ty) & 1) ? 0x84 : 0x86);
+			D2GFX_DrawBoxAlpha(nIsoX - 60, nIsoY - 28, nIsoX + 60, nIsoY + 28, nColor, 180);
+		}
+	}
+
+	// Town Campfire at world origin (80, -30)
+	if (gpHudCampfire)
+	{
+		const int32_t nFireX = 400 + 80 - nCamX;
+		const int32_t nFireY = 280 + 10 - nCamY;
+		if (nFireX > -120 && nFireX < 920 && nFireY > 0 && nFireY < 620)
+		{
+			const uint32_t nFireFrames = D2CMP_CelFileGetCelsPerDirection(gpHudCampfire);
+			D2GfxDataStrc tFireGfx = {};
+			tFireGfx.pCellFile = gpHudCampfire;
+			tFireGfx.nDirection = 0;
+			tFireGfx.nFrame = nFireFrames ? ((GetTickCount() / 40) % nFireFrames) : 0;
+			TEXTURE_CelDraw(&tFireGfx, nFireX - 55, nFireY + 20, 0xFFFFFFFFu, DRAWMODE_MODULATE, nullptr);
+		}
+	}
+}
+
+static void DrawHudControlPanel()
+{
+	// Health & Mana Orbs (hlthmana.dc6)
+	if (gpHudHlthMana)
+	{
+		D2GfxDataStrc tOrb = {};
+		tOrb.pCellFile = gpHudHlthMana;
+		tOrb.nDirection = 0;
+
+		tOrb.nFrame = 0; // Health Orb
+		TEXTURE_CelDraw(&tOrb, 30, 588, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+
+		tOrb.nFrame = 1; // Mana Orb
+		TEXTURE_CelDraw(&tOrb, 692, 588, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+	}
+
+	// 800x600 Control Panel slices (800ctrlpnl7.dc6)
+	if (gpHudCtrlPnl)
+	{
+		const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(gpHudCtrlPnl);
+		int32_t nCurX = 0;
+		for (int32_t f = 0; f < nFrames; ++f)
+		{
+			D2GfxDataStrc tPnl = {};
+			tPnl.pCellFile = gpHudCtrlPnl;
+			tPnl.nDirection = 0;
+			tPnl.nFrame = f;
+			D2CellFileStrc* pCell = D2CMP_CelGetHandle(&tPnl);
+			const int32_t nW = pCell ? D2CMP_CelGetWidth(pCell) : 128;
+			const int32_t nY = (f == 0 || f == nFrames - 1) ? 600 : 599;
+			TEXTURE_CelDraw(&tPnl, nCurX, nY, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+			nCurX += nW;
+		}
+	}
+
+	// Orb glass overlaps
+	if (gpHudOverlap)
+	{
+		D2GfxDataStrc tOvl = {};
+		tOvl.pCellFile = gpHudOverlap;
+		tOvl.nDirection = 0;
+		tOvl.nFrame = 0;
+		TEXTURE_CelDraw(&tOvl, 28, 594, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+		tOvl.nFrame = 1;
+		TEXTURE_CelDraw(&tOvl, 690, 594, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+	}
+}
+
 static void RenderInGameFrame()
 {
+	UpdatePlayerMovement();
+
 	if (!D2GFX_StartDraw(0, 0, 0, 0))
 	{
 		return;
@@ -229,30 +742,49 @@ static void RenderInGameFrame()
 
 	D2GFX_ClearScreen(0);
 
-	// Draw ground / viewport frame and HUD status
-	D2GFX_DrawBoxAlpha(0, 0, 800, 600, 0x10, 255);
-	D2GFX_DrawBoxAlpha(0, 552, 800, 600, 0x08, 255);
+	// 1. Rogue Encampment Ground & Campfire
+	DrawRogueEncampmentGround();
 
-	Unicode wszTitle[128] = {};
+	// 2. Player Composite Character at screen center (400, 295)
+	D2CompositeUnitStrc* pActiveComp = (gbPlayerMoving && gpPlayerCompWalk) ? gpPlayerCompWalk : gpPlayerCompIdle;
+	DrawCompositeCharacter(pActiveComp, 400, 295, gnPlayerDir);
+
+	// 3. Player Overhead Name Banner & Area Title
+	Unicode wszArea[128] = {};
 	Unicode wszChar[128] = {};
 	Unicode wszHint[128] = {};
 	char szCharLine[128] = {};
 	std::snprintf(
 		szCharLine,
 		sizeof(szCharLine),
-		"Character: %s  |  Act I - Rogue Encampment  |  Tick: %u  |  Packets: %u",
+		"%s  -  Level %u %s%s",
 		gszCharName,
-		gdwServerTicks,
-		gdwGamePacketsReceived);
+		gnCharLevel,
+		kClassNames[gnCharClass < 7 ? gnCharClass : 0],
+		(gwCharSaveFlags & 0x04) ? " (Hardcore)" : "");
 
-	Unicode::win2Unicode(wszTitle, "Diablo II: Lord of Destruction (v1.12a - D2MOO In-Game Session)", 127);
+	Unicode::win2Unicode(wszArea, "Act I - Rogue Encampment", 127);
 	Unicode::win2Unicode(wszChar, szCharLine, 127);
-	Unicode::win2Unicode(wszHint, "Press ESC to Save and Exit Game", 127);
+	Unicode::win2Unicode(wszHint, "Left-Click / WASD: Move   |   ESC: Save and Exit Game", 127);
 
 	D2Win_10127_SetFont(D2FONT_FONT16);
-	D2Win_10117_DrawText(wszTitle, 20, 40, 4, 0);
-	D2Win_10117_DrawText(wszChar, 20, 80, 0, 0);
-	D2Win_10117_DrawText(wszHint, 20, 580, 9, 0);
+	D2Win_10117_DrawText(wszChar, 20, 26, (gwCharSaveFlags & 0x04) ? 1 : 4, 0);
+	D2Win_10117_DrawText(wszArea, 600, 26, 0, 0);
+	D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+	D2Win_10117_DrawText(wszHint, 230, 535, 0, 0);
+
+	// 4. Diablo II 800x600 Bottom HUD Control Panel & Orbs
+	DrawHudControlPanel();
+
+	// 5. Hand Cursor
+	if (gpHudCursor)
+	{
+		D2GfxDataStrc tCur = {};
+		tCur.pCellFile = gpHudCursor;
+		tCur.nDirection = 0;
+		tCur.nFrame = 0;
+		TEXTURE_CelDraw(&tCur, gMousePos.x, gMousePos.y - 1, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+	}
 
 	D2GFX_EndScene();
 }
@@ -270,6 +802,8 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	{
 		SStrCopy(gszCharName, gpD2Config->szName, sizeof(gszCharName));
 	}
+
+	InitInGameAssets();
 
 	if (gnGameType != 3 && gnGameType != 7 && gnGameType != 9)
 	{
@@ -329,6 +863,8 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 		RenderInGameFrame();
 		Sleep(40);
 	}
+
+	ShutdownInGameAssets();
 
 	if (gnGameType == 0 || gnGameType == 1)
 	{

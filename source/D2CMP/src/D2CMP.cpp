@@ -42,7 +42,7 @@ struct D2GfxCellStrc
 	uint32_t unk0x14;						//0x14
 	D2GfxCellNodeStrc* pCellNode;			//0x18
 	uint32_t dwLength;						//0x1C
-	uint8_t* pPixels;						//0x20
+	uint8_t pPixels[1];						//0x20 (inline RLE pixel stream in normalized DC6)
 };
 
 struct D2CellFileStrc
@@ -737,7 +737,6 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelFileNormalize(D2CellFileStrc* pFile, D2Ce
 		uintptr_t offset = (uintptr_t)pFile->pGfxCells[i];
 		D2GfxCellStrc* pCell = (D2GfxCellStrc*)(pBase + offset);
 		pCell->pCellNode = nullptr;
-		pCell->pPixels = (uint8_t*)(pCell + 1);
 		pFile->pGfxCells[i] = pCell;
 	}
 	pFile->dwTermination = 0xB00B1E5;
@@ -757,7 +756,7 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelFileSerialize(D2CellFileStrc* pCelFile, D
 	{
 		if (pCelFile->pGfxCells[i])
 		{
-			nTotalSize += sizeof(D2GfxCellStrc) + pCelFile->pGfxCells[i]->dwLength;
+			nTotalSize += 0x20 + pCelFile->pGfxCells[i]->dwLength;
 		}
 	}
 
@@ -774,14 +773,13 @@ D2CMP_DLL_DECL void __stdcall D2CMP_CelFileSerialize(D2CellFileStrc* pCelFile, D
 		if (pSrcCell)
 		{
 			D2GfxCellStrc* pDstCell = (D2GfxCellStrc*)(pBuf + curOffset);
-			memcpy(pDstCell, pSrcCell, sizeof(D2GfxCellStrc));
+			memcpy(pDstCell, pSrcCell, 0x20);
 			pDstCell->pCellNode = nullptr;
-			pDstCell->pPixels = nullptr;
-			if (pSrcCell->pPixels && pSrcCell->dwLength > 0)
+			if (pSrcCell->dwLength > 0)
 			{
-				memcpy(pDstCell + 1, pSrcCell->pPixels, pSrcCell->dwLength);
+				memcpy(pDstCell->pPixels, pSrcCell->pPixels, pSrcCell->dwLength);
 			}
-			curOffset += sizeof(D2GfxCellStrc) + pSrcCell->dwLength;
+			curOffset += 0x20 + pSrcCell->dwLength;
 		}
 	}
 	*ppOutFile = pOut;
