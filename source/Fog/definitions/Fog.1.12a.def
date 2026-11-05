@@ -46,7 +46,7 @@ UnimplementedOrdinal_10028=UnimplementedOrdinal @10028;   FOG_10028 @10028 NONAM
     FOG_TraceAppend @10031 NONAME
     FOG_TraceMemory @10032 NONAME
     FOG_CrashDeadlockDetected @10033 NONAME
-UnimplementedOrdinal_10034=UnimplementedOrdinal @10034;   FOG_CrashDumpThread @10034 NONAME
+    FOG_CrashDumpThread @10034 NONAME
 UnimplementedOrdinal_10035=UnimplementedOrdinal @10035;   FOG_10035 @10035 NONAME
 UnimplementedOrdinal_10036=UnimplementedOrdinal @10036;   FOG_10036 @10036 NONAME
 UnimplementedOrdinal_10037=UnimplementedOrdinal @10037;   FOG_10037 @10037 NONAME
@@ -126,7 +126,7 @@ UnimplementedOrdinal_10110=UnimplementedOrdinal @10110;   FOG_10110 @10110 NONAM
 UnimplementedOrdinal_10111=UnimplementedOrdinal @10111;   FOG_10111 @10111 NONAME
 UnimplementedOrdinal_10112=UnimplementedOrdinal @10112;   FOG_10112 @10112 NONAME
 UnimplementedOrdinal_10113=UnimplementedOrdinal @10113;   FOG_10113 @10113 NONAME
-UnimplementedOrdinal_10114=UnimplementedOrdinal @10114;   FOG_10114 @10114 NONAME
+    FOG_CreatePathHierarchy @10114 NONAME
     FOG_GetSavePath @10115 NONAME
     FOG_GetInstallPath @10116 NONAME
     FOG_UseDirect @10117 NONAME

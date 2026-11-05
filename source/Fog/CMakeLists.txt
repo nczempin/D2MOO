@@ -1,7 +1,7 @@
 
 D2MOO_prepare_targets(Fog)
 
-target_link_libraries(${FogImplName} PUBLIC D2CommonDefinitions Storm)
+target_link_libraries(${FogImplName} PUBLIC D2CommonDefinitions Storm ws2_32)
 
 target_sources(${FogImplName}
   PRIVATE
@@ -14,7 +14,6 @@ target_sources(${FogImplName}
 	src/D2QSQueue.cpp
 	src/D2QSSocket.cpp
 	src/DataArrays.cpp
-	src/ErrorManager.cpp
 	src/ErrorManager.cpp
 	src/Excel/Excel.cpp
 	src/Exceptions.cpp
@@ -34,6 +33,7 @@ target_sources(${FogImplName}
 	
 	# Headers
 	include/Fog.h
+	include/FogTables.h
 	include/D2BitManip.h
 	include/Safesock.h
 	include/System/System.h

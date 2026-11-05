@@ -6,8 +6,9 @@
 #include <stdlib.h>
 
 //1.10f Image base: 0x6FF50000
+//1.12a Image base: 0x6FF50000
 
-#ifdef D2_VERSION_110F
+#if defined(D2_VERSION_110F) || defined(D2_VERSION_112A)
 constexpr int FogImageBase = 0x6FF50000;
 #endif
 
@@ -150,70 +151,70 @@ struct QServer;
 
 typedef int (*D2ExceptionCallback)();
 
-D2FUNC_DLL(FOG, csprintf, const char*, __cdecl, (char* szDest, const char* szFormat, ...), 0xDD90)													//Fog.#10018
-D2FUNC_DLL(FOG, InitErrorMgr, void, __fastcall, (const char* szProgramName, D2ExceptionCallback pExceptionCallback, const char* szVersion, BOOL bLogToFile), 0xE1B0)	//Fog.#10019
-D2FUNC_DLL(FOG, SetLogPrefix, int, __fastcall, (const char* szLogPrefix), 0xE1A0)																	//Fog.#10021
-D2FUNC_DLL(FOG, GetSystemInfo, void*, __cdecl, (), 0xDF20)																							//Fog.#10022
-D2FUNC_DLL(FOG, DisplayAssert, void, __cdecl, (const char* szMsg, const char* szFile, int nLine), 0xED30)											//Fog.#10023
-D2FUNC_DLL(FOG, DisplayHalt, void, __cdecl, (const char* szMsg, const char* szFile, int nLine), 0xED60)												//Fog.#10024
-D2FUNC_DLL(FOG, DisplayWarning, void, __cdecl, (const char* szMsg, const char* szFile, int nLine), 0xED90)											//Fog.#10025
-D2FUNC_DLL(FOG, DisplayError, void, __cdecl, (int nCategory, const char* szMsg, const char* szFile, int nLine), 0xEDF0)								//Fog.#10026
+FOG_DLL_DECL const char* __cdecl FOG_csprintf(char* szDest, const char* szFormat, ...);																//Fog.#10018
+FOG_DLL_DECL void __fastcall FOG_InitErrorMgr(const char* szProgramName, D2ExceptionCallback pExceptionCallback, const char* szVersion, BOOL bLogToFile);	//Fog.#10019
+FOG_DLL_DECL int __fastcall FOG_SetLogPrefix(const char* szLogPrefix);																				//Fog.#10021
+FOG_DLL_DECL void* __cdecl FOG_GetSystemInfo();																										//Fog.#10022
+FOG_DLL_DECL void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int nLine);														//Fog.#10023
+FOG_DLL_DECL void __cdecl FOG_DisplayHalt(const char* szMsg, const char* szFile, int nLine);														//Fog.#10024
+FOG_DLL_DECL void __cdecl FOG_DisplayWarning(const char* szMsg, const char* szFile, int nLine);														//Fog.#10025
+FOG_DLL_DECL void __cdecl FOG_DisplayError(int nCategory, const char* szMsg, const char* szFile, int nLine);										//Fog.#10026
 // Log to default logfile with date and `\n` at end of message
-D2FUNC_DLL(FOG, Trace, void, __cdecl, (const char* szFormat, ...), 0x120A0)																			//Fog.#10029
+FOG_DLL_DECL void __cdecl FOG_Trace(const char* szFormat, ...);																						//Fog.#10029
 // Log to file. Will be prefixed with "D2" and suffixed by date. Log includes date prefix and `\n` at end of message.
-D2FUNC_DLL(FOG, TraceF, void, __cdecl, (const char* pFileSubName, const char* szFormat, ...), 0x120E0)												//Fog.#10030
+FOG_DLL_DECL void __cdecl FOG_TraceF(const char* pFileSubName, const char* szFormat, ...);															//Fog.#10030
 // Append to the default logfile. No date nor '\n'.
-D2FUNC_DLL(FOG, TraceAppend, void, __cdecl, (const char* szFormat, ...), 0x12180)																	//Fog.#10031
-D2FUNC_DLL(FOG, TraceMemory, void, __cdecl, (const char* pFileSubName, const char* szMessage, void* pMemory, size_t nByteCount, BOOL bLogOffset, BOOL bNoCopy, BOOL bNoASCII), 0x12210) //Fog.#10032
-D2FUNC_DLL(FOG, CrashDeadlockDetected, void, __fastcall, (HANDLE hThreadToWalk), 0xFA10)															//Fog.#10033
-D2FUNC_DLL(FOG, CrashDumpThread, void, __fastcall, (HANDLE hThreadToWalk), 0x1DE0)																	//Fog.#10034
-D2FUNC_DLL(FOG, IsHandlingError, BOOL, __cdecl, (), 0xF2A0)																							//Fog.#10039
-D2FUNC_DLL(FOG, Alloc, void*, __fastcall, (int nSize, const char* szFile, int nLine, int n0), 0x8F50)												//Fog.#10042
-D2FUNC_DLL(FOG, Free, void, __fastcall, (void* pFree, const char* szFile, int nLine, int n0), 0x8F90)												//Fog.#10043
-D2FUNC_DLL(FOG, Realloc, void, __fastcall, (void* pMemory, int nSize, const char* szFile, int nLine, int n0), 0x8F90)								//Fog.#10044
-D2FUNC_DLL(FOG, AllocPool, void*, __fastcall, (void* pMemPool, int nSize, const char* szFile, int nLine, int n0), 0x8FF0)							//Fog.#10045
-D2FUNC_DLL(FOG, FreePool, void, __fastcall, (void* pMemPool, void* pFree, const char* szFile, int nLine, int n0), 0x9030)							//Fog.#10046
-D2FUNC_DLL(FOG, ReallocPool, void*, __fastcall, (void* pMemPool, void* pMemory, int nSize, const char* szFile, int nLine, int n0), 0x9060)			//Fog.#10047
-D2FUNC_DLL(FOG, 10050_EnterCriticalSection, void, __fastcall, (_Acquires_lock_(*_Curr_) CRITICAL_SECTION* pCriticalSection, int nLine), 0xDC20)		//Fog.#10050
-D2FUNC_DLL(FOG, 10055_GetSyncTime, int32_t, __fastcall, (), 0xA690)																					//Fog.#10055
+FOG_DLL_DECL void __cdecl FOG_TraceAppend(const char* szFormat, ...);																				//Fog.#10031
+FOG_DLL_DECL void __cdecl FOG_TraceMemory(const char* pFileSubName, const char* szMessage, void* pMemory, size_t nByteCount, BOOL bLogOffset, BOOL bNoCopy, BOOL bNoASCII); //Fog.#10032
+FOG_DLL_DECL void __fastcall FOG_CrashDeadlockDetected(HANDLE hThreadToWalk);																		//Fog.#10033
+FOG_DLL_DECL void __fastcall FOG_CrashDumpThread(HANDLE hThreadToWalk);																				//Fog.#10034
+FOG_DLL_DECL BOOL __cdecl FOG_IsHandlingError();																									//Fog.#10039
+FOG_DLL_DECL void* __fastcall FOG_Alloc(int nSize, const char* szFile, int nLine, int n0);															//Fog.#10042
+FOG_DLL_DECL void __fastcall FOG_Free(void* pFree, const char* szFile, int nLine, int n0);															//Fog.#10043
+FOG_DLL_DECL void* __fastcall FOG_Realloc(void* pMemory, int nSize, const char* szFile, int nLine, int n0);											//Fog.#10044
+FOG_DLL_DECL void* __fastcall FOG_AllocPool(void* pMemPool, int nSize, const char* szFile, int nLine, int n0);										//Fog.#10045
+FOG_DLL_DECL void __fastcall FOG_FreePool(void* pMemPool, void* pFree, const char* szFile, int nLine, int n0);										//Fog.#10046
+FOG_DLL_DECL void* __fastcall FOG_ReallocPool(void* pMemPool, void* pMemory, int nSize, const char* szFile, int nLine, int n0);						//Fog.#10047
+FOG_DLL_DECL void __fastcall FOG_10050_EnterCriticalSection(_Acquires_lock_(*_Curr_) CRITICAL_SECTION* pCriticalSection, int nLine);				//Fog.#10050
+FOG_DLL_DECL int32_t __fastcall FOG_10055_GetSyncTime();																							//Fog.#10055
 // Noop, same as 10048, 10049, 10053, 10054, 10146, 10194, 10195, 10196, 10197, 10220, 10221, 10225, 10232, 10240, 10241, 10242
-D2FUNC_DLL(FOG, 10082_Noop, void, __fastcall, (), 0x1DE0)																						//Fog.#10082
-D2FUNC_DLL(FOG, 10083_Cos_LUT, float, __stdcall, (int16_t index), 0x1DF0)																			//Fog.#10083
-D2FUNC_DLL(FOG, 10084_Sin_LUT, float, __stdcall, (int16_t index), 0x1E10)																			//Fog.#10084
-D2FUNC_DLL(FOG, Decode14BitsFromString, unsigned, __stdcall, (uint16_t* p2Characters), 0x1B20)														//Fog.#10085
-D2FUNC_DLL(FOG, Encode14BitsToString, void, __stdcall, (uint16_t* p2Characters, uint32_t value), 0x1B40)											//Fog.#10086
+FOG_DLL_DECL void __fastcall FOG_10082_Noop();																										//Fog.#10082
+FOG_DLL_DECL float __stdcall FOG_10083_Cos_LUT(int16_t index);																						//Fog.#10083
+FOG_DLL_DECL float __stdcall FOG_10084_Sin_LUT(int16_t index);																						//Fog.#10084
+FOG_DLL_DECL unsigned __stdcall FOG_Decode14BitsFromString(uint16_t* p2Characters);																	//Fog.#10085
+FOG_DLL_DECL void __stdcall FOG_Encode14BitsToString(uint16_t* p2Characters, uint32_t value);														//Fog.#10086
 // Note: works up to value 0xFC05FC00
-D2FUNC_DLL(FOG, Decode32BitsFromString, unsigned, __stdcall, (uint32_t* p4Characters), 0x1B60)														//Fog.#10087
-D2FUNC_DLL(FOG, Encode32BitsToString, void , __stdcall, (uint32_t* p4Characters, uint32_t value), 0x1BA0)											//Fog.#10088
-D2FUNC_DLL(FOG, AsyncDataInitialize, void, __fastcall, (BOOL bEnableAsyncOperations), 0xC010)														//Fog.#10089
-D2FUNC_DLL(FOG, AsyncDataDestroy, void, __fastcall, (), 0xC0E0)																						//Fog.#10090
-D2FUNC_DLL(FOG, AsyncDataLoadFileEx, AsyncData*, __fastcall, (void* pMemPool, const char* pFileName, BOOL bAllowAsync, LONG nFileOffset, int nFileSize, void* pBuffer, AsyncDataLoadFileCallback* asyncOpDesc, int a8, const char* sourceFile, int sourceLine), 0xC2B0)	//Fog.#10091
-D2FUNC_DLL(FOG, AsyncDataTestLoaded, BOOL, __fastcall, (AsyncData* pAsyncData), 0xC480)																//Fog.#10092
-D2FUNC_DLL(FOG, AsyncDataWaitAndGetBuffer, void, __fastcall, (AsyncData* pAsyncData), 0xC630)														//Fog.#10093
-D2FUNC_DLL(FOG, AsyncDataGetBuffer, void*, __fastcall, (AsyncData* pAsyncData), 0xC700)																//Fog.#10094
-D2FUNC_DLL(FOG, AsyncDataGetBufferSize, DWORD, __fastcall, (AsyncData* pAsyncData), 0xC790)															//Fog.#10095
-D2FUNC_DLL(FOG, AsyncDataSetResults, void, __fastcall, (AsyncData* pAsyncData, void* pBuffer, int nBufferSize), 0xC7E0)								//Fog.#10096
-D2FUNC_DLL(FOG, AsyncDataFree, void, __fastcall, (AsyncData* pAsyncData), 0xC880)																	//Fog.#10097
-D2FUNC_DLL(FOG, AsyncDataSetPriority, void, __fastcall, (AsyncData* pAsyncData, int nPriority), 0xC4E0)												//Fog.#10099
-D2FUNC_DLL(FOG, AsyncDataHandlePriorityChanges, void, __fastcall, (BOOL bPostpone), 0xC5A0)															//Fog.#10100
-D2FUNC_DLL(FOG, MPQSetConfig, BOOL, __fastcall, (int dwDirectAccessFlags, int bEnableSeekOptimization), 0x11590)									//Fog.#10101
-D2FUNC_DLL(FOG, FOpenFile, BOOL, __fastcall, (const char* szFile, HSFILE* pFileHandle), 0x11600)													//Fog.#10102
-D2FUNC_DLL(FOG, FCloseFile, void, __fastcall, (HSFILE pFile), 0x11610)																				//Fog.#10103
-D2FUNC_DLL(FOG, FReadFile, BOOL, __fastcall, (HSFILE pFile, void* pBuffer, size_t nSize, int* nBytesRead, uint32_t, uint32_t, uint32_t), 0x11620)	//Fog.#10104
-D2FUNC_DLL(FOG, FGetFileSize, uint32_t, __fastcall, (HSFILE pFileHandle, uint32_t* lpFileSizeHigh), 0x11650)										//Fog.#10105
-D2FUNC_DLL(FOG, FSetFilePointer, size_t, __fastcall, (HSFILE hFile, int32_t lDistanceToMove, int32_t* lpDistanceToMoveHigh, uint32_t dwMoveMethod), 0x11660)//Fog.#10106
-D2FUNC_DLL(FOG, CreateFileA, HANDLE, __fastcall, (LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile), 0x11680); //Fog.#10107
-D2FUNC_DLL(FOG, DeleteFileA, BOOL, __fastcall, (LPCSTR lpFileName), 0x116B0);																		//Fog.#10108
-D2FUNC_DLL(FOG, CloseFile, BOOL, __fastcall, (HANDLE hFILE), 0x116C0);																				//Fog.#10109
-D2FUNC_DLL(FOG, CreatePathHierarchy, BOOL, __fastcall, (char* szPath), 0x11730)																		//Fog.#10114
-D2FUNC_DLL(FOG, GetSavePath, size_t, __fastcall, (char* pPathBuffer, size_t nBufferSize), 0x11900)													//Fog.#10115
-D2FUNC_DLL(FOG, GetInstallPath, BOOL, __fastcall, (char* pPathBuffer, size_t nBufferSize), 0x11870)													//Fog.#10116
-D2FUNC_DLL(FOG, UseDirect, BOOL, __fastcall, (), 0x11A10)																							//Fog.#10117
-D2FUNC_DLL(FOG, ComputeStringCRC16, uint16_t, __stdcall, (const char* szString), 0x3DB0)															//Fog.#10137
-D2FUNC_DLL(FOG, CreateNewPoolSystem, void, __cdecl, (void** pMemPoolSystem, const char* szName, uint32_t nPools, uint32_t nUnused), 0xA280)			//Fog.#10142
-D2FUNC_DLL(FOG, DestroyMemoryPoolSystem, void, __cdecl, (void* pMemoryPoolSystem), 0xA100)															//Fog.#10143
-D2FUNC_DLL(FOG, SetMemoryPoolSystemMode, void, __cdecl, (void* pMemoryPoolSystem, BOOL bFreePoolAlloc), 0xA4A0)										//Fog.#10145
-D2FUNC_DLL(FOG, GetMemoryUsage, DWORD, __cdecl, (void*), 0xA4E0)																					//Fog.#10147
+FOG_DLL_DECL unsigned __stdcall FOG_Decode32BitsFromString(uint32_t* p4Characters);																	//Fog.#10087
+FOG_DLL_DECL void __stdcall FOG_Encode32BitsToString(uint32_t* p4Characters, uint32_t value);														//Fog.#10088
+FOG_DLL_DECL void __fastcall FOG_AsyncDataInitialize(BOOL bEnableAsyncOperations);																	//Fog.#10089
+FOG_DLL_DECL void __fastcall FOG_AsyncDataDestroy();																								//Fog.#10090
+FOG_DLL_DECL AsyncData* __fastcall FOG_AsyncDataLoadFileEx(void* pMemPool, const char* pFileName, BOOL bAllowAsync, LONG nFileOffset, int nFileSize, void* pBuffer, AsyncDataLoadFileCallback* asyncOpDesc, int a8, const char* sourceFile, int sourceLine);	//Fog.#10091
+FOG_DLL_DECL BOOL __fastcall FOG_AsyncDataTestLoaded(AsyncData* pAsyncData);																		//Fog.#10092
+FOG_DLL_DECL void __fastcall FOG_AsyncDataWaitAndGetBuffer(AsyncData* pAsyncData);																	//Fog.#10093
+FOG_DLL_DECL void* __fastcall FOG_AsyncDataGetBuffer(AsyncData* pAsyncData);																		//Fog.#10094
+FOG_DLL_DECL DWORD __fastcall FOG_AsyncDataGetBufferSize(AsyncData* pAsyncData);																	//Fog.#10095
+FOG_DLL_DECL void __fastcall FOG_AsyncDataSetResults(AsyncData* pAsyncData, void* pBuffer, int nBufferSize);										//Fog.#10096
+FOG_DLL_DECL void __fastcall FOG_AsyncDataFree(AsyncData* pAsyncData);																				//Fog.#10097
+FOG_DLL_DECL void __fastcall FOG_AsyncDataSetPriority(AsyncData* pAsyncData, int nPriority);														//Fog.#10099
+FOG_DLL_DECL void __fastcall FOG_AsyncDataHandlePriorityChanges(BOOL bPostpone);																	//Fog.#10100
+FOG_DLL_DECL BOOL __fastcall FOG_MPQSetConfig(int dwDirectAccessFlags, int bEnableSeekOptimization);												//Fog.#10101
+FOG_DLL_DECL BOOL __fastcall FOG_FOpenFile(const char* szFile, HSFILE* pFileHandle);																//Fog.#10102
+FOG_DLL_DECL void __fastcall FOG_FCloseFile(HSFILE pFile);																							//Fog.#10103
+FOG_DLL_DECL BOOL __fastcall FOG_FReadFile(HSFILE pFile, void* pBuffer, size_t nSize, int* nBytesRead, uint32_t, uint32_t, uint32_t);				//Fog.#10104
+FOG_DLL_DECL uint32_t __fastcall FOG_FGetFileSize(HSFILE pFileHandle, uint32_t* lpFileSizeHigh);													//Fog.#10105
+FOG_DLL_DECL size_t __fastcall FOG_FSetFilePointer(HSFILE hFile, int32_t lDistanceToMove, int32_t* lpDistanceToMoveHigh, uint32_t dwMoveMethod);	//Fog.#10106
+FOG_DLL_DECL HANDLE __fastcall FOG_CreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile); //Fog.#10107
+FOG_DLL_DECL BOOL __fastcall FOG_DeleteFileA(LPCSTR lpFileName);																					//Fog.#10108
+FOG_DLL_DECL BOOL __fastcall FOG_CloseFile(HANDLE hFILE);																							//Fog.#10109
+FOG_DLL_DECL BOOL __fastcall FOG_CreatePathHierarchy(char* szPath);																					//Fog.#10114
+FOG_DLL_DECL size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10115
+FOG_DLL_DECL BOOL __fastcall FOG_GetInstallPath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10116
+FOG_DLL_DECL BOOL __fastcall FOG_UseDirect();																										//Fog.#10117
+FOG_DLL_DECL uint16_t __stdcall FOG_ComputeStringCRC16(const char* szString);																		//Fog.#10137
+FOG_DLL_DECL void __cdecl FOG_CreateNewPoolSystem(void** pMemPoolSystem, const char* szName, uint32_t nPools, uint32_t nUnused);					//Fog.#10142
+FOG_DLL_DECL void __cdecl FOG_DestroyMemoryPoolSystem(void* pMemoryPoolSystem);																		//Fog.#10143
+FOG_DLL_DECL void __cdecl FOG_SetMemoryPoolSystemMode(void* pMemoryPoolSystem, BOOL bFreePoolAlloc);												//Fog.#10145
+FOG_DLL_DECL DWORD __cdecl FOG_GetMemoryUsage(void*);																								//Fog.#10147
 D2FUNC_DLL(FOG, InitializeServer, QServer*, __stdcall, (int, int, int, int, void*, void*, void*, void*), 0x4150)									//Fog.#10149
 D2FUNC_DLL(FOG, SetMaxClientsPerGame, int, __stdcall, (QServer*, int), 0x4970)																		//Fog.#10151
 D2FUNC_DLL(FOG, 10152, int, __stdcall, (void*, const uint8_t*, int), 0x44F0)																		//Fog.#10152
@@ -237,32 +238,32 @@ D2FUNC_DLL(FOG, 10177, int, __stdcall, (void*, int), 0x5E60)																				
 D2FUNC_DLL(FOG, SetHackListEnabled, int, __stdcall, (QServer* pServer, BOOL bHacklistEnabled), 0x75A0)												//Fog.#10178
 D2FUNC_DLL(FOG, 10180, int, __stdcall, (void*), 0x4920)																								//Fog.#10180
 D2FUNC_DLL(FOG, 10181, int, __stdcall, (void*, const uint8_t*, int, int), 0x75C0)																	//Fog.#10181
-D2FUNC_DLL(FOG, 10182_Return, int, __stdcall, (void*), 0x1B10)																						//Fog.#10182
-D2FUNC_DLL(FOG, 10183_Return, int, __stdcall, (void*, int), 0x7620)																					//Fog.#10183
+FOG_DLL_DECL int __stdcall FOG_10182_Return(void*);																									//Fog.#10182
+FOG_DLL_DECL int __stdcall FOG_10183_Return(void*, int);																							//Fog.#10183
 D2FUNC_DLL(FOG, 10186, int, __stdcall, (void*, int, int), 0x44C0)																					//Fog.#10186
 D2FUNC_DLL(FOG, 10187, int, __fastcall, (void*, int, int), 0x7630)																					//Fog.#10187
-D2FUNC_DLL(FOG, 10207, void, __stdcall, (D2BinFileStrc* pBinFile, D2BinFieldStrc* pBinField, void* pTxt, int nRecordCount, int nRecordSize), 0xAA60)//Fog.#10207
-D2FUNC_DLL(FOG, CreateBinFile, D2BinFileStrc*, __stdcall, (void* pDataBuffer, int nBufferSize), 0xA8B0)												//Fog.#10208
-D2FUNC_DLL(FOG, FreeBinFile, void, __stdcall, (D2BinFileStrc* pBinFile), 0xAA10)																	//Fog.#10209
-D2FUNC_DLL(FOG, GetRecordCountFromBinFile, int, __stdcall, (D2BinFileStrc* pBinFile), 0xAA50)														//Fog.#10210
-D2FUNC_DLL(FOG, AllocLinker, void*, __stdcall, (const char* szFile, int nLine), 0xB720)																//Fog.#10211
-D2FUNC_DLL(FOG, FreeLinker, void, __stdcall, (void* pLinker), 0xB750)																				//Fog.#10212
-D2FUNC_DLL(FOG, GetLinkIndex, int, __stdcall, (void* pLink, uint32_t dwCode, BOOL bLogError), 0xB810)												//Fog.#10213
-D2FUNC_DLL(FOG, GetStringFromLinkIndex, int, __stdcall, (void* pLinker, int nIndex, char* szString), 0xB8F0)										//Fog.#10214
-D2FUNC_DLL(FOG, 10215, int, __stdcall, (void* pBin, int a2), 0xB990)																				//Fog.#10215
-D2FUNC_DLL(FOG, 10216_AddRecordToLinkingTable, int, __stdcall, (void* pBin, const char* a2), 0xBD80)														//Fog.#10216
-D2FUNC_DLL(FOG, GetRowFromTxt, int, __stdcall, (void* pBin, char* szText, int nColumn), 0xBC20)														//Fog.#10217
-D2FUNC_DLL(FOG, 10218, int, __fastcall, (), 0xCC40)																									//Fog.#10218
-D2FUNC_DLL(FOG, 10219, int, __fastcall, (uint8_t*), 0xC9E0)																							//Fog.#10219
-D2FUNC_DLL(FOG, 10222, int, __fastcall, (const uint8_t*, int), 0xCC90)																				//Fog.#10222
-D2FUNC_DLL(FOG, 10223, int, __fastcall, (uint8_t*, int, const uint8_t*, int), 0xCD50)																//Fog.#10223
-D2FUNC_DLL(FOG, 10224, int, __fastcall, (char*, int, uint8_t*, int), 0xCE00)																		//Fog.#10224
-D2FUNC_DLL(FOG, IsExpansion, int, __fastcall, (), 0xD730)																							//Fog.#10227
-D2FUNC_DLL(FOG, ComputeChecksum, uint32_t, __stdcall, (void* pData, size_t dwSize), 0x3940)															//Fog.#10229
-D2FUNC_DLL(FOG, PopCount, uint32_t, __stdcall, (void* pData, size_t dwSize), 0x3970)																//Fog.#10230
-D2FUNC_DLL(FOG, 10233, void, __fastcall, (const char*, int), 0xF300)																				//Fog.#10233
-D2FUNC_DLL(FOG, LeadingZeroesCount, uint32_t, __stdcall, (uint32_t nValue), 0x39A0)																	//Fog.#10252
-D2FUNC_DLL(FOG, 10255, char*, __stdcall, (void* pLinker, int nId, int a3), 0xBB20)																	//Fog.#10255
+FOG_DLL_DECL void __stdcall FOG_10207(D2BinFileStrc* pBinFile, D2BinFieldStrc* pBinField, void* pTxt, int nRecordCount, int nRecordSize);			//Fog.#10207
+FOG_DLL_DECL D2BinFileStrc* __stdcall FOG_CreateBinFile(void* pDataBuffer, int nBufferSize);														//Fog.#10208
+FOG_DLL_DECL void __stdcall FOG_FreeBinFile(D2BinFileStrc* pBinFile);																				//Fog.#10209
+FOG_DLL_DECL int __stdcall FOG_GetRecordCountFromBinFile(D2BinFileStrc* pBinFile);																	//Fog.#10210
+FOG_DLL_DECL void* __stdcall FOG_AllocLinker(const char* szFile, int nLine);																		//Fog.#10211
+FOG_DLL_DECL void __stdcall FOG_FreeLinker(void* pLinker);																							//Fog.#10212
+FOG_DLL_DECL int __stdcall FOG_GetLinkIndex(void* pLink, uint32_t dwCode, BOOL bLogError);															//Fog.#10213
+FOG_DLL_DECL int __stdcall FOG_GetStringFromLinkIndex(void* pLinker, int nIndex, char* szString);													//Fog.#10214
+FOG_DLL_DECL int __stdcall FOG_10215(void* pBin, int a2);																							//Fog.#10215
+FOG_DLL_DECL int __stdcall FOG_10216_AddRecordToLinkingTable(void* pBin, const char* a2);															//Fog.#10216
+FOG_DLL_DECL int __stdcall FOG_GetRowFromTxt(void* pBin, char* szText, int nColumn);																//Fog.#10217
+FOG_DLL_DECL int __fastcall FOG_10218();																											//Fog.#10218
+FOG_DLL_DECL int __fastcall FOG_10219(uint8_t*);																									//Fog.#10219
+FOG_DLL_DECL int __fastcall FOG_10222(const uint8_t*, int);																							//Fog.#10222
+FOG_DLL_DECL int __fastcall FOG_10223(uint8_t*, int, const uint8_t*, int);																			//Fog.#10223
+FOG_DLL_DECL int __fastcall FOG_10224(char*, int, uint8_t*, int);																					//Fog.#10224
+FOG_DLL_DECL int __fastcall FOG_IsExpansion();																										//Fog.#10227
+FOG_DLL_DECL uint32_t __stdcall FOG_ComputeChecksum(void* pData, size_t dwSize);																	//Fog.#10229
+FOG_DLL_DECL uint32_t __stdcall FOG_PopCount(void* pData, size_t dwSize);																			//Fog.#10230
+FOG_DLL_DECL void __fastcall FOG_10233(const char*, int);																							//Fog.#10233
+FOG_DLL_DECL uint32_t __stdcall FOG_LeadingZeroesCount(uint32_t nValue);																			//Fog.#10252
+FOG_DLL_DECL char* __stdcall FOG_10255(void* pLinker, int nId, int a3);																				//Fog.#10255
 
 
 #define D2_ALLOC(size) FOG_Alloc((size), __FILE__, __LINE__, 0)
