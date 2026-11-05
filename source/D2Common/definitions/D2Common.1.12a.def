@@ -1,0 +1,1310 @@
+LIBRARY		D2COMMON
+EXPORTS
+	DRLG_GetLevelTypeFromLevelId										@10437
+	DRLG_GetActNoFromLevelId											@10124
+	DRLG_GetLOSDrawFromLevelId											@10585
+	DRLGACTIVATE_Update													@10293
+	DRLG_GetSaveMonstersFromLevelId										@10545
+	DRLG_GetLevel														@10793
+	DRLG_InitLevel														@10721
+	DUNGEON_GetRoomExFromRoom											@10321
+	DRLGPRESET_GetLevelPrestIdFromRoomEx								@10583
+	DRLGPRESET_GetPickedLevelPrestFilePathFromRoomEx					@10095
+	DATATBLS_GetLevelDefRecord											@10301
+	DATATBLS_GetAutomapCellId											@10398
+	DRLG_FreeDrlg														@10202
+	DRLG_AllocLevel														@11020
+	DRLG_AllocDrlg														@10596
+	DRLGACTIVATE_GetRoomsAllocationStats								@10308
+	D2COMMON_10016_Return0												@10180
+	DRLGROOMTILE_GetNumberOfShadowsFromRoom								@10864
+	D2COMMON_10018_Return0												@10100
+	D2COMMON_10019_Return												@10806
+	DRLGPRESET_CreateCopyOfMapAI										@10278
+	DRLGPRESET_ChangeMapAI												@10682
+	DRLGPRESET_FreeMapAI												@10687
+	DATATBLS_GetLevelTypesTxtRecord										@10625
+	DATATBLS_GetLvlPrestTxtRecord										@10963
+	DUNGEON_GetWarpCoordinatesFromRoom									@10261
+	DUNGEON_ToggleRoomTilesEnableFlag									@10591
+	DUNGEON_GetWarpTileFromRoomAndSourceLevelId							@10791
+	DUNGEON_GetLvlWarpTxtRecordFromRoomAndUnit							@10702
+	DUNGEON_GetFirstUnitInRoom											@10672
+	DUNGEON_GetFloorTilesFromRoom										@10828
+	DUNGEON_GetWallTilesFromRoom										@10459
+	DUNGEON_GetRoofTilesFromRoom										@10238
+	DUNGEON_GetTileDataFromAct											@11058
+	DUNGEON_GetRoomCoordinates											@10692
+	DUNGEON_GetAdjacentRoomsListFromRoom								@10915
+	DUNGEON_GetAlliedCountFromRoom										@10320
+	DUNGEON_GetTownLevelIdFromAct										@10977
+	DUNGEON_AllocAct													@10588
+	DUNGEON_FreeAct														@10710
+	DUNGEON_DoRoomsTouchOrOverlap										@10783
+	DUNGEON_FindRoomBySubtileCoordinates								@10104
+	sgptDataTables														@11170
+	DUNGEON_AreTileCoordinatesInsideRoom								@10128
+	DUNGEON_CheckLOSDraw												@11093
+	DUNGEON_FindActSpawnLocationEx										@10643
+	DUNGEON_FindActSpawnLocation										@10922
+	DUNGEON_GetHoradricStaffTombLevelId									@10978
+	DUNGEON_CheckRoomsOverlapping_BROKEN								@10650
+	DUNGEON_CallRoomCallback											@10865
+	DUNGEON_GetAdjacentRoomByTileCoordinates							@10557
+	DUNGEON_FindRoomByTileCoordinates									@10256
+	D2Common_10052														@10886
+	DUNGEON_GetSubtileRect												@10752
+	DUNGEON_GetRGB_IntensityFromRoom									@11039
+	DUNGEON_GetPresetUnitsFromRoom										@10192
+	DUNGEON_GetRoomFromAct												@10945
+	DUNGEON_GetLevelIdFromRoom											@10511
+	DUNGEON_GetWarpDestinationLevel										@11166
+	DUNGEON_GetLevelIdFromPopulatedRoom									@10466
+	DUNGEON_HasWaypoint													@10173
+	DUNGEON_GetPickedLevelPrestFilePathFromRoom							@10628
+	DUNGEON_ChangeClientRoom    										@11051
+	DUNGEON_SetClientIsInSight  										@10184
+	DUNGEON_UnsetClientIsInSight										@11009
+	DUNGEON_StreamRoomAtCoords  										@10356
+	DUNGEON_AllocDrlgDelete												@10572
+	DUNGEON_FreeDrlgDelete												@10395
+	DUNGEON_GetDrlgDeleteFromRoom										@10215
+	DUNGEON_GetARoomInClientSight          								@10085
+	DUNGEON_GetARoomInSightButWithoutClient								@10763
+	DUNGEON_TestRoomCanUnTile              								@10971
+	DUNGEON_GetRoomStatusFlags             								@10307
+	D2Common_10073														@10031
+	D2Common_10074														@10165
+	D2Common_10075														@10287
+	DUNGEON_RemoveRoomFromAct											@10229
+	D2Common_10077														@10322
+	DUNGEON_UpdateAndFreeInactiveRooms									@10928
+	DUNGEON_AddClientToRoom												@10422
+	DUNGEON_RemoveClientFromRoom										@10050
+	D2Common_10081_GetTileCountFromRoom									@10871
+	DUNGEON_IsRoomInTown												@10438
+	D2COMMON_10083_Return0												@10007
+	D2Common_10084														@10013
+	DUNGEON_GetTownLevelIdFromActNo										@10920
+	DUNGEON_IsTownLevelId												@10217
+	D2Common_10087														@10166
+	DUNGEON_GetDrlgFromAct												@10942
+	DUNGEON_GetInitSeedFromAct											@10319
+	DUNGEON_GetNumberOfPopulatedRoomsInLevel							@10365
+	DUNGEON_UpdateWarpRoomSelect										@10400
+	DUNGEON_UpdateWarpRoomDeselect										@10304
+	DUNGEON_UpdatePops													@10910
+	DUNGEON_GetTombStoneTileCoords										@10468
+	D2Common_10095														@10779
+	D2Common_10096														@10720
+	DUNGEON_GetRoomCoordList											@10811
+	DUNGEON_GetPortalLevelArrayFromPortalFlags							@11014
+	DUNGEON_GetPortalFlagFromLevelId									@10734
+	DUNGEON_IncreaseAlliedCountOfRoom									@10976
+	DUNGEON_DecreaseAlliedCountOfRoom									@11114
+	DUNGEON_ToggleHasPortalFlag											@10323
+	DUNGEON_SetActCallbackFunc											@10635
+	DUNGEON_AnimateTiles												@10136
+	DUNGEON_InitRoomTileAnimation										@10446
+	DUNGEON_SaveKilledUnitGUID											@10624
+	DUNGEON_ClientToGameTileCoords										@10812
+	DUNGEON_ClientToGameSubtileCoords									@10725
+	DUNGEON_ClientToGameCoords											@10565
+	DUNGEON_GameTileToClientCoords										@10970
+	DUNGEON_GameSubtileToClientCoords									@10912
+	DUNGEON_GameToClientCoords											@10476
+	DUNGEON_GameTileToSubtileCoords										@10250
+	DUNGEON_ClientTileDrawPositionToGameCoords							@10870
+	DUNGEON_GameToClientTileDrawPositionCoords							@10570
+	DUNGEON_ClientSubileDrawPositionToGameCoords						@10512
+	DUNGEON_GameToClientSubtileDrawPositionCoords						@11024
+	COLLISION_CheckMask													@10493
+	COLLISION_CheckMaskWithSize											@10616
+	COLLISION_CheckMaskWithSizeXY										@10759
+	COLLISION_CheckMaskWithPattern										@10807
+	COLLISION_CheckAnyCollisionWithPattern								@10206
+	COLLISION_ResetMask													@11104
+	COLLISION_ResetMaskWithSize											@10306
+	COLLISION_ResetMaskWithSizeXY										@10773
+	COLLISION_ResetMaskWithPattern										@10338
+	COLLISION_SetMask													@10579
+	COLLISION_SetMaskWithSize											@10107
+	COLLISION_SetMaskWithSizeXY											@10952
+	COLLISION_SetMaskWithPattern										@10477
+	COLLISION_TryMoveUnitCollisionMask									@10818
+	COLLISION_TryTeleportUnitCollisionMask								@11123
+	COLLISION_SetUnitCollisionMask										@10542
+	COLLISION_GetFreeCoordinates										@10504
+	COLLISION_GetFreeCoordinatesWithMaxDistance							@10590
+	D2Common_10136														@11078
+	COLLISION_GetFreeCoordinatesEx										@10142
+	COLLISION_GetFreeCoordinatesWithField								@11043
+	D2COMMON_10139_Return												@10362
+	D2COMMON_10140_Return												@10156
+	PATH_GetClientCoordsVelocity										@11138
+	D2Common_10142														@10221
+	PATH_SetUnitDeadCollision											@11154
+	PATH_SetUnitAliveCollision											@10633
+	PATH_SetUnusedFlag_0x00004											@10385
+	PATH_SetVelocity													@10377
+	PATH_GetVelocity													@11084
+	PATH_SetMaxVelocity													@10851
+	PATH_GetMaxVelocity													@10479
+	PATH_SetAcceleration												@10226
+	PATH_GetAcceleration												@10914
+	PATH_AllocDynamicPath												@10091
+	D2Common_10153														@10606
+	PATH_GetNumberOfPathPoints											@11122
+	D2Common_10155														@10695
+	PATH_FreeDynamicPath												@10696
+	PATH_GetPathPoints													@10584
+	PATH_GetDirection													@10194
+	PATH_GetNewDirection												@10944
+	D2COMMON_10160_PathUpdateDirection									@10529
+	PATH_SetDirection													@10155
+	PATH_GetXPosition													@10191
+	PATH_GetYPosition													@10178
+	PATH_GetClientCoordX												@10532
+	PATH_GetClientCoordY												@10485
+	PATH_GetRoom														@10664
+	PATH_SetRoom														@10748
+	PATH_GetNextRoom													@10197
+	PATH_ClearNextRoom													@10810
+	D2COMMON_10170_PathSetTargetPos										@10515
+	PATH_GetTargetTypeAndGUID											@10994
+	PATH_IsCurrentRoomInvalid											@10360
+	PATH_SetCurrentRoomInvalid											@10273
+	PATH_GetUnusedFlag_0x00004											@10447
+	D2COMMON_10175_PathGetFirstPointX									@10024
+	D2COMMON_10176_PathGetFirstPointY									@10728
+	D2COMMON_10177_PATH_GetLastPointX									@10298
+	D2COMMON_10178_PATH_GetLastPointY									@10415
+	PATH_SetTargetUnit													@10563
+	PATH_GetTargetUnit													@10248
+	PATH_GetFootprintCollisionMask										@10220
+	PATH_SetFootprintCollisionMask										@10003
+	PATH_GetMoveTestCollisionMask										@10651
+	PATH_SetMoveTestCollisionMask										@10203
+	PATH_SetType														@11059
+	PATH_ResetToPreviousType											@11129
+	PATH_GetType														@10275
+	PATH_SetNewDistance													@10766
+	PATH_GetMaxDistance													@10123
+	D2COMMON_10190_PATH_SetDistance										@10894
+	D2COMMON_10191_PATH_GetDistance										@10174
+	PATH_SetIDAStarInitFScore											@10010
+	D2COMMON_10193_PATH_AdjustDirection									@11131
+	PATH_GetPrecisionX													@10268
+	PATH_GetPrecisionY													@10381
+	PATH_SetPrecisionX													@10282
+	PATH_SetPrecisionY													@10346
+	D2COMMON_10198_PathGetSaveStep										@10431
+	D2COMMON_10199_PathGetSaveX											@10957
+	D2COMMON_10200_PathGetSaveY											@10524
+	D2Common_10201														@10135
+	D2Common_10202														@10175
+	D2COMMON_10203_PATH_SetRotateFlag									@10794
+	D2COMMON_10204_PATH_ClearPoint2										@10349
+	PATH_SetStepNum														@10452
+	PATH_GetStepNum														@10057
+	D2Common_10207														@10924
+	D2COMMON_10208_PathSetPathingFlag									@10621
+	D2COMMON_10209_PathCheckPathingFlag									@10992
+	PATH_GetUnitCollisionPattern										@10363
+	PATH_SetUnitCollisionPattern										@11012
+	D2COMMON_10212_PATH_SetMoveFlags									@11026
+	D2Common_10213														@10601
+	D2Common_10214														@10101
+	PATH_ComputeDirection												@10246
+	D2Common_10216														@10756
+	PATH_SetDistance													@10392
+	PATH_GetDistance													@10430
+	PATH_AddToDistance													@10204
+	PATH_ComputeSquaredDistance											@11031
+	PATH_AddCollisionFootprintForOptionalUnit							@10353
+	PATH_AddCollisionFootprintForUnit									@10316
+	PATH_RemoveCollisionFootprintForUnit								@11011
+	D2Common_10224														@10892
+	D2Common_10225														@10258
+	D2Common_10226														@10612
+	D2Common_10227														@10208
+	D2Common_10228														@10638
+	D2Common_10229														@11002
+	D2Common_10230														@10949
+	D2Common_10231														@10604
+	D2Common_10232														@10520
+	PATH_RecacheRoomIfNeeded											@10573
+	D2Common_10234														@10429
+	D2Common_10235_PATH_UpdateRiderPath									@11047
+	D2Common_10236														@10015
+	D2Common_10237														@10213
+	D2COMMON_10238_Return												@10008
+	D2COMMON_10239_Return0												@11115
+	INVENTORY_AllocInventory											@10426
+	INVENTORY_FreeInventory												@11085
+	INVENTORY_PlaceItemInSocket											@10079
+	INVENTORY_RemoveItemFromInventory									@10796
+	INVENTORY_CompareWithItemsParentInventory							@10742
+	INVENTORY_GetFreePosition											@10980
+	INVENTORY_PlaceItemAtFreePosition									@10289
+	INVENTORY_CanItemBePlaced											@10157
+	INVENTORY_CanItemsBeExchanged										@11038
+	INVENTORY_PlaceItemAtInventoryPage									@10436
+	INVENTORY_Return													@10559
+	D2COMMON_10251_Return												@10332
+	INVENTORY_GetItemFromInventoryPage									@10765
+	INVENTORY_PlaceItemInBodyLoc										@11037
+	D2COMMON_10254_Return0												@10845
+	INVENTORY_GetSecondWieldingWeapon									@10179
+	INVENTORY_CheckEquipmentForWeaponByClass							@10958
+	INVENTORY_GetItemFromBodyLoc										@10099
+	INVENTORY_GetLeftHandWeapon											@10054
+	INVENTORY_GetCompositItem											@10609
+	INVENTORY_GetBodyLocFromEquippedItem								@11035
+	INVENTORY_SetCursorItem												@10359
+	INVENTORY_GetCursorItem												@10078
+	INVENTORY_FindBackPackItemForStack									@10411
+	INVENTORY_FindEquippedItemForStack									@10795
+	INVENTORY_FindFillableBook											@10496
+	INVENTORY_PlaceItemInBeltSlot										@10937
+	D2COMMON_10267_Return												@10404
+	INVENTORY_HasSimilarPotionInBelt									@10314
+	INVENTORY_GetFreeBeltSlot											@11164
+	INVENTORY_PlaceItemInFreeBeltSlot									@11168
+	INVENTORY_GetItemFromBeltSlot										@10387
+	INVENTORY_GetUseableItemFromBeltSlot								@11126
+	INVENTORY_GetEquippedShield											@10564
+	INVENTORY_GetEquippedWeapon											@10130
+	INVENTORY_HasBodyArmorEquipped										@10254
+	INVENTORY_IsItemBodyLocFree											@10631
+	INVENTORY_GetFirstItem												@11151
+	INVENTORY_GetLastItem												@10242
+	INVENTORY_RemoveInventoryItems										@10263
+	INVENTORY_GetTradeInventory											@10735
+	INVENTORY_FreeTradeInventory										@10754
+	INVENTORY_CheckForItemInTradeInventory								@11089
+	INVENTORY_AddItemToTradeInventory									@10270
+	INVENTORY_GetItemCount												@10902
+	INVENTORY_GetBackPackItemByType										@10090
+	INVENTORY_GetEquippedItemByType										@10490
+	INVENTORY_GetEquippedItemByCode										@10502
+	INVENTORY_GetSetItemEquipCountByFileIndex							@10186
+	INVENTORY_UpdateWeaponGUIDOnInsert									@10716
+	INVENTORY_UpdateWeaponGUIDOnRemoval									@10691
+	INVENTORY_GetWieldType												@10207
+	INVENTORY_SetOwnerId												@10183
+	INVENTORY_GetOwnerId												@11127
+	INVENTORY_CreateCorpseForPlayer										@10000
+	INVENTORY_FreeCorpse												@10382
+	INVENTORY_GetFirstCorpse											@10689
+	INVENTORY_GetCorpseCount											@10310
+	INVENTORY_GetItemSaveGfxInfo										@10499
+	D2Common_10299														@10731
+	INVENTORY_RemoveAllItems											@10935
+	D2COMMON_10301_Return0												@10121
+	INVENTORY_CanItemsBeTraded											@10143
+	D2COMMON_10303_Return												@10158
+	INVENTORY_GetNextItem												@10770
+	INVENTORY_UnitIsItem												@10852
+	INVENTORY_GetItemGUID												@10418
+	INVENTORY_GetItemNodePage											@10458
+	D2COMMON_10308_Return												@10610
+	D2COMMON_10309_Return0												@11050
+	INVENTORY_IsItemInInventory											@10936
+	INVENTORY_GetNextNode												@10597
+	INVENTORY_GetItemGUIDFromNode										@10416
+	INVENTORY_GetNextCorpse												@10492
+	INVENTORY_GetUnitGUIDFromCorpse										@10903
+	D2Common_10315														@10451
+	D2Common_10316														@10816
+	UNITS_CanSwitchAI													@10938
+	UNITS_IsInMovingMode												@10354
+	UNITS_IsInMovingModeEx												@10655
+	UNITS_GetStartSkill													@10421
+	UNITS_GetLeftSkill													@10566
+	UNITS_GetRightSkill													@10126
+	UNITS_GetUsedSkill													@10652
+	UNITS_SetUsedSkill													@10662
+	UNITS_SetAnimData													@10722
+;------------------------UNUSED------------------------						@10326
+	UNITS_GetPrecisionX													@10984
+	UNITS_SetXForStaticUnit												@10586
+;------------------------UNUSED------------------------						@10329
+	UNITS_GetPrecisionY													@10098
+	UNITS_SetYForStaticUnit												@10697
+	UNITS_GetCoords														@10543
+	UNITS_GetClientCoordX												@10732
+	UNITS_GetClientCoordY												@10467
+	UNITS_GetClientCoords												@10576
+	UNITS_GetUnitSizeX													@10334
+	UNITS_GetUnitSizeY													@10376
+	UNITS_GetCollisionMask												@10116
+	UNITS_GetStashGoldLimit												@10941
+	UNITS_SetTargetX													@11165
+	UNITS_SetTargetY													@10835
+	UNITS_GetRoom														@10366
+	UNITS_ResetRoom														@10340
+	UNITS_SetTargetUnitForDynamicUnit									@10647
+	UNITS_GetTargetTypeFromDynamicUnit									@10660
+	UNITS_GetTargetGUIDFromDynamicUnit									@10330
+	UNITS_SetTargetUnitForPlayerOrMonster								@10060
+	UNITS_ChangeAnimMode												@10481
+	UNITS_SetAnimStartFrame												@11072
+	UNITS_InitializeStaticPath											@10163
+	UNITS_BlockCollisionPath											@10815
+	UNITS_FreeCollisionPath												@10384
+	UNITS_GetNameOffsetFromObject										@10723
+	UNITS_GetRunAndWalkSpeedForPlayer									@11083
+	UNITS_IsCurrentRoomInvalid											@10780
+	UNITS_SetCurrentRoomInvalid											@10787
+	UNITS_RefreshInventory												@10800
+	UNITS_GetSkillFromSkillId											@10369
+	UNITS_IsSoftMonster													@10577
+	UNITS_GetMeleeRange													@10087
+	UNITS_IsInMeleeRange												@10974
+	UNITS_TestCollisionWithUnit											@10233
+	UNITS_TestCollisionBetweenInteractingUnits							@10302
+	UNITS_TestCollisionByCoordinates									@10009
+	UNITS_GetHitClass													@11081
+	UNITS_GetWeaponClass												@10764
+	UNITS_GetBeltType													@10115
+	UNITS_GetCurrentLifePercentage										@10407
+	UNITS_GetAnimOrSeqMode												@10706
+	UNITS_SetAnimOrSeqMode												@10380
+	UNITS_InitializeSequence											@10230
+	UNITS_SetAnimationFrame												@10562
+	UNITS_StopSequence													@10037
+	UNITS_UpdateFrame													@11145
+	D2COMMON_10375_UNITS_SetFrameNonRate								@10867
+	UNITS_UpdateAnimRateAndVelocity										@10883
+	UNITS_SetAnimationSpeed												@10299
+	UNITS_IsAtEndOfFrameCycle											@10844
+	UNITS_GetShiftedFrameMetrics										@10188
+	UNITS_GetFrameMetrics												@10665
+	UNITS_SetAnimActionFrame											@10055
+	UNITS_GetEventFrameInfo												@10772
+	UNITS_ResetLightMap													@10443
+	UNITROOM_AddUnitToRoom												@10106
+	UNITROOM_RefreshUnit												@10571
+	UNITROOM_RemoveUnitFromRoom											@10269
+	UNITROOM_RemoveUnitFromUpdateQueue									@11015
+	UNITROOM_SortUnitListByTargetY										@11041
+	UNITROOM_IsUnitInRoom												@10522
+	UNITROOM_UpdatePath													@10993
+	UNITROOM_ClearUpdateQueue											@10623
+	UNITS_IsDoor														@10724
+	UNITS_IsShrine														@10827
+	UNITS_GetObjectTxtRecordFromObject									@10345
+	UNITS_GetShrineTxtRecordFromObject									@10761
+	UNITS_SetShrineTxtRecordInObjectData								@10768
+	UNITS_GetDistanceToOtherUnit										@10836
+	UNITS_GetDistanceToCoordinates										@10666
+	D2Common_10399														@10034
+	UNITS_IsInRange														@10990
+	UNITFINDS_InitializeUnitFindData									@10908
+	UNITFINDS_FreeUnitFindData											@10674
+	UNITFINDS_FindAllMatchingUnitsInNeighboredRooms						@10339
+	UNITFINDS_TestUnit													@10161
+	UNITFINDS_GetTestedUnitsFromRoom									@11016
+	D2Common_10406														@10240
+	D2Common_10407														@10824
+	UNITFINDS_AreUnitsInNeighboredRooms									@10874
+	UNITS_GetInventoryRecordId											@10005
+	UNITS_HasCollision													@10843
+	UNITS_GetAbsoluteXDistance											@10351
+	UNITS_GetAbsoluteYDistance											@10020
+	UNITS_UpdateDirectionAndSpeed										@10168
+	UNITS_GetNewDirection												@10890
+	UNITS_StoreOwner													@10901
+	UNITS_StoreOwnerTypeAndGUID											@11023
+	UNITS_StoreLastAttacker												@10629
+	UNITS_GetDirectionToCoords											@10837
+	UNITS_SetInteractData												@10518
+	UNITS_AllocPlayerData												@11097
+	UNITS_FreePlayerData												@10711
+	UNITS_SetNameInPlayerData											@10877
+	UNITS_GetPlayerName													@10103
+	UNITS_GetPlayerData													@10860
+	UNITS_SetPlayerPortalFlags											@10607
+	UNITS_GetPlayerPortalFlags											@10831
+	UNITS_GetObjectPortalFlags											@10866
+	UNITS_SetObjectPortalFlags											@10150
+	UNITS_CheckObjectPortalFlag											@10170
+	UNITS_GetOverlayHeight												@10082
+	UNITS_GetDefense													@10975
+	UNITS_GetAttackRate													@11094
+	UNITS_GetBlockRate													@10283
+	D2Common_10434														@10205
+	UNITS_GetEquippedWeaponFromMonster									@10863
+	UNITS_GetFrameBonus													@10406
+	UNITS_SetOverlay													@10719
+	UNITS_GetHealingCost												@10774
+	UNITS_GetInventoryGoldLimit											@10729
+	UNITS_MergeDualWieldWeaponStatLists									@11087
+	D2COMMON_10441_Return												@10537
+	UNITS_GetItemComponentId											@10832
+	UNITS_InitRightSkill												@10081
+	UNITS_InitLeftSkill													@10962
+	UNITS_InitSwitchRightSkill											@10727
+	UNITS_InitSwitchLeftSkill											@10781
+	UNITS_GetRightSkillData												@11110
+	UNITS_GetLeftSkillData												@10471
+	UNITS_GetSwitchRightSkillDataResetRightSkill						@10023
+	UNITS_GetSwitchLeftSkillDataResetLeftSkill							@10819
+	UNITS_GetSwitchLeftSkillData										@10568
+	UNITS_GetSwitchRightSkillData										@10784
+	UNITS_SetSwitchLeftSkill											@11112
+	UNITS_SetSwitchRightSkill											@11055
+	UNITS_SetWeaponGUID													@10326
+	UNITS_GetWeaponGUID													@10581
+	UNITS_GetDirection													@11128
+	UNITS_SetTimerArg													@11004
+	UNITS_GetTimerArg													@10281
+	UNITS_AllocStaticPath												@10598
+	UNITS_FreeStaticPath												@10067
+	UNITS_CanDualWield													@10498
+	STATLIST_SetStat													@10668
+	STATLIST_AddStat													@10145
+	STATLIST_SetStatIfListIsValid										@11139
+	STATLIST_GetStatValue												@10775
+	D2Common_10467														@10333
+	STATLIST_RemoveAllStats												@11054
+	D2Common_10469														@10533
+	STATLIST_AllocStatList												@10235
+	STATLIST_GetOwnerType												@10252
+	STATLIST_GetOwnerGUID												@10470
+	D2COMMON_10473														@10402
+	D2Common_10474														@10484
+	D2COMMON_10475_PostStatToStatList									@10626
+	D2COMMON_10476														@10841
+	STATLIST_SetStatRemoveCallback										@10193
+	STATLIST_SetState													@10558
+	STATLIST_GetState													@10574
+	STATLIST_GetStatListFromUnitAndState								@10539
+	STATLIST_GetStatListFromUnitAndFlag									@10344
+	STATLIST_GetStatListFromFlag										@11033
+	STATLIST_GetStatListFromUnitStateOrFlag								@10117
+	STATLIST_GetStatListFromUnitStateAndFlag							@10611
+	STATLIST_FreeStatList												@10049
+	STATES_ToggleState													@10059
+	STATES_CheckState													@10295
+	STATES_ToggleGfxStateFlag											@11132
+	STATES_CheckGfxStateFlag											@10195
+	STATES_IsAnyGfxStateFlagSet											@10317
+	STATES_ClearGfxStateFlags											@10617
+	STATES_GetGfxStateFlags												@10714
+	STATES_UpdateStayDeathFlags											@10906
+	D2COMMON_10494_STATES_GetStatFlags									@10943
+	STATES_GetNumberOfStateFlags										@10450
+	STATES_CheckStateMaskAuraByStateId									@10196
+	STATES_CheckStateMaskCurseByStateId									@10216
+	STATES_CheckStateMaskCurableByStateId								@10234
+;------------------------UNUSED------------------------						@10499
+	STATES_CheckStateMaskPgsvByStateId									@10144
+	STATES_UpdatePgsvFlags												@10391
+	STATES_CheckStateMaskActiveOnUnit									@10505
+	STATES_CheckStateMaskAuraOnUnit										@10856
+;------------------------UNUSED------------------------						@10504
+;------------------------UNUSED------------------------						@10505
+;------------------------UNUSED------------------------						@10506
+;------------------------UNUSED------------------------						@10507
+;------------------------UNUSED------------------------						@10508
+;------------------------UNUSED------------------------						@10509
+;------------------------UNUSED------------------------						@10510
+	STATLIST_FreeModStats												@10035
+	D2Common_10512														@10717
+	D2Common_10513														@10440
+	STATLIST_ClampStaminaManaHP											@10445
+	STATLIST_DeactivateTemporaryStates									@11069
+	STATLIST_UpdateStatListsExpiration									@10872
+	STATLIST_SetUnitStat												@11091
+	STATLIST_AddUnitStat												@10762
+	STATLIST_UnitGetStatValue											@10658
+	STATLIST_UnitGetItemStatOrSkillStatValue							@11034
+	STATLIST_GetUnitBaseStat											@10907
+	STATLIST_GetUnitStatBonus											@10494
+	STATLIST_MergeStatLists												@10820
+	STATLIST_ExpireUnitStatlist											@10508
+	D2Common_10525														@10300
+	STATLIST_AllocStatListEx											@10737
+	STATLIST_FreeStatListEx												@10112
+	STATLIST_SetExpireFrame												@10088
+	STATLIST_GetExpireFrame												@10274
+	D2COMMON_10530_D2CheckStatlistFlagDMGRed							@10640
+	D2Common_10531_SetStatInStatListLayer0								@10868
+	STATLIST_GetTotalStatValue_Layer0									@10152
+	STATLIST_RemoveAllStatsFromOverlay									@10840
+	D2Common_10534														@11092
+	STATLIST_GetOwner													@10861
+	STATES_CheckStateMaskBlueOnUnit										@10540
+	STATES_CheckStateMaskAttBlueOnUnit									@10767
+	STATES_CheckStateMaskDamBlueOnUnit									@10712
+	STATES_CheckStateMaskArmBlueOnUnit									@10698
+	STATES_CheckStateMaskRFBlueOnUnit									@10829
+	STATES_CheckStateMaskRCBlueOnUnit									@11006
+	STATES_CheckStateMaskRLBlueOnUnit									@10653
+	STATES_CheckStateMaskRPBlueOnUnit									@11022
+	STATES_CheckStateMaskAttRedOnUnit									@10946
+	STATES_CheckStateMaskDamRedOnUnit									@10931
+	STATES_CheckStateMaskArmRedOnUnit									@10809
+	STATES_CheckStateMaskRFRedOnUnit									@10804
+	STATES_CheckStateMaskRCRedOnUnit									@10738
+	STATES_CheckStateMaskRLRedOnUnit									@10694
+	STATES_CheckStateMaskRPRedOnUnit									@10685
+	STATES_IsUnitShapeShifted											@10803
+	STATES_CheckStateMaskExpOnUnit										@10506
+	STATES_CheckStateMaskExpByStateId									@10147
+	STATES_CheckStateMaskStayDeathOnUnitByStateId						@10509
+	STATES_CheckStateMaskShatterOnUnit									@10449
+	STATES_CheckStateMaskShatterByStateId								@10061
+	STATES_CheckStateMaskHideOnUnit										@10198
+	STATES_CheckStateMaskHideByStateId									@10131
+	STATES_CheckStateMaskLifeOnUnit										@10271
+	STATES_CheckStateMaskUdeadOnUnit									@10546
+	STATES_CheckStateMaskGreenOnUnit									@11108
+	STATLIST_GetUnitAlignment											@10893
+	STATLIST_AreUnitsAligned											@11017
+	STATLIST_GetMaxLifeFromUnit											@10830
+	STATLIST_GetMaxManaFromUnit											@10986
+	STATLIST_GetMaxStaminaFromUnit										@10777
+	STATLIST_GetMaxDurabilityFromUnit									@10813
+	STATLIST_GetMaxDamageFromUnit										@10985
+	STATLIST_GetMinDamageFromUnit										@10966
+	STATLIST_GetMaxThrowDamageFromUnit									@10383
+	STATLIST_GetMinThrowDamageFromUnit									@10688
+	STATLIST_GetDefenseFromUnit											@10048
+	STATLIST_MergeBaseStats												@10911
+	D2Common_10574														@10615
+	DATATBLS_UnloadAllBins												@10325
+	DATATBLS_LoadAllTxts												@10439
+;------------------------UNUSED------------------------						@10577
+	DATATBLS_CompileTxt													@10244
+	DATATBLS_UnloadBin													@10114
+	DATATBLS_WriteBinFile												@11124
+;------------------------UNUSED------------------------						@10581
+;------------------------UNUSED------------------------						@10582
+	DATATBLS_GetHirelingTxtRecordFromIdAndLevel							@10285
+	DATATBLS_GetNextHirelingTxtRecordFromActAndDifficulty				@10397
+	DATATBLS_GetNextHirelingTxtRecordFromNameId							@10981
+	DATATBLS_GetNextHirelingTxtRecordFromClassId						@10921
+	DATATBLS_GetNextHirelingTxtRecordFromVendorIdAndDifficulty			@10343
+	DATATBLS_GetNpcTxtRecord											@10444
+;------------------------UNUSED------------------------						@10589
+	DATATBLS_GetMissileVelocityFromMissilesTxt							@10294
+;------------------------UNUSED------------------------						@10591
+	DATATBLS_GetMonsterChainInfo										@11042
+	DATATBLS_GetCharstatsTxtTable										@10708
+;------------------------UNUSED------------------------						@10594
+;------------------------UNUSED------------------------						@10595
+	DATATBLS_GetArenaTxtRecord											@10019
+	DATATBLS_MapOldItemIndexToCurrent									@10012
+;------------------------UNUSED------------------------						@10598
+	DATATBLS_GetItemDataTables											@10011
+	DATATBLS_GetItemsTxtRecord											@10887
+	DATATBLS_GetItemRecordFromItemCode									@11007
+	DATATBLS_GetItemIdFromItemCode										@10482
+	DATATBLS_GetMagicAffixDataTables									@11057
+	DATATBLS_GetMagicAffixTxtRecord										@10750
+	DATATBLS_GetRareAffixDataTables										@11010
+	DATATBLS_GetRareAffixTxtRecord										@10488
+;------------------------UNUSED------------------------						@10607
+;------------------------UNUSED------------------------						@10608
+;------------------------UNUSED------------------------						@10609
+;------------------------UNUSED------------------------						@10610
+	DATATBLS_GetQualityItemDataTables									@11064
+	DATATBLS_GetQualityItemsTxtRecord									@10001
+	DATATBLS_GetLowQualityItemDataTables								@10882
+	DATATBLS_GetLowQualityItemsTxtRecord								@11065
+	DATATBLS_GetGemDataTables											@10805
+	DATATBLS_GetGemsTxtRecord											@11095
+	DATATBLS_GetBookDataTables											@10753
+	DATATBLS_GetBooksTxtRecord											@10442
+	DATATBLS_GetRuneDataTables											@10704
+	DATATBLS_GetRunesTxtRecord											@10622
+	DATATBLS_AddOrChangeRunesTxtRecord									@11068
+	DATATBLS_GetItemRatioDataTables										@10483
+	DATATBLS_GetItemRatioTxtRecord										@11096
+	DATATBLS_GetShrinesTxtRecord										@10880
+	DATATBLS_GetShrinesTxtRecordCount									@11029
+	DATATBLS_GetObjectsTxtRecord										@10670
+	DATATBLS_GetObjGroupTxtRecord										@11056
+	DATATBLS_GetLevelThreshold											@10680
+	DATATBLS_GetMaxLevel												@10639
+	DATATBLS_GetCurrentLevelFromExp										@10999
+	DATATBLS_GetLevelsTxtRecord											@11102
+	DATATBLS_GetRainFromLevelsTxt										@10641
+	DATATBLS_GetMudFromLevelsTxt										@10905
+	DATATBLS_GetNoPerFromLevelsTxt										@11157
+	DATATBLS_GetInventoryRect											@10279
+	DATATBLS_GetInventoryGridInfo										@10654
+	DATATBLS_GetInventoryComponentGrid									@10030
+	DATATBLS_GetBeltsTxtRecord											@10225
+	DATATBLS_GetInvRectFromBeltsTxt										@10110
+	DATATBLS_UnitAnimInfoDebugSet										@11159
+	DATATBLS_GetAnimDataInfo											@10798
+	DATATBLS_SetVelocityInMonStatsTxtRecord								@10517
+	DATATBLS_GetPlrMode_TypeDataTables									@10838
+	DATATBLS_GetMonModeDataTables										@10740
+	DATATBLS_GetObjMode_TypeDataTables									@10701
+	DATATBLS_GetPlrModeTypeTxtRecord									@10547
+	DATATBLS_GetMonModeTxtRecord										@10876
+	DATATBLS_GetObjModeTypeTxtRecord									@11133
+	DATATBLS_GetCompositTxtRecord										@11163
+	DATATBLS_GetArmTypeTxtRecord										@10567
+	DATATBLS_RollRandomUniqueTitleString								@10503
+	DATATBLS_RollRandomUniquePrefixString								@10575
+	DATATBLS_RollRandomUniqueSuffixString								@10553
+	DATATBLS_RollRandomUniqueAppellationString							@10160
+	DATATBLS_GetDifficultyLevelsTxtRecord								@10297
+	DATATBLS_ShouldNeverCallInExpansion									@10535
+;------------------------UNUSED------------------------						@10657
+	DATATBLS_GetTreasureClassExRecordFromName							@10489
+	DATATBLS_GetTreasureClassExRecordFromIdAndLevel						@10909
+	DATATBLS_GetTreasureClassExRecordFromActAndDifficulty				@11044
+	D2COMMON_10661_Return0												@10700
+	DATATBLS_GetMonItemPercentDataTables								@11100
+	DATATBLS_GetMonItemPercentTxtRecord									@10948
+	DATATBLS_GetCharTemplateTxtRecordCount								@10390
+	DATATBLS_GetCharTemplateTxtRecord									@10743
+	DATATBLS_GetClassFromCharTemplateTxtRecord							@10891
+	DATATBLS_UNUSED_Return0												@10474
+	DATATBLS_GetSuperUniquesTxtRecord									@10162
+;------------------------UNUSED------------------------						@10669
+;------------------------UNUSED------------------------						@10670
+	DATATBLS_GetGambleDataTables										@10222
+;------------------------UNUSED------------------------						@10672
+;------------------------UNUSED------------------------						@10673
+	DATATBLS_GetFramesFromOverlayTxt									@10134
+	DATABLS_GetPreDrawFromOverlayTxt									@11143
+	DATATBLS_GetOffsetXFromOverlayTxt									@10241
+	DATATBLS_GetOffsetYFromOverlayTxt									@10933
+	DATATBLS_GetTransFromOverlayTxt										@11001
+	DATATBLS_GetRadiusAndColorFromOverlayTxt							@10541
+	DATATBLS_Get1OfNFromOverlayTxt										@10185
+	DATATBLS_GetDirFromOverlayTxt										@10656
+	DATATBLS_GetMonSeqTxtRecordFromUnit									@10361
+	DATATBLS_GetSeqFramePointsCount										@10969
+	DATATBLS_GetSeqFrameCount											@11052
+	DATATBLS_ComputeSequenceAnimation									@10895
+	DATATBLS_GetSequenceEvent											@10531
+	ITEMS_AllocItemData													@10211
+	ITEMS_FreeItemData													@10939
+	ITEMS_GetBodyLocation												@11136
+	ITEMS_SetBodyLocation												@10550
+	ITEMS_GetItemSeed													@10749
+	ITEMS_InitItemSeed													@10105
+	ITEMS_GetItemStartSeed												@10699
+	ITEMS_SetItemStartSeed												@10967
+	ITEMS_GetItemQuality												@10276
+	ITEMS_SetItemQuality												@10552
+	ITEMS_GetAutoAffix													@10200
+	ITEMS_SetAutoAffix													@11107
+	ITEMS_GetPrefixId													@10094
+	ITEMS_AssignPrefix													@10329
+	ITEMS_GetSuffixId													@10014
+	ITEMS_AssignSuffix													@10897
+	ITEMS_GetRarePrefixId												@10171
+	ITEMS_AssignRarePrefix												@10580
+	ITEMS_GetRareSuffixId												@11036
+	ITEMS_AssignRareSuffix												@10530
+	ITEMS_CheckItemFlag													@10989
+	ITEMS_SetItemFlag													@10605
+	ITEMS_GetItemFlags													@10262
+	ITEMS_CheckItemCMDFlag												@10554
+	ITEMS_SetItemCMDFlag												@10051
+	ITEMS_GetItemCMDFlags												@10133
+;------------------------UNUSED------------------------						@10713
+;------------------------UNUSED------------------------						@10714
+;------------------------UNUSED------------------------						@10715
+;------------------------UNUSED------------------------						@10716
+	ITEMS_GetItemLevel													@10410
+	ITEMS_SetItemLevel													@10358
+	ITEMS_GetInvPage													@10370
+	ITEMS_SetInvPage													@10223
+	ITEMS_GetCellOverlap												@11106
+	ITEMS_SetCellOverlap												@10848
+	ITEMS_GetEarName													@10318
+	ITEMS_SetEarName													@11046
+	ITEMS_GetEarLevel													@11063
+	ITEMS_SetEarLevel													@10884
+	ITEMS_GetVarGfxIndex												@10523
+	ITEMS_SetVarGfxIndex												@10916
+	ITEMS_CheckItemTypeIdByItemId										@10964
+	ITEMS_CheckType														@10826
+	ITEMS_CheckItemTypeId												@10231
+	ITEMS_GetFileIndex													@10280
+	ITEMS_SetFileIndex													@10642
+	ITEMS_SetOwnerId													@10842
+	ITEMS_GetOwnerId													@10018
+	ITEMS_IsBodyItem													@10888
+	ITEMS_IsClassValid													@11025
+	ITEMS_IsClassValidByItemId											@10352
+	ITEMS_GetClassOfClassSpecificItem									@10311
+	ITEMS_IsNotQuestItem												@10899
+	ITEMS_GetQuestFromItemId											@11149
+	ITEMS_GetQuest														@10253
+	ITEMS_GetNormalCode													@10337
+	ITEMS_GetWeaponClassCode											@10528
+	ITEMS_Get2HandWeaponClassCode										@10788
+	ITEMS_GetBaseCode													@10432
+	ITEMS_GetAltGfx														@10834
+	ITEMS_GetComponent													@10862
+	ITEMS_GetDimensions													@10065
+	ITEMS_GetAllowedBodyLocations										@10896
+	ITEMS_GetItemType													@10409
+	ITEMS_GetItemTypeFromItemId											@10264
+	ITEMS_GetItemQlvl													@10413
+	ITEMS_CheckIfFlagIsSet												@10589
+	ITEMS_SetOrRemoveFlag												@10025
+	ITEMS_CheckRequirements												@11075
+	ITEMS_GetLevelRequirement											@10113
+	ITEMS_CheckBodyLocation												@11019
+	ITEMS_CheckIfThrowable												@10681
+	ITEMS_GetMissileType												@10286
+	ITEMS_GetMeleeRange													@10536
+	ITEMS_CheckItemTypeIfThrowable										@11077
+	ITEMS_CheckWeaponClassByItemId										@10602
+	ITEMS_CheckWeaponClass												@10267
+	ITEMS_CheckWeaponIfTwoHanded										@10480
+	ITEMS_CheckWeaponIfTwoHandedByItemId								@11062
+	ITEMS_CheckIfStackable												@10603
+	ITEMS_CheckIfBeltable												@10096
+	ITEMS_ComparePotionTypes											@10657
+	ITEMS_CheckIfAutoBeltable											@11150
+	ITEMS_CheckIfUseable												@10328
+	ITEMS_GetUniqueColumnFromItemsTxt									@10934
+	ITEMS_IsQuestItem													@10033
+	ITEMS_IsNotQuestItemByItemId										@10169
+	ITEMS_GetTransactionCost											@10122
+	ITEMS_GetNoOfUnidItems												@10199
+	ITEMS_IsRepairable													@10757
+;------------------------UNUSED------------------------						@10778
+;------------------------UNUSED------------------------						@10779
+	ITEMS_GetAmmoTypeFromItemType										@10983
+	ITEMS_GetAmmoType													@11045
+	ITEMS_GetQuiverTypeFromItemType										@10292
+	ITEMS_GetQuiverType													@11021
+	ITEMS_GetAutoStackFromItemType										@10046
+	ITEMS_GetAutoStack													@10705
+	ITEMS_GetReload														@10420
+	ITEMS_GetReEquip													@10219
+	ITEMS_GetStorePage													@10726
+	ITEMS_GetVarInvGfxCount												@10709
+	ITEMS_GetVarInvGfxString											@10614
+	ITEMS_CanBeMagic													@10265
+	ITEMS_CanBeRare														@10561
+	ITEMS_CanBeNormal													@10102
+	ITEMS_GetMaxStack													@10634
+	ITEMS_GetTotalMaxStack												@10548
+	ITEMS_GetMinStackFromItemId											@11125
+	ITEMS_GetMinStack													@10857
+	ITEMS_GetSpawnStackFromItemId										@10335
+	ITEMS_GetSpawnStack													@10075
+	ITEMS_CheckBitField1Flag8											@11153
+	ITEMS_CheckBitField1Flag4											@10084
+	ITEMS_IsMetalItem													@10257
+	ITEMS_CheckBitField1Flag1											@10960
+	ITEMS_GetSpellIcon													@10486
+	ITEMS_GetDurWarnCount												@10341
+	ITEMS_GetQtyWarnCount												@10255
+	ITEMS_GetStrengthBonus												@10176
+	ITEMS_GetDexBonus													@10885
+	ITEMS_CheckIfSocketableByItemId										@11018
+	ITEMS_CheckIfSocketable												@10044
+	ITEMS_HasDurability													@10182
+;------------------------UNUSED------------------------						@10812
+	ITEMS_GetStaffMods													@10676
+	ITEMS_GetAllowedGemSocketsFromItemId								@10428
+	ITEMS_GetMaxSockets													@11099
+	ITEMS_GetSockets													@10072
+	ITEMS_AddSockets													@10214
+	ITEMS_SetSockets													@10997
+	ITEMS_GetGemApplyTypeFromItemId										@10707
+	ITEMS_GetGemApplyType												@10889
+	ITEMS_IsSocketFiller												@11152
+	ITEMS_GetRunesTxtRecordFromItem										@10869
+	ITEMS_GetWeaponClassId												@10401
+	ITEMS_GetTransmogrifyFromItemId										@10433
+	ITEMS_GetTransmogrify												@10789
+	ITEMS_IsMagSetRarUniCrfOrTmp										@10923
+	ITEMS_GetHitClassFromItem											@11028
+	ITEMS_Is1Or2Handed													@10243
+	ITEMS_GetColor														@10371
+	ITEMS_IsImbueable													@11119
+	ITEMS_IsSocketable													@11160
+	ITEMS_IsPersonalizable												@10456
+	ITEMS_AreStackablesEqual											@11105
+	ITEMS_CanItemBeUsedForThrowSkill									@11040
+	D2COMMON_10835_Return0												@10551
+	ITEMS_GetSetItemsMask												@10058
+	ITEMS_GetNoOfSetItemsFromItem										@10507
+	ITEMS_GetSetItemsTxtRecordFromItem									@10272
+	ITEMS_CanBeEquipped													@10108
+	ITEMS_IsCharmUsable													@10968
+	ITEMS_GetBonusLifeBasedOnClass										@10434
+	ITEMS_GetBonusManaBasedOnClass										@10137
+	ITEMMODS_GetByTimeAdjustment										@10855
+	D2Common_10844_ITEMMODS_First										@11137
+	D2Common_10845														@10898
+	D2Common_10846														@11000
+	ITEMMODS_UpdateItemWithSkillCharges									@10047
+	D2Common_10848														@10080
+	D2Common_10849														@10961
+	D2Common_10850														@10497
+	D2Common_10851														@10839
+;------------------------UNUSED------------------------						@10852
+	ITEMS_GetItemCell													@11049
+	ITEMS_SetItemCell													@11008
+	ITEMMODS_AssignProperty												@10309
+	D2COMMON_10856_Return												@10930
+;------------------------UNUSED------------------------						@10857
+;------------------------UNUSED------------------------						@10858
+	ITEMMODS_CanItemHaveMagicAffix										@10469
+	ITEMMODS_CanItemHaveRareAffix										@10733
+	ITEMMODS_CanItemBeHighQuality										@10209
+	ITEMMODS_SetRandomElixirFileIndex									@10917
+;------------------------UNUSED------------------------						@10863
+;------------------------UNUSED------------------------						@10864
+	ITEMMODS_ApplyEthereality											@10849
+	ITEMS_UpdateSets													@10236
+	ITEMMODS_UpdateRuneword												@10534
+	ITEMMODS_AddCraftPropertyList										@10052
+;------------------------UNUSED------------------------						@10869
+;------------------------UNUSED------------------------						@10870
+;------------------------UNUSED------------------------						@10871
+;------------------------UNUSED------------------------						@10872
+;------------------------UNUSED------------------------						@10873
+;------------------------UNUSED------------------------						@10874
+	ITEMS_GetItemFormat													@10086
+	ITEMS_SetItemFormat													@10730
+	ITEMS_GetAllRepairCosts												@10027
+	ITEMS_GetWeaponAttackSpeed											@10277
+	ITEMS_HasUsedCharges												@10026
+	ITEMS_IsEthereal													@10313
+	ITEMS_SerializeItemToBitstream										@10218
+	ITEMS_DecodeItemFromBitstream										@10374
+	ITEMS_GetCompactItemDataFromBitstream								@11147
+	D2Common_10884_COMPOSIT_unk											@11118
+	D2Common_10885_COMPOSIT_unk											@11135
+	COMPOSIT_GetWeaponClassIdFromCode									@10527
+	COMPOSIT_GetWeaponClassCode											@10947
+	COMPOSIT_GetWeaponClassId											@10979
+	COMPOSIT_IsArmorComponent											@11079
+	COMPOSIT_IsWeaponBowOrXBow											@10684
+	COMPOSIT_GetArmorTypeFromComponent									@10396
+	CHAT_AllocHoverMsg													@10041
+	CHAT_FreeHoverMsg													@10375
+	CHAT_GetDisplayTimeFromHoverMsg										@10022
+	CHAT_GetTimeoutFromHoverMsg											@10677
+	CHAT_CopyHoverMsgToBuffer											@10070
+	CHAT_GetUsedFromHoverMsg											@11134
+	CHAT_SetUsedInHoverMsg												@10006
+	CHAT_GetLangIdFromHoverMsg											@10125
+	CHAT_SetLangIdInHoverMsg											@10315
+	TEXT_AllocTextHeader												@10613
+	TEXT_FreeTextHeader													@10461
+	TEXT_AddNodeToTextList												@10821
+	TEXT_RemoveNodeFromTextList											@11082
+	TEXT_GetMenuType2NodeCount											@10453
+	TEXT_GetStringIdOfMenuType2Node										@10593
+	TEXT_GetStringIdOfMenuType1Or2Node									@10389
+	TEXT_GetStringIdOfMenuType0Or2Node									@10040
+	TEXT_CreateMessageListFromTextHeader								@10296
+	TEXT_CreateTextHeaderFromMessageList								@11169
+	TEXT_SortTextNodeListByStringId										@10644
+	SEED_InitSeed														@11156
+	SEED_InitLowSeed													@10073
+	SEED_GetLowSeed														@10120
+	SEED_GetHighSeed													@10164
+	SEED_Return															@10814
+;------------------------UNUSED------------------------						@10917
+;------------------------UNUSED------------------------						@10918
+;------------------------UNUSED------------------------						@10919
+	SEED_GetRandomValue													@10043
+	SEED_SetSeeds														@10076
+	SEED_GetSeeds														@10487
+	ENVIRONMENT_UpdatePeriodOfDay										@10190
+	ENVIRONMENT_UpdateCycleIndex										@10667
+	ENVIRONMENT_GetStatistics											@10212
+	ENVIRONMENT_GetIntensityFromAct										@10998
+	ENVIRONMENT_GetLightColorFromAct									@10744
+	ENVIRONMENT_GetUnusedMember											@11053
+	ENVIRONMENT_NextEnvCycle											@10139
+	ENVIRONMENT_GetCycleIndexFromAct									@11140
+	ENVIRONMENT_GetCycleIndex_Ticks_EclipseFromAct						@11098
+	ENVIRONMENT_InitializeEnvironment									@10578
+	ENVIRONMENT_GetPeriodOfDayFromAct									@10618
+	ENVIRONMENT_GetTimeRateFromAct										@10661
+	ENVIRONMENT_SetNextTimeRate											@11121
+	ENVIRONMENT_TaintedSunBegin											@10348
+	ENVIRONMENT_TaintedSunEnd											@10544
+	SKILLS_GetPassiveState												@10850
+;------------------------UNUSED------------------------						@10939
+	SKILLS_RefreshSkill													@10953
+	SKILLS_RefreshPassiveSkills											@10419
+	SKILLS_GetSkillModeFromUnit											@10991
+	D2COMMON_10943_Return1												@10599
+	SKILLS_GetRange														@10071
+	SKILLS_AllocSkillList												@10029
+	SKILLS_InitSkillList												@11141
+	SKILLS_GetNextSkill													@10427
+	SKILLS_GetFirstSkillFromSkillList									@10002
+	SKILLS_GetSkillById													@10646
+	SKILLS_GetHighestLevelSkillFromUnitAndId							@10747
+	SKILLS_RemoveSkill													@10853
+	SKILLS_AddSkill														@10858
+	SKILLS_AssignSkill													@10210
+	D2Common_10954														@10973
+	SKILLS_GetSkillInfo													@10146
+	SKILLS_SetCharges													@10119
+	SKILLS_GetOwnerGUIDFromSkill										@10847
+	D2Common_10958														@10918
+	D2Common_10959														@10336
+	SKILLS_FreeSkillList												@10569
+	SKILLS_SetLeftActiveSkill											@10187
+	SKILLS_SetRightActiveSkill											@10305
+	SKILLS_GetSkillIdFromSkill											@10239
+	SKILLS_GetUseState													@10715
+	SKILLS_GetSeqNumFromSkill											@10900
+	SKILLS_GetSkillsTxtRecordFromSkill									@10679
+	SKILLS_GetShrineSkillLevelBonus										@10036
+	SKILLS_GetSkillLevel												@10904
+	D2Common_10969														@10878
+	D2Common_10970														@10021
+	D2Common_10971														@10926
+	D2Common_10972														@10703
+	D2Common_10973														@10940
+	SKILLS_SetSkillMode													@10032
+	SKILLS_GetSkillMode													@10956
+	SKILLS_GetParam1													@10063
+	SKILLS_GetParam2													@10089
+	SKILLS_GetParam3													@10368
+	SKILLS_GetParam4													@10620
+	SKILLS_SetParam1													@10965
+	SKILLS_SetParam2													@10817
+	SKILLS_SetParam3													@10454
+	SKILLS_SetParam4													@10919
+	SKILLS_SetFlags														@10140
+	SKILLS_GetFlags														@10619
+	SKILLS_GetRequiredLevel												@10423
+	SKILLS_GetRequiredLevelBasedOnCurrent								@10645
+	SKILLS_CheckRequiredSkills											@10132
+	SKILLS_CheckRequiredAttributes										@11032
+;------------------------UNUSED------------------------						@10990
+;------------------------UNUSED------------------------						@10991
+;------------------------UNUSED------------------------						@10992
+;------------------------UNUSED------------------------						@10993
+;------------------------UNUSED------------------------						@10994
+;------------------------UNUSED------------------------						@10995
+;------------------------UNUSED------------------------						@10996
+;------------------------UNUSED------------------------						@10997
+;------------------------UNUSED------------------------						@10998
+	SKILLS_GetToHitFactor												@11116
+	SKILLS_GetHighestSkillLevelById										@10786
+	SKILLS_GetManaCosts													@10693
+	SKILLS_GetMinPhysDamage												@10290
+	SKILLS_GetMaxPhysDamage												@10399
+	SKILLS_GetMinElemDamage												@11090
+	SKILLS_GetMaxElemDamage												@10141
+	SKILLS_GetElementalLength											@10342
+;------------------------UNUSED------------------------						@11007
+	SKILLS_GetClassIdFromSkillId										@10521
+	D2COMMON_11009_Return0												@11155
+	SKILLS_IsPlayerClassSkill											@10347
+	SKILLS_GetQuantity													@10355
+	SKILLS_SetQuantity													@10303
+	D2COMMON_11013_ConvertMode											@10350
+	D2Common_11014_ConvertShapeShiftedMode                              @10745
+	D2Common_11015														@10251
+	D2Common_11016														@10982
+	D2COMMON_11017_CheckUnitIfConsumeable								@10675
+	D2COMMON_11018														@10288
+	D2COMMON_11019														@10109
+	D2Common_11020														@10608
+	D2COMMON_11021														@10560
+	SKILLS_CanUnitCorpseBeSelected										@10510
+	SKILLS_GetWeaponMasteryBonus										@10833
+	D2Common_11024														@11060
+	D2Common_11025														@10097
+	D2Common_11026														@10056
+	SKILLS_GetShiftedManaCosts											@10778
+	D2Common_11028														@10386
+	SKILLS_GetBonusSkillLevelFromSkillId								@10408
+	D2Common_11030														@10394
+	D2Common_11031														@10525
+	D2Common_11032														@11142
+	D2Common_11033														@11027
+	D2Common_11034														@10683
+	D2Common_11035														@11162
+	D2COMMON_11036_GetMonCurseResistanceSubtraction						@11144
+	SKILLS_CheckIfCanLeapTo												@11113
+;------------------------UNUSED------------------------						@11038
+	D2COMMON_11039_CheckWeaponIsMissileBased							@10074
+	SKILLS_IsEnhanceable												@10064
+	SKILLS_GetClassSkillId												@10823
+	SKILLS_GetPlayerSkillCount											@10077
+	D2Common_11043														@11158
+;------------------------UNUSED------------------------						@11044
+;------------------------UNUSED------------------------						@11045
+;------------------------UNUSED------------------------						@11046
+	SKILLS_GetConcentrationDamageBonus									@10266
+	D2COMMON_11048_Return1												@10501
+	SKILLS_Return1														@11148
+	D2Common_11050														@10526
+	MONSTERS_GetMaximalLightRadius										@10594
+	D2Common_11052														@10929
+	D2Common_11053														@11088
+	D2Common_11054														@10465
+	D2Common_11055														@10859
+;------------------------UNUSED------------------------						@11056
+	MONSTERS_IsSandLeaper												@10636
+	MONSTERS_IsDemon													@10790
+	MONSTERS_IsUndead													@10455
+	MONSTERS_IsBoss														@10513
+	MONSTERS_GetMinionSpawnInfo											@11074
+	D2COMMON_11062_Return												@10372
+	D2Common_11063														@10042
+	MONSTERS_IsDead														@10472
+	MONSTERS_IsPrimeEvil												@10514
+	D2Common_11066														@10785
+	MONSTERS_GetHirelingTypeId											@10822
+	D2COMMON_11068_GetCompInfo											@10663
+	D2Common_11069														@10259
+	D2Common_11070														@10004
+;------------------------UNUSED------------------------						@11071
+;------------------------UNUSED------------------------						@11072
+;------------------------UNUSED------------------------						@11073
+;------------------------UNUSED------------------------						@11074
+;------------------------UNUSED------------------------						@11075
+	D2COMMON_11076_Return												@10181
+	D2COMMON_11077_Return												@10549
+	D2COMMON_11078_Return0												@10464
+	D2COMMON_11079_Return0												@11109
+	D2COMMON_11080_Return												@10627
+	D2Common_11081														@10378
+	MONSTERS_HirelingInit												@11103
+	MONSTERS_GetHirelingResurrectionCost								@10659
+	MONSTERS_GetHirelingExpForNextLevel									@10669
+	MONSTERS_GetHirelingDescString										@10201
+	MONSTERS_GetActFromHirelingTxt										@10227
+	UNITFINDS_FindUnitInNeighboredRooms									@10118
+	UNITFINDS_GetNearestTestedUnit										@10463
+	DATATBLS_InitializeCollisionFieldTable								@10951
+	DATATBLS_FreeCollisionFieldTable									@10357
+	DATATBLS_GetCollisionFieldCenter									@11120
+	DATATBLS_GetCollisionFieldWidth										@11071
+	DATATBLS_GetCollisionFieldHeight									@10879
+	DATATBLS_AllocField													@10066
+	DATATBLS_FreeField													@11080
+	DATATBLS_SetFieldCoordinates										@10771
+	D2Common_11097														@10159
+	D2Common_11098														@10291
+	D2Common_11099														@10424
+	LOG_11100															@11130
+	LOG_11101															@10475
+	LOG_11102															@10460
+	LOG_11103															@10228
+	LOG_11104															@10068
+	LOG_11105															@10950
+	LOG_11106															@10755
+	QUESTRECORD_GetQuestState											@10600
+	QUESTRECORD_SetQuestState											@10637
+	QUESTRECORD_ClearQuestState											@11066
+	QUESTRECORD_ResetIntermediateStateFlags								@11030
+	QUESTRECORD_AllocRecord												@10478
+	QUESTRECORD_FreeRecord												@10237
+	QUESTRECORD_CopyBufferToRecord										@11086
+	QUESTRECORD_CopyRecordToBuffer										@11070
+	MISSILE_AllocMissileData											@10403
+	MISSILE_FreeMissileData												@10988
+	MISSILE_GetFlags													@10690
+	MISSILE_SetFlags													@10177
+	MISSILE_SetLevel													@10062
+	MISSILE_GetLevel													@10388
+	MISSILE_SetTotalFrames												@11076
+	MISSILE_GetTotalFrames												@10955
+	MISSILE_SetCurrentFrame												@10017
+	MISSILE_GetCurrentFrame												@10189
+	MISSILE_GetRemainingFrames											@10417
+	MISSILE_SetSkill													@10649
+	MISSILE_GetSkill													@10632
+	MISSILE_GetClassId													@10245
+	MISSILE_SetOwner													@10686
+	MISSILE_CheckUnitIfOwner											@10996
+	MISSILE_SetStreamMissile											@10247
+	MISSILE_GetStreamMissile											@10538
+	MISSILE_SetStreamRange												@10648
+	MISSILE_GetStreamRange												@10167
+	MISSILE_GetHitClass													@10500
+	MISSILE_SetActivateFrame											@10224
+	MISSILE_GetActivateFrame											@10802
+	MISSILE_GetAnimSpeed												@10808
+	MISSILE_SetAnimSpeed												@10630
+	MISSILE_SetTargetX													@11161
+	MISSILE_GetTargetX													@11048
+	MISSILE_SetTargetY													@10792
+	MISSILE_GetTargetY													@11101
+	MISSILE_SetHomeType													@10736
+	MISSILE_GetHomeType													@11073
+	WAYPOINTS_IsActivated												@10875
+	WAYPOINTS_ActivateWaypoint											@11117
+	WAYPOINTS_AllocWaypointData											@11111
+	WAYPOINTS_FreeWaypointData											@10713
+	WAYPOINTS_CopyAndValidateWaypointData								@10587
+	WAYPOINTS_ValidateAndCopyWaypointData								@10379
+	WAYPOINTS_GetWaypointNoFromLevelId									@10232
+	WAYPOINTS_GetLevelIdFromWaypointNo									@10462
+;------------------------UNUSED------------------------						@11154
+;------------------------UNUSED------------------------						@11155
+;------------------------UNUSED------------------------						@11156
+;------------------------UNUSED------------------------						@11157
+;------------------------UNUSED------------------------						@11158
+;------------------------UNUSED------------------------						@11159
+;------------------------UNUSED------------------------						@11160
+;------------------------UNUSED------------------------						@11161
+;------------------------UNUSED------------------------						@11162
+;------------------------UNUSED------------------------						@11163
+;------------------------UNUSED------------------------						@11164
+;------------------------UNUSED------------------------						@11165
+;------------------------UNUSED------------------------						@11166
+;------------------------UNUSED------------------------						@11167
+;------------------------UNUSED------------------------						@11168
+;------------------------UNUSED------------------------						@11169
+;------------------------UNUSED------------------------						@11170
+;------------------------UNUSED------------------------						@11171
+;------------------------UNUSED------------------------						@11172
+;------------------------UNUSED------------------------						@11173
+;------------------------UNUSED------------------------						@11174
+;------------------------UNUSED------------------------						@11175
+;------------------------UNUSED------------------------						@11176
+;------------------------UNUSED------------------------						@11177
+;------------------------UNUSED------------------------						@11178
+;------------------------UNUSED------------------------						@11179
+;------------------------UNUSED------------------------						@11180
+;------------------------UNUSED------------------------						@11181
+;------------------------UNUSED------------------------						@11182
+;------------------------UNUSED------------------------						@11183
+;------------------------UNUSED------------------------						@11184
+;------------------------UNUSED------------------------						@11185
+;------------------------UNUSED------------------------						@11186
+;------------------------UNUSED------------------------						@11187
+;------------------------UNUSED------------------------						@11188
+;------------------------UNUSED------------------------						@11189
+;------------------------UNUSED------------------------						@11190
+;------------------------UNUSED------------------------						@11191
+;------------------------UNUSED------------------------						@11192
+;------------------------UNUSED------------------------						@11193
+;------------------------UNUSED------------------------						@11194
+;------------------------UNUSED------------------------						@11195
+;------------------------UNUSED------------------------						@11196
+;------------------------UNUSED------------------------						@11197
+;------------------------UNUSED------------------------						@11198
+;------------------------UNUSED------------------------						@11199
+;------------------------UNUSED------------------------						@11200
+;------------------------UNUSED------------------------						@11201
+;------------------------UNUSED------------------------						@11202
+;------------------------UNUSED------------------------						@11203
+;------------------------UNUSED------------------------						@11204
+;------------------------UNUSED------------------------						@11205
+;------------------------UNUSED------------------------						@11206
+;------------------------UNUSED------------------------						@11207
+;------------------------UNUSED------------------------						@11208
+;------------------------UNUSED------------------------						@11209
+;------------------------UNUSED------------------------						@11210
+;------------------------UNUSED------------------------						@11211
+;------------------------UNUSED------------------------						@11212
+	MISSTREAM_AllocMissileStream										@10801
+	MISSTREAM_FreeMissileStream											@10148
+	MISSTREAM_ExecuteHit												@10932
+	MISSTREAM_Update													@10746
+	MISSILE_CalculateDamageData											@10425
+	MISSILE_SetDamageStats												@10435
+;------------------------UNUSED------------------------						@11219
+;------------------------UNUSED------------------------						@11220
+	MISSILE_GetElementalLength											@10249
+	DRLGPRESET_CountPresetObjectsByAct									@10324
+	DRLGPRESET_GetObjectIndexFromObjPreset								@10038
+;------------------------UNUSED------------------------						@11224
+;------------------------UNUSED------------------------						@11225
+	DATATBLS_CheckActInLevelTypesTxt									@10846
+	DATATBLS_GetFileNameFromLevelTypeAndFileId							@10769
+;------------------------UNUSED------------------------						@11228
+	D2COMMON_11229_Return												@10457
+	SKILLS_RemoveTransformStatesFromShapeshiftedUnit					@10954
+;------------------------UNUSED------------------------						@11231
+	DATATBLS_GetCubemainTxtRecord										@10913
+	DATATBLS_GetCubemainTxtRecordCount									@10555
+	STATES_CheckStateMaskPgsvOnUnit										@10995
+	D2COMMON_11235_Return0												@10854
+	D2COMMON_11236_Return												@10987
+	D2COMMON_11237_Return												@10799
+	UNITS_IsCorpseUseable												@10149
+	SKILLS_Return0														@10284
+	D2COMMON_11240_Return												@10473
+	D2COMMON_11241_Return												@10414
+	DATATBLS_ToggleCompileTxtFlag										@10412
+	STATLIST_GetBaseStatsData											@10373
+	ITEMS_GetRealmData													@10972
+	ITEMS_SetRealmData													@10172
+	MONSTERS_ApplyClassicScaling										@10825
+	DATATBLS_GetMonsterLevelInArea										@10491
+	D2Common_11248														@10516
+	DATATBLS_GetExpRatio												@10556
+	DATATBLS_GetMonSoundsTxtRecordFromMonsterId							@10069
+;------------------------UNUSED------------------------						@11251
+	DATATBLS_GetMonSoundsTxtRecordFromSoundId							@10741
+;------------------------UNUSED------------------------						@11253
+;------------------------UNUSED------------------------						@11254
+	DATATBLS_GetCodeFromCompCodeTxt										@10016
+	DATATBLS_GetMonPresetTxtActSection									@10153
+	DATATBLS_GetSuperUniquesTxtRecordCount								@11061
+	DATATBLS_MapSuperUniqueId											@10592
+	UNITS_AllocUnit														@10881
+	UNITS_FreeUnit														@10495
+	DATATBLS_CalculateMonsterStatsByLevel								@10776
+	DATATBLS_GetMonSeqTableRecord										@10151
+	COLLISION_RayTrace													@10925
+	STATLIST_SetSkillId													@10092
+	STATLIST_GetSkillId													@10129
+	STATLIST_SetSkillLevel												@10045
+	STATLIST_GetSkillLevel												@10053
+	STATLIST_GetFullStatsDataFromUnit									@10028
+	D2COMMON_11269_CopyStats											@10751
+	STATLIST_CopyStats													@10127
+	SKILLS_GetSpecialParamValue											@11167
+	STATES_CheckStateMaskRemHitOnUnit									@10364
+	D2Common_11273														@10671
+	D2Common_11274														@11067
+	D2Common_11275														@10739
+	SKILLS_EvaluateSkillFormula											@10111
+	D2COMMON_11277_Return												@10312
+	INVENTORY_GetItemsXPosition											@11013
+	UNITROOM_AddUnitToRoomEx											@10927
+	MONSTERS_GetSpawnMode_XY											@10367
+	D2Common_11281_CollisionPatternFromSize								@10039
+	PATH_GetCollisionPatternFromMonStats2Txt							@10760
+	SKILLS_CalculateKickDamage											@10327
+	MISSILE_EvaluateMissileFormula										@10873
+	MISSILE_GetMinDamage												@10083
+	MISSILE_GetMaxDamage												@10393
+	MISSILE_GetMinElemDamage											@10678
+	MISSILE_GetMaxElemDamage											@11146
+	MISSILE_GetElemTypeFromMissileId									@10519
+	MISSILE_GetSpecialParamValue										@11005
+	PATH_SetNumberOfPathPoints								@10093
+	D2COMMON_11292_ItemAssignProperty									@10405
+	ITEMMODS_GetItemCharges												@10718
+	STATLIST_SetBaseStat												@10331
+	STATLIST_SetBaseStat2												@10673
+	D2COMMON_11296_Return												@10138
+	MONSTERS_SetMonsterNameInMonsterData								@11003
+	DATATBLS_GetUnitNameFromUnit										@10260
+	DATATBLS_GetUnitNameFromUnitTypeAndClassId							@10797
+	ITEMMODS_EvaluateItemFormula										@10782
+	INVENTORY_GetSecondaryWeapon										@10441
+	SKILLS_EvaluateSkillDescFormula										@10959
+	STATES_CheckStateMaskOnUnit											@10595
+	STATLIST_GetBaseStatsCount											@10582
+	STATLIST_GetFullStatsCountFromUnit									@10758
+	INVENTORY_GetBackPackItemByCode										@10154
+	UNITS_IsObjectInInteractRange										@10448
