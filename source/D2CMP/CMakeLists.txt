@@ -1,12 +1,13 @@
 
 D2MOO_prepare_targets(D2CMP)
-target_link_libraries(${D2CMPImplName} PUBLIC D2CommonDefinitions Fog)
+target_link_libraries(${D2CMPImplName} PUBLIC D2CommonDefinitions Fog Storm)
 
 target_sources(${D2CMPImplName}
   PRIVATE
   
     src/D2CMP.cpp
     include/D2CMP.h
+    include/D2CMPTables.h
 
     src/CelCmp.cpp
     src/CelDataHash.cpp
