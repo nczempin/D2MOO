@@ -39,25 +39,6 @@
 #pragma warning (disable : 6262)
 
 
-#pragma pack(push, 1)
-struct D2WinControlInitStrc
-{
-	int nType;
-	int nX;
-	int nY;
-	int nWidth;
-	int nHeight;
-	int field_14;
-	int nStringId;
-	D2CellFileStrc** ppCellFile;
-	int(__stdcall* field_20)(SMSGHANDLER_PARAMS*);
-	void* field_24;
-	void* field_28;
-	void* field_2C;
-};
-#pragma pack(pop)
-
-
 WNDPROC gpfWndProc_6F8FE268;
 HWND ghMainWindow_6F8FE23C;
 int32_t dword_6F8FE26C;

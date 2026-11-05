@@ -575,8 +575,8 @@ EXPORTS
 	STATLIST_GetDefenseFromUnit											@10445
 	STATLIST_MergeBaseStats												@10911
 	D2Common_10574														@10615
-	DATATBLS_UnloadAllBins												@10708
-	DATATBLS_LoadAllTxts												@10439
+	DATATBLS_UnloadAllBins												@10325
+	DATATBLS_LoadAllTxts												@10797
 ;------------------------UNUSED------------------------						@10577
 	DATATBLS_CompileTxt													@10244
 	DATATBLS_UnloadBin													@10114
@@ -593,7 +593,7 @@ EXPORTS
 	DATATBLS_GetMissileVelocityFromMissilesTxt							@10294
 ;------------------------UNUSED------------------------						@10591
 	DATATBLS_GetMonsterChainInfo										@11042
-	DATATBLS_GetCharstatsTxtTable										@10325
+	DATATBLS_GetCharstatsTxtTable										@10708
 ;------------------------UNUSED------------------------						@10594
 ;------------------------UNUSED------------------------						@10595
 	DATATBLS_GetArenaTxtRecord											@10857
@@ -1299,7 +1299,7 @@ EXPORTS
 	D2COMMON_11296_Return												@10138
 	MONSTERS_SetMonsterNameInMonsterData								@11003
 	DATATBLS_GetUnitNameFromUnit										@10260
-	DATATBLS_GetUnitNameFromUnitTypeAndClassId							@10797
+	DATATBLS_GetUnitNameFromUnitTypeAndClassId							@10439
 	ITEMMODS_EvaluateItemFormula										@10782
 	INVENTORY_GetSecondaryWeapon										@10441
 	SKILLS_EvaluateSkillDescFormula										@10959

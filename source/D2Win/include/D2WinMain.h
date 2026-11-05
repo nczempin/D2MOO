@@ -8,9 +8,26 @@
 
 struct D2CellFileStrc;
 struct D2WinEditBoxStrc;
-struct D2WinControlInitStrc;
 struct D2WinControlStrc;
 struct SMSGHANDLER_PARAMS;
+
+#pragma pack(push, 1)
+struct D2WinControlInitStrc
+{
+	int nType;
+	int nX;
+	int nY;
+	int nWidth;
+	int nHeight;
+	int field_14;
+	int nStringId;
+	D2CellFileStrc** ppCellFile;
+	int(__stdcall* field_20)(SMSGHANDLER_PARAMS*);
+	void* field_24;
+	void* field_28;
+	void* field_2C;
+};
+#pragma pack(pop)
 
 extern POINT gMousePosition_6F8FE234;
 extern int32_t dword_6F8FE254;
@@ -29,11 +46,11 @@ D2WIN_DLL_DECL int __stdcall D2Win_CloseSpriteCache();
 //D2Win.0x6F8ACDD0 (#10003)
 D2WIN_DLL_DECL void __stdcall D2Win_10003();
 //D2Win.0x6F8ACDE0 (#10004)
-D2WIN_DLL_DECL void __stdcall D2Win_10004(BOOL bForceResize);
+D2WIN_DLL_DECL void __stdcall D2Win_10004(D2GameResolutionMode bForceResize);
 //D2Win.0x6F8ACE20 (#10016)
 D2WIN_DLL_DECL int __stdcall D2Win_10016();
 //D2Win.0x6F8ACEC0 (#10005)
-D2WIN_DLL_DECL int __stdcall D2Win_10005(BOOL bForceResize);
+D2WIN_DLL_DECL int __stdcall D2Win_10005(D2GameResolutionMode nResolution);
 //D2Win.0x6F8ACF20 (#10006)
 D2WIN_DLL_DECL void __stdcall D2Win_10006_ClearDrawCaches();
 //D2Win.0x6F8ACF30 (#10007)

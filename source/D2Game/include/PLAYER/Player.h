@@ -44,7 +44,7 @@ int32_t __fastcall sub_6FC7C3A0(D2GameStrc* pGame, D2UnitStrc* pPlayer, D2UnitSt
 //D2Game.0x6FC7C450
 int32_t __fastcall sub_6FC7C450(D2GameStrc* pGame, D2UnitStrc* pPlayer, int32_t nHotkeyId, int16_t nSkillId, char a4, int32_t nFlags);
 //D2Game.0x6FC7C490 (#10059)
-void __fastcall PLAYER_SetVirtualPlayerCount(int32_t nPlayers);
+D2GAME_DLL_DECL void __fastcall PLAYER_SetVirtualPlayerCount(int32_t nPlayers);
 //D2Game.0x6FC7C4A0
 int32_t __fastcall PLAYER_GetPlayerCount(D2GameStrc* pGame);
 //D2Game.0x6FC7C4E0

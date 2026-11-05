@@ -31,7 +31,7 @@ struct D2SavedItemStrc
 
 
 //D2Game.0x6FC895D0
-void __fastcall D2GAME_10036_PLRSAVE_EnableSaveFileWriting(int32_t bWriteSaveFile);
+D2GAME_DLL_DECL void __fastcall D2GAME_10036_PLRSAVE_EnableSaveFileWriting(int32_t bWriteSaveFile);
 //D2Game.0x6FC895E0
 int32_t __fastcall sub_6FC895E0(D2GameStrc* pGame, D2UnitStrc* pPlayer, D2SavedItemStrc* pSavedItem, D2UnitStrc** ppItem, int32_t* a5);
 //D2Game.0x6FC897F0

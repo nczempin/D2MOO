@@ -206,6 +206,8 @@ FOG_DLL_DECL size_t __fastcall FOG_FSetFilePointer(HSFILE hFile, int32_t lDistan
 FOG_DLL_DECL HANDLE __fastcall FOG_CreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile); //Fog.#10107
 FOG_DLL_DECL BOOL __fastcall FOG_DeleteFileA(LPCSTR lpFileName);																					//Fog.#10108
 FOG_DLL_DECL BOOL __fastcall FOG_CloseFile(HANDLE hFILE);																							//Fog.#10109
+FOG_DLL_DECL BOOL __fastcall FOG_ReadFile(HANDLE hFile, void* lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);		//Fog.#10110
+FOG_DLL_DECL BOOL __fastcall FOG_WriteFile(HANDLE hFile, const void* lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);	//Fog.#10111
 FOG_DLL_DECL BOOL __fastcall FOG_CreatePathHierarchy(char* szPath);																					//Fog.#10114
 FOG_DLL_DECL size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10115
 FOG_DLL_DECL BOOL __fastcall FOG_GetInstallPath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10116

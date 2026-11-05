@@ -1,0 +1,3 @@
+LIBRARY D2Launch.dll
+EXPORTS
+    QueryInterface @1

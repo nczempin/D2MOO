@@ -4,7 +4,7 @@
 
 
 //D2Game.0x6FCCD2E0 (#10025)
-D2UnitStrc* __stdcall DEBUG_GetUnitFromTypeAndGUID(int32_t nUnitType, int32_t nUnitGUID);
+D2GAME_DLL_DECL D2UnitStrc* __stdcall DEBUG_GetUnitFromTypeAndGUID(int32_t nUnitType, int32_t nUnitGUID);
 //D2Game.0x6FCCD310 (#10026)
 D2DrlgActStrc* __stdcall DEBUG_GetAct(uint8_t nAct);
 //D2Game.0x6FCCD350 (#10027)

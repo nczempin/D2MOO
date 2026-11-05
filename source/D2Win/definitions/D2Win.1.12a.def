@@ -11,10 +11,10 @@ EXPORTS
 	D2Win_10008														@10087
 	D2Win_10009														@10074
 	D2Win_10010														@10089
-	CURSOR_SetCellFile												@10079
+	CURSOR_SetCellFile												@10144
 	D2Win_10012														@10068
 	CONTROL_SetCellFile												@10021
-	D2Win_10014_SetWndProc											@10144
+	D2Win_10014_SetWndProc											@10079
 	D2Win_10015														@10057
 	D2Win_10016														@10203
 	CONTROL_Create													@10098

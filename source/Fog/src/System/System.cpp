@@ -121,6 +121,20 @@ BOOL __fastcall FOG_CloseFile(HANDLE hFile)
 	return ::CloseHandle(hFile);
 }
 
+// 1.10f: Fog.0x6FF616D0 (#10110)
+// 1.12a: Fog.0x6FF6EE60 (#10110)
+BOOL __fastcall FOG_ReadFile(HANDLE hFile, void* lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
+{
+	return ::ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
+}
+
+// 1.10f: Fog.0x6FF616F0 (#10111)
+// 1.12a: Fog.0x6FF6EE40 (#10111)
+BOOL __fastcall FOG_WriteFile(HANDLE hFile, const void* lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
+{
+	return ::WriteFile(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped);
+}
+
 // 1.10f: Fog.0x6FF61730 (#10114)
 // 1.12a: Fog.0x6FF6ED40 (#10114)
 BOOL __fastcall FOG_CreatePathHierarchy(char* szPath)

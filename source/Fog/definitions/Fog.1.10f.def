@@ -119,8 +119,8 @@ UnimplementedOrdinal_10098=UnimplementedOrdinal @10098;   FOG_10098 @10098 NONAM
     FOG_CreateFileA @10107 NONAME
     FOG_DeleteFileA @10108 NONAME
     FOG_CloseFile @10109 NONAME
-UnimplementedOrdinal_10110=UnimplementedOrdinal @10110;   FOG_10110 @10110 NONAME
-UnimplementedOrdinal_10111=UnimplementedOrdinal @10111;   FOG_10111 @10111 NONAME
+    FOG_ReadFile @10110 NONAME
+    FOG_WriteFile @10111 NONAME
 UnimplementedOrdinal_10112=UnimplementedOrdinal @10112;   FOG_10112 @10112 NONAME
 UnimplementedOrdinal_10113=UnimplementedOrdinal @10113;   FOG_10113 @10113 NONAME
     FOG_CreatePathHierarchy @10114 NONAME
