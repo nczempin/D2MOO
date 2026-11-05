@@ -30,8 +30,16 @@ struct D2TblNodeStrc
 
 #pragma pack()
 
-D2FUNC_DLL(D2LANG, GetStringByReferenceString, const Unicode*, __fastcall, (char* string), 0x3BC0)			//D2LANG.#10003
+//1.10f: D2Lang.0x6FC13BC0 (#10003)
+//1.12a: D2Lang.0x6FC0A5D0 (#10010)
+D2LANG_DLL_DECL const Unicode* __fastcall D2LANG_GetStringByReferenceString(char* string);
+
+//1.10f: D2Lang.0x6FC13740 (#10004)
+//1.12a: D2Lang.0x6FC09310 (#10005)
 //1.14d: Game.0x524A30
-D2FUNC_DLL(D2LANG, GetStringFromTblIndex, const Unicode*, __fastcall, (short index), 0x3740)					//D2LANG.#10004
-D2FUNC_DLL(D2LANG, GetTblIndex, short, __stdcall, (char* szReference, const Unicode** pUnicode), 0x3960)		//D2LANG.#10013
+D2LANG_DLL_DECL const Unicode* __fastcall D2LANG_GetStringFromTblIndex(short index);
+
+//1.10f: D2Lang.0x6FC13960 (#10013)
+//1.12a: D2Lang.0x6FC0A3D0 (#10007)
+D2LANG_DLL_DECL short __stdcall D2LANG_GetTblIndex(char* szReference, const Unicode** pUnicode);
 

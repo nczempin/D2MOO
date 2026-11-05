@@ -212,14 +212,19 @@ int32_t __fastcall SERVER_GetServerPacketSize(D2PacketBufferStrc* pBuffer, uint3
 		VARIABLE_PACKET_SIZE,
 		sizeof(D2GSPacketSrvAB),
 		VARIABLE_PACKET_SIZE,
+#if defined(D2_VERSION_112A)
+		0, // 0xAD
+		VARIABLE_PACKET_SIZE, // 0xAE (Warden server packet)
+#else
 		sizeof(D2GSPacketSrvAD),
-		VARIABLE_PACKET_SIZE,
+#endif
+		VARIABLE_PACKET_SIZE, // 0xAE (0xAF in 1.12a)
 		//sizeof(D2GSPacketSrvAF),
-		1, // 0xAF
-		0,
-		sizeof(D2GSPacketSrvB1),
-		VARIABLE_PACKET_SIZE,
-		sizeof(D2GSPacketSrvB3),
+		1, // 0xAF (0xB0 in 1.12a)
+		0, // 0xB0 (0xB1 in 1.12a)
+		sizeof(D2GSPacketSrvB1), // 0xB1 (0xB2 in 1.12a)
+		VARIABLE_PACKET_SIZE, // 0xB2 (0xB3 in 1.12a)
+		sizeof(D2GSPacketSrvB3), // 0xB3 (0xB4 in 1.12a)
 	};
 
 	if (nBufferSize == 0)
@@ -356,7 +361,27 @@ int32_t __fastcall SERVER_GetServerPacketSize(D2PacketBufferStrc* pBuffer, uint3
 		*pSize = pBuffer->data[12];
 		return *pSize;
 	}
+#if defined(D2_VERSION_112A)
 	case 0xAEu:
+	{
+		if (nBufferSize < 3)
+		{
+			return 0;
+		}
+
+		uint16_t wPayloadSize = *(uint16_t*)&pBuffer->data[1];
+		if (wPayloadSize > 0x1FD)
+		{
+			wPayloadSize = 0;
+		}
+
+		*pSize = wPayloadSize + 3;
+		return *pSize;
+	}
+	case 0xAFu:
+#else
+	case 0xAEu:
+#endif
 	{
 		if (nBufferSize < 2)
 		{
@@ -373,7 +398,11 @@ int32_t __fastcall SERVER_GetServerPacketSize(D2PacketBufferStrc* pBuffer, uint3
 		}
 		return *pSize;
 	}
+#if defined(D2_VERSION_112A)
+	case 0xB3u:
+#else
 	case 0xB2u:
+#endif
 	{
 		if (nBufferSize < 8)
 		{
@@ -534,8 +563,14 @@ int32_t __fastcall SERVER_GetClientPacketSize(D2PacketBufferStrc* pBuffer, uint3
 		//sizeof(D2GSPacketClt62),
 		5, // 0x62
 		sizeof(D2GSPacketClt63),
+#if defined(D2_VERSION_112A)
+		0, // 0x64
+		0, // 0x65
+		VARIABLE_PACKET_SIZE, // 0x66 (Warden client packet)
+#else
 		sizeof(D2GSPacketClt64),
 		sizeof(D2GSPacketClt65),
+#endif
 		sizeof(D2GSPacketClt66),
 		sizeof(D2GSPacketClt67),
 		sizeof(D2GSPacketClt68),
@@ -608,7 +643,27 @@ int32_t __fastcall SERVER_GetClientPacketSize(D2PacketBufferStrc* pBuffer, uint3
 		*pSize = result;
 		return *pSize;
 	}
+#if defined(D2_VERSION_112A)
+	case 0x66:
+	{
+		if (nBufferSize < 3)
+		{
+			return 0;
+		}
+
+		uint16_t wPayloadSize = *(uint16_t*)&pBuffer->data[1];
+		if (wPayloadSize > 0x1FD)
+		{
+			wPayloadSize = 0;
+		}
+
+		*pSize = wPayloadSize + 3;
+		return *pSize;
+	}
+	case 0x6C:
+#else
 	case 0x6B:
+#endif
 	{
 		if (nBufferSize < 6)
 		{
@@ -649,6 +704,13 @@ int32_t __fastcall SERVER_ReadPacketFromBufferCallback(QServer* nUnused, D2Packe
 //D2Net.0x6FC01FE0
 int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer, uint32_t nBufferSize, int32_t* a3, int32_t* a4, int32_t* a5, int32_t* a6, int32_t nUnused1, int32_t nUnused2)
 {
+#if defined(D2_VERSION_112A)
+	constexpr uint8_t kClientSystemPacketStart = 0x67u;
+	constexpr uint8_t kClientSystemPacketEnd = 0x71u;
+#else
+	constexpr uint8_t kClientSystemPacketStart = 0x66u;
+	constexpr uint8_t kClientSystemPacketEnd = 0x70u;
+#endif
 	int32_t nSize = 0;
 	if (nBufferSize == 0 || !SERVER_GetClientPacketSize(pPacketBuffer, nBufferSize, &nSize))
 	{
@@ -656,7 +718,7 @@ int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer
 	}
 
 	const uint8_t nHeader = pPacketBuffer->data[0];
-	if ((nHeader >= 0x70u && nHeader != 0xFF) || nSize < 0 || nSize > MAX_MSG_SIZE)
+	if ((nHeader >= kClientSystemPacketEnd && nHeader != 0xFF) || nSize < 0 || nSize > MAX_MSG_SIZE)
 	{
 		return 4;
 	}
@@ -669,11 +731,11 @@ int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer
 	*a4 = 0;
 	*a3 = nSize;
 
-	if (nHeader < 0x66u)
+	if (nHeader < kClientSystemPacketStart)
 	{
 		*a5 = 1;
 	}
-	else if (nHeader < 0x70u)
+	else if (nHeader < kClientSystemPacketEnd)
 	{
 		*a5 = 0;
 	}
@@ -695,7 +757,11 @@ int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer
 //D2Net.0x6FC020B0
 int32_t __fastcall sub_6FC020B0(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4)
 {
+#if defined(D2_VERSION_112A)
+	uint8_t data[2] = { 0xAF, 1 };
+#else
 	uint8_t data[2] = { 0xAE, 1 };
+#endif
 
 	D2NET_10006(0, nClientId, data, sizeof(data));
 	return 1;
@@ -704,7 +770,11 @@ int32_t __fastcall sub_6FC020B0(int32_t a1, int32_t nClientId, int32_t a3, int32
 //D2Net.0x6FC020E0
 int32_t __fastcall sub_6FC020E0(int32_t a1, int32_t a2, int32_t a3, int32_t a4)
 {
+#if defined(D2_VERSION_112A)
+	const uint8_t data[1] = { 0x70 };
+#else
 	const uint8_t data[1] = { 0x6F };
+#endif
 
 	FOG_10175(gpServer, data, sizeof(data), a2);
 	return 1;
@@ -713,7 +783,11 @@ int32_t __fastcall sub_6FC020E0(int32_t a1, int32_t a2, int32_t a3, int32_t a4)
 //D2Net.0x6FC02110
 int32_t __fastcall sub_6FC02110()
 {
+#if defined(D2_VERSION_112A)
+	uint8_t data[2] = { 0xAF, 0 };
+#else
 	uint8_t data[2] = { 0xAE, 0 };
+#endif
 
 	return D2NET_10006(0, 0, data, sizeof(data));
 }
@@ -763,7 +837,11 @@ void __stdcall SERVER_SetHackListEnabled(BOOL bEnabled)
 //D2Net.0x6FC02220 (#10004)
 void __stdcall SERVER_Release()
 {
+#if defined(D2_VERSION_112A)
+	const uint8_t data[1] = { 0xB0 };
+#else
 	const uint8_t data[1] = { 0xAF };
+#endif
 	FOG_10152(gpServer, data, sizeof(data));
 
 	gpServer = nullptr;
@@ -803,7 +881,11 @@ uint32_t __stdcall D2NET_10006(int8_t a1, int32_t nClientId, void* pBufferArg, u
 		return nBufferSize;
 	}
 
+#if defined(D2_VERSION_112A)
+	if (!a1 && *pBuffer == 0xAF)
+#else
 	if (!a1 && *pBuffer == 0xAE)
+#endif
 	{
 		return FOG_10157(gpServer, nClientId, pBuffer, nBufferSize) != 0 ? nBufferSize : 0;
 	}

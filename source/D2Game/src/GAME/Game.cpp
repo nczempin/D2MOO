@@ -1408,7 +1408,11 @@ void __fastcall CLIENT_SendSaveHeaderPart_6FC37B90(D2GameStrc* pGame, D2ClientSt
     }
 
 	ClientPacketSaveHeaderPart* pPacket = D2_ALLOC_STRC_POOL(pClient->pGame->pMemoryPool, ClientPacketSaveHeaderPart);
+#if defined(D2_VERSION_112A)
+	pPacket->nHeaderId = 0xB3u;
+#else
 	pPacket->nHeaderId = 0xB2u;
+#endif
 	pPacket->nPartDataSize = nDataSize;
 	pPacket->bFirstPart = pClient->nSaveHeaderDataSentBytes == 0;
 	pPacket->nSaveHeaderSize = pClient->nSaveHeaderSize;

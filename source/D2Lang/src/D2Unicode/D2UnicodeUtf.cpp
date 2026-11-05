@@ -224,3 +224,80 @@ Unicode* __fastcall Unicode::utf8ToUnicode(Unicode* dest, const char* src, int c
         dest[i].ch = 0;
     return dest;
 }
+
+// 1.12a: D2Lang.0x6FC088E0
+static int Utf8CodePointLength(const char* src, int count) {
+  if (count <= 0) {
+    return -1;
+  }
+
+  int ucs2 = (uint8_t)src[0];
+  int first_byte = ucs2;
+
+  for (int i = 0; sgUtf8ConvertTable[i].leading_unusable_bits != 0; ++i) {
+    int leading_bits = (int16_t)sgUtf8ConvertTable[i].leading_unusable_bits & first_byte;
+    if (leading_bits == (int16_t)sgUtf8ConvertTable[i].leading_bits) {
+      int code_point = ucs2 & sgUtf8ConvertTable[i].last_code_point;
+      if (code_point >= sgUtf8ConvertTable[i].first_code_point) {
+        return i + 1;
+      }
+      return -1;
+    }
+
+    if ((i + 1) >= count) {
+      return -1;
+    }
+
+    uint8_t trailing_bits = (uint8_t)src[i + 1] ^ 0x80u;
+    if ((trailing_bits & 0xC0u) != 0) {
+      return -1;
+    }
+
+    ucs2 = (ucs2 << 6) | trailing_bits;
+  }
+
+  return -1;
+}
+
+// 1.12a: D2Lang.0x6FC08AA0 (#10057)
+unsigned int __fastcall Unicode::unicodenwidth(const char* str, int count) {
+  unsigned int width = 0;
+  while (count > 0 && *str != '\0') {
+    int char_len = Utf8CodePointLength(str, count);
+    if (char_len == -1) {
+      ++str;
+      --count;
+    } else {
+      int i = 0;
+      for (; i < char_len; ++i) {
+        if (*str == '\0') {
+          return width;
+        }
+        ++str;
+      }
+      ++width;
+      count -= char_len;
+    }
+  }
+  return width;
+}
+
+// 1.12a: D2Lang.0x6FC08B60 (#10060)
+unsigned int __fastcall Unicode::utfnwidth(const Unicode* str, int count) {
+  unsigned int total_bytes = 0;
+  char tmp[12];
+  for (int i = 0; str[i].ch != L'\0' && i < count; ++i) {
+    int written = UnicodeCharToUtf8CodePoint(tmp, str[i].ch);
+    if (written == -1) {
+      break;
+    }
+    total_bytes += (unsigned int)written;
+  }
+  return total_bytes;
+}
+
+// 1.12a: D2Lang.0x6FC08C00 (#10061)
+int Unicode::utfwidth() const {
+  char tmp[8];
+  return UnicodeCharToUtf8CodePoint(tmp, this->ch);
+}

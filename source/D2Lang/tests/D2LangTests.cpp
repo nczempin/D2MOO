@@ -624,3 +624,67 @@ TEST_CASE("STR_GroupUintDigits")
         CHECK(wcscmp((wchar_t*)dest, L"*") == 0);
     }
 }
+
+TEST_CASE("STR_GroupInt64Digits")
+{
+    constexpr size_t dest_capacity = 256;
+    Unicode dest[dest_capacity];
+
+    STR_GroupInt64Digits(dest, 0, dest_capacity);
+    CHECK(wcscmp((wchar_t*)dest, L"0") == 0);
+
+    STR_GroupInt64Digits(dest, 1234567890123LL, dest_capacity);
+    CHECK(wcscmp((wchar_t*)dest, L"1,234,567,890,123") == 0);
+
+    STR_GroupInt64Digits(dest, -1234567890123LL, dest_capacity);
+    CHECK(wcscmp((wchar_t*)dest, L"-1,234,567,890,123") == 0);
+}
+
+TEST_CASE("STR_ShortenUint64Digits")
+{
+    constexpr size_t dest_capacity = 256;
+    Unicode dest[dest_capacity];
+
+    STR_ShortenUint64Digits(dest, 12345ULL, 10);
+    CHECK(wcscmp((wchar_t*)dest, L"12,345") == 0);
+
+    STR_ShortenUint64Digits(dest, 123456789ULL, 10);
+    CHECK(wcscmp((wchar_t*)dest, L"123,456K") == 0);
+
+    STR_ShortenUint64Digits(dest, 1234567890ULL, 10);
+    CHECK(wcscmp((wchar_t*)dest, L"1,234M") == 0);
+}
+
+TEST_CASE("STRTABLE_HashString")
+{
+    CHECK(STRTABLE_HashString("", 1024) == 0);
+    CHECK(STRTABLE_HashString("Diablo", 1024) < 1024);
+    CHECK(STRTABLE_HashString("Diablo", 1024) == STRTABLE_HashString("Diablo", 1024));
+}
+
+TEST_CASE("Unicode::strstri & strcoll & utfwidth & Personalize")
+{
+    const Unicode* diablo = D2_USTR(L"Diablo");
+    CHECK(Unicode::strstri(diablo, D2_USTR(L"IAB")) == &diablo[1]);
+    CHECK(Unicode::strstri(diablo, D2_USTR(L"baal")) == nullptr);
+
+    CHECK(Unicode::strcoll(D2_USTR(L"Alpha"), D2_USTR(L"alpha")) < 0);
+    CHECK(Unicode::strcoll(D2_USTR(L"alpha"), D2_USTR(L"Beta")) < 0);
+    CHECK(Unicode::strncoll(D2_USTR(L"Alpha1"), D2_USTR(L"Alpha2"), 5) == 0);
+
+    CHECK(Unicode(0x0041).utfwidth() == 1);
+    CHECK(Unicode(0x00E9).utfwidth() == 2);
+    CHECK(Unicode(0x30C7).utfwidth() == 3);
+    CHECK(Unicode::utfnwidth(D2_USTR(L"Diablo"), 6) == 6);
+    CHECK(Unicode::unicodenwidth("Diablo", 6) == 6);
+    CHECK(Unicode::unicodeWidth("Diablo", 6) == 6);
+    CHECK(Unicode(L'A').isLeftToRight() == TRUE);
+    CHECK(Unicode(0x0590).isLeftToRight() == FALSE);
+
+    Unicode out[64];
+    Unicode::Personalize(out, D2_USTR(L"Hero"), D2_USTR(L"Sword"), 64, LANGUAGE_ENGLISH);
+    CHECK(wcscmp((wchar_t*)out, L"Hero's Sword") == 0);
+    Unicode::Personalize(out, D2_USTR(L"Heros"), D2_USTR(L"Sword"), 64, LANGUAGE_ENGLISH);
+    CHECK(wcscmp((wchar_t*)out, L"Heros' Sword") == 0);
+}
+

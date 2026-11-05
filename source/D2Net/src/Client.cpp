@@ -349,7 +349,16 @@ int32_t __stdcall CLIENT_ReadPacketsFromStream()
 
 		memcpy(&pPacket->data, pPacketBuffer->data, nSize);
 
-		if (pPacketBuffer->data[0] == 0xAE && pPacketBuffer->data[1])
+#if defined(D2_VERSION_112A)
+		constexpr uint8_t kServerHandshakeHeader = 0xAFu;
+		constexpr uint8_t kServerSystemPacketEnd = 0xB5u;
+#else
+		constexpr uint8_t kServerHandshakeHeader = 0xAEu;
+		constexpr uint8_t kServerSystemPacketEnd = 0xB4u;
+#endif
+		D2_MAYBE_UNUSED(kServerSystemPacketEnd);
+
+		if (pPacketBuffer->data[0] == kServerHandshakeHeader && pPacketBuffer->data[1])
 		{
 			bIsPacket0xAE = 1;
 
@@ -374,7 +383,7 @@ int32_t __stdcall CLIENT_ReadPacketsFromStream()
 		}
 
 		D2PacketStrc** ppLast = nullptr;
-		if (pPacketBuffer->data[0] >= 0xAEu)
+		if (pPacketBuffer->data[0] >= kServerHandshakeHeader)
 		{
 			ppLast = &gpSystemPacketList;
 		}
@@ -460,15 +469,22 @@ void __fastcall CLIENT_ReadPacketFromBuffer(D2PacketBufferStrc* pBuffer, int32_t
 		pPacket->dwTickCount = GetTickCount();
 		pPacket->pNext = nullptr;
 
+#if defined(D2_VERSION_112A)
+		constexpr uint8_t kServerHandshakeHeader = 0xAFu;
+		constexpr uint8_t kServerSystemPacketEnd = 0xB5u;
+#else
+		constexpr uint8_t kServerHandshakeHeader = 0xAEu;
+		constexpr uint8_t kServerSystemPacketEnd = 0xB4u;
+#endif
 		const uint8_t nHeader = pPacketBuffer->data[0];
-		if (nHeader >= 0xB4u)
+		if (nHeader >= kServerSystemPacketEnd)
 		{
 			FOG_DisplayHalt("Bad message type", __FILE__, __LINE__);
 			exit(-1);
 		}
 
 		D2PacketStrc* pLast = nullptr;
-		if (nHeader >= 0xAEu)
+		if (nHeader >= kServerHandshakeHeader)
 		{
 			pLast = gpSystemPacketList;
 		}
@@ -487,13 +503,13 @@ void __fastcall CLIENT_ReadPacketFromBuffer(D2PacketBufferStrc* pBuffer, int32_t
 		}
 		else
 		{
-			if (nHeader >= 0xB4u)
+			if (nHeader >= kServerSystemPacketEnd)
 			{
 				FOG_DisplayHalt("Bad message type", __FILE__, __LINE__);
 				exit(-1);
 			}
 
-			if (nHeader >= 0xAEu)
+			if (nHeader >= kServerHandshakeHeader)
 			{
 				gpSystemPacketList = pPacket;
 			}

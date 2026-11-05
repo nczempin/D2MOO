@@ -331,11 +331,10 @@ struct D2GSPacketClt38		//size of 0x0D
 
 //TODO: 0x39
 
-struct D2GSPacketClt3A		//size of 0x07
+struct D2GSPacketClt3A		//size of 0x03
 {
 	uint8_t nHeader;			//0x00
 	uint16_t nStat;				//0x01
-	int32_t nPoints;			//0x03 ???
 };
 
 struct D2GSPacketClt3B		//size of 0x03
@@ -365,10 +364,9 @@ struct D2GSPacketClt41		//size of 0x01
 	uint8_t nHeader;			//0x00
 };
 
-struct D2GSPacketClt42		//size of 0x0B
+struct D2GSPacketClt42		//size of 0x01
 {
 	uint8_t nHeader;			//0x00
-	char szVersion[10];		//0x01
 };
 
 //TODO: 0x43
@@ -502,15 +500,18 @@ struct D2GSPacketClt66		//size of 0x2E
 	int8_t nLocale;				//0x2D
 };
 
-struct D2GSPacketClt67		//size of 0x1D
+struct D2GSPacketClt67		//size of 0x1D (0x25 in 1.12a)
 {
 	uint8_t nHeader;			//0x00
 	int32_t nTokenId;			//0x01
 	uint16_t nGameId;			//0x05
 	uint8_t nPlayerClass;		//0x07
 	int32_t unk0x08;			//0x08
-	uint8_t nLocale;			//0x0C
-	char szClientName[16];		//0x0D
+#if defined(D2_VERSION_112A)
+	int32_t unk0x0C[2];			//0x0C
+#endif
+	uint8_t nLocale;			//0x0C (0x14 in 1.12a)
+	char szClientName[16];		//0x0D (0x15 in 1.12a)
 };
 
 struct D2GSPacketClt68		//size of 0x01
@@ -537,11 +538,14 @@ struct D2GSPacketClt6B
 	//...
 };
 
-struct D2GSPacketClt6C		//size of 0x09
+struct D2GSPacketClt6C		//size of 0x09 (0x0D in 1.12a)
 {
 	uint8_t nHeader;			//0x00
 	int32_t unk0x01;			//0x01
 	int32_t unk0x05;			//0x05
+#if defined(D2_VERSION_112A)
+	int32_t unk0x09;			//0x09
+#endif
 };
 
 struct D2GSPacketClt6D		//size of 0x01

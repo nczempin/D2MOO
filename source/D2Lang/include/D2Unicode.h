@@ -31,8 +31,12 @@
 #include <wchar.h>
 
 #include <D2BasicTypes.h>
+#include <D2Constants.h>
 
 #include "D2Lang.h"
+
+struct HD2ARCHIVE__;
+typedef struct HD2ARCHIVE__* HD2ARCHIVE;
 
 /*
 * This type must be struct in order to make certain functions'
@@ -64,6 +68,14 @@ struct D2LANG_DLL_DECL Unicode {
   // D2Lang.0x6FC11020 (#10016) ??BUnicode@@QBEGXZ
   operator unsigned short() const;
 
+  // 1.12a: D2Lang.0x6FC0B330 (#10018) ?Personalize@Unicode@@SIXPAU1@PBU1@1HW4ELANGUAGE@@@Z
+  static void __fastcall Personalize(
+      Unicode* dest,
+      const Unicode* player_name,
+      const Unicode* item_name,
+      int max_length,
+      ELANGUAGE language);
+
   /**
    * Performs case insensitive comparison between a Unicode code
    * unit to another.
@@ -82,6 +94,12 @@ struct D2LANG_DLL_DECL Unicode {
    * D2Lang.0x6FC11190 (#10031) ?isWordEnd@Unicode@@SIHPBU1@I@Z
    */
   static BOOL __fastcall isWordEnd(const Unicode* str, size_t index);
+
+  // 1.12a: D2Lang.0x6FC082F0 (#10032) ?loadSysMap@Unicode@@SIHPAUHD2ARCHIVE__@@PBD@Z
+  static BOOL __fastcall loadSysMap(HD2ARCHIVE hArchive, const char* szFilePath);
+
+  // 1.12a: D2Lang.0x6FC08560 (#10058) ?unloadSysMap@Unicode@@SIXXZ
+  static void __fastcall unloadSysMap();
 
   /**
    * Performs string conversions on the supplied parameters, similar
@@ -127,6 +145,12 @@ struct D2LANG_DLL_DECL Unicode {
    * D2Lang.0x6FC11210 (#10036) ?strcmp@Unicode@@SIHPBU1@0@Z
    */
   static int __fastcall strcmp(const Unicode* str1, const Unicode* str2);
+
+  // 1.12a: D2Lang.0x6FC011A0 (#10037) ?strcoll@Unicode@@SIHPBU1@0@Z
+  static int __fastcall strcoll(const Unicode* str1, const Unicode* str2);
+
+  // 1.12a: D2Lang.0x6FC0B7A0 (#10043) ?strncoll@Unicode@@SIHPBU1@0H@Z
+  static int __fastcall strncoll(const Unicode* str1, const Unicode* str2, int count);
 
   /**
    * Copies the characters from a null-terminated source string into a
@@ -230,6 +254,22 @@ struct D2LANG_DLL_DECL Unicode {
       const Unicode* str,
       const Unicode* substr);
 
+  // 1.12a: D2Lang.0x6FC0ACB0 (#10047) ?strstri@Unicode@@SIPAU1@PBU1@0@Z
+  static Unicode* __fastcall strstri(
+      const Unicode* str,
+      const Unicode* substr);
+
+  // 1.12a: D2Lang.0x6FC08840 (#10048) ?sys2Unicode@Unicode@@SIPAU1@PAU1@PBDH@Z
+  static Unicode* __fastcall sys2Unicode(
+      Unicode* dest,
+      const char* src,
+      int count);
+
+  // 1.12a: D2Lang.0x6FC086B0 (#10049) ?sysWidth@Unicode@@SIKPBU1@H@Z
+  static unsigned long __fastcall sysWidth(
+      const Unicode* str,
+      int count);
+
   /**
    * Converts a null-terminated UTF-8 string into a null-terminated
    * UCS-2 string. The count indicates the capacity of the destination
@@ -246,6 +286,10 @@ struct D2LANG_DLL_DECL Unicode {
       const char* src,
       int count);
 
+  // 1.12a: D2Lang.0x6FC08760 (#10054) ?unicode2Sys@Unicode@@SIPADPADPBU1@H@Z
+  static char* __fastcall unicode2Sys(
+      char* dest, const Unicode* src, int count);
+
   /**
    * Converts a null-terminated UCS-2 string into a null-terminated
    * 7-bit ASCII string. The count indicates the capacity of the
@@ -258,6 +302,12 @@ struct D2LANG_DLL_DECL Unicode {
    */
   static char* __fastcall unicode2Win(
       char* dest, const Unicode* src, int count);
+
+  // 1.12a: D2Lang.0x6FC08610 (#10056) ?unicodeWidth@Unicode@@SIKPBDH@Z
+  static unsigned long __fastcall unicodeWidth(const char* str, int count);
+
+  // 1.12a: D2Lang.0x6FC08AA0 (#10057) ?unicodenwidth@Unicode@@SIIPBDH@Z
+  static unsigned int __fastcall unicodenwidth(const char* str, int count);
 
   /**
    * Converts a null-terminated UCS-2 string into a null-terminated
@@ -278,6 +328,12 @@ struct D2LANG_DLL_DECL Unicode {
   
   //1.10f: D2Lang.0x6FC11B30 (#10059) ?utf8ToUnicode@Unicode@@SIPAU1@PAU1@PBDH@Z
   static Unicode* __fastcall utf8ToUnicode(Unicode* dest, char const* src, int count);
+
+  // 1.12a: D2Lang.0x6FC08B60 (#10060) ?utfnwidth@Unicode@@SIIPBU1@H@Z
+  static unsigned int __fastcall utfnwidth(const Unicode* str, int count);
+
+  // 1.12a: D2Lang.0x6FC08C00 (#10061) ?utfwidth@Unicode@@QBEHXZ
+  int utfwidth() const;
 
   /**
    * Converts a null-terminated 7-bit ASCII string into a
@@ -319,6 +375,9 @@ struct D2LANG_DLL_DECL Unicode {
    * D2Lang.0x6FC11090 (#10025) ?isAlpha@Unicode@@QBEHXZ
    */
   BOOL isAlpha() const;
+
+  // 1.12a: D2Lang.0x6FC0AEB0 (#10026) ?isLeftToRight@Unicode@@QBEHXZ
+  BOOL isLeftToRight() const;
 
   // D2Lang.0x6FC11A30 (#10027) ?isLineBreak@Unicode@@SIHPBU1@I@Z
   static BOOL __fastcall isLineBreak(const Unicode* str, size_t count);

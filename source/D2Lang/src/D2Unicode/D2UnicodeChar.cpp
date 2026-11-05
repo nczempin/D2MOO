@@ -268,6 +268,15 @@ BOOL Unicode::isAlpha() const {
   return (isASCII() && ::isalpha((char)this->ch));
 }
 
+// 1.12a: D2Lang.0x6FC0AEB0 (#10026)
+BOOL Unicode::isLeftToRight() const {
+  if ((this->ch >= 0x590 && this->ch <= 0x5FF)
+      || (this->ch >= 0x600 && this->ch <= 0x6FF)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
 BOOL __fastcall Unicode::isLineBreak(const Unicode* str, size_t count)
 {
     if (!count)

@@ -51,7 +51,11 @@ int32_t __fastcall sub_6FC3C640(int32_t nClientId, int16_t nGameId, int16_t nCli
 {
     D2GSPacketSrvB1 packetB1 = {};
 
+#if defined(D2_VERSION_112A)
+    packetB1.nHeader = 0xB2;
+#else
     packetB1.nHeader = 0xB1;
+#endif
     packetB1.nGameId = nGameId;
     packetB1.nClientCount = nClientCount;
 
@@ -65,7 +69,11 @@ void __fastcall sub_6FC3C690(int32_t nClientId)
 {
     D2GSPacketSrvAF packetAF = {};
 
+#if defined(D2_VERSION_112A)
+    packetAF.nHeader = 0xB0;
+#else
     packetAF.nHeader = 0xAF;
+#endif
 
     D2NET_10006(0, nClientId, &packetAF, sizeof(packetAF));
 }
@@ -85,7 +93,11 @@ void __fastcall sub_6FC3C6D0(int32_t nClientId, uint32_t nErrorCode)
 {
     D2GSPacketSrvB3 packetB3 = {};
 
+#if defined(D2_VERSION_112A)
+    packetB3.nHeader = 0xB4;
+#else
     packetB3.nHeader = 0xB3;
+#endif
     packetB3.nErrorCode = nErrorCode;
     
     D2NET_10006(0, nClientId, &packetB3, sizeof(packetB3));

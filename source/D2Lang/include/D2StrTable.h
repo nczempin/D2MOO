@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <D2BasicTypes.h>
 #include <D2Constants.h>
 
 #include "D2Lang.h"
@@ -37,10 +38,41 @@
  *
  * 1.00: D2Lang.0x100010B9 (#10007)
  * 1.10: D2Lang.0x6FC13DF0 (#10007)
+ * 1.12a: D2Lang.0x6FC08FC0 (#10002)
  * 1.13c: D2Lang.0x6FC09290 (#10009)
  * 1.14c: Game.0x00522610
  */
 D2LANG_DLL_DECL D2C_Language STRTABLE_GetLanguage();
+
+// 1.10f: D2Lang.0x6FC13E70 (#10012)
+// 1.12a: D2Lang.0x6FC08EB0 (#10001)
+D2LANG_DLL_DECL D2C_Language __stdcall STRTABLE_GetSystemLanguage();
+
+// 1.10f: D2Lang.0x6FC13EE0 (#10011)
+// 1.12a: D2Lang.0x6FC09BC0 (#10004)
+D2LANG_DLL_DECL void __stdcall STRTABLE_GetLanguageInfo(void* pOut, int nMode);
+
+// 1.10f: D2Lang.0x6FC13290 (#10001)
+// 1.12a: D2Lang.0x6FC08D10 (#10011)
+D2LANG_DLL_DECL uint32_t __stdcall STRTABLE_HashString(const char* szString, int nHashTableSize);
+
+// 1.10f: D2Lang.0x6FC136E0 (#10002)
+// 1.12a: D2Lang.0x6FC09E60 (#10003)
+D2LANG_DLL_DECL BOOL __fastcall STRTABLE_Initialize(int nUnused, const char* szLanguage, BOOL bExpansion);
+
+// 1.10f: D2Lang.0x6FC13890 (#10008)
+// 1.12a: D2Lang.0x6FC09090 (#10009)
+D2LANG_DLL_DECL void __stdcall STRTABLE_Destroy();
+
+// 1.10f: D2Lang.0x6FC14360 (#10000)
+// 1.12a: D2Lang.0x6FC09800 (#10000)
+D2LANG_DLL_DECL void __stdcall STR_GroupInt64Digits(
+		Unicode* pUnicode, int64_t nValue, int nMaxLength);
+
+// 1.10f: D2Lang.0x6FC14450 (#10006)
+// 1.12a: D2Lang.0x6FC09650 (#10006)
+D2LANG_DLL_DECL void __stdcall STR_ShortenUint64Digits(
+		Unicode* pUnicode, uint64_t qwValue, int nMaxLength);
 
 /**
  * Converts an integer value into a into a null-terminated UCS-2 string,

@@ -400,7 +400,7 @@ enum D2C_VendorInventoryModes
 #endif // CONSTANTS_UI
 
 #ifndef CONSTANTS_STRINGS //Pseudo-Macro to group all constants
-enum D2C_Language
+enum ELANGUAGE
 {
 	LANGUAGE_ENGLISH = 0,
 	LANGUAGE_SPANISH = 1,
@@ -422,6 +422,7 @@ enum D2C_Language
 
 	NUM_LANGUAGES,
 };
+using D2C_Language = ELANGUAGE;
 
 enum D2C_StringTablesHcidx
 {
