@@ -217,33 +217,33 @@ FOG_DLL_DECL void __cdecl FOG_CreateNewPoolSystem(void** pMemPoolSystem, const c
 FOG_DLL_DECL void __cdecl FOG_DestroyMemoryPoolSystem(void* pMemoryPoolSystem);																		//Fog.#10143
 FOG_DLL_DECL void __cdecl FOG_SetMemoryPoolSystemMode(void* pMemoryPoolSystem, BOOL bFreePoolAlloc);												//Fog.#10145
 FOG_DLL_DECL DWORD __cdecl FOG_GetMemoryUsage(void*);																								//Fog.#10147
-D2FUNC_DLL(FOG, InitializeServer, QServer*, __stdcall, (int, int, int, int, void*, void*, void*, void*), 0x4150)									//Fog.#10149
-D2FUNC_DLL(FOG, SetMaxClientsPerGame, int, __stdcall, (QServer*, int), 0x4970)																		//Fog.#10151
-D2FUNC_DLL(FOG, 10152, int, __stdcall, (void*, const uint8_t*, int), 0x44F0)																		//Fog.#10152
-D2FUNC_DLL(FOG, WaitForSingleObject, int, __stdcall, (void*, int), 0x4A60)																			//Fog.#10154
-D2FUNC_DLL(FOG, 10156, int, __stdcall, (void*, int, uint8_t*, int), 0x59D0)																			//Fog.#10156
-D2FUNC_DLL(FOG, 10157, int, __stdcall, (void*, int, const uint8_t*, int), 0x5EA0)																	//Fog.#10157
-D2FUNC_DLL(FOG, 10158, int, __stdcall, (void*, int), 0x6210)																						//Fog.#10158
-D2FUNC_DLL(FOG, 10159, int, __stdcall, (void*, int, char*, int), 0x6180)																			//Fog.#10159
-D2FUNC_DLL(FOG, 10161, int, __stdcall, (void*, int), 0x6310)																						//Fog.#10161
-D2FUNC_DLL(FOG, 10162, int, __stdcall, (void*, int, const char*, int), 0x6380)																		//Fog.#10162
-D2FUNC_DLL(FOG, 10163, int, __stdcall, (void*, int, const char*, int), 0x66E0)																		//Fog.#10163
-D2FUNC_DLL(FOG, 10164, int, __stdcall, (void*, int, int, int), 0x69D0)																				//Fog.#10164
-D2FUNC_DLL(FOG, 10165, int, __stdcall, (void*, int, const char*, int), 0x6A10)																		//Fog.#10165
-D2FUNC_DLL(FOG, 10166, int, __stdcall, (void*, int, int, int), 0x6C90)																				//Fog.#10166
-D2FUNC_DLL(FOG, 10170, int, __stdcall, (void*, int), 0x6F70)																						//Fog.#10170
-D2FUNC_DLL(FOG, 10171, int, __stdcall, (void*, void*), 0x6FB0)																						//Fog.#10171
-D2FUNC_DLL(FOG, 10172, int, __stdcall, (void*, int, int), 0x6FD0)																					//Fog.#10172
-D2FUNC_DLL(FOG, 10173, int, __stdcall, (void*, int), 0x7040)																						//Fog.#10173
-D2FUNC_DLL(FOG, 10175, int, __stdcall, (void*, const uint8_t*, int, int), 0x7420)																	//Fog.#10175
-D2FUNC_DLL(FOG, 10177, int, __stdcall, (void*, int), 0x5E60)																						//Fog.#10177
-D2FUNC_DLL(FOG, SetHackListEnabled, int, __stdcall, (QServer* pServer, BOOL bHacklistEnabled), 0x75A0)												//Fog.#10178
-D2FUNC_DLL(FOG, 10180, int, __stdcall, (void*), 0x4920)																								//Fog.#10180
-D2FUNC_DLL(FOG, 10181, int, __stdcall, (void*, const uint8_t*, int, int), 0x75C0)																	//Fog.#10181
+FOG_DLL_DECL QServer* __stdcall FOG_InitializeServer(int nServerType, int nNumQueues, int nPort, int a4, void* pfValidate, void* pfOnConnect, void* pfOnDisconnect, void* pfReadPacket); //Fog.#10149
+FOG_DLL_DECL int __stdcall FOG_SetMaxClientsPerGame(QServer* pServer, int nMaxClients);																//Fog.#10151
+FOG_DLL_DECL int __stdcall FOG_10152(void* pServer, const uint8_t* pData, int nSize);																//Fog.#10152
+FOG_DLL_DECL int __stdcall FOG_WaitForSingleObject(void* pServer, int dwMilliseconds);																//Fog.#10154
+FOG_DLL_DECL int __stdcall FOG_10156(void* pServer, int nQueueIdx, uint8_t* pBuffer, int nBufferSize);												//Fog.#10156
+FOG_DLL_DECL int __stdcall FOG_10157(void* pServer, int nClientId, const uint8_t* pBuffer, int nBufferSize);										//Fog.#10157
+FOG_DLL_DECL int __stdcall FOG_10158(void* pServer, int nClientId);																					//Fog.#10158
+FOG_DLL_DECL int __stdcall FOG_10159(void* pServer, int nClientId, char* szBuffer, int nBufferSize);												//Fog.#10159
+FOG_DLL_DECL int __stdcall FOG_10161(void* pServer, int nClientId);																					//Fog.#10161
+FOG_DLL_DECL int __stdcall FOG_10162(void* pServer, int nClientId, const char* szFile, int nLine);													//Fog.#10162
+FOG_DLL_DECL int __stdcall FOG_10163(void* pServer, int nClientId, const char* szFile, int nLine);													//Fog.#10163
+FOG_DLL_DECL int __stdcall FOG_10164(void* pServer, int a2, int a3, int a4);																		//Fog.#10164
+FOG_DLL_DECL int __stdcall FOG_10165(void* pServer, int nClientId, const char* szFile, int nLine);													//Fog.#10165
+FOG_DLL_DECL int __stdcall FOG_10166(void* pServer, int nClientId, int a3, int a4);																	//Fog.#10166
+FOG_DLL_DECL int __stdcall FOG_10170(void* pServer, int a2);																						//Fog.#10170
+FOG_DLL_DECL int __stdcall FOG_10171(void* pServer, void* pfCallback);																				//Fog.#10171
+FOG_DLL_DECL int __stdcall FOG_10172(void* pServer, int nClientId, int dwGameGuid);																	//Fog.#10172
+FOG_DLL_DECL int __stdcall FOG_10173(void* pServer, int nClientId);																					//Fog.#10173
+FOG_DLL_DECL int __stdcall FOG_10175(void* pServer, const uint8_t* pBuffer, int nBufferSize, int nClientId);										//Fog.#10175
+FOG_DLL_DECL int __stdcall FOG_10177(void* pServer, int dwMilliseconds);																			//Fog.#10177
+FOG_DLL_DECL int __stdcall FOG_SetHackListEnabled(QServer* pServer, BOOL bHacklistEnabled);															//Fog.#10178
+FOG_DLL_DECL int __stdcall FOG_10180(void* pServer);																								//Fog.#10180
+FOG_DLL_DECL int __stdcall FOG_10181(void* pServer, const uint8_t* pBuffer, int nBufferSize, int a4);												//Fog.#10181
 FOG_DLL_DECL int __stdcall FOG_10182_Return(void*);																									//Fog.#10182
 FOG_DLL_DECL int __stdcall FOG_10183_Return(void*, int);																							//Fog.#10183
-D2FUNC_DLL(FOG, 10186, int, __stdcall, (void*, int, int), 0x44C0)																					//Fog.#10186
-D2FUNC_DLL(FOG, 10187, int, __fastcall, (void*, int, int), 0x7630)																					//Fog.#10187
+FOG_DLL_DECL int __stdcall FOG_10186(void* pServer, int nIndex, int nValue);																		//Fog.#10186
+FOG_DLL_DECL int __fastcall FOG_10187(void* pServer, int a2, int a3);																				//Fog.#10187
 FOG_DLL_DECL void __stdcall FOG_10207(D2BinFileStrc* pBinFile, D2BinFieldStrc* pBinField, void* pTxt, int nRecordCount, int nRecordSize);			//Fog.#10207
 FOG_DLL_DECL D2BinFileStrc* __stdcall FOG_CreateBinFile(void* pDataBuffer, int nBufferSize);														//Fog.#10208
 FOG_DLL_DECL void __stdcall FOG_FreeBinFile(D2BinFileStrc* pBinFile);																				//Fog.#10209

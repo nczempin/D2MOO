@@ -43,6 +43,7 @@ static DWORD gdwServerThreadId = 0;                            // 0x6FBB340C
 static volatile int32_t gbStopServerThread = 0;                // 0x6FBCC038
 static volatile int32_t gbRunServerThreadUpdates = 0;          // 0x6FBCC03C
 static D2GameDataTableStrc gLocalGameDataTable = {};           // 0x6FBD0E98
+static uint32_t gLocalGameList[8] = {};                        // 0x6FBCC018
 
 // 1.12a @10001: 0x6FB4E980
 extern "C" D2CLIENT_DLL_DECL int32_t __stdcall D2Client_10001(int32_t nUnused)
@@ -139,7 +140,7 @@ void __fastcall D2Client_SendJoinGamePacket(const char* szCharName)
 	}
 
 	tPacket.nLocaleId = static_cast<uint8_t>(STRTABLE_GetLanguage());
-	SStrCopy(tPacket.szAccountName, gszAccountName, sizeof(tPacket.szAccountName));
+	SStrCopy(tPacket.szAccountName, szCharName ? szCharName : gszCharName, sizeof(tPacket.szAccountName));
 
 	CLIENT_Send(0, reinterpret_cast<const uint8_t*>(&tPacket), 0x2E);
 }
@@ -193,6 +194,9 @@ static DWORD __stdcall D2Client_ServerThreadProc(LPVOID lpParameter)
 	return 1;
 }
 
+static uint32_t gdwGamePacketsReceived = 0;
+static uint32_t gdwServerTicks = 0;
+
 static void DrainNetworkPackets()
 {
 	uint8_t aBuffer[512] = {};
@@ -206,14 +210,61 @@ static void DrainNetworkPackets()
 	}
 	while (CLIENT_DequeueGamePacket(aBuffer, sizeof(aBuffer)) != -1)
 	{
+		++gdwGamePacketsReceived;
+		if (aBuffer[0] == 0x02) // D2GS_ACTINITDONE -> send D2CLTSYS_JOINACT (0x6B)
+		{
+			const uint8_t pktJoinAct = 0x6Bu;
+			CLIENT_Send(0, &pktJoinAct, 1);
+		}
 		Sleep(0);
 	}
+}
+
+static void RenderInGameFrame()
+{
+	if (!D2GFX_StartDraw(0, 0, 0, 0))
+	{
+		return;
+	}
+
+	D2GFX_ClearScreen(0);
+
+	// Draw ground / viewport frame and HUD status
+	D2GFX_DrawBoxAlpha(0, 0, 800, 600, 0x10, 255);
+	D2GFX_DrawBoxAlpha(0, 552, 800, 600, 0x08, 255);
+
+	Unicode wszTitle[128] = {};
+	Unicode wszChar[128] = {};
+	Unicode wszHint[128] = {};
+	char szCharLine[128] = {};
+	std::snprintf(
+		szCharLine,
+		sizeof(szCharLine),
+		"Character: %s  |  Act I - Rogue Encampment  |  Tick: %u  |  Packets: %u",
+		gszCharName,
+		gdwServerTicks,
+		gdwGamePacketsReceived);
+
+	Unicode::win2Unicode(wszTitle, "Diablo II: Lord of Destruction (v1.12a - D2MOO In-Game Session)", 127);
+	Unicode::win2Unicode(wszChar, szCharLine, 127);
+	Unicode::win2Unicode(wszHint, "Press ESC to Save and Exit Game", 127);
+
+	D2Win_10127_SetFont(D2FONT_FONT16);
+	D2Win_10117_DrawText(wszTitle, 20, 40, 4, 0);
+	D2Win_10117_DrawText(wszChar, 20, 80, 0, 0);
+	D2Win_10117_DrawText(wszHint, 20, 580, 9, 0);
+
+	D2GFX_EndScene();
 }
 
 // 1.12a: 0x6FB2D2D0 (State 2: Join Session & Main In-Game Loop)
 static int32_t __stdcall D2Client_State2_MainLoop()
 {
 	gbExitApplication = 0;
+	gbWindowClosed = 0;
+	gbSaveAndExitRequested = 0;
+	gdwGamePacketsReceived = 0;
+	gdwServerTicks = 0;
 
 	if (gpD2Config && gpD2Config->szName[0])
 	{
@@ -246,12 +297,41 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	}
 
 	// Single-player / local frame loop (0x6FB2CFF0)
-	if (gnGameType == 0)
+	while (gnClientState == D2CLIENT_STATE_GAME_LOOP && !gbWindowClosed && !gbSaveAndExitRequested)
 	{
-		GAME_ProcessNetworkMessages();
-		GAME_UpdateGamesProgress(1);
-		GAME_UpdateClients(0, 0);
+		MSG msg = {};
+		while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
+		{
+			if (msg.message == WM_QUIT)
+			{
+				gbWindowClosed = 1;
+				gbExitApplication = 1;
+				break;
+			}
+			TranslateMessage(&msg);
+			DispatchMessageA(&msg);
+		}
+
+		if (gbWindowClosed || gbSaveAndExitRequested)
+		{
+			break;
+		}
+
+		if (gnGameType == 0 || gnGameType == 1)
+		{
+			GAME_ProcessNetworkMessages();
+			GAME_UpdateGamesProgress(1);
+			GAME_UpdateClients(0, 0);
+			++gdwServerTicks;
+		}
+
 		DrainNetworkPackets();
+		RenderInGameFrame();
+		Sleep(40);
+	}
+
+	if (gnGameType == 0 || gnGameType == 1)
+	{
 		GAME_CloseAllGames();
 	}
 
@@ -308,7 +388,7 @@ static int32_t __stdcall D2Client_State5_StartNetworkAndServer()
 		SERVER_Initialize(1, 1);
 		CLIENT_Initialize(1, nullptr);
 		SERVER_SetHackListEnabled(FALSE);
-		GAME_InitGameDataTable(&gLocalGameDataTable, nullptr);
+		GAME_InitGameDataTable(&gLocalGameDataTable, gLocalGameList);
 		D2Game_10046();
 	}
 	else if (gnGameType == 1)
@@ -316,7 +396,7 @@ static int32_t __stdcall D2Client_State5_StartNetworkAndServer()
 		SERVER_Initialize(2, 1);
 		CLIENT_Initialize(2, nullptr);
 		SERVER_SetHackListEnabled(FALSE);
-		GAME_InitGameDataTable(&gLocalGameDataTable, nullptr);
+		GAME_InitGameDataTable(&gLocalGameDataTable, gLocalGameList);
 		D2Game_10046();
 	}
 	else if (gnGameType == 4)
@@ -329,7 +409,7 @@ static int32_t __stdcall D2Client_State5_StartNetworkAndServer()
 		SERVER_SetMaxClientsPerGame(8);
 		SERVER_SetHackListEnabled(FALSE);
 		CLIENT_Initialize(0, gpD2Config ? gpD2Config->szServerIP : "");
-		GAME_InitGameDataTable(&gLocalGameDataTable, nullptr);
+		GAME_InitGameDataTable(&gLocalGameDataTable, gLocalGameList);
 		D2Game_10046();
 	}
 
