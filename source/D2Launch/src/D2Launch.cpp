@@ -172,8 +172,54 @@ static D2LaunchCharNodeStrc* gpCharSlotNode[8] = {};
 static D2WinButtonStrc* gpBtnConvertExp = nullptr;
 static D2WinButtonStrc* gpBtnDeleteChar = nullptr;
 static D2WinButtonStrc* gpBtnCharSelectOk = nullptr;
+static D2WinButtonStrc* gpBtnClientModeToggle = nullptr;
+static bool gbUseTsClient = true;
+static bool gbClientModeInitialized = false;
 static int32_t gnSelectedSlotIndex = -1;
 static DWORD gdwLastSlotClickTick = 0;
+
+static void SyncClientModeEnv()
+{
+	if (!gbClientModeInitialized)
+	{
+		char szEnv[16] = {};
+		if (GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szEnv, sizeof(szEnv)) > 0)
+		{
+			gbUseTsClient = (szEnv[0] != '0');
+		}
+		else
+		{
+			gbUseTsClient = true;
+			SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", "1");
+		}
+		gbClientModeInitialized = true;
+	}
+	else
+	{
+		SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", gbUseTsClient ? "1" : "0");
+	}
+}
+
+static void RefreshClientModeButtonText()
+{
+	if (!gpBtnClientModeToggle)
+	{
+		return;
+	}
+	const char* szLabel = gbUseTsClient ? "CLIENT: TS WEB" : "CLIENT: NATIVE C++";
+	Unicode wszLabel[64] = {};
+	Unicode::win2Unicode(wszLabel, szLabel, 64);
+	BUTTON_SetText(gpBtnClientModeToggle, D2FONT_FONTEXOCET10, wszLabel, 0);
+}
+
+static int __stdcall D2LAUNCH_OnToggleClientMode(SMSGHANDLER_PARAMS* pMsg)
+{
+	(void)pMsg;
+	gbUseTsClient = !gbUseTsClient;
+	SyncClientModeEnv();
+	RefreshClientModeButtonText();
+	return 1;
+}
 
 // Character Create screen state
 static int32_t gnSelectedCreateClass = -1;
@@ -248,6 +294,7 @@ void __fastcall D2LAUNCH_DestroyAllControls()
 	gpBtnConvertExp = nullptr;
 	gpBtnDeleteChar = nullptr;
 	gpBtnCharSelectOk = nullptr;
+	gpBtnClientModeToggle = nullptr;
 	gnSelectedSlotIndex = -1;
 
 	std::memset(gpCreateClassAnim, 0, sizeof(gpCreateClassAnim));
@@ -1067,6 +1114,14 @@ void __stdcall D2LAUNCH_EnterMainMenu(int32_t nUnused)
 		D2Win_10025_CONTROL_ToggleFirstFlag(pMultiBtn, 0);
 	}
 
+	// Client Mode Toggle: TS Web Client vs. Native C++ Client
+	SyncClientModeEnv();
+	tBtn.nY = 435;
+	tBtn.nStringId = 0;
+	tBtn.field_20 = D2LAUNCH_OnToggleClientMode;
+	gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tBtn)));
+	RefreshClientModeButtonText();
+
 	// Exit Diablo II (5109)
 	tBtn.nY = 500;
 	tBtn.nStringId = 5109;
@@ -1475,6 +1530,20 @@ BOOL __stdcall D2LAUNCH_EnterCharSelect()
 		tMedBtn.nStringId = 5102;
 		tMedBtn.field_20 = D2LAUNCH_OnCharSelectOk;
 		gpBtnCharSelectOk = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tMedBtn)));
+
+		// Client Mode Toggle on Character Select (centered between EXIT and OK)
+		SyncClientModeEnv();
+		D2WinControlInitStrc tToggleBtn = {};
+		tToggleBtn.nType = D2WIN_BUTTON;
+		tToggleBtn.nX = 216;
+		tToggleBtn.nY = 572;
+		tToggleBtn.nWidth = 272;
+		tToggleBtn.nHeight = 35;
+		tToggleBtn.ppCellFile = &gpBtnWideBlank;
+		tToggleBtn.nStringId = 0;
+		tToggleBtn.field_20 = D2LAUNCH_OnToggleClientMode;
+		gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tToggleBtn)));
+		RefreshClientModeButtonText();
 	}
 
 	RefreshCharSelectUI();

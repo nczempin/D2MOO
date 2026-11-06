@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Local WebSocket-to-D2MOO Bridge (`ws://127.0.0.1:8787/d2net/{bnet,realm,game}`)
+ * Local WebSocket + HTTP Reverse-Proxy Gateway for D2MOO 1.12a (`http://127.0.0.1:8787`)
  *
- * Bridges `diablo2-web` (`BncsSession`, `McpSession`, `D2gsSession`) to the local
- * `D2MOO` 1.12a C++ server (`Game.D2MOO.exe` listening on TCP `127.0.0.1:4000`):
  * - `/d2net/bnet`: BNCS (port 6112) auth, account logon, realm list & realm logon, lobby chat.
  * - `/d2net/realm`: MCP (port 6113) startup, character list/create/logon (synced with D2MOO `save/*.d2s`),
  *   game list/info/create/join.
  * - `/d2net/game`: Raw binary WebSocket <-> TCP `127.0.0.1:4000` (`Game.D2MOO.exe` D2GS server).
+ * - All other HTTP & WebSocket paths: Reverse-proxied to `diablo2-web` Vite server (`http://127.0.0.1:5173`),
+ *   with automatic `serverHost = 127.0.0.1:8787` configuration and 1-click/auto-join into the D2MOO C++ server.
  */
 
 import http from 'node:http'
@@ -17,19 +17,23 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const BRIDGE_HOST = process.env.D2MOO_BRIDGE_HOST || '127.0.0.1'
-const BRIDGE_PORT = Number(process.env.D2MOO_BRIDGE_PORT || 8787)
+const BRIDGE_PORT = Number(process.env.D2MOO_BRIDGE_PORT || process.env.D2MOO_WS_PORT || 8787)
 const D2GS_HOST = process.env.D2MOO_D2GS_HOST || '127.0.0.1'
 const D2GS_PORT = Number(process.env.D2MOO_D2GS_PORT || 4000)
-const SAVE_DIR =
-  process.env.D2MOO_SAVE_DIR || 'H:/git/D2MOO-112a/build-112a/bin/Release/save'
+const VITE_HOST = process.env.D2MOO_VITE_HOST || '127.0.0.1'
+const VITE_PORT = Number(process.env.D2MOO_VITE_PORT || 5173)
+
+const SAVE_DIRS = [
+  process.env.D2MOO_SAVE_DIR,
+  'H:/git/D2MOO-112a/build-112a/bin/Debug/save',
+  'H:/git/D2MOO-112a/build-112a/bin/Release/save',
+].filter(Boolean)
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
-// In-memory character & game registries (merged with on-disk `save/*.d2s`)
 const memoryChars = new Map()
 const activeGames = new Map()
 
-// Seed a default game entry so the lobby Join Game list is populated immediately
 activeGames.set('d2moo', {
   index: 1,
   name: 'D2MOO',
@@ -76,17 +80,11 @@ function encodeMcpFrame(packetId, payload) {
   return out
 }
 
-/**
- * Build a 33-byte MCP character statstring (+1 NUL byte = 34 bytes total)
- * matching `parseMcpCharStatString` in `diablo2-web/src/netproto/mcp/packets.ts`.
- */
 function buildCharStatString33(charClass = 1, level = 1, flags = 0x60, progression = 0) {
   const stat = Buffer.alloc(34, 0xff)
   stat[0] = 0x84
   stat[1] = 0x80
-  // [2..12]: 11 equipment component bytes (0xff = none)
   stat[13] = ((charClass & 0x07) + 1) & 0xff
-  // [14..24]: 11 color bytes (0xff = default)
   stat[25] = Math.max(1, Math.min(99, level || 1))
   stat[26] = (flags & 0x7f) | 0x80
   stat[27] = ((progression & 0x1f) << 1) | 0x80
@@ -95,24 +93,22 @@ function buildCharStatString33(charClass = 1, level = 1, flags = 0x60, progressi
   stat[30] = 0x80
   stat[31] = 0x80
   stat[32] = 0x80
-  stat[33] = 0x00 // NUL terminator
+  stat[33] = 0x00
   return stat
 }
 
-/**
- * Scan `SAVE_DIR/*.d2s` and merge with `memoryChars`.
- */
 function getCharacterList() {
   const result = new Map()
   for (const [k, v] of memoryChars.entries()) {
     result.set(k, v)
   }
-  try {
-    if (fs.existsSync(SAVE_DIR)) {
-      const files = fs.readdirSync(SAVE_DIR)
+  for (const dir of SAVE_DIRS) {
+    try {
+      if (!fs.existsSync(dir)) continue
+      const files = fs.readdirSync(dir)
       for (const file of files) {
         if (!file.toLowerCase().endsWith('.d2s')) continue
-        const fullPath = path.join(SAVE_DIR, file)
+        const fullPath = path.join(dir, file)
         const stat = fs.statSync(fullPath)
         if (!stat.isFile() || stat.size < 48) continue
         const buf = fs.readFileSync(fullPath)
@@ -134,17 +130,16 @@ function getCharacterList() {
           progression,
         })
       }
+    } catch (err) {
+      console.error('[Bridge] Error scanning save dir:', err)
     }
-  } catch (err) {
-    console.error('[Bridge] Error scanning save dir:', err)
   }
   if (result.size === 0) {
-    // Provide a default character so a user can jump right in even before creating one
     const defaultChar = {
       name: 'WebHero',
-      charClass: 1, // Sorceress
+      charClass: 1,
       level: 1,
-      flags: 0x60, // Expansion | Ladder
+      flags: 0x60,
       progression: 0,
     }
     memoryChars.set('webhero', defaultChar)
@@ -153,9 +148,6 @@ function getCharacterList() {
   return Array.from(result.values())
 }
 
-/**
- * Minimal RFC 6455 WebSocket wrapper over a raw upgraded `net.Socket`.
- */
 class RawWebSocket {
   constructor(socket) {
     this.socket = socket
@@ -187,7 +179,7 @@ class RawWebSocket {
     let header
     if (len < 126) {
       header = Buffer.alloc(2)
-      header[0] = 0x82 // FIN + binary
+      header[0] = 0x82
       header[1] = len
     } else if (len < 65536) {
       header = Buffer.alloc(4)
@@ -212,7 +204,7 @@ class RawWebSocket {
       payload.writeUInt16BE(code, 0)
       reasonBuf.copy(payload, 2)
       const frame = Buffer.alloc(2 + payload.length)
-      frame[0] = 0x88 // FIN + close
+      frame[0] = 0x88
       frame[1] = payload.length
       payload.copy(frame, 2)
       this.socket.end(frame)
@@ -268,11 +260,9 @@ class RawWebSocket {
       }
 
       if (opcode === 0x08) {
-        // Close
         this.close(1000, 'client closed')
         return
       } else if (opcode === 0x09) {
-        // Ping -> Pong
         if (!this.closed && !this.socket.destroyed) {
           const pong = Buffer.alloc(2 + payload.length)
           pong[0] = 0x8a
@@ -289,13 +279,10 @@ class RawWebSocket {
   }
 }
 
-/**
- * Handle `/d2net/bnet` (BNCS lobby server).
- */
 function handleBnetConnection(ws) {
   let sawGreeting = false
   let buf = Buffer.alloc(0)
-  let username = 'WebPlayer'
+  let username = 'D2MOO'
   let serverToken = 0xdeadbeef
 
   ws.onMessage(chunk => {
@@ -307,7 +294,6 @@ function handleBnetConnection(ws) {
 
     while (buf.length >= 4) {
       if (buf[0] !== 0xff) {
-        console.warn('[BNCS] Unexpected frame magic:', buf[0])
         buf = buf.subarray(1)
         continue
       }
@@ -318,21 +304,20 @@ function handleBnetConnection(ws) {
       buf = buf.subarray(totalLen)
 
       switch (id) {
-        case 0x00: // SID_NULL
-        case 0x25: // SID_PING
+        case 0x00:
+        case 0x25:
           break
 
         case 0x50: {
-          // SID_AUTH_INFO -> send SID_PING (0x25) + SID_AUTH_INFO (0x50)
           const pingPayload = Buffer.alloc(4)
           pingPayload.writeUInt32LE(0x12345678, 0)
           ws.sendBinary(encodeBncsFrame(0x25, pingPayload))
 
           const fixed = Buffer.alloc(20)
-          fixed.writeUInt32LE(0, 0) // logonType = 0
-          fixed.writeUInt32LE(serverToken, 4) // serverToken
-          fixed.writeUInt32LE(0, 8) // udpValue
-          fixed.writeBigUInt64LE(0n, 12) // mpqFiletime
+          fixed.writeUInt32LE(0, 0)
+          fixed.writeUInt32LE(serverToken, 4)
+          fixed.writeUInt32LE(0, 8)
+          fixed.writeBigUInt64LE(0n, 12)
           const mpqName = writeCString('ver-IX86-1.mpq')
           const formula = writeCString('A=1 B=2 C=3 4 A=A^S B=B^C C=C^A A=A^B')
           ws.sendBinary(encodeBncsFrame(0x50, Buffer.concat([fixed, mpqName, formula])))
@@ -340,7 +325,6 @@ function handleBnetConnection(ws) {
         }
 
         case 0x51: {
-          // SID_AUTH_CHECK -> result = 0
           const res = Buffer.alloc(5)
           res.writeUInt32LE(0, 0)
           res[4] = 0
@@ -349,7 +333,6 @@ function handleBnetConnection(ws) {
         }
 
         case 0x3d: {
-          // SID_CREATEACCOUNT2 -> status = 0
           if (payload.length > 20) {
             username = readCString(payload, 20).value || username
           }
@@ -362,7 +345,6 @@ function handleBnetConnection(ws) {
 
         case 0x29:
         case 0x3a: {
-          // SID_LOGONRESPONSE2 -> status = 0
           if (payload.length > 28) {
             username = readCString(payload, 28).value || username
           }
@@ -373,11 +355,10 @@ function handleBnetConnection(ws) {
         }
 
         case 0x40: {
-          // SID_QUERYREALMS2 -> 1 realm ("D2MOO")
           const hdr = Buffer.alloc(12)
-          hdr.writeUInt32LE(0, 0) // unknown
-          hdr.writeUInt32LE(1, 4) // count = 1
-          hdr.writeUInt32LE(1, 8) // realm id = 1
+          hdr.writeUInt32LE(0, 0)
+          hdr.writeUInt32LE(1, 4)
+          hdr.writeUInt32LE(1, 8)
           const title = writeCString('D2MOO')
           const desc = writeCString('D2MOO 1.12a C++ Server')
           ws.sendBinary(encodeBncsFrame(0x40, Buffer.concat([hdr, title, desc])))
@@ -385,28 +366,22 @@ function handleBnetConnection(ws) {
         }
 
         case 0x3e: {
-          // SID_LOGONREALMEX
           const clientToken = payload.length >= 4 ? payload.readUInt32LE(0) : 1
           const fixed = Buffer.alloc(72)
-          fixed.writeUInt32LE(clientToken, 0) // mcpCookie
-          fixed.writeUInt32LE(0, 4) // mcpStatus = 0
-          // +8..15: mcpChunk1 (8 bytes)
-          // +16..19: mcpIp = 127.0.0.1
+          fixed.writeUInt32LE(clientToken, 0)
+          fixed.writeUInt32LE(0, 4)
           fixed[16] = 127
           fixed[17] = 0
           fixed[18] = 0
           fixed[19] = 1
-          // +20..23: mcpPort = 6113 (0x17e1 BE)
           fixed[20] = 0x17
           fixed[21] = 0xe1
-          // +24..71: mcpChunk2 (48 bytes)
           const uniqueName = writeCString(username)
           ws.sendBinary(encodeBncsFrame(0x3e, Buffer.concat([fixed, uniqueName])))
           break
         }
 
         case 0x0a: {
-          // SID_ENTERCHAT
           const parsedChar = readCString(payload, 0).value
           const unique = writeCString(parsedChar || username)
           const stat = writeCString('PX2D')
@@ -416,7 +391,6 @@ function handleBnetConnection(ws) {
         }
 
         case 0x0b: {
-          // SID_GETCHANNELLIST
           const ch1 = writeCString('Diablo II')
           const end = Buffer.from([0])
           ws.sendBinary(encodeBncsFrame(0x0b, Buffer.concat([ch1, end])))
@@ -424,13 +398,12 @@ function handleBnetConnection(ws) {
         }
 
         case 0x0c: {
-          // SID_JOINCHANNEL -> send SID_CHATEVENT (0x07 channel + 0x01 showUser)
           const channel = payload.length > 4 ? readCString(payload, 4).value : 'Diablo II'
           const sendChatEvt = (eventId, user, text) => {
             const hdr = Buffer.alloc(24)
             hdr.writeUInt32LE(eventId, 0)
-            hdr.writeUInt32LE(0, 4) // flags
-            hdr.writeUInt32LE(10, 8) // ping
+            hdr.writeUInt32LE(0, 4)
+            hdr.writeUInt32LE(10, 8)
             ws.sendBinary(
               encodeBncsFrame(0x0f, Buffer.concat([hdr, writeCString(user), writeCString(text)])),
             )
@@ -441,11 +414,10 @@ function handleBnetConnection(ws) {
         }
 
         case 0x0e: {
-          // SID_CHATCOMMAND
           const text = readCString(payload, 0).value
           if (text && !text.startsWith('/')) {
             const hdr = Buffer.alloc(24)
-            hdr.writeUInt32LE(0x05, 0) // talk
+            hdr.writeUInt32LE(0x05, 0)
             hdr.writeUInt32LE(0, 4)
             hdr.writeUInt32LE(10, 8)
             ws.sendBinary(
@@ -459,9 +431,6 @@ function handleBnetConnection(ws) {
   })
 }
 
-/**
- * Handle `/d2net/realm` (MCP realm server).
- */
 function handleRealmConnection(ws) {
   let sawGreeting = false
   let buf = Buffer.alloc(0)
@@ -483,7 +452,6 @@ function handleRealmConnection(ws) {
 
       switch (id) {
         case 0x01: {
-          // MCP_STARTUP -> status = 0
           const res = Buffer.alloc(4)
           res.writeUInt32LE(0, 0)
           ws.sendBinary(encodeMcpFrame(0x01, res))
@@ -491,7 +459,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x19: {
-          // MCP_CHARLIST2
           const requested = payload.length >= 4 ? payload.readUInt32LE(0) : 8
           const chars = getCharacterList().slice(0, requested)
           const hdr = Buffer.alloc(8)
@@ -513,11 +480,9 @@ function handleRealmConnection(ws) {
         }
 
         case 0x02: {
-          // MCP_CHARCREATE
           const charClass = payload.length >= 4 ? payload.readUInt32LE(0) : 1
           const flags = payload.length >= 6 ? payload.readUInt16LE(4) : 0x60
           const rawName = payload.length > 6 ? readCString(payload, 6).value : 'WebHero'
-          // Sanitize digits if any since D2Game's IsClientNameValid only permits [A-Za-z_-]
           const cleanName = rawName.replace(/[^A-Za-z_-]/g, '') || 'WebHero'
           memoryChars.set(cleanName.toLowerCase(), {
             name: cleanName,
@@ -528,13 +493,12 @@ function handleRealmConnection(ws) {
           })
           activeCharName = cleanName
           const res = Buffer.alloc(4)
-          res.writeUInt32LE(0, 0) // status = 0 (OK)
+          res.writeUInt32LE(0, 0)
           ws.sendBinary(encodeMcpFrame(0x02, res))
           break
         }
 
         case 0x07: {
-          // MCP_CHARLOGON
           const name = readCString(payload, 0).value
           if (name) activeCharName = name
           const res = Buffer.alloc(4)
@@ -544,7 +508,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x0a: {
-          // MCP_CHARDELETE
           const reqId = payload.length >= 2 ? payload.readUInt16LE(0) : 0
           const name = payload.length > 2 ? readCString(payload, 2).value : ''
           if (name) {
@@ -558,7 +521,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x18: {
-          // MCP_CHARUPGRADE
           const res = Buffer.alloc(4)
           res.writeUInt32LE(0, 0)
           ws.sendBinary(encodeMcpFrame(0x18, res))
@@ -566,7 +528,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x12: {
-          // MCP_MOTD
           const unk = Buffer.from([0])
           const headline = writeCString('D2MOO 1.12a Server')
           const body = writeCString('Connected to local D2MOO C++ D2GS server on port 4000.')
@@ -575,7 +536,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x05: {
-          // MCP_GAMELIST
           const reqId = payload.length >= 2 ? payload.readUInt16LE(0) : 1
           let idx = 1
           for (const g of activeGames.values()) {
@@ -583,7 +543,7 @@ function handleRealmConnection(ws) {
             fixed.writeUInt16LE(reqId, 0)
             fixed.writeUInt32LE(idx++, 2)
             fixed.writeUInt8(Math.max(1, g.players.length), 6)
-            fixed.writeUInt32LE(0x00000004, 7) // open game status bit 0x04
+            fixed.writeUInt32LE(0x00000004, 7)
             ws.sendBinary(
               encodeMcpFrame(
                 0x05,
@@ -591,7 +551,6 @@ function handleRealmConnection(ws) {
               ),
             )
           }
-          // Sentinel end-of-list packet
           const endFixed = Buffer.alloc(11)
           endFixed.writeUInt16LE(reqId, 0)
           endFixed.writeUInt32LE(0, 2)
@@ -604,20 +563,19 @@ function handleRealmConnection(ws) {
         }
 
         case 0x06: {
-          // MCP_GAMEINFO
           const reqId = payload.length >= 2 ? payload.readUInt16LE(0) : 1
           const gameName = payload.length > 2 ? readCString(payload, 2).value : 'D2MOO'
           const g = activeGames.get(gameName.toLowerCase()) || activeGames.get('d2moo')
           const fixed = Buffer.alloc(46)
           fixed.writeUInt16LE(reqId, 0)
-          fixed.writeUInt32LE(0x00000004, 2) // status
+          fixed.writeUInt32LE(0x00000004, 2)
           fixed.writeUInt32LE(Math.max(1, Math.floor((Date.now() - (g?.createdAt ?? Date.now())) / 1000)), 6)
-          fixed.writeUInt8(1, 10) // creatorLevel
-          fixed.writeUInt8(0xff, 11) // levelDiff
-          fixed.writeUInt8(8, 12) // maxPlayers
-          fixed.writeUInt8(1, 13) // player count = 1
-          fixed[14] = 1 // class 0 = Sorceress
-          fixed[30] = 1 // level 0 = 1
+          fixed.writeUInt8(1, 10)
+          fixed.writeUInt8(0xff, 11)
+          fixed.writeUInt8(8, 12)
+          fixed.writeUInt8(1, 13)
+          fixed[14] = 1
+          fixed[30] = 1
           ws.sendBinary(
             encodeMcpFrame(
               0x06,
@@ -632,7 +590,6 @@ function handleRealmConnection(ws) {
         }
 
         case 0x03: {
-          // MCP_CREATEGAME
           const reqId = payload.length >= 2 ? payload.readUInt16LE(0) : 1
           const diffFlag = payload.length >= 6 ? payload.readUInt32LE(2) : 0
           const levelDiff = payload.length >= 8 ? payload[7] : 0xff
@@ -659,26 +616,25 @@ function handleRealmConnection(ws) {
 
           const res = Buffer.alloc(10)
           res.writeUInt16LE(reqId, 0)
-          res.writeUInt16LE(1, 2) // gameToken = 1
-          res.writeUInt16LE(0, 4) // unknown = 0
-          res.writeUInt32LE(0, 6) // status = 0 (OK)
+          res.writeUInt16LE(1, 2)
+          res.writeUInt16LE(0, 4)
+          res.writeUInt32LE(0, 6)
           ws.sendBinary(encodeMcpFrame(0x03, res))
           break
         }
 
         case 0x04: {
-          // MCP_JOINGAME
           const reqId = payload.length >= 2 ? payload.readUInt16LE(0) : 1
           const res = Buffer.alloc(18)
           res.writeUInt16LE(reqId, 0)
-          res.writeUInt16LE(1, 2) // gameToken = 1
-          res.writeUInt16LE(0, 4) // unknown = 0
+          res.writeUInt16LE(1, 2)
+          res.writeUInt16LE(0, 4)
           res[6] = 127
           res[7] = 0
           res[8] = 0
           res[9] = 1
-          res.writeUInt32LE(1, 10) // gameHash = 1 (nGameId = 1 on D2MOO)
-          res.writeUInt32LE(0, 14) // status = 0 (OK)
+          res.writeUInt32LE(1, 10)
+          res.writeUInt32LE(0, 14)
           ws.sendBinary(encodeMcpFrame(0x04, res))
           break
         }
@@ -687,9 +643,6 @@ function handleRealmConnection(ws) {
   })
 }
 
-/**
- * Handle `/d2net/game` (1:1 binary bridge to `Game.D2MOO.exe` on TCP `127.0.0.1:4000`).
- */
 function handleGameConnection(ws) {
   const pendingC2S = []
   let tcpConnected = false
@@ -731,6 +684,163 @@ function handleGameConnection(ws) {
   })
 }
 
+const INJECTED_D2MOO_BOOTSTRAP = `
+<script>
+  (() => {
+    try {
+      const host = window.location.host || '127.0.0.1:8787';
+      const raw = window.localStorage.getItem('d2web.settings.v1');
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed.serverHost = host;
+      if (!parsed.lang) parsed.lang = 'en';
+      window.localStorage.setItem('d2web.settings.v1', JSON.stringify(parsed));
+      window.localStorage.setItem('d2_last_bnet_account', 'D2MOO');
+    } catch {}
+  })();
+</script>
+<script type="module">
+  import { applyOnlineCharactersToFlowState } from '/src/client/frontend/flow-state.ts';
+
+  const params = new URLSearchParams(window.location.search);
+  const autoJoin = params.get('autojoin') !== '0';
+  const requestedChar = (params.get('char') || '').trim();
+  const requestedClass = Number.parseInt(params.get('class') || '1', 10);
+  const host = window.location.host || '127.0.0.1:8787';
+
+  async function enterD2MooGame(ctrl) {
+    const st = ctrl.flowState;
+    st.stage = 'door_loading';
+    st.stageTicks = 0;
+    st.doorFrame = 0;
+    st.sceneReady = false;
+    ctrl.frontendRenderer.render(performance.now());
+    await ctrl.assetsReadyPromise;
+    await ctrl.session.enterGame({
+      mode: 'create',
+      spec: {
+        name: 'D2MOO',
+        password: '',
+        description: 'D2MOO 1.12a C++ Server',
+        difficulty: 0,
+        maxPlayers: 8,
+        levelDiff: 0xff,
+      },
+    });
+    st.sceneReady = true;
+    st.stage = 'in_game';
+    st.stageTicks = 0;
+    st.tickAccumulatorMs = 0;
+    st.lastFrameTimeMs = null;
+    ctrl.renderFrame(performance.now());
+  }
+
+  async function bootstrapD2Moo() {
+    while (!window.__d2Play || !window.__d2Play.ready) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const ctrl = window.__d2Play;
+    ctrl.settingsStore.setServerHost(host);
+    const serverInput = document.getElementById('d2-toolbar-server-input');
+    if (serverInput) serverInput.value = host;
+
+    ctrl.flowState.playMode = 'bnet';
+    const res = await ctrl.session.login({
+      username: 'D2MOO',
+      password: 'password',
+      host,
+    });
+    let chars = res.characters;
+    if (requestedChar && !chars.some(c => c.name.toLowerCase() === requestedChar.toLowerCase())) {
+      chars = await ctrl.session.createCharacter({
+        name: requestedChar,
+        classId: Number.isFinite(requestedClass) ? requestedClass : 1,
+        hardcore: false,
+        expansion: true,
+        ladder: true,
+      });
+    }
+    applyOnlineCharactersToFlowState(ctrl.flowState, chars, {
+      preserveSelectedName: requestedChar || chars[0]?.name,
+    });
+    ctrl.frontendRenderer.render(performance.now());
+
+    if (autoJoin) {
+      const targetName =
+        (requestedChar && chars.find(c => c.name.toLowerCase() === requestedChar.toLowerCase())?.name) ||
+        chars[0]?.name ||
+        'WebHero';
+      await ctrl.session.selectCharacter(targetName);
+      await enterD2MooGame(ctrl);
+    }
+
+    // Also hook Character Select -> OK so selecting any character enters D2MOO directly without the chat lobby
+    let enteringFromLobby = false;
+    setInterval(() => {
+      if (!enteringFromLobby && ctrl.flowState.stage === 'bnet_lobby' && ctrl.session.phase === 'lobby') {
+        enteringFromLobby = true;
+        enterD2MooGame(ctrl).finally(() => {
+          enteringFromLobby = false;
+        });
+      }
+    }, 100);
+  }
+
+  bootstrapD2Moo().catch(err => console.error('[D2MOO Auto-Connect]', err));
+</script>
+`
+
+function proxyHttpToVite(req, res) {
+  const urlPath = (req.url || '/').split('?')[0]
+  if (urlPath === '/' || urlPath === '/index.html') {
+    const query = (req.url || '').includes('?') ? req.url.slice(req.url.indexOf('?')) : '?autojoin=1'
+    res.writeHead(302, { Location: `/play.html${query}` })
+    res.end()
+    return
+  }
+
+  const isPlayHtml = urlPath === '/play.html'
+  const headers = { ...req.headers, host: `${VITE_HOST}:${VITE_PORT}` }
+  if (isPlayHtml) {
+    delete headers['accept-encoding']
+  }
+
+  const proxyReq = http.request(
+    {
+      hostname: VITE_HOST,
+      port: VITE_PORT,
+      path: req.url,
+      method: req.method,
+      headers,
+    },
+    proxyRes => {
+      if (isPlayHtml && proxyRes.statusCode === 200) {
+        const chunks = []
+        proxyRes.on('data', c => chunks.push(c))
+        proxyRes.on('end', () => {
+          let html = Buffer.concat(chunks).toString('utf8')
+          html = html.replace('</head>', `${INJECTED_D2MOO_BOOTSTRAP}\n</head>`)
+          const outHeaders = { ...proxyRes.headers }
+          delete outHeaders['content-length']
+          delete outHeaders['content-encoding']
+          outHeaders['cache-control'] = 'no-store'
+          res.writeHead(200, outHeaders)
+          res.end(html)
+        })
+        return
+      }
+      res.writeHead(proxyRes.statusCode || 200, proxyRes.headers)
+      proxyRes.pipe(res)
+    },
+  )
+
+  proxyReq.on('error', err => {
+    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end(`Waiting for diablo2-web Vite server on ${VITE_HOST}:${VITE_PORT} (${err.message})...\n`)
+  })
+
+  req.pipe(proxyReq)
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -752,11 +862,57 @@ const server = http.createServer((req, res) => {
     )
     return
   }
-  res.writeHead(200, { 'Content-Type': 'text/plain' })
-  res.end('D2MOO WebSocket Bridge running (/d2net/bnet, /d2net/realm, /d2net/game)\n')
+  if (req.url?.startsWith('/api/register-char') && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => {
+      body += c
+    })
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}')
+        const cleanName = String(data.name || 'WebHero').replace(/[^A-Za-z_-]/g, '') || 'WebHero'
+        const charClass = Math.max(0, Math.min(6, Number(data.charClass ?? 1)))
+        memoryChars.set(cleanName.toLowerCase(), {
+          name: cleanName,
+          charClass,
+          level: 1,
+          flags: 0x60,
+          progression: 0,
+        })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, name: cleanName, charClass }))
+      } catch (e) {
+        res.writeHead(400)
+        res.end(String(e))
+      }
+    })
+    return
+  }
+  proxyHttpToVite(req, res)
 })
 
 server.on('upgrade', (req, socket, head) => {
+  const urlPath = (req.url || '').split('?')[0]
+  const isD2Net =
+    urlPath.endsWith('/bnet') || urlPath.endsWith('/realm') || urlPath.endsWith('/game')
+
+  if (!isD2Net) {
+    // Proxy Vite HMR WebSocket upgrades directly to Vite
+    const viteSock = net.createConnection({ host: VITE_HOST, port: VITE_PORT }, () => {
+      const reqLines = [`${req.method || 'GET'} ${req.url || '/'} HTTP/${req.httpVersion || '1.1'}`]
+      for (let i = 0; i < req.rawHeaders.length; i += 2) {
+        reqLines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`)
+      }
+      reqLines.push('\r\n')
+      viteSock.write(reqLines.join('\r\n'))
+      if (head && head.length > 0) viteSock.write(head)
+      socket.pipe(viteSock).pipe(socket)
+    })
+    viteSock.on('error', () => socket.destroy())
+    socket.on('error', () => viteSock.destroy())
+    return
+  }
+
   const key = req.headers['sec-websocket-key']
   if (!key) {
     socket.destroy()
@@ -781,20 +937,17 @@ server.on('upgrade', (req, socket, head) => {
     ws._onData(head)
   }
 
-  const urlPath = (req.url || '').split('?')[0]
   if (urlPath.endsWith('/bnet')) {
     handleBnetConnection(ws)
   } else if (urlPath.endsWith('/realm')) {
     handleRealmConnection(ws)
   } else if (urlPath.endsWith('/game')) {
     handleGameConnection(ws)
-  } else {
-    ws.close(1008, `Unknown endpoint: ${urlPath}`)
   }
 })
 
 server.listen(BRIDGE_PORT, BRIDGE_HOST, () => {
   console.log(
-    `[D2MOO Bridge] Listening on ws://${BRIDGE_HOST}:${BRIDGE_PORT}/d2net/{bnet,realm,game} -> D2GS ${D2GS_HOST}:${D2GS_PORT}`,
+    `[D2MOO Bridge] Listening on http://${BRIDGE_HOST}:${BRIDGE_PORT}/play.html (WS /d2net/{bnet,realm,game} -> D2GS ${D2GS_HOST}:${D2GS_PORT})`,
   )
 })
