@@ -20,6 +20,16 @@ target_link_libraries(Game
 	D2Sound
 	D2MCPClient
 )
+add_dependencies(Game
+  D2Launch
+  D2Client
+  D2Game
+  D2Common
+  D2Net
+  D2Lang
+  D2CMP
+  D2Gdi
+)
 set_target_properties(Game PROPERTIES
   OUTPUT_NAME Game.D2MOO
   VS_DEBUGGER_COMMAND_ARGUMENTS "-w"

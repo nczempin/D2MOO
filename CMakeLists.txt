@@ -22,7 +22,7 @@ include(cmake/D2MOO.D2SE.cmake)           # Used to generate D2SE .ini files
 ##  D2MOO OPTIONS  ##
 #####################
 
-set(D2MOO_ORDINALS_VERSION "1.10f" CACHE STRING "Name of the version to be used for ordinals and patches")
+set(D2MOO_ORDINALS_VERSION "1.12a" CACHE STRING "Name of the version to be used for ordinals and patches")
 option(ENABLE_D2DETOURS_EMBEDDED_PATCHES "Build the DLL with builtin patching using D2.Detours" ON)
 if(D2MOO_IS_ROOT_PROJECT) # Let parent project decide wether to use its own patches or not
 	set(D2DETOURS_EMBEDDED_PATCHES_DIR "${EMBEDDED_PATCHES_DIR_PREFIX}D2.Detours.patches" CACHE PATH "The directory to your D2.Detours embedded patches. Defaults to the root D2.Detours.patches directory")
