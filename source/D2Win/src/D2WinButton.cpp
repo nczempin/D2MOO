@@ -269,7 +269,7 @@ int32_t __fastcall BUTTON_Draw(D2WinControlStrc* pControl)
 			nOffsetY = 1;
 		}
 
-		pButton->nTextColor = 0;
+		pButton->nTextColor = (pButton->controlHeader.dwFlags & gdwBitMasks[0]) ? 0 : 5;
 
 		if (pButton->wszText[0])
 		{
@@ -435,6 +435,11 @@ int32_t __stdcall BUTTON_HandleVirtualKeyInput(SMSGHANDLER_PARAMS* pMsg)
 	D2_ASSERT(pButton->controlHeader.nType == D2WIN_BUTTON);
 
 	if (pMsg->nMessage == WM_CHAR || pButton->nActivationVirtualKey != pMsg->wParam)
+	{
+		return 0;
+	}
+
+	if (!(pButton->controlHeader.dwFlags & gdwBitMasks[2]) || !(pButton->controlHeader.dwFlags & gdwBitMasks[0]))
 	{
 		return 0;
 	}

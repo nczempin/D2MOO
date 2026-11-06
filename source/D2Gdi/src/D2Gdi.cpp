@@ -198,7 +198,19 @@ static BOOL __fastcall D2GDI_Blit()
 	SetDIBColorTable(hMemDC, 0, 256, gColorTable);
 	SelectPalette(hDC, ghPalette, FALSE);
 	RealizePalette(hDC);
-	BitBlt(hDC, 0, 0, gnSurfaceWidth, gnSurfaceHeight, hMemDC, 0, 0, SRCCOPY);
+	RECT rcClient = {};
+	GetClientRect(ghWnd, &rcClient);
+	const int32_t nDstW = rcClient.right - rcClient.left;
+	const int32_t nDstH = rcClient.bottom - rcClient.top;
+	if (nDstW > 0 && nDstH > 0 && (nDstW != gnSurfaceWidth || nDstH != gnSurfaceHeight))
+	{
+		SetStretchBltMode(hDC, COLORONCOLOR);
+		StretchBlt(hDC, 0, 0, nDstW, nDstH, hMemDC, 0, 0, gnSurfaceWidth, gnSurfaceHeight, SRCCOPY);
+	}
+	else
+	{
+		BitBlt(hDC, 0, 0, gnSurfaceWidth, gnSurfaceHeight, hMemDC, 0, 0, SRCCOPY);
+	}
 	GdiFlush();
 	DeleteDC(hMemDC);
 	ReleaseDC(ghWnd, hDC);

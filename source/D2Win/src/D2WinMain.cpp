@@ -896,6 +896,30 @@ LRESULT __stdcall D2Win_MAINWINDOW_WndProc_6F8AD9B0(HWND hWnd, UINT Msg, WPARAM 
 		return 0;
 	}
 
+	if (Msg == WM_MOUSEMOVE || Msg == WM_LBUTTONDOWN || Msg == WM_LBUTTONUP ||
+		Msg == WM_RBUTTONDOWN || Msg == WM_RBUTTONUP || Msg == WM_MBUTTONDOWN ||
+		Msg == WM_MBUTTONUP || Msg == WM_LBUTTONDBLCLK || Msg == WM_RBUTTONDBLCLK)
+	{
+		RECT rcClient = {};
+		if (GetClientRect(hWnd, &rcClient))
+		{
+			const int nClientW = rcClient.right - rcClient.left;
+			const int nClientH = rcClient.bottom - rcClient.top;
+			int nLogicalW = 0;
+			int nLogicalH = 0;
+			WINDOW_GetDimensions(&nLogicalW, &nLogicalH);
+			if (nClientW > 0 && nClientH > 0 && nLogicalW > 0 && nLogicalH > 0 &&
+				(nClientW != nLogicalW || nClientH != nLogicalH))
+			{
+				const int nPhysX = static_cast<int16_t>(LOWORD(lParam));
+				const int nPhysY = static_cast<int16_t>(HIWORD(lParam));
+				const int nLogX = std::max(0, std::min((nPhysX * nLogicalW) / nClientW, nLogicalW - 1));
+				const int nLogY = std::max(0, std::min((nPhysY * nLogicalH) / nClientH, nLogicalH - 1));
+				lParam = MAKELPARAM(static_cast<uint16_t>(nLogX), static_cast<uint16_t>(nLogY));
+			}
+		}
+	}
+
 	if (gpfWndProc_6F8FE268)
 	{
 		return gpfWndProc_6F8FE268(hWnd, Msg, wParam, lParam);

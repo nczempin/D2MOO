@@ -622,12 +622,99 @@ static BOOL __stdcall D2LAUNCH_EnterSelectedCharacter(
 	return TRUE;
 }
 
-static int __stdcall D2LAUNCH_EditBoxCharFilter(char cCh)
+// 1.12a: 0x6FA50E80
+static int __stdcall D2LAUNCH_EditBoxCharFilter(D2WinEditBoxStrc* pEditBox, int32_t nPos, uint8_t* pChar)
 {
-	return (cCh >= 'A' && cCh <= 'Z') ||
-		(cCh >= 'a' && cCh <= 'z') ||
-		cCh == '-' ||
-		cCh == '_';
+	if (!pChar)
+	{
+		return 0;
+	}
+	const uint8_t cCh = *pChar;
+	if ((cCh >= 'A' && cCh <= 'Z') || (cCh >= 'a' && cCh <= 'z'))
+	{
+		return 1;
+	}
+	if (cCh == '-' || cCh == '_')
+	{
+		if (nPos == 0)
+		{
+			return 0;
+		}
+		if (pEditBox)
+		{
+			const Unicode* pwszText = D2Win_10077_EDITBOX_GetText(pEditBox);
+			if (pwszText)
+			{
+				for (const Unicode* p = pwszText; *p; ++p)
+				{
+					if (*p == '-' || *p == '_')
+					{
+						return 0;
+					}
+				}
+			}
+		}
+		return 1;
+	}
+	return 0;
+}
+
+// 1.12a: 0x6FA53080
+static bool D2LAUNCH_IsCharNameValid(const char* szName)
+{
+	if (!szName)
+	{
+		return false;
+	}
+	const size_t nLen = std::strlen(szName);
+	if (nLen < 2 || nLen >= 16)
+	{
+		return false;
+	}
+	if (szName[0] == '-' || szName[0] == '_' || szName[nLen - 1] == '-' || szName[nLen - 1] == '_')
+	{
+		return false;
+	}
+	int nHyphenCount = 0;
+	for (size_t i = 0; i < nLen; ++i)
+	{
+		const char c = szName[i];
+		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+		{
+			continue;
+		}
+		if (c == '-' || c == '_')
+		{
+			++nHyphenCount;
+			if (nHyphenCount >= 2)
+			{
+				return false;
+			}
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+// 1.12a: 0x6FA53100
+static void __stdcall D2LAUNCH_OnNameTextChanged(int32_t nUnused)
+{
+	(void)nUnused;
+	char szTypedName[32] = {};
+	if (gpCreateNameEditBox)
+	{
+		const Unicode* pwszText = D2Win_10077_EDITBOX_GetText(gpCreateNameEditBox);
+		if (pwszText && pwszText[0])
+		{
+			Unicode::unicode2Win(szTypedName, pwszText, sizeof(szTypedName));
+		}
+	}
+	const bool bValid = D2LAUNCH_IsCharNameValid(szTypedName);
+	if (gpCreateOkBtn)
+	{
+		D2Win_10025_CONTROL_ToggleFirstFlag(&gpCreateOkBtn->controlHeader, bValid ? 1 : 0);
+	}
 }
 
 // 1.12a: 0x6FA59B90
@@ -635,6 +722,10 @@ static int __stdcall D2LAUNCH_OnCreateCharConfirm(SMSGHANDLER_PARAMS* pMsg)
 {
 	(void)pMsg;
 	if (!gpD2Config || gnSelectedCreateClass < 0 || gnSelectedCreateClass >= 7)
+	{
+		return 0;
+	}
+	if (!gpCreateOkBtn || !(gpCreateOkBtn->controlHeader.dwFlags & 1))
 	{
 		return 0;
 	}
@@ -649,9 +740,9 @@ static int __stdcall D2LAUNCH_OnCreateCharConfirm(SMSGHANDLER_PARAMS* pMsg)
 		}
 	}
 
-	if (!szTypedName[0])
+	if (!D2LAUNCH_IsCharNameValid(szTypedName))
 	{
-		SStrCopy(szTypedName, kClassFallbackNames[gnSelectedCreateClass], sizeof(szTypedName));
+		return 0;
 	}
 
 	SStrCopy(gpD2Config->szName, szTypedName, sizeof(gpD2Config->szName));
@@ -856,37 +947,6 @@ static int __stdcall D2LAUNCH_OnSinglePlayerClick(SMSGHANDLER_PARAMS* pMsg)
 	return 1;
 }
 
-// 1.12a: 0x6FA58230
-static int __stdcall D2LAUNCH_OnBattleNetClick(SMSGHANDLER_PARAMS* pMsg)
-{
-	(void)pMsg;
-	gnLaunchMode = 1;
-	if (gpD2Config)
-	{
-		gpD2Config->nLaunchType = LAUNCHTYPE_REALM;
-	}
-	gdwNextModule = D2LAUNCH_MODULE_MULTIPLAYER;
-	D2Win_10009();
-	return 1;
-}
-
-// 1.12a: 0x6FA56820
-static int __stdcall D2LAUNCH_OnOtherMultiplayerClick(SMSGHANDLER_PARAMS* pMsg)
-{
-	(void)pMsg;
-	gnLaunchMode = 2;
-	D2LAUNCH_DestroyAllControls();
-	if (D2LAUNCH_HasSavedCharacters())
-	{
-		D2LAUNCH_EnterCharSelect();
-	}
-	else
-	{
-		D2LAUNCH_EnterCharCreate();
-	}
-	return 1;
-}
-
 // 1.12a: 0x6FA506D0
 static int __stdcall D2LAUNCH_OnExitClick(SMSGHANDLER_PARAMS* pMsg)
 {
@@ -989,17 +1049,23 @@ void __stdcall D2LAUNCH_EnterMainMenu(int32_t nUnused)
 	tBtn.field_20 = D2LAUNCH_OnSinglePlayerClick;
 	RegisterControl(CONTROL_Create(&tBtn));
 
-	// Battle.net (5107)
+	// Battle.net (5107) — disabled for offline/single-player build
 	tBtn.nY = 330;
 	tBtn.nStringId = 5107;
-	tBtn.field_20 = D2LAUNCH_OnBattleNetClick;
-	RegisterControl(CONTROL_Create(&tBtn));
+	tBtn.field_20 = nullptr;
+	if (D2WinControlStrc* pBnetBtn = RegisterControl(CONTROL_Create(&tBtn)))
+	{
+		D2Win_10025_CONTROL_ToggleFirstFlag(pBnetBtn, 0);
+	}
 
-	// Other Multiplayer (5108)
+	// Other Multiplayer (5108) — disabled for offline/single-player build
 	tBtn.nY = 370;
 	tBtn.nStringId = 5108;
-	tBtn.field_20 = D2LAUNCH_OnOtherMultiplayerClick;
-	RegisterControl(CONTROL_Create(&tBtn));
+	tBtn.field_20 = nullptr;
+	if (D2WinControlStrc* pMultiBtn = RegisterControl(CONTROL_Create(&tBtn)))
+	{
+		D2Win_10025_CONTROL_ToggleFirstFlag(pMultiBtn, 0);
+	}
 
 	// Exit Diablo II (5109)
 	tBtn.nY = 500;
@@ -1191,15 +1257,15 @@ static void RefreshCharSelectUI()
 	if (gpBtnConvertExp)
 	{
 		const bool bCanConvert = FOG_IsExpansion() && gpSelectedChar && !(gpSelectedChar->wSaveFlags & 0x20);
-		D2Win_10027_CONTROL_ToggleThirdFlag(&gpBtnConvertExp->controlHeader, bCanConvert ? 1 : 0);
+		D2Win_10025_CONTROL_ToggleFirstFlag(&gpBtnConvertExp->controlHeader, bCanConvert ? 1 : 0);
 	}
 	if (gpBtnDeleteChar)
 	{
-		D2Win_10027_CONTROL_ToggleThirdFlag(&gpBtnDeleteChar->controlHeader, gpSelectedChar ? 1 : 0);
+		D2Win_10025_CONTROL_ToggleFirstFlag(&gpBtnDeleteChar->controlHeader, gpSelectedChar ? 1 : 0);
 	}
 	if (gpBtnCharSelectOk)
 	{
-		D2Win_10027_CONTROL_ToggleThirdFlag(&gpBtnCharSelectOk->controlHeader, gpSelectedChar ? 1 : 0);
+		D2Win_10025_CONTROL_ToggleFirstFlag(&gpBtnCharSelectOk->controlHeader, gpSelectedChar ? 1 : 0);
 	}
 }
 
@@ -1462,9 +1528,14 @@ static void SetCreateNameControlsVisible(int bVisible, int nClassId)
 	if (bVisible && gpCreateNameEditBox)
 	{
 		D2Win_10012(gpCreateNameEditBox);
+		D2LAUNCH_OnNameTextChanged(0);
 	}
 	else
 	{
+		if (gpCreateNameEditBox)
+		{
+			D2Win_10076(gpCreateNameEditBox, "");
+		}
 		D2Win_10012(nullptr);
 	}
 }
@@ -1715,12 +1786,15 @@ BOOL __stdcall D2LAUNCH_EnterCharCreate()
 		tEdit.nHeight = 16;
 		tEdit.field_14 = 8;
 		tEdit.nStringId = 4;
-		tEdit.field_20 = D2LAUNCH_OnCreateCharConfirm;
+		tEdit.field_20 = nullptr;
+		tEdit.field_24 = reinterpret_cast<void*>(D2LAUNCH_OnCreateCharConfirm);
 		tEdit.field_28 = &gFontStyleFormal12;
 		gpCreateNameEditBox = reinterpret_cast<D2WinEditBoxStrc*>(RegisterControl(CONTROL_Create(&tEdit)));
 		if (gpCreateNameEditBox)
 		{
-			D2Win_10081(gpCreateNameEditBox, 15);
+			D2Win_10081(gpCreateNameEditBox, 16);
+			D2Win_10072(gpCreateNameEditBox, reinterpret_cast<int32_t>(D2LAUNCH_EditBoxCharFilter));
+			D2Win_10073(gpCreateNameEditBox, D2LAUNCH_OnNameTextChanged);
 		}
 
 		// Expansion Character Checkbox & Label (0x6FA636F8, 0x6FA636C8)

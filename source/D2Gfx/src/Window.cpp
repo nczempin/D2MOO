@@ -46,14 +46,14 @@ int32_t __stdcall WINDOW_Create(int32_t bWindowed, D2GameResolutionMode nResolut
     switch (nResolution)
     {
     case D2GAMERES_640x480:
-        rect.right = 640;
-        rect.bottom = 480;
+        rect.right = (bWindowed == 1) ? 1200 : 640;
+        rect.bottom = (bWindowed == 1) ? 900 : 480;
         break;
 
     case D2GAMERES_800x600:
     case NUM_GAME_RESOLUTIONS:
-        rect.right = 800;
-        rect.bottom = 600;
+        rect.right = (bWindowed == 1) ? 1200 : 800;
+        rect.bottom = (bWindowed == 1) ? 900 : 600;
         break;
 
     case D2GAMERES_1344x700:
@@ -72,7 +72,7 @@ int32_t __stdcall WINDOW_Create(int32_t bWindowed, D2GameResolutionMode nResolut
     uint32_t dwStyle = 0;
     if (bWindowed == 1)
     {
-        dwStyle = WS_CAPTION;
+        dwStyle = WS_OVERLAPPEDWINDOW;
     }
     else if (gnDisplayType == DISPLAYTYPE_OPENGL)
     {
@@ -321,14 +321,10 @@ int32_t __stdcall WINDOW_Resize(D2GameResolutionMode nResolution, int32_t bForce
         switch (nResolution)
         {
         case 0:
-            Rect.right = 640;
-            Rect.bottom = 480;
-            break;
-
         case 1:
         case 2:
-            Rect.right = 800;
-            Rect.bottom = 600;
+            Rect.right = 1200;
+            Rect.bottom = 900;
             break;
 
         case 3:
@@ -343,7 +339,7 @@ int32_t __stdcall WINDOW_Resize(D2GameResolutionMode nResolution, int32_t bForce
 
         //dword_6FA8D740 = Rect.bottom;
 
-        AdjustWindowRectEx(&Rect, WS_CAPTION, 0, WS_EX_APPWINDOW);
+        AdjustWindowRectEx(&Rect, WS_OVERLAPPEDWINDOW, 0, WS_EX_APPWINDOW);
 
         const int32_t nWidth = Rect.right - Rect.left;
         const int32_t nHeight = Rect.bottom - Rect.top;
