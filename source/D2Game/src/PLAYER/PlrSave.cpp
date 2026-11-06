@@ -2297,11 +2297,21 @@ int32_t __fastcall D2GAME_SAVE_GetUnitDataFromFile_6FC8CB40(D2GameStrc* pGame, D
             *ppPlayer = pPlayer;
             if (nErrorCode)
             {
-                return nErrorCode;
+                pClient->tSaveFlags.bExpansion = pGame->bExpansion;
+                pClient->tSaveFlags.bLadder = pGame->dwGameType;
+                pClient->tSaveFlags.bHardcore = (ARENA_GetFlags(pGame) & GAMEFLAG_ARENA_HARDCORE) ? 1 : 0;
+                const int32_t nFallbackErr = sub_6FC8C890(pGame, pClient, ppPlayer, pRoomArg, nXArg, nYArg);
+                if (nFallbackErr)
+                {
+                    return nFallbackErr;
+                }
             }
         }
         else
         {
+            pClient->tSaveFlags.bExpansion = pGame->bExpansion;
+            pClient->tSaveFlags.bLadder = pGame->dwGameType;
+            pClient->tSaveFlags.bHardcore = (ARENA_GetFlags(pGame) & GAMEFLAG_ARENA_HARDCORE) ? 1 : 0;
             const int32_t nErrorCode = sub_6FC8C890(pGame, pClient, ppPlayer, pRoomArg, nXArg, nYArg);
             if (nErrorCode)
             {
@@ -2313,6 +2323,9 @@ int32_t __fastcall D2GAME_SAVE_GetUnitDataFromFile_6FC8CB40(D2GameStrc* pGame, D
     {
         if (!a4)
         {
+            pClient->tSaveFlags.bExpansion = pGame->bExpansion;
+            pClient->tSaveFlags.bLadder = pGame->dwGameType;
+            pClient->tSaveFlags.bHardcore = (ARENA_GetFlags(pGame) & GAMEFLAG_ARENA_HARDCORE) ? 1 : 0;
             const int32_t nErrorCode = sub_6FC8C890(pGame, pClient, ppPlayer, pRoomArg, nXArg, nYArg);
             if (nErrorCode)
             {
@@ -2326,7 +2339,30 @@ int32_t __fastcall D2GAME_SAVE_GetUnitDataFromFile_6FC8CB40(D2GameStrc* pGame, D
             const uint32_t nSaveHeaderSize = CLIENTS_GetSaveHeaderSize(pClient);
             if (!nSaveHeaderSize)
             {
-                return SYSERROR_UNK_14;
+                D2UnitStrc* pPlayer = nullptr;
+                const int32_t nReadErr = D2GAME_SAVE_ReadFile_6FC8C9D0(pGame, pClient, szName, &pPlayer, pRoomArg, nXArg, nYArg);
+                if (!nReadErr && pPlayer)
+                {
+                    QUESTS_SequenceCycler(pGame, pPlayer, 0);
+                    *ppPlayer = pPlayer;
+                }
+                else
+                {
+                    pClient->tSaveFlags.bExpansion = pGame->bExpansion;
+                    pClient->tSaveFlags.bLadder = pGame->dwGameType;
+                    pClient->tSaveFlags.bHardcore = (ARENA_GetFlags(pGame) & GAMEFLAG_ARENA_HARDCORE) ? 1 : 0;
+                    const int32_t nFallbackErr = sub_6FC8C890(pGame, pClient, ppPlayer, pRoomArg, nXArg, nYArg);
+                    if (nFallbackErr)
+                    {
+                        return nFallbackErr;
+                    }
+                }
+                if (!*ppPlayer)
+                {
+                    return SYSERROR_UNK_14;
+                }
+                sub_6FD14C30(*ppPlayer);
+                return 0;
             }
 
             if (nSaveHeaderSize < 8)

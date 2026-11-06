@@ -875,7 +875,7 @@ uint32_t __stdcall D2NET_10006(int8_t a1, int32_t nClientId, void* pBufferArg, u
 
 	D2_ASSERT(nBufferSize <= MAX_MSG_SIZE);
 
-	if (sub_6FC01A00())
+	if (sub_6FC01A00() && nClientId == 0)
 	{
 		CLIENT_ReadPacketFromBuffer((D2PacketBufferStrc*)pBuffer, nBufferSize);
 		return nBufferSize;

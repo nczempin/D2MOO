@@ -52,7 +52,7 @@ uint32_t __fastcall CCMD_CanClientJoinGame(int32_t a1, int32_t a2, char* szClien
         return 6;
     }
 
-    if (a2 != 10)
+    if (a2 < 10 || a2 > 14)
     {
         GAME_LeaveGamesCriticalSection(pGame);
         return 16;
@@ -110,6 +110,35 @@ void __fastcall CCMD_ProcessClientSystemMessage(void* pData, int32_t nSize)
     case D2CLTSYS_JOINGAME:
     {
         D2GSPacketClt67* pPacket67 = (D2GSPacketClt67*)pPacket;
+        const int32_t nExistingClientId = CLIENTS_GetClientIdByName(pPacket67->szClientName);
+        if (nExistingClientId && nExistingClientId != nClientId)
+        {
+            GAME_DisconnectClientById(nExistingClientId, EVENTTYPE_DISCONNECT);
+        }
+        if (!pPacket67->nGameId || (!GAME_GetGameGUIDFromGameId(pPacket67->nGameId) && GAME_GetGameGUIDFromGameId(1)))
+        {
+            pPacket67->nGameId = 1;
+        }
+        if (!GAME_GetGameGUIDFromGameId(pPacket67->nGameId))
+        {
+            char szGameName[16] = "D2MOO";
+            GAME_SendGameInit(
+                nClientId,
+                szGameName,
+                3,
+                pPacket67->nPlayerClass,
+                pPacket67->szClientName,
+                0,
+                0x100004u,
+                0,
+                0,
+                0,
+                0,
+                pPacket67->nLocale,
+                0,
+                0);
+            break;
+        }
         if (!gpD2EventCallbackTable_6FD45830)
         {
             const uint32_t nErrorCode = CCMD_CanClientJoinGame(pPacket67->nGameId, pPacket67->unk0x08, pPacket67->szClientName);
@@ -117,6 +146,7 @@ void __fastcall CCMD_ProcessClientSystemMessage(void* pData, int32_t nSize)
             {
                 sub_6FC3C6D0(nClientId, nErrorCode);
                 D2NET_10015(nClientId, __FILE__, __LINE__);
+                break;
             }
         }
 

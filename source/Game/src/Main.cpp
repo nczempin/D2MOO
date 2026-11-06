@@ -674,6 +674,12 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 		tCfg.bWindow = TRUE;
 	}
 
+	char szHeadlessEnv[16] = {};
+	if (tCfg.dwGameType == 6 || tCfg.dwGameType == 8 || GetEnvironmentVariableA("D2MOO_HEADLESS_SERVER", szHeadlessEnv, sizeof(szHeadlessEnv)) > 0)
+	{
+		nChosenModule = MODULE_CLIENT;
+	}
+
 #if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
 	return GameStart(ghCurrentProcess, &tCfg, nChosenModule);
 #else

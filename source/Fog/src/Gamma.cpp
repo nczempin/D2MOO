@@ -178,6 +178,11 @@ int __fastcall FOG_10222(const uint8_t* pPacket, int nSize)
 //1.12a: Fog.dll 0x6FF6BFA0 (#10223)
 int __fastcall FOG_10223(uint8_t* pDest, int nDestSize, const uint8_t* pSrc, int nSrcSize)
 {
+	if (!gpFogHuffmanDecodeTable[0])
+	{
+		FOG_10218();
+	}
+
 	uint8_t* pOut = pDest;
 	int nRemainingDest = nDestSize;
 	uint8_t bCurByte = 0;
@@ -231,6 +236,11 @@ int __fastcall FOG_10223(uint8_t* pDest, int nDestSize, const uint8_t* pSrc, int
 //1.12a: Fog.dll 0x6FF6BEE0 (#10224)
 int __fastcall FOG_10224(char* pDest, int nDestSize, uint8_t* pSrc, int nSrcSize)
 {
+	if (!gpFogHuffmanDecodeTable[0])
+	{
+		FOG_10218();
+	}
+
 	char* pOut = pDest;
 	int nRemainingDest = nDestSize;
 	const uint8_t* pIn = pSrc;

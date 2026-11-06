@@ -2522,6 +2522,56 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 	hArchive = D2Win_GetArchive();
 	DATATBLS_LoadAllTxts(hArchive, 0, 0);
 
+	char szHeadlessEnv[16] = {};
+	if (GetEnvironmentVariableA("D2MOO_HEADLESS_SERVER", szHeadlessEnv, sizeof(szHeadlessEnv)) > 0 && szHeadlessEnv[0] != '0')
+	{
+		if (HWND hMainWnd = WINDOW_GetWindow())
+		{
+			ShowWindow(hMainWnd, SW_HIDE);
+		}
+		if (pCfg && pCfg->dwAct > 0 && pCfg->dwAct < 6)
+		{
+			GAME_SetGlobalAct(static_cast<int32_t>(pCfg->dwAct - 1));
+		}
+		if (pCfg && pCfg->dwSeed != 0)
+		{
+			GAME_SetInitSeed(static_cast<int32_t>(pCfg->dwSeed));
+		}
+		SERVER_Initialize(0, 1);
+		SERVER_SetMaxClientsPerGame(8);
+		SERVER_SetHackListEnabled(FALSE);
+		GAME_InitGameDataTable(&gLocalGameDataTable, gLocalGameList);
+		D2Game_10046();
+
+		gbWindowClosed = 0;
+		while (!gbWindowClosed)
+		{
+			MSG msg = {};
+			while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
+			{
+				if (msg.message == WM_QUIT)
+				{
+					gbWindowClosed = 1;
+					break;
+				}
+				TranslateMessage(&msg);
+				DispatchMessageA(&msg);
+			}
+			GAME_ProcessNetworkMessages();
+			GAME_UpdateGamesProgress(1);
+			GAME_UpdateClients(0, 0);
+			Sleep(20);
+		}
+
+		GAME_CloseAllGames();
+		SERVER_Release();
+		D2Win_10016();
+		DATATBLS_UnloadAllBins();
+		STRTABLE_Destroy();
+		LOG_11105();
+		return D2CLIENT_MODULE_NONE;
+	}
+
 	gnClientState = D2CLIENT_STATE_INIT_SESSION;
 	gbExitApplication = 1;
 
