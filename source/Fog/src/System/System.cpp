@@ -229,7 +229,12 @@ static bool FOG_TryGetLocalGameDir(char* pPathBuffer, size_t nBufferSize)
 // 1.12a: Fog.0x6FF6F060 (#10115)
 size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 {
-	if (FOG_TryGetLocalGameDir(pPathBuffer, nBufferSize))
+	char szEnvSaveDir[MAX_PATH] = {};
+	if (GetEnvironmentVariableA("D2MOO_SAVE_DIR", szEnvSaveDir, sizeof(szEnvSaveDir)) > 0 && szEnvSaveDir[0] != '\0')
+	{
+		SStrCopy(pPathBuffer, szEnvSaveDir, nBufferSize);
+	}
+	else if (FOG_TryGetLocalGameDir(pPathBuffer, nBufferSize))
 	{
 		SStrNCat(pPathBuffer, "save\\", static_cast<int>(nBufferSize));
 	}
@@ -256,7 +261,7 @@ size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 	if (nBufferSize != 0)
 	{
 		const size_t nLen = static_cast<size_t>(SStrLen(pPathBuffer));
-		if (nLen == 0 || pPathBuffer[nLen - 1] != '\\')
+		if (nLen == 0 || (pPathBuffer[nLen - 1] != '\\' && pPathBuffer[nLen - 1] != '/'))
 		{
 			if (nLen + 1 < nBufferSize)
 			{

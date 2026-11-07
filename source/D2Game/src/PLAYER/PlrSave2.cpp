@@ -663,6 +663,8 @@ int32_t __fastcall PLRSAVE2_CheckPlayerFlags(D2GameStrc* pGame, uint32_t dwFlags
 		const bool bCurrentLadder = true;
 		if (dwFlags & CLIENTSAVEFLAG_LADDER && bCurrentLadder)
 #else
+	if (gpD2EventCallbackTable_6FD45830)
+	{
 		if (dwFlags & CLIENTSAVEFLAG_LADDER)
 #endif
 		{
@@ -678,9 +680,7 @@ int32_t __fastcall PLRSAVE2_CheckPlayerFlags(D2GameStrc* pGame, uint32_t dwFlags
 				return PLRSAVE2ERROR_LADDERGAME;
 			}
 		}
-#if PLRSAVE2_CHECK_LADDER_TIMESTAMP
 	}
-#endif
     if (dwFlags & CLIENTSAVEFLAG_HARDCORE)
     {
         if (dwFlags & CLIENTSAVEFLAG_DEAD)

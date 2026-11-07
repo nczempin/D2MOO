@@ -1129,13 +1129,9 @@ void __stdcall D2LAUNCH_EnterMainMenu(int32_t nUnused)
 	RegisterControl(CONTROL_Create(&tBtn));
 }
 
-static void EnumerateSavedCharacters()
+static void EnumerateSavedCharactersFromDir(const char* szSaveDir, D2LaunchCharNodeStrc** ppTail)
 {
-	FreeCharList();
-
-	char szSaveDir[MAX_PATH] = {};
 	char szPattern[MAX_PATH * 2] = {};
-	FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
 	std::snprintf(szPattern, sizeof(szPattern), "%s*.d2s", szSaveDir);
 
 	WIN32_FIND_DATAA tFind = {};
@@ -1144,8 +1140,6 @@ static void EnumerateSavedCharacters()
 	{
 		return;
 	}
-
-	D2LaunchCharNodeStrc* pTail = nullptr;
 
 	do
 	{
@@ -1169,50 +1163,66 @@ static void EnumerateSavedCharacters()
 				tHdr.dwVersion >= 0x47 &&
 				tHdr.dwVersion <= 0x60)
 			{
-				D2LaunchCharNodeStrc* pNode = static_cast<D2LaunchCharNodeStrc*>(D2_CALLOC(sizeof(D2LaunchCharNodeStrc)));
-				if (pNode)
+				char szCandidateName[16] = {};
+				tHdr.szName[15] = '\0';
+				if (tHdr.szName[0])
 				{
-					tHdr.szName[15] = '\0';
-					if (tHdr.szName[0])
+					SStrCopy(szCandidateName, tHdr.szName, sizeof(szCandidateName));
+				}
+				else
+				{
+					SStrCopy(szCandidateName, tFind.cFileName, sizeof(szCandidateName));
+					if (char* pDot = std::strrchr(szCandidateName, '.'))
 					{
-						SStrCopy(pNode->szCharName, tHdr.szName, sizeof(pNode->szCharName));
+						*pDot = '\0';
 					}
-					else
+				}
+
+				bool bAlreadyListed = false;
+				for (D2LaunchCharNodeStrc* pCur = gpCharListHead; pCur; pCur = pCur->pNext)
+				{
+					if (_stricmp(pCur->szCharName, szCandidateName) == 0)
 					{
-						SStrCopy(pNode->szCharName, tFind.cFileName, sizeof(pNode->szCharName));
-						if (char* pDot = std::strrchr(pNode->szCharName, '.'))
+						bAlreadyListed = true;
+						break;
+					}
+				}
+
+				if (!bAlreadyListed)
+				{
+					D2LaunchCharNodeStrc* pNode = static_cast<D2LaunchCharNodeStrc*>(D2_CALLOC(sizeof(D2LaunchCharNodeStrc)));
+					if (pNode)
+					{
+						SStrCopy(pNode->szCharName, szCandidateName, sizeof(pNode->szCharName));
+						pNode->wSaveFlags = static_cast<uint16_t>(tHdr.dwSaveFlags);
+						pNode->nCharClass = (tHdr.nCharClass < 7) ? tHdr.nCharClass : 0;
+						pNode->nCharLevel = tHdr.nCharLevel ? tHdr.nCharLevel : 1;
+						std::memcpy(pNode->nAppearanceComponents, tHdr.nAppearanceComponents, 16);
+						std::memcpy(pNode->nAppearanceColors, tHdr.nAppearanceColors, 16);
+
+						EncodePreviewInfo(
+							&pNode->tPreview,
+							pNode->nCharClass,
+							pNode->nCharLevel,
+							pNode->wSaveFlags,
+							pNode->nAppearanceComponents,
+							pNode->nAppearanceColors);
+
+						pNode->pNext = nullptr;
+						if (!gpCharListHead)
 						{
-							*pDot = '\0';
+							gpCharListHead = pNode;
+							*ppTail = pNode;
 						}
-					}
-					pNode->wSaveFlags = static_cast<uint16_t>(tHdr.dwSaveFlags);
-					pNode->nCharClass = (tHdr.nCharClass < 7) ? tHdr.nCharClass : 0;
-					pNode->nCharLevel = tHdr.nCharLevel ? tHdr.nCharLevel : 1;
-					std::memcpy(pNode->nAppearanceComponents, tHdr.nAppearanceComponents, 16);
-					std::memcpy(pNode->nAppearanceColors, tHdr.nAppearanceColors, 16);
-
-					EncodePreviewInfo(
-						&pNode->tPreview,
-						pNode->nCharClass,
-						pNode->nCharLevel,
-						pNode->wSaveFlags,
-						pNode->nAppearanceComponents,
-						pNode->nAppearanceColors);
-
-					pNode->pNext = nullptr;
-					if (!gpCharListHead)
-					{
-						gpCharListHead = pNode;
-						pTail = pNode;
-					}
-					else
-					{
-						pTail->pNext = pNode;
-						pTail = pNode;
-					}
-					if (!gpSelectedChar)
-					{
-						gpSelectedChar = pNode;
+						else
+						{
+							(*ppTail)->pNext = pNode;
+							*ppTail = pNode;
+						}
+						if (!gpSelectedChar)
+						{
+							gpSelectedChar = pNode;
+						}
 					}
 				}
 			}
@@ -1221,6 +1231,25 @@ static void EnumerateSavedCharacters()
 	} while (FindNextFileA(hFind, &tFind));
 
 	FindClose(hFind);
+}
+
+static void EnumerateSavedCharacters()
+{
+	FreeCharList();
+
+	char szSaveDir[MAX_PATH] = {};
+	FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
+
+	D2LaunchCharNodeStrc* pTail = nullptr;
+	EnumerateSavedCharactersFromDir(szSaveDir, &pTail);
+
+	static const char* const kFallbackDirs[] = { "..\\..\\Debug\\save\\", "..\\..\\Release\\save\\" };
+	for (const char* szRel : kFallbackDirs)
+	{
+		char szAltDir[MAX_PATH * 2] = {};
+		std::snprintf(szAltDir, sizeof(szAltDir), "%s%s", szSaveDir, szRel);
+		EnumerateSavedCharactersFromDir(szAltDir, &pTail);
+	}
 }
 
 // 1.12a: 0x6FA4CF70 (Populate character slot text & selection visuals)

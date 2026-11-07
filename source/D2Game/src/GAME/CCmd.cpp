@@ -1,6 +1,8 @@
 #include "GAME/CCmd.h"
 
+#include <cstdio>
 #include <Storm.h>
+#include <Fog.h>
 
 // D2Net
 #include <Server.h>
@@ -35,12 +37,12 @@ int32_t __fastcall CCMD_IsStringZeroTerminated(const char* pData, int32_t nDataS
 uint32_t __fastcall CCMD_CanClientJoinGame(int32_t a1, int32_t a2, char* szClientName)
 {
     // TODO: Names
-    if (a1 != 1)
+    if (a1 < 1 || a1 > 1024)
     {
         return 6;
     }
 
-    const D2GameGUID nGUID = GAME_GetGameGUIDFromGameId(1u);
+    const D2GameGUID nGUID = GAME_GetGameGUIDFromGameId(static_cast<uint16_t>(a1));
     if (!nGUID)
     {
         return 6;
@@ -115,21 +117,98 @@ void __fastcall CCMD_ProcessClientSystemMessage(void* pData, int32_t nSize)
         {
             GAME_DisconnectClientById(nExistingClientId, EVENTTYPE_DISCONNECT);
         }
-        if (!pPacket67->nGameId || (!GAME_GetGameGUIDFromGameId(pPacket67->nGameId) && GAME_GetGameGUIDFromGameId(1)))
+
+        // Purge any empty games (nClients == 0) and locate an active populated game if one exists
+        uint16_t nActiveGameId = 0;
+        for (uint16_t id = 1; id <= 1024; ++id)
         {
-            pPacket67->nGameId = 1;
+            const D2GameGUID nGUID = GAME_GetGameGUIDFromGameId(id);
+            if (!nGUID || nGUID == static_cast<D2GameGUID>(-1))
+            {
+                continue;
+            }
+            if (D2GameStrc* pExistingGame = GAME_LockGame(nGUID))
+            {
+                const int32_t nClientsInGame = pExistingGame->nClients;
+                D2_UNLOCK(pExistingGame->lpCriticalSection);
+                if (nClientsInGame <= 0)
+                {
+                    GAME_CloseGame(nGUID);
+                }
+                else if (!nActiveGameId || id == pPacket67->nGameId)
+                {
+                    nActiveGameId = id;
+                }
+            }
         }
+
+        if (!GAME_GetGameGUIDFromGameId(pPacket67->nGameId) && nActiveGameId != 0)
+        {
+            pPacket67->nGameId = nActiveGameId;
+        }
+
         if (!GAME_GetGameGUIDFromGameId(pPacket67->nGameId))
         {
+            uint32_t nGameFlags = 0x100004u;
+            uint8_t nPlayerClass = pPacket67->nPlayerClass < 7 ? pPacket67->nPlayerClass : 0;
+
+            char szSaveDir[1024] = {};
+            FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
+            char szSaveFile[1024] = {};
+            std::snprintf(szSaveFile, sizeof(szSaveFile), "%s%s.d2s", szSaveDir, pPacket67->szClientName);
+            FILE* pSaveFp = std::fopen(szSaveFile, "rb");
+            if (!pSaveFp)
+            {
+                static const char* const kFallbackDirs[] = { "Debug\\save\\", "Release\\save\\" };
+                for (const char* szRel : kFallbackDirs)
+                {
+                    std::snprintf(szSaveFile, sizeof(szSaveFile), "%s..\\..\\%s%s.d2s", szSaveDir, szRel, pPacket67->szClientName);
+                    pSaveFp = std::fopen(szSaveFile, "rb");
+                    if (pSaveFp)
+                    {
+                        break;
+                    }
+                }
+            }
+            if (pSaveFp)
+            {
+                uint8_t aHdr[64] = {};
+                const size_t nRead = std::fread(aHdr, 1, sizeof(aHdr), pSaveFp);
+                std::fclose(pSaveFp);
+                if (nRead >= 44 && *reinterpret_cast<const uint32_t*>(&aHdr[0]) == 0xAA55AA55u)
+                {
+                    const uint32_t nVersion = *reinterpret_cast<const uint32_t*>(&aHdr[4]);
+                    const uint32_t dwSaveFlags = *reinterpret_cast<const uint32_t*>(nVersion > 91u ? &aHdr[0x24] : &aHdr[24]);
+                    nGameFlags = 0x000004u;
+                    if (dwSaveFlags & CLIENTSAVEFLAG_EXPANSION)
+                    {
+                        nGameFlags |= 0x100000u;
+                    }
+                    if (dwSaveFlags & CLIENTSAVEFLAG_LADDER)
+                    {
+                        nGameFlags |= 0x200000u;
+                    }
+                    if (dwSaveFlags & CLIENTSAVEFLAG_HARDCORE)
+                    {
+                        nGameFlags |= 0x000800u;
+                    }
+                    const uint8_t nHdrClass = (nVersion > 91u) ? aHdr[0x28] : aHdr[34];
+                    if (nHdrClass < 7u)
+                    {
+                        nPlayerClass = nHdrClass;
+                    }
+                }
+            }
+
             char szGameName[16] = "D2MOO";
             GAME_SendGameInit(
                 nClientId,
                 szGameName,
                 3,
-                pPacket67->nPlayerClass,
+                nPlayerClass,
                 pPacket67->szClientName,
                 0,
-                0x100004u,
+                nGameFlags,
                 0,
                 0,
                 0,

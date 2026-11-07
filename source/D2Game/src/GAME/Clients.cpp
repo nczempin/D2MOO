@@ -357,22 +357,25 @@ int32_t __fastcall CLIENTS_AddPlayerToGame(D2ClientStrc* pClient, D2GameStrc* pG
         }
     }
 
-    if (pClient->tSaveFlags.bLadder)
+    if (gpD2EventCallbackTable_6FD45830)
     {
-        if (!pGame->dwGameType)
+        if (pClient->tSaveFlags.bLadder)
         {
-            FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_NOTLADDERGAME\n", pClient->szName);
-            pClient->pPlayer = nullptr;
-            return SYSERROR_NOTLADDERGAME;
+            if (!pGame->dwGameType)
+            {
+                FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_NOTLADDERGAME\n", pClient->szName);
+                pClient->pPlayer = nullptr;
+                return SYSERROR_NOTLADDERGAME;
+            }
         }
-    }
-    else
-    {
-        if (pGame->dwGameType)
+        else
         {
-            FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_LADDERGAME\n", pClient->szName);
-            pClient->pPlayer = 0;
-            return SYSERROR_LADDERGAME;
+            if (pGame->dwGameType)
+            {
+                FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_LADDERGAME\n", pClient->szName);
+                pClient->pPlayer = 0;
+                return SYSERROR_LADDERGAME;
+            }
         }
     }
     if (pClient->tSaveFlags.bHardcore)

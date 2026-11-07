@@ -679,7 +679,12 @@ function handleGameConnection(ws) {
 
   ws.onClose(() => {
     if (!tcp.destroyed) {
-      tcp.destroy()
+      tcp.end()
+      setTimeout(() => {
+        if (!tcp.destroyed) {
+          tcp.destroy()
+        }
+      }, 150)
     }
   })
 }

@@ -34,7 +34,7 @@
 #include "UNIT/SUnitNpc.h"
 
 
-int32_t gbWriteSaveFile_6FD30E08;
+int32_t gbWriteSaveFile_6FD30E08 = 1;
 int32_t dword_6FD4DC28;
 
 
@@ -718,6 +718,22 @@ int32_t __fastcall D2GAME_SAVE_WriteFile_6FC8A500(D2GameStrc* pGame, D2UnitStrc*
         FOG_Trace("Unable to open player save file %s", szFileName);
     }
 
+    static const char* const kSiblingSaveDirs[] = { "Debug\\save\\", "Release\\save\\" };
+    for (const char* szRel : kSiblingSaveDirs)
+    {
+        char szSiblingFile[1024] = {};
+        sprintf(szSiblingFile, "%s..\\..\\%s%s.d2s", szDirectory, szRel, szName);
+        if (FILE* pCheck = fopen(szSiblingFile, "rb"))
+        {
+            fclose(pCheck);
+            if (FILE* pSibOut = fopen(szSiblingFile, "wb"))
+            {
+                FileLockAndWrite(pSaveData, nFileSize, 1u, pSibOut);
+                fclose(pSibOut);
+            }
+        }
+    }
+
     return 1;
 }
 
@@ -798,22 +814,25 @@ int32_t __fastcall sub_6FC8A780(D2GameStrc* pGame, D2ClientStrc* pClient, uint8_
         }
     }
 
-    if (nFlags & CLIENTSAVEFLAG_LADDER)
+    if (gpD2EventCallbackTable_6FD45830)
     {
-        if (!pGame->dwGameType)
+        if (nFlags & CLIENTSAVEFLAG_LADDER)
         {
-            FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_NOTLADDERGAME\n", CLIENTS_GetName(pClient));
-            CLIENTS_SetPlayerInClient(pClient, 0);
-            return SYSERROR_NOTLADDERGAME;
+            if (!pGame->dwGameType)
+            {
+                FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_NOTLADDERGAME\n", CLIENTS_GetName(pClient));
+                CLIENTS_SetPlayerInClient(pClient, 0);
+                return SYSERROR_NOTLADDERGAME;
+            }
         }
-    }
-    else
-    {
-        if (pGame->dwGameType)
+        else
         {
-            FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_LADDERGAME\n", CLIENTS_GetName(pClient));
-            CLIENTS_SetPlayerInClient(pClient, 0);
-            return SYSERROR_LADDERGAME;
+            if (pGame->dwGameType)
+            {
+                FOG_Trace("[PLAYER LOAD]  ClientAddPlayerToGame()  Error Loading:%s  Error:SYSERROR_LADDERGAME\n", CLIENTS_GetName(pClient));
+                CLIENTS_SetPlayerInClient(pClient, 0);
+                return SYSERROR_LADDERGAME;
+            }
         }
     }
 
@@ -2238,6 +2257,20 @@ int32_t __fastcall D2GAME_SAVE_ReadFile_6FC8C9D0(D2GameStrc* pGame, D2ClientStrc
     sprintf_s(szFileName, "%s%s.d2s", szPath, szName);
 
     FILE* pSaveFile = fopen(szFileName, "rb"); // NOLINT(clang-diagnostic-deprecated-declarations)
+    if (!pSaveFile)
+    {
+        static const char* const kFallbackDirs[] = { "..\\Debug\\save\\", "..\\Release\\save\\" };
+        for (const char* szRel : kFallbackDirs)
+        {
+            char szAltFile[500] = {};
+            sprintf_s(szAltFile, "%s..\\..\\%s%s.d2s", szPath, szRel + 3, szName);
+            pSaveFile = fopen(szAltFile, "rb"); // NOLINT(clang-diagnostic-deprecated-declarations)
+            if (pSaveFile)
+            {
+                break;
+            }
+        }
+    }
     if (!pSaveFile)
     {
         return SYSERROR_UNK_14;

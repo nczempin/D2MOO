@@ -2064,6 +2064,19 @@ static void LoadCharacterSaveAppearance()
 	std::snprintf(szFullPath, sizeof(szFullPath), "%s%s.d2s", szSaveDir, gszCharName);
 
 	FILE* pFile = std::fopen(szFullPath, "rb");
+	if (!pFile)
+	{
+		static const char* const kFallbackDirs[] = { "..\\..\\Debug\\save\\", "..\\..\\Release\\save\\" };
+		for (const char* szRel : kFallbackDirs)
+		{
+			std::snprintf(szFullPath, sizeof(szFullPath), "%s%s%s.d2s", szSaveDir, szRel, gszCharName);
+			pFile = std::fopen(szFullPath, "rb");
+			if (pFile)
+			{
+				break;
+			}
+		}
+	}
 	if (pFile)
 	{
 		uint8_t aHdr[0xB0] = {};
