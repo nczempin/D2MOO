@@ -693,6 +693,16 @@ const INJECTED_D2MOO_BOOTSTRAP = `
 <script>
   (() => {
     try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('sw')) {
+        url.searchParams.set('sw', '0');
+        window.history.replaceState(null, '', url.toString());
+      }
+      if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === 'function') {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (const r of regs) r.unregister();
+        }).catch(() => {});
+      }
       const host = window.location.host || '127.0.0.1:8787';
       const raw = window.localStorage.getItem('d2web.settings.v1');
       const parsed = raw ? JSON.parse(raw) : {};
@@ -700,6 +710,12 @@ const INJECTED_D2MOO_BOOTSTRAP = `
       if (!parsed.lang) parsed.lang = 'en';
       window.localStorage.setItem('d2web.settings.v1', JSON.stringify(parsed));
       window.localStorage.setItem('d2_last_bnet_account', 'D2MOO');
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith('d2_active_char_lease_v1:')) {
+          window.localStorage.removeItem(k);
+        }
+      }
     } catch {}
   })();
 </script>
