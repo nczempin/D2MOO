@@ -4277,6 +4277,123 @@ static const FnClientStateHandler gapfnClientStateHandlers[D2CLIENT_STATE_COUNT]
 };
 
 // 1.12a: 0x6FAC24C0
+static void EnsureOriginal112aClientDirectory(const char* szExeDir, char* szOutOrigDir, size_t nOutSize)
+{
+	std::snprintf(szOutOrigDir, nOutSize, "%s\\Original112a", szExeDir);
+	CreateDirectoryA(szOutOrigDir, nullptr);
+
+	char szShimSrc[MAX_PATH] = {};
+	char szShimDst[MAX_PATH] = {};
+	std::snprintf(szShimSrc, sizeof(szShimSrc), "%s\\D2LaunchOrigShim.dll", szExeDir);
+	std::snprintf(szShimDst, sizeof(szShimDst), "%s\\D2Launch.dll", szOutOrigDir);
+	if (GetFileAttributesA(szShimSrc) != INVALID_FILE_ATTRIBUTES)
+	{
+		CopyFileA(szShimSrc, szShimDst, FALSE);
+	}
+
+	static const char* const kUntouchedDirs[] = {
+		"C:\\Users\\nicol\\.gemini\\antigravity\\worktrees\\rea-research-catalog\\d2moo_version_binaries_check\\targets\\diablo-ii-1.12a\\game",
+		"H:\\git\\D2MOO-112a\\targets\\diablo-ii-1.12a\\game"
+	};
+	const char* szUntouchedDir = nullptr;
+	for (const char* szCandidate : kUntouchedDirs)
+	{
+		if (GetFileAttributesA(szCandidate) != INVALID_FILE_ATTRIBUTES)
+		{
+			szUntouchedDir = szCandidate;
+			break;
+		}
+	}
+
+	static const char* const kUntouchedFiles[] = {
+		"Game.exe", "D2Client.dll", "D2Common.dll", "D2Game.dll", "D2Gdi.dll",
+		"D2gfx.dll", "D2Direct3D.dll", "D2DDraw.dll", "D2Glide.dll", "D2Lang.dll",
+		"D2MCPClient.dll", "D2Multi.dll", "D2Net.dll", "D2sound.dll", "D2Win.dll",
+		"D2CMP.dll", "Fog.dll", "Storm.dll", "Bnclient.dll", "binkw32.dll",
+		"SmackW32.dll", "ijl11.dll", "D2.LNG"
+	};
+	if (szUntouchedDir)
+	{
+		for (const char* szFile : kUntouchedFiles)
+		{
+			char szSrc[MAX_PATH] = {};
+			char szDst[MAX_PATH] = {};
+			std::snprintf(szSrc, sizeof(szSrc), "%s\\%s", szUntouchedDir, szFile);
+			std::snprintf(szDst, sizeof(szDst), "%s\\%s", szOutOrigDir, szFile);
+			if (GetFileAttributesA(szDst) == INVALID_FILE_ATTRIBUTES &&
+				GetFileAttributesA(szSrc) != INVALID_FILE_ATTRIBUTES)
+			{
+				if (!CreateHardLinkA(szDst, szSrc, nullptr))
+				{
+					CopyFileA(szSrc, szDst, FALSE);
+				}
+			}
+		}
+	}
+
+	static const char* const kMpqFiles[] = {
+		"d2data.mpq", "d2exp.mpq", "d2sfx.mpq", "d2speech.mpq", "d2char.mpq",
+		"d2music.mpq", "D2xMusic.mpq", "d2xtalk.mpq", "d2video.mpq", "D2xVideo.mpq",
+		"patch_d2.mpq"
+	};
+	for (const char* szMpq : kMpqFiles)
+	{
+		char szSrc[MAX_PATH] = {};
+		char szDst[MAX_PATH] = {};
+		std::snprintf(szSrc, sizeof(szSrc), "%s\\%s", szExeDir, szMpq);
+		std::snprintf(szDst, sizeof(szDst), "%s\\%s", szOutOrigDir, szMpq);
+		if (GetFileAttributesA(szDst) == INVALID_FILE_ATTRIBUTES &&
+			GetFileAttributesA(szSrc) != INVALID_FILE_ATTRIBUTES)
+		{
+			if (!CreateHardLinkA(szDst, szSrc, nullptr))
+			{
+				CopyFileA(szSrc, szDst, FALSE);
+			}
+		}
+	}
+
+	// Point HKCU "Diablo II\InstallPath" and "Save Path" to Original112a\ and save\
+	// BEFORE launching Original112a\Game.exe so untouched 1.12a Fog.dll / D2Win.dll
+	// locates d2exp.mpq and the shared save folder without prompting for an Expansion CD.
+	HKEY hD2Key = nullptr;
+	if (RegCreateKeyExA(
+			HKEY_CURRENT_USER,
+			"Software\\Blizzard Entertainment\\Diablo II",
+			0,
+			nullptr,
+			0,
+			KEY_SET_VALUE,
+			nullptr,
+			&hD2Key,
+			nullptr) == ERROR_SUCCESS)
+	{
+		char szInstallPathWithSlash[MAX_PATH] = {};
+		std::snprintf(szInstallPathWithSlash, sizeof(szInstallPathWithSlash), "%s\\", szOutOrigDir);
+		RegSetValueExA(
+			hD2Key,
+			"InstallPath",
+			0,
+			REG_SZ,
+			reinterpret_cast<const BYTE*>(szInstallPathWithSlash),
+			static_cast<DWORD>(std::strlen(szInstallPathWithSlash) + 1));
+		RegDeleteValueA(hD2Key, "Default Command Line");
+
+		char szSaveDir[MAX_PATH] = {};
+		FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
+		if (szSaveDir[0] != '\0')
+		{
+			RegSetValueExA(
+				hD2Key,
+				"Save Path",
+				0,
+				REG_SZ,
+				reinterpret_cast<const BYTE*>(szSaveDir),
+				static_cast<DWORD>(std::strlen(szSaveDir) + 1));
+		}
+		RegCloseKey(hD2Key);
+	}
+}
+
 int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 {
 	gpD2Config = pCfg;
@@ -4304,19 +4421,31 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 
 	char szHeadlessEnv[16] = {};
 	char szUseTsEnv[16] = {};
+	char szUseOrigEnv[16] = {};
 	char szConnectHostEnv[64] = {};
 	const bool bHasConnectHost =
 		(GetEnvironmentVariableA("D2MOO_CONNECT_HOST", szConnectHostEnv, sizeof(szConnectHostEnv)) > 0 && szConnectHostEnv[0] != '\0');
 	const bool bExplicitHeadless =
 		(GetEnvironmentVariableA("D2MOO_HEADLESS_SERVER", szHeadlessEnv, sizeof(szHeadlessEnv)) > 0 && szHeadlessEnv[0] != '0');
+	const bool bUseOriginalClient =
+		!bHasConnectHost &&
+		!bExplicitHeadless &&
+		(GetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", szUseOrigEnv, sizeof(szUseOrigEnv)) > 0 && szUseOrigEnv[0] != '0');
 	const bool bUseTsClient =
 		!bHasConnectHost &&
 		!bExplicitHeadless &&
+		!bUseOriginalClient &&
 		(GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szUseTsEnv, sizeof(szUseTsEnv)) > 0 && szUseTsEnv[0] != '0');
 
-	if (bExplicitHeadless || bUseTsClient)
+	if (bExplicitHeadless || bUseTsClient || bUseOriginalClient)
 	{
-		if (HWND hMainWnd = WINDOW_GetWindow())
+		if (bUseOriginalClient)
+		{
+			// Destroy the server's "Diablo II" window class instance so the untouched 1.12a
+			// D2gfx.dll single-instance check (FindWindowA("Diablo II", 0)) succeeds.
+			WINDOW_Destroy();
+		}
+		else if (HWND hMainWnd = WINDOW_GetWindow())
 		{
 			ShowWindow(hMainWnd, bUseTsClient ? SW_MINIMIZE : SW_HIDE);
 			if (bUseTsClient)
@@ -4340,7 +4469,14 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 
 		HANDLE hWebJob = nullptr;
 		PROCESS_INFORMATION tWebProcInfo = {};
-		if (bUseTsClient)
+		char szExeDir[MAX_PATH] = {};
+		GetModuleFileNameA(nullptr, szExeDir, sizeof(szExeDir));
+		if (char* pLastSlash = std::strrchr(szExeDir, '\\'))
+		{
+			*pLastSlash = '\0';
+		}
+
+		if (bUseTsClient || bUseOriginalClient)
 		{
 			hWebJob = CreateJobObjectA(nullptr, nullptr);
 			if (hWebJob)
@@ -4348,20 +4484,6 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 				JOBOBJECT_EXTENDED_LIMIT_INFORMATION tJobLimits = {};
 				tJobLimits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 				SetInformationJobObject(hWebJob, JobObjectExtendedLimitInformation, &tJobLimits, sizeof(tJobLimits));
-			}
-
-			char szExeDir[MAX_PATH] = {};
-			GetModuleFileNameA(nullptr, szExeDir, sizeof(szExeDir));
-			if (char* pLastSlash = std::strrchr(szExeDir, '\\'))
-			{
-				*pLastSlash = '\0';
-			}
-
-			char szScriptPath[MAX_PATH] = {};
-			std::snprintf(szScriptPath, sizeof(szScriptPath), "%s\\..\\..\\..\\tools\\start_d2moo_web.mjs", szExeDir);
-			if (GetFileAttributesA(szScriptPath) == INVALID_FILE_ATTRIBUTES)
-			{
-				SStrCopy(szScriptPath, "H:\\git\\D2MOO-112a\\tools\\start_d2moo_web.mjs", sizeof(szScriptPath));
 			}
 
 			char szSaveDir[MAX_PATH] = {};
@@ -4374,37 +4496,101 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 			}
 			LoadCharacterSaveAppearance();
 
-			char szCmdLine[1024] = {};
-			std::snprintf(
-				szCmdLine,
-				sizeof(szCmdLine),
-				"node \"%s\" --attach --char \"%s\" --class %d",
-				szScriptPath,
-				gszCharName[0] ? gszCharName : "WebHero",
-				static_cast<int32_t>(gnCharClass));
-
-			STARTUPINFOA tStartupInfo = {};
-			tStartupInfo.cb = sizeof(tStartupInfo);
-			tStartupInfo.dwFlags = STARTF_USESHOWWINDOW;
-			tStartupInfo.wShowWindow = SW_HIDE;
-
-			if (CreateProcessA(
-					nullptr,
-					szCmdLine,
-					nullptr,
-					nullptr,
-					FALSE,
-					CREATE_NO_WINDOW | CREATE_SUSPENDED,
-					nullptr,
-					szExeDir,
-					&tStartupInfo,
-					&tWebProcInfo))
+			if (bUseOriginalClient)
 			{
-				if (hWebJob)
+				char szOrigDir[MAX_PATH] = {};
+				EnsureOriginal112aClientDirectory(szExeDir, szOrigDir, sizeof(szOrigDir));
+
+				char szClassBuf[16] = {};
+				char szArenaBuf[32] = {};
+				char szSaveFlagsBuf[32] = {};
+				std::snprintf(szClassBuf, sizeof(szClassBuf), "%d", static_cast<int32_t>(gnCharClass));
+				std::snprintf(
+					szArenaBuf,
+					sizeof(szArenaBuf),
+					"0x%X",
+					static_cast<unsigned int>((pCfg && pCfg->nArenaFlags) ? pCfg->nArenaFlags : 0x100004u));
+				std::snprintf(
+					szSaveFlagsBuf,
+					sizeof(szSaveFlagsBuf),
+					"0x%X",
+					static_cast<unsigned int>(pCfg ? pCfg->unpackedCTemp.nCharacterSaveFlags : 0x20u));
+
+				SetEnvironmentVariableA("D2MOO_ORIG_CHAR_NAME", gszCharName[0] ? gszCharName : "ExpansionHero");
+				SetEnvironmentVariableA("D2MOO_ORIG_CHAR_CLASS", szClassBuf);
+				SetEnvironmentVariableA("D2MOO_ORIG_ARENA_FLAGS", szArenaBuf);
+				SetEnvironmentVariableA("D2MOO_ORIG_SAVE_FLAGS", szSaveFlagsBuf);
+				SetEnvironmentVariableA("D2MOO_ORIG_SERVER_IP", "127.0.0.1");
+				SetEnvironmentVariableA("D2MOO_ORIG_GAME_NAME", "D2MOO");
+
+				char szOrigExe[MAX_PATH] = {};
+				char szCmdLine[1024] = {};
+				std::snprintf(szOrigExe, sizeof(szOrigExe), "%s\\Game.exe", szOrigDir);
+				std::snprintf(szCmdLine, sizeof(szCmdLine), "\"%s\" -w", szOrigExe);
+
+				STARTUPINFOA tStartupInfo = {};
+				tStartupInfo.cb = sizeof(tStartupInfo);
+
+				if (CreateProcessA(
+						szOrigExe,
+						szCmdLine,
+						nullptr,
+						nullptr,
+						FALSE,
+						CREATE_SUSPENDED,
+						nullptr,
+						szOrigDir,
+						&tStartupInfo,
+						&tWebProcInfo))
 				{
-					AssignProcessToJobObject(hWebJob, tWebProcInfo.hProcess);
+					if (hWebJob)
+					{
+						AssignProcessToJobObject(hWebJob, tWebProcInfo.hProcess);
+					}
+					ResumeThread(tWebProcInfo.hThread);
 				}
-				ResumeThread(tWebProcInfo.hThread);
+			}
+			else
+			{
+				char szScriptPath[MAX_PATH] = {};
+				std::snprintf(szScriptPath, sizeof(szScriptPath), "%s\\..\\..\\..\\tools\\start_d2moo_web.mjs", szExeDir);
+				if (GetFileAttributesA(szScriptPath) == INVALID_FILE_ATTRIBUTES)
+				{
+					SStrCopy(szScriptPath, "H:\\git\\D2MOO-112a\\tools\\start_d2moo_web.mjs", sizeof(szScriptPath));
+				}
+
+				char szCmdLine[1024] = {};
+				std::snprintf(
+					szCmdLine,
+					sizeof(szCmdLine),
+					"node \"%s\" --attach --char \"%s\" --class %d",
+					szScriptPath,
+					gszCharName[0] ? gszCharName : "WebHero",
+					static_cast<int32_t>(gnCharClass));
+
+				STARTUPINFOA tStartupInfo = {};
+				tStartupInfo.cb = sizeof(tStartupInfo);
+				tStartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+				tStartupInfo.wShowWindow = SW_HIDE;
+
+				if (CreateProcessA(
+						nullptr,
+						szCmdLine,
+						nullptr,
+						nullptr,
+						FALSE,
+						CREATE_NO_WINDOW | CREATE_SUSPENDED,
+						nullptr,
+						szExeDir,
+						&tStartupInfo,
+						&tWebProcInfo))
+				{
+					if (hWebJob)
+					{
+						AssignProcessToJobObject(hWebJob, tWebProcInfo.hProcess);
+					}
+					ResumeThread(tWebProcInfo.hThread);
+				}
 			}
 		}
 
@@ -4421,6 +4607,11 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 				}
 				TranslateMessage(&msg);
 				DispatchMessageA(&msg);
+			}
+			if (bUseOriginalClient && tWebProcInfo.hProcess &&
+				WaitForSingleObject(tWebProcInfo.hProcess, 0) == WAIT_OBJECT_0)
+			{
+				gbWindowClosed = 1;
 			}
 			GAME_ProcessNetworkMessages();
 			GAME_UpdateGamesProgress(1);
@@ -4440,6 +4631,32 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 		if (hWebJob)
 		{
 			CloseHandle(hWebJob);
+		}
+		if (bUseOriginalClient && szExeDir[0] != '\0')
+		{
+			HKEY hRestoreKey = nullptr;
+			if (RegCreateKeyExA(
+					HKEY_CURRENT_USER,
+					"Software\\Blizzard Entertainment\\Diablo II",
+					0,
+					nullptr,
+					0,
+					KEY_SET_VALUE,
+					nullptr,
+					&hRestoreKey,
+					nullptr) == ERROR_SUCCESS)
+			{
+				char szRestorePath[MAX_PATH] = {};
+				std::snprintf(szRestorePath, sizeof(szRestorePath), "%s\\", szExeDir);
+				RegSetValueExA(
+					hRestoreKey,
+					"InstallPath",
+					0,
+					REG_SZ,
+					reinterpret_cast<const BYTE*>(szRestorePath),
+					static_cast<DWORD>(std::strlen(szRestorePath) + 1));
+				RegCloseKey(hRestoreKey);
+			}
 		}
 
 		GAME_CloseAllGames();

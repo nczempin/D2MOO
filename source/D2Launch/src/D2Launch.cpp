@@ -173,7 +173,8 @@ static D2WinButtonStrc* gpBtnConvertExp = nullptr;
 static D2WinButtonStrc* gpBtnDeleteChar = nullptr;
 static D2WinButtonStrc* gpBtnCharSelectOk = nullptr;
 static D2WinButtonStrc* gpBtnClientModeToggle = nullptr;
-static bool gbUseTsClient = true;
+// 0 = TS Web Client, 1 = Original 1.12a Binary Client, 2 = Native C++ Client
+static int32_t gnClientMode = 0;
 static bool gbClientModeInitialized = false;
 static int32_t gnSelectedSlotIndex = -1;
 static DWORD gdwLastSlotClickTick = 0;
@@ -182,22 +183,25 @@ static void SyncClientModeEnv()
 {
 	if (!gbClientModeInitialized)
 	{
-		char szEnv[16] = {};
-		if (GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szEnv, sizeof(szEnv)) > 0)
+		char szOrigEnv[16] = {};
+		char szTsEnv[16] = {};
+		if (GetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", szOrigEnv, sizeof(szOrigEnv)) > 0 && szOrigEnv[0] != '0')
 		{
-			gbUseTsClient = (szEnv[0] != '0');
+			gnClientMode = 1;
+		}
+		else if (GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szTsEnv, sizeof(szTsEnv)) > 0)
+		{
+			gnClientMode = (szTsEnv[0] != '0') ? 0 : 2;
 		}
 		else
 		{
-			gbUseTsClient = true;
-			SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", "1");
+			gnClientMode = 0;
 		}
 		gbClientModeInitialized = true;
 	}
-	else
-	{
-		SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", gbUseTsClient ? "1" : "0");
-	}
+
+	SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", (gnClientMode == 0) ? "1" : "0");
+	SetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", (gnClientMode == 1) ? "1" : "0");
 }
 
 static void RefreshClientModeButtonText()
@@ -206,7 +210,15 @@ static void RefreshClientModeButtonText()
 	{
 		return;
 	}
-	const char* szLabel = gbUseTsClient ? "CLIENT: TS WEB" : "CLIENT: NATIVE C++";
+	const char* szLabel = "CLIENT: TS WEB";
+	if (gnClientMode == 1)
+	{
+		szLabel = "CLIENT: ORIGINAL 1.12A";
+	}
+	else if (gnClientMode == 2)
+	{
+		szLabel = "CLIENT: NATIVE C++";
+	}
 	Unicode wszLabel[64] = {};
 	Unicode::win2Unicode(wszLabel, szLabel, 64);
 	BUTTON_SetText(gpBtnClientModeToggle, D2FONT_FONTEXOCET10, wszLabel, 0);
@@ -215,7 +227,7 @@ static void RefreshClientModeButtonText()
 static int __stdcall D2LAUNCH_OnToggleClientMode(SMSGHANDLER_PARAMS* pMsg)
 {
 	(void)pMsg;
-	gbUseTsClient = !gbUseTsClient;
+	gnClientMode = (gnClientMode + 1) % 3;
 	SyncClientModeEnv();
 	RefreshClientModeButtonText();
 	return 1;

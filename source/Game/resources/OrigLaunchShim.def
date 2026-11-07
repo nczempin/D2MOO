@@ -1,0 +1,3 @@
+LIBRARY D2Launch
+EXPORTS
+    QueryInterface @1

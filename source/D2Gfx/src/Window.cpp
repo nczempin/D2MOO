@@ -30,18 +30,8 @@ HINSTANCE ghInstance;
 int32_t __stdcall WINDOW_Create(int32_t bWindowed, D2GameResolutionMode nResolution)
 {
     char szHeadlessEnv[16] = {};
-    char szConnectEnv[128] = {};
     const bool bIsHeadlessServer =
         (GetEnvironmentVariableA("D2MOO_HEADLESS_SERVER", szHeadlessEnv, sizeof(szHeadlessEnv)) > 0 && szHeadlessEnv[0] != '0');
-    const bool bIsMultiInstance =
-        bIsHeadlessServer ||
-        (GetEnvironmentVariableA("D2MOO_CONNECT_HOST", szConnectEnv, sizeof(szConnectEnv)) > 0 && szConnectEnv[0] != '\0');
-
-    if (!bIsMultiInstance && FindWindowA("Diablo II", 0))
-    {
-        MessageBoxA(nullptr, "Only one copy of Diablo II may run at a time.", "Diablo II Critical Error", MB_ICONEXCLAMATION);
-        return 0;
-    }
 
     D2_ASSERT(gpGraphicsInterface);
     D2_ASSERT(!ghWnd);
@@ -176,6 +166,11 @@ int32_t __stdcall WINDOW_Create(int32_t bWindowed, D2GameResolutionMode nResolut
 //D2Gfx.0x6FA74820 (#10024)
 int32_t __stdcall WINDOW_Destroy()
 {
+    if (!ghWnd)
+    {
+        return 1;
+    }
+
     D2_ASSERT(gpGraphicsInterface);
 
     if (!gbCursorDisplayed)
