@@ -1,5 +1,7 @@
 #pragma once
 
+#include <DataTbls/ObjectsIds.h>
+
 struct D2ObjectsTxt;
 struct D2ShrinesTxt;
 
@@ -46,7 +48,11 @@ struct D2ObjectControlStrc
 struct D2ObjectDataStrc
 {
 	D2ObjectsTxt* pObjectTxt;				//0x00
-	uint8_t InteractType;					//0x04
+	union
+	{
+		uint8_t InteractType;				//0x04
+		uint8_t nShrineNo;					//0x04
+	};
 	uint8_t nPortalFlags;					//0x05
 	uint16_t unk0x06;						//0x06
 	D2ShrinesTxt* pShrineTxt;				//0x08

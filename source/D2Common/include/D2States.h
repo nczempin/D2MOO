@@ -342,3 +342,13 @@ D2COMMON_DLL_DECL BOOL __stdcall STATES_CheckStateMaskUdeadOnUnit(D2UnitStrc* pU
 D2COMMON_DLL_DECL BOOL __stdcall STATES_CheckStateMaskGreenOnUnit(D2UnitStrc* pUnit);
 //D2Common.0x6FDB5740 (#11303)
 D2COMMON_DLL_DECL BOOL __stdcall STATES_CheckStateMaskOnUnit(D2UnitStrc* pUnit, int nStateMask);
+
+inline BOOL __stdcall STATES_CheckStateMaskOnSoundByStateId(int nState)
+{
+	return nState >= 0;
+}
+
+inline BOOL __stdcall STATES_CheckStateMaskDisguiseByStateId(int nState)
+{
+	return STATES_CheckStateMaskHideByStateId(nState);
+}

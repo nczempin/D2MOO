@@ -485,7 +485,7 @@ extern "C" {
 void __stdcall AUTOMAP_SaveCurrentLayer(void);
 void __stdcall AUTOMAP_FreeAllCells(void);
 void __stdcall AUTOMAP_LoadCurrentLayerFromFile(void);
-void __stdcall AUTOMAP_CenterView(int32_t bForceCenter);
+void __fastcall AUTOMAP_CenterView(int32_t bForceCenter);
 int32_t __fastcall AUTOMAP_InsertCell(D2AutomapCellStrc* pCell, D2AutomapCellStrc** ppRoot);
 
 // 1.12a: 0x6FAECFC0 (__stdcall)

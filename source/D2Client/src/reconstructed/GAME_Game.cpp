@@ -785,7 +785,7 @@ void __stdcall GAME_FreeClientState()
 
 // 1.12a: 0x6FB2CA10 (__fastcall)
 // Main In-Game Frame Renderer (registered at g_pfnRenderFrame = 0x6FBB329C)
-void __fastcall GAME_RenderFrame(int32_t b skipPresent)
+void __fastcall GAME_RenderFrame(int32_t skipPresent)
 {
     (void)skipPresent;
     if (!g_pClientAct || !g_pPlayerUnit)
@@ -821,7 +821,7 @@ void __stdcall GAME_InitClientState()
     // Load "Resolution" from registry and call GAME_SetResolutionMode
     // Initialize palette shift tables (PALSHIFT_Init, 0x6FB6F170; D2CMP_PalShiftInit)
     // Clear unit hash tables (0x6FBCA960, 0x6FBC9D60) and initialize UI subsystems
-    g_pfnRenderFrame    = GAME_RenderFrame;
+    g_pfnRenderFrame    = reinterpret_cast<decltype(g_pfnRenderFrame)>(GAME_RenderFrame);
     g_dwLastFrameTick   = GetTickCount();
     g_dwClientFrameCount = 0;
     g_nFrameTickAccumulator = 0;

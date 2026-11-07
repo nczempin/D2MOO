@@ -39,6 +39,11 @@ D2LANG_DLL_DECL const Unicode* __fastcall D2LANG_GetStringByReferenceString(char
 //1.14d: Game.0x524A30
 D2LANG_DLL_DECL const Unicode* __fastcall D2LANG_GetStringFromTblIndex(short index);
 
+inline const Unicode* __fastcall D2LANG_GetStringByTblIndex(short index)
+{
+	return D2LANG_GetStringFromTblIndex(index);
+}
+
 //1.10f: D2Lang.0x6FC13960 (#10013)
 //1.12a: D2Lang.0x6FC0A3D0 (#10007)
 D2LANG_DLL_DECL short __stdcall D2LANG_GetTblIndex(char* szReference, const Unicode** pUnicode);

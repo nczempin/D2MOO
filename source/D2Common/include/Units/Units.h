@@ -64,7 +64,12 @@ enum D2C_UnitFlags
 	UNITFLAG_AUTOMAP = 0x10000000,				//automap stuff
 	UNITFLAG_AUTOMAP2 = 0x20000000,				//automap stuff
 	UNITFLAG_PETIGNORE = 0x40000000,			//ignored by pets
-	UNITFLAG_ISREVIVE = 0x80000000				//is revived monster
+	UNITFLAG_ISREVIVE = 0x80000000,				//is revived monster
+	UNITFLAG_SELECTABLE = UNITFLAG_TARGETABLE,
+	UNITFLAG_HOVERED = UNITFLAG_INITSEEDSET,
+	UNITFLAG_DOESNOTBLOCKLIGHT = UNITFLAG_DRAWSHADOW,
+	UNITFLAG_FLOOR = UNITFLAG_PREDRAW,
+	UNITFLAG_ISEXPANSION = UNITFLAG_ISRESURRECT
 };
 
 enum D2C_UnitFlagsEx
@@ -82,6 +87,7 @@ enum D2C_UnitFlagsEx
 	UNITFLAGEX_TELEPORTED = 0x00010000,			//unit has been teleported, needs resync
 	UNITFLAGEX_STORELASTATTACKER = 0x00020000,	//unit stores info about last attacker
 	UNITFLAGEX_NODRAW = 0x00040000,				//don't draw this unit
+	UNITFLAGEX_ISINVISIBLE = UNITFLAGEX_NODRAW,
 	UNITFLAGEX_ISEXPANSION = 0x02000000,		//is expansion unit
 	UNITFLAGEX_SERVERUNIT = 0x04000000			//is server-side unit
 };
@@ -131,20 +137,40 @@ struct D2UnitStrc
 	uint8_t unk0x19[3];							//0x19
 	D2DrlgActStrc* pDrlgAct;					//0x1C
 	D2SeedStrc pSeed;							//0x20
-	uint32_t dwInitSeed;						//0x28
+	union
+	{
+		uint32_t dwInitSeed;					//0x28
+		uint32_t dwEndSeed;						//0x28
+	};
 	union										//0x2C
 	{
 		D2DynamicPathStrc* pDynamicPath;
 		D2StaticPathStrc* pStaticPath;
 	};
-	struct D2AnimSeqTxt* pAnimSeq;				//0x30
+	union
+	{
+		struct D2AnimSeqTxt* pAnimSeq;			//0x30
+		struct D2AnimSeqTxt* pMonSeq;			//0x30
+	};
 	uint32_t dwSeqFrameCount;					//0x34
 	int32_t dwSeqFrame;							//0x38
 	uint32_t dwSeqSpeed;						//0x3C
-	uint32_t dwSeqMode;							//0x40
-	int32_t nSeqCurrentFramePrecise;			//0x44 8-bits fixed point. Actually reused as stop frame when not using a seq. For example for missiles / inferno.
+	union
+	{
+		uint32_t dwSeqMode;						//0x40
+		uint32_t dwFrameFlags;					//0x40
+	};
+	union
+	{
+		int32_t nSeqCurrentFramePrecise;		//0x44 8-bits fixed point. Actually reused as stop frame when not using a seq. For example for missiles / inferno.
+		int32_t wFrame;							//0x44
+	};
 	int32_t dwFrameCountPrecise;				//0x48 8-bits fixed point.
-	int16_t wAnimSpeed;							//0x4C
+	union
+	{
+		int16_t wAnimSpeed;						//0x4C
+		int16_t wFrameRate;						//0x4C
+	};
 	uint8_t nActionFrame;						//0x4E
 	uint8_t unk0x4F;							//0x4F
 	const D2AnimDataRecordStrc* pAnimData;		//0x50
@@ -173,14 +199,46 @@ struct D2UnitStrc
 		{
 			D2GfxLightStrc* pLight;				//0x064
 			uint32_t dwStartLight;				//0x068
-			int32_t nPaletteIndex;				//0x06C
-			BOOL bUnitSfx;						//0x070
-			uint32_t dwSfxMode;					//0x074
-			void* pUnitSfxData;					//0x078
-			uint32_t dwSfxTicks;				//0x07C
-			uint32_t dwSfxAsyncTicks;			//0x080
-			uint32_t dwSfxStepTicks;			//0x084
-			BOOL bHasActiveSound;				//0x088
+			union
+			{
+				int32_t nPaletteIndex;			//0x06C
+				int32_t nPGsv;					//0x06C
+			};
+			union
+			{
+				BOOL bUnitSfx;					//0x070
+				BOOL bSoundPlayed;				//0x070
+			};
+			union
+			{
+				uint32_t dwSfxMode;				//0x074
+				int32_t dwLastSoundMode;		//0x074
+			};
+			union
+			{
+				void* pUnitSfxData;				//0x078
+				struct D2SoundNodeStrc* pSoundList; //0x078
+			};
+			union
+			{
+				uint32_t dwSfxTicks;			//0x07C
+				uint32_t dwLastGenericSoundTick;//0x07C
+			};
+			union
+			{
+				uint32_t dwSfxAsyncTicks;		//0x080
+				uint32_t dwLastNeutralSoundTick;//0x080
+			};
+			union
+			{
+				uint32_t dwSfxStepTicks;		//0x084
+				uint32_t dwLastFootstepTick;	//0x084
+			};
+			union
+			{
+				BOOL bHasActiveSound;			//0x088
+				BOOL bSoundsPreloaded;			//0x088
+			};
 			uint16_t nLastClickX;				//0x08C
 			uint16_t nLastClickY;				//0x08E
 			D2UnitEventStrc* pCltTimerList;		//0x090
@@ -194,11 +252,19 @@ struct D2UnitStrc
 	D2SkillListStrc* pSkills;					//0xA8
 	struct D2CombatStrc* pCombat;				//0xAC
 	uint32_t dwLastHitClass;					//0xB0
-	uint32_t unk0xB4;							//0xB4
+	union
+	{
+		uint32_t unk0xB4;						//0xB4
+		uint32_t dwClientInteracted;			//0xB4
+	};
 	uint32_t dwDropItemCode;					//0xB8
 	uint32_t unk0xBC[2];						//0xBC
 	uint32_t dwFlags;							//0xC4
-	uint32_t dwFlagEx;							//0xC8
+	union
+	{
+		uint32_t dwFlagEx;						//0xC8
+		uint32_t dwFlagsEx;						//0xC8
+	};
 	void* pUnused0xCC;							//0xCC may be quest related ?
 
 	uint32_t dwNodeIndex;						//0xD0
@@ -221,6 +287,10 @@ struct D2UnitStrc
 // Helper function
 inline D2AnimSeqTxt* UNITS_GetAnimSeq(D2UnitStrc* pUnit) { 
 	return (pUnit->dwUnitType == UNIT_PLAYER || pUnit->dwUnitType == UNIT_MONSTER) ? pUnit->pAnimSeq : nullptr;
+}
+
+inline BOOL __stdcall UNITS_IsSelectable(const D2UnitStrc* pUnit) {
+	return pUnit && (pUnit->dwFlags & UNITFLAG_TARGETABLE) != 0;
 }
 
 //D2Common.0x6FDBD520 (#10457)

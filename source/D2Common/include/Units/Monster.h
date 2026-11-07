@@ -30,13 +30,25 @@ struct D2UnkMonsterDataStrc
 
 struct D2MonsterDataStrc
 {
-	D2MonStatsTxt* pMonstatsTxt;			//0x00
+	union
+	{
+		D2MonStatsTxt* pMonstatsTxt;			//0x00
+		D2MonStatsTxt* pMonStatsTxt;			//0x00
+	};
 	uint8_t nComponent[16];					//0x04
 	uint16_t wNameSeed;							//0x14
-	uint8_t nTypeFlag;							//0x16
+	union
+	{
+		uint8_t nTypeFlag;						//0x16
+		uint8_t nTypeFlags;						//0x16
+	};
 	uint8_t nLastAnimMode;						//0x17
 	uint32_t dwDurielFlag;						//0x18
-	uint8_t nMonUmod[10];						//0x1C
+	union
+	{
+		uint8_t nMonUmod[10];					//0x1C
+		uint8_t nMonUMod[10];					//0x1C
+	};
 	uint16_t wBossHcIdx;						//0x26
 	D2AiControlStrc* pAiControl;			//0x28
 	union									//0x2C

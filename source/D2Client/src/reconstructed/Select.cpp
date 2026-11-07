@@ -22,6 +22,7 @@
 #include <Path/Path.h>
 #include <D2Collision.h>
 #include <D2Dungeon.h>
+#include <D2Items.h>
 #include <D2States.h>
 #include <D2StatList.h>
 #include <D2DataTbls.h>

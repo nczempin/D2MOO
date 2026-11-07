@@ -18,6 +18,7 @@
 #include <string.h>
 #include <windows.h>
 
+#include <Fog.h>
 #include <Units/Units.h>
 #include <Path/Path.h>
 #include <D2Collision.h>
@@ -27,6 +28,8 @@
 #include <D2States.h>
 #include <D2DataTbls.h>
 
+typedef D2ActiveRoomStrc D2RoomStrc;
+
 // =============================================================================
 // External D2Net / Fog / D2Common / D2Lang Imports
 // =============================================================================
@@ -34,12 +37,6 @@
 extern "C" int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket);
 // D2Net.#10023: int32_t __stdcall D2NET_10023_GetSendQueueBacklog()
 extern "C" int32_t __stdcall D2NET_10023_GetSendQueueBacklog(void);
-// Fog.#10023: void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int nLine)
-extern "C" void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int32_t nLine);
-// Fog.#10042: void* __fastcall FOG_AllocClientMemory(size_t nSize, const char* szFile, int nLine, int nZero)
-extern "C" void* __fastcall FOG_AllocClientMemory(size_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-// Fog.#10043: void __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int nLine, int nZero)
-extern "C" void __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
 // D2Lang.#10009: int32_t __fastcall Unicode::win2utf8(char* pDest, const wchar_t* pSrc, int32_t nDestSize)
 extern "C" int32_t __fastcall Unicode_win2utf8(char* pDest, const wchar_t* pSrc, int32_t nDestSize);
 

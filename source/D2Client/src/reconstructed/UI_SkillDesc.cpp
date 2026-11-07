@@ -10,45 +10,40 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-struct D2UnitStrc;
-struct D2SkillStrc;
-struct D2StatListStrc;
-struct D2InventoryStrc;
+#include <Units/Units.h>
+#include <Units/UnitRoom.h>
+#include <Units/Missile.h>
+#include <Path/Path.h>
+#include <Path/PathMisc.h>
+#include <Path/Step.h>
+#include <UselessOrdinals.h>
+#include <D2Collision.h>
+#include <D2Dungeon.h>
+#include <Drlg/D2DrlgDrlg.h>
+#include <Drlg/D2DrlgPreset.h>
+#include <D2Environment.h>
+#include <D2Inventory.h>
+#include <D2Items.h>
+#include <D2Monsters.h>
+#include <D2Seed.h>
+#include <D2Skills.h>
+#include <D2States.h>
+#include <D2StatList.h>
+#include <D2DataTbls.h>
+#include <D2Gfx.h>
+#include <D2Lang.h>
+#include <D2Sound.h>
+#include <D2WinMain.h>
+#include <D2WinFont.h>
+#include <D2WinImage.h>
+#include <D2WinTextBox.h>
+#include <Fog.h>
+#include <Storm.h>
 
 #pragma pack(push, 1)
-
-struct D2SkillDescTxt
-{
-    uint16_t wSkillDesc;                // 0x00
-    uint8_t nSkillPage;                 // 0x02
-    uint8_t nSkillRow;                  // 0x03
-    uint8_t nSkillColumn;               // 0x04
-    uint8_t nListRow;                   // 0x05
-    uint8_t nListPool;                  // 0x06
-    uint8_t nIconCel;                   // 0x07
-    uint16_t wStrName;                  // 0x08
-    uint16_t wStrShort;                 // 0x0A
-    uint16_t wStrLong;                  // 0x0C
-    uint16_t wStrAlt;                   // 0x0E
-    uint16_t wStrMana;                  // 0x10
-    uint16_t wDescDam;                  // 0x12
-    uint16_t wDescAtt;                  // 0x14
-    uint16_t pad0x16;                   // 0x16
-    uint32_t dwDamCalc[2];              // 0x18
-    uint8_t nPrgDamElem[3];             // 0x20
-    uint8_t pad0x23;                    // 0x23
-    uint32_t dwProgDmgMin[3];           // 0x24
-    uint32_t dwProgDmgMax[3];           // 0x30
-    uint16_t wDescMissile[3];           // 0x3C
-    uint8_t nDescLine[17];              // 0x42 (0..5: dsc, 6..9: dsc2, 10..16: dsc3)
-    uint8_t pad0x53;                    // 0x53
-    uint16_t wDescTextA[17];            // 0x54
-    uint16_t wDescTextB[17];            // 0x76
-    uint32_t dwDescCalcA[17];           // 0x98
-    uint32_t dwDescCalcB[17];           // 0xDC
-};
 
 struct D2ElementalDamageStatStrc
 {
@@ -64,22 +59,234 @@ struct D2CharPagTextBoxStrc
     int32_t nXRight;                    // 0x08
 };
 
-struct D2MonStatInitStrc
-{
-    int32_t nMinHp;                     // 0x00
-    int32_t nMaxHp;                     // 0x04
-    int32_t nAC;                        // 0x08
-    int32_t nTH;                        // 0x0C
-    int32_t nExp;                       // 0x10
-    int32_t nA1MinD;                    // 0x14
-    int32_t nA1MaxD;                    // 0x18
-    int32_t nA2MinD;                    // 0x1C
-    int32_t nA2MaxD;                    // 0x20
-    int32_t nS1MinD;                    // 0x24
-    int32_t nS1MaxD;                    // 0x28
-};
-
 #pragma pack(pop)
+
+// API compatibility shims for 1.12a UI_SkillDesc
+static inline const wchar_t* D2LANG_GetStringByTblIndexW(uint16_t nIndex)
+{
+    return reinterpret_cast<const wchar_t*>(D2LANG_GetStringByTblIndex(nIndex));
+}
+#define D2LANG_GetStringByTblIndex D2LANG_GetStringByTblIndexW
+
+#define SKILLS_GetElementalMinDamage SKILLS_GetMinElemDamage
+#define SKILLS_GetElementalMaxDamage SKILLS_GetMaxElemDamage
+#define ITEMS_CheckWeaponIfThrow ITEMS_CheckIfThrowable
+#define MISSILE_GetElemDamageLength MISSILE_GetElementalLength
+
+static inline int32_t DATATBLS_GetStatesTxtRecordCount(void)
+{
+    return sgptDataTables ? sgptDataTables->nStatesTxtRecordCount : 0;
+}
+
+static inline int32_t MISSILE_CalculateMasteryBonus(int32_t nMissileId, D2UnitStrc* pUnit, int32_t nSkillLevel)
+{
+    return MISSILE_GetMinDamage(nullptr, pUnit, nMissileId, nSkillLevel);
+}
+
+static inline int32_t MISSILE_GetRange(D2UnitStrc* pMissile, D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillLevel)
+{
+    return MISSILE_EvaluateMissileFormula(pMissile, pUnit, 0, nMissileId, nSkillLevel);
+}
+
+static inline D2SkillStrc* SKILLS_GetFirstSkillFromSkillList(void* pSkillList)
+{
+    return ::SKILLS_GetFirstSkillFromSkillList(reinterpret_cast<D2SkillListStrc*>(pSkillList));
+}
+
+static inline int32_t SKILLS_GetProgressiveSkillId(D2UnitStrc* pUnit, int32_t nSkillId)
+{
+    (void)pUnit;
+    if (!sgptDataTables || nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+        return -1;
+    return sgptDataTables->pSkillsTxt[nSkillId].wSummon;
+}
+
+static inline BOOL SKILLS_CalculateGetLeftHandSwing(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pOutLevel)
+{
+    (void)pUnit;
+    (void)nSkillId;
+    if (pOutLevel) *pOutLevel = nSkillLevel;
+    return nSkillLevel > 0;
+}
+
+inline int32_t D2WIN_GetTextWidth(const wchar_t* wszText)
+{
+    return D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszText));
+}
+
+inline void D2WIN_DrawText(const wchar_t* wszText, int32_t nX, int32_t nY, int32_t nColor, int32_t bCentered)
+{
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszText), nX, nY, nColor, bCentered);
+}
+
+inline Font D2WIN_SetFont(int32_t nFont)
+{
+    return D2Win_10127_SetFont(static_cast<Font>(nFont));
+}
+
+static inline void D2WIN_WordWrap(wchar_t* wszText, int32_t nMaxWidth)
+{
+    (void)wszText;
+    (void)nMaxWidth;
+}
+
+inline void D2WIN_DrawFramedText(const wchar_t* wszText, int32_t nX, int32_t nY, int32_t nColor, int32_t nAlign)
+{
+    D2Win_10129_DrawFramedText(reinterpret_cast<const Unicode*>(wszText), nX, nY, nColor, nAlign);
+}
+
+// External 1.12a D2Client helpers referenced by UI_SkillDesc
+D2SkillsTxt* __fastcall sub_6FAFF7E0(int32_t nSkillId);
+D2UnitStrc* __fastcall sub_6FB57830(D2InventoryStrc* pInventory);
+uint8_t __cdecl sub_6FAFF090(void);
+D2UnitStrc* __cdecl sub_6FAFF3D0(void);
+int32_t __cdecl sub_6FAFE930(void);
+int32_t __fastcall sub_6FAFCE90(D2UnitStrc* pUnit, int32_t nType, D2UnitStrc* pWeapon);
+int32_t __fastcall sub_6FAFCD70(D2UnitStrc* pUnit, int32_t nType, D2UnitStrc* pWeapon);
+int32_t __fastcall sub_6FAFCC20(D2UnitStrc* pUnit, int32_t nType, D2UnitStrc* pWeapon);
+const wchar_t* __fastcall sub_6FB200F0(int32_t nColor);
+void __fastcall sub_6FB201A0(wchar_t* wszOut, const wchar_t* wszStrA, int32_t nVal, const wchar_t* wszStrB);
+void __fastcall sub_6FB201D0(wchar_t* wszOut, const wchar_t* wszStrA, int32_t nVal, const wchar_t* wszStrB);
+void __fastcall sub_6FB20200(wchar_t* wszOut, const wchar_t* wszStrA, const wchar_t* wszMid, const wchar_t* wszStrB);
+void __fastcall sub_6FB20280(const wchar_t* wszStrA, wchar_t* wszOut, int32_t nVal);
+void __fastcall sub_6FB202B0(const wchar_t* wszStrA, wchar_t* wszOut, int32_t nVal);
+void __fastcall sub_6FB202E0(const wchar_t* wszStrA, wchar_t* wszOut, const wchar_t* wszVal);
+void __fastcall sub_6FB20310(wchar_t* wszOut, int32_t nVal, const wchar_t* wszStr);
+void __fastcall sub_6FB20340(wchar_t* wszOut, int32_t nVal, const wchar_t* wszStr);
+
+// Internal forward declarations for UI_SkillDesc & UI_spellsel functions
+void __cdecl sub_6FAF2060(void);
+BOOL __fastcall sub_6FAF2090(D2SkillStrc* pSkill, D2UnitStrc* pUnit);
+void __fastcall sub_6FAF20D0(D2UnitStrc* pUnit, D2StatListStrc** ppSavedStatList, D2UnitStrc* pLeftWeapon);
+void __fastcall sub_6FAF2170(D2StatListStrc* pSavedStatList, D2UnitStrc* pUnit, D2UnitStrc* pLeftWeapon);
+D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId);
+int32_t __fastcall sub_6FAF2210(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+int32_t __fastcall sub_6FAF2310(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+int32_t __fastcall sub_6FAF2430(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+D2SkillDescTxt* __fastcall sub_6FAF2540(uint16_t wSkillDesc);
+void __fastcall sub_6FAF2560(int32_t nVal, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB);
+void __fastcall sub_6FAF2660(int32_t nMin, int32_t nMax, wchar_t* wszOut);
+void __fastcall sub_6FAF26C0(int32_t nMin, int32_t nMax, wchar_t* wszOut);
+void __fastcall sub_6FAF2720(int32_t nMin, int32_t nMax, wchar_t* wszOut);
+void __fastcall sub_6FAF2760(int32_t nMin, int32_t nMax, wchar_t* wszOut);
+void __fastcall sub_6FAF27A0(const wchar_t* wszPrefix, wchar_t* wszOut, int32_t nMin, int32_t nMax);
+void __fastcall sub_6FAF2840(uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, int32_t nVal);
+void __fastcall sub_6FAF2950(uint16_t wStrA, wchar_t* wszOut, uint16_t wStrB, int32_t nVal);
+void __fastcall sub_6FAF29B0(uint16_t wStrA, wchar_t* wszOut, uint16_t wStrB, int32_t nVal);
+void __fastcall sub_6FAF2A10(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB);
+void __fastcall sub_6FAF2AB0(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB);
+void __fastcall sub_6FAF2B50(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB);
+void __fastcall sub_6FAF2BF0(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB);
+void __fastcall sub_6FAF2C90(int32_t nMin, int32_t nMax, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF2CE0(int32_t nMin, int32_t nMax, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF2D30(int32_t nMin, int32_t nMax, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF2D80(int32_t nMin, int32_t nMax, uint16_t wStr, wchar_t* wszOut);
+int32_t __fastcall sub_6FAF2DD0(int32_t nMonType, int32_t nMonLevel, D2MonStatInitStrc* pMonStatInit);
+int32_t __fastcall sub_6FAF2E30(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkillLevel, D2MonStatInitStrc* pMonStatInit, int32_t* pHpOut);
+void __fastcall sub_6FAF2F00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut);
+void __fastcall sub_6FAF3090(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut);
+void __fastcall sub_6FAF3240(wchar_t* wszText, int32_t nColor, int32_t nRow, int32_t nCol);
+void __fastcall sub_6FAF3300(int32_t nCol, int32_t nRow, D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t nColor);
+int32_t __fastcall sub_6FAF3410(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+void __fastcall sub_6FAF3450(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+void __fastcall sub_6FAF3500(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+int32_t __fastcall sub_6FAF35C0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+int32_t __fastcall sub_6FAF3600(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t* pAR, int32_t* pColor);
+void __fastcall sub_6FAF3690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+void __fastcall sub_6FAF3750(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF3790(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF37D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF3820(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF3870(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF38D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF3920(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF3980(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF3A30(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF3A70(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF3AB0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF3B00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF3B50(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF3C20(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF3CF0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF3EC0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF40E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+int32_t __fastcall sub_6FAF4290(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor);
+void __fastcall sub_6FAF4330(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF43E0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF44A0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4560(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4680(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF46E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4750(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF4810(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF48D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF49B0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF4AA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF4B90(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF4BF0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut);
+void __fastcall sub_6FAF4C50(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF4D70(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4DC0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF4EA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF4FE0(D2UnitStrc* pUnit, int32_t nRow, D2SkillStrc* pSkill);
+void __fastcall sub_6FAF5050(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkillLevel, D2UnitStrc* pWeapon, int32_t* pElemBonus, int32_t* pMinElem, int32_t* pMaxElem, int32_t* pElemType, int32_t nOverrideElemType);
+int32_t __fastcall sub_6FAF51A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+int32_t __fastcall sub_6FAF51F0(D2UnitStrc* pUnit, int32_t* pAR, int32_t* pColor);
+void __fastcall sub_6FAF5220(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall sub_6FAF5330(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF54E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
+void __fastcall sub_6FAF5530(D2SkillDescTxt* pSkillDesc, int32_t nSkillLevel, D2UnitStrc* pUnit, int32_t nLineIdx, wchar_t* wszOut);
+void __fastcall sub_6FAF5690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+void __fastcall sub_6FAF58C0(D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMaxOut, int32_t* pElemTypeOut, int32_t nOverrideElemType);
+void __fastcall sub_6FAF5A90(D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMaxOut, int32_t* pElemTypeOut, int32_t nOverrideElemType);
+uint16_t __stdcall sub_6FAF5BD0(int32_t nSkillId);
+uint16_t __stdcall sub_6FAF5BF0(int32_t nSkillId);
+uint16_t __stdcall sub_6FAF5C10(int32_t nSkillId);
+uint16_t __stdcall sub_6FAF5C30(int32_t nSkillId);
+uint16_t __stdcall sub_6FAF5C50(int32_t nSkillId);
+void __fastcall sub_6FAF5C70(D2UnitStrc* pUnit, int32_t nRow, D2SkillStrc* pSkill);
+int32_t __fastcall sub_6FAF5DC0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkillLevel, D2UnitStrc* pWeapon, int32_t* pPhysBonus, int32_t* pMinPhys, int32_t* pMaxPhys, int32_t nApplyPenalty);
+int32_t __fastcall sub_6FAF61B0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkillLevel, D2UnitStrc* pWeapon, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nApplyPenalty, int32_t nElemType);
+int32_t __fastcall sub_6FAF6280(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF63E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF66F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF6A20(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF6CF0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
+void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, wchar_t* wszOut);
+int32_t __stdcall sub_6FAF7560(int32_t nSkillId, wchar_t* wszOut, uint32_t nMaxChars);
+void __fastcall sub_6FAF75A0(D2UnitStrc* pUnit, int32_t nRow);
+void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+int32_t __fastcall sub_6FAF8B30(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+void __cdecl sub_6FAF91D0(void);
+void __cdecl sub_6FAF9490(void);
+void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx);
+int32_t __fastcall sub_6FAFA030(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFA1E0(D2UnitStrc* pUnit, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor);
+int32_t __fastcall sub_6FAFA210(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFA260(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFA580(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+void __fastcall sub_6FAFA620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMaxOut);
+int32_t __fastcall sub_6FAFA8A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFA930(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFA9F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFAB40(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFAD40(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFAD90(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFAFB0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFB080(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFB1B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFB2E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFB3B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+int32_t __fastcall sub_6FAFB480(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
+BOOL __stdcall sub_6FB074E0(D2UnitStrc* pUnit, int32_t nSkillId);
+BOOL __stdcall sub_6FB07530(D2UnitStrc* pUnit, int32_t nSkillId);
+BOOL __stdcall sub_6FB07580(D2UnitStrc* pUnit, int32_t nSkillId);
+BOOL __stdcall sub_6FB075D0(D2UnitStrc* pUnit, int32_t nSkillId);
+void __cdecl sub_6FB07620(void);
 
 typedef int32_t (__fastcall *CharPagDmgCallback_t)(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
 typedef int32_t (__fastcall *CharPagARCallback_t)(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
@@ -609,7 +816,7 @@ int32_t __fastcall sub_6FAF2E30(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
     if (!sub_6FAF2DD0(nSummonId, nMonLevel, pMonStatInit))
         return 0;
 
-    int32_t nHp = (pMonStatInit->nMinHp + pMonStatInit->nMaxHp) / 2;
+    int32_t nHp = (pMonStatInit->nMinHP + pMonStatInit->nMaxHP) / 2;
     uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
@@ -3333,7 +3540,7 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     if (pSkill)
     {
         int32_t nCharges = 0, nMaxCharges = 0;
-        if (SKILLS_GetSkillInfo(pSkill, nullptr, nullptr, nullptr, &nCharges, &nMaxCharges) && nMaxCharges > 0)
+        if (SKILLS_GetSkillInfo(pSkill, nullptr, nullptr, &nMaxCharges, &nCharges) && nMaxCharges > 0)
         {
             wchar_t wszChargeLine[128];
             sub_6FB202B0(D2LANG_GetStringByTblIndex(0x0D7A), wszChargeLine, nCharges);
@@ -3475,6 +3682,7 @@ int32_t __fastcall sub_6FAFA8A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 {
     D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
     D2UnitStrc* pLeftWeapon = INVENTORY_GetLeftHandWeapon(pInventory);
+    (void)pLeftWeapon;
     return sub_6FAF6A20(pUnit, nSkillId, nSkillLevel, pMinDmg, pMaxDmg, pColor, nElemType);
 }
 
@@ -3670,7 +3878,7 @@ void __cdecl sub_6FB07620(void)
 // ============================================================================
 // Additional Unicode & Damage Helpers from UI_SkillDesc.asm
 // ============================================================================
-
+#if 0
 // 1.12a: 0x6FAF2590
 // Calling convention: __usercall (EAX = nMaxFrac, ECX = nMaxInt, EDX = nMinFrac, ESI = nMinInt, [esp+4] = pOutUnicode, [esp+8] = bPlus)
 void __fastcall sub_6FAF2590(int32_t nMaxInt, int32_t nMinFrac, int32_t nMaxFrac, int32_t nMinInt, wchar_t* pOutUnicode, int32_t bPlus)
@@ -4449,3 +4657,4 @@ int32_t __fastcall sub_6FAFACB0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
+#endif

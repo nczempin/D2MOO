@@ -226,3 +226,22 @@ int __fastcall MISSILE_GetRandomNumberInRange(int nMin, int nMax, int nUnused, v
 int __fastcall MISSILE_GetSpecialParamValueForSkillMissile(int nSkillId, int nParamId, int nUnused, void* pUserData);
 //D2Common.0x6FDBC170 (#11284)
 D2COMMON_DLL_DECL int __stdcall MISSILE_EvaluateMissileFormula(D2UnitStrc* pMissile, D2UnitStrc* pOwner, unsigned int nCalc, int nMissileId, int nLevel);
+
+inline void __stdcall MISSILE_SetRemainingFrames(D2UnitStrc* pMissile, int nFrames)
+{
+	MISSILE_SetCurrentFrame(pMissile, nFrames);
+}
+
+inline void __stdcall MISSILE_InitMissileStats(D2UnitStrc* pMissile, D2UnitStrc* pOwner, int nMissileId, int nSkillId, int nSkillLevel)
+{
+	(void)nMissileId;
+	if (pOwner) MISSILE_SetOwner(pMissile, pOwner);
+	if (nSkillId > 0) MISSILE_SetSkill(pMissile, nSkillId);
+	if (nSkillLevel > 0) MISSILE_SetLevel(pMissile, (uint16_t)nSkillLevel);
+}
+
+inline int __stdcall MISSILE_CalculateMasteryBonus(D2UnitStrc* pMissile, D2UnitStrc* pOwner, int nMissileId, int nSkillId, int nSkillLevel)
+{
+	(void)nSkillId;
+	return MISSILE_EvaluateMissileFormula(pMissile, pOwner, 0, nMissileId, nSkillLevel);
+}

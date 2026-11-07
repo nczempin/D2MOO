@@ -27,6 +27,7 @@
 #include "D2States.h"
 #include "Fog.h"
 #include "D2Gfx.h"
+#include "Window.h"
 #include "D2Sound.h"
 #include "D2Lang.h"
 #include "D2CMP.h"
@@ -125,7 +126,7 @@ int32_t __fastcall D2Client_PlaySound(int32_t nSoundId, D2UnitStrc* pUnit, int32
 
 // 1.12a: 0x6FAE0EB0
 // Custom calling convention: EAX = nDigit, EDX = nX, ECX = nY
-static void __fastcall D2Client_DrawDebugDigit7x10(int32_t nDigit, int32_t nX, int32_t nY, uint8_t nColor)
+void __fastcall D2Client_DrawDebugDigit7x10(int32_t nDigit, int32_t nX, int32_t nY, uint8_t nColor)
 {
     const uint8_t* pGlyph = &gDigitBitmap7x10_6FBA6351[nDigit * 70];
     for (int32_t row = 0; row < 10; ++row)
@@ -134,7 +135,7 @@ static void __fastcall D2Client_DrawDebugDigit7x10(int32_t nDigit, int32_t nX, i
         {
             if (pGlyph[row * 7 + col] == 1)
             {
-                D2GFX_DrawFilledRect(nX + col, nY + row, nX + col + 1, nY + row + 1, nColor, 5);
+                D2GFX_DrawBox(nX + col, nY + row, nX + col + 1, nY + row + 1, nColor, DRAWMODE_NORMAL);
             }
         }
     }
@@ -142,7 +143,7 @@ static void __fastcall D2Client_DrawDebugDigit7x10(int32_t nDigit, int32_t nX, i
 
 // 1.12a: 0x6FAE0EE0
 // Custom calling convention: EAX = nValue, ECX = nY, stack = nX, nColor
-static void __fastcall D2Client_DrawDebugUnsignedInt(uint32_t nValue, int32_t nY, int32_t nX, uint8_t nColor)
+void __fastcall D2Client_DrawDebugUnsignedInt(uint32_t nValue, int32_t nY, int32_t nX, uint8_t nColor)
 {
     int32_t nCurX = nX + 24;
     for (int32_t i = 0; i < 4; ++i)
@@ -154,7 +155,7 @@ static void __fastcall D2Client_DrawDebugUnsignedInt(uint32_t nValue, int32_t nY
 }
 
 // 1.12a: 0x6FAE0F30
-static void __cdecl D2Client_DrawSoundDebugOverlay(void)
+void __cdecl D2Client_DrawSoundDebugOverlay(void)
 {
     D2ClientSoundChannelStrc* pChan = gpActiveSoundList_6FBCC36C;
     int32_t nIndex = 0;
@@ -179,7 +180,7 @@ static void __cdecl D2Client_DrawSoundDebugOverlay(void)
 }
 
 // 1.12a: 0x6FAE0FF0
-static int32_t __cdecl D2Client_CompareSoundChannels(D2ClientSoundChannelStrc* pChanA, D2ClientSoundChannelStrc* pChanB)
+int32_t __cdecl D2Client_CompareSoundChannels(D2ClientSoundChannelStrc* pChanA, D2ClientSoundChannelStrc* pChanB)
 {
     if (pChanA->nPriority < pChanB->nPriority)
         return -1;
@@ -218,21 +219,21 @@ BOOL __cdecl D2Client_IsAnySpeechSoundPlaying(void)
 
 // 1.12a: 0x6FAE10D0
 // Custom calling convention: EAX = pChan
-static BOOL __fastcall D2Client_IsSoundChannelFadingToZero(D2ClientSoundChannelStrc* pChan)
+BOOL __fastcall D2Client_IsSoundChannelFadingToZero(D2ClientSoundChannelStrc* pChan)
 {
     return (pChan && pChan->bFadeActive && pChan->nFadeEndVol == 0);
 }
 
 // 1.12a: 0x6FAE10F0
 // Custom calling convention: EAX = pChan
-static BOOL __fastcall D2Client_IsSoundChannelFadeComplete(D2ClientSoundChannelStrc* pChan)
+BOOL __fastcall D2Client_IsSoundChannelFadeComplete(D2ClientSoundChannelStrc* pChan)
 {
     return pChan->bFadeComplete != 0;
 }
 
 // 1.12a: 0x6FAE1100
 // Custom calling convention: EAX = pChan, ECX = dwDurationMs, stack = nTargetVol, bStopAfterFade
-static void __fastcall D2Client_SetupSoundChannelFade(D2ClientSoundChannelStrc* pChan, uint32_t dwDurationMs, int32_t nTargetVol, uint8_t bStopAfterFade)
+void __fastcall D2Client_SetupSoundChannelFade(D2ClientSoundChannelStrc* pChan, uint32_t dwDurationMs, int32_t nTargetVol, uint8_t bStopAfterFade)
 {
     pChan->nFadeStartVol = pChan->nVolume;
     pChan->nFadeEndVol = nTargetVol;
@@ -246,7 +247,7 @@ static void __fastcall D2Client_SetupSoundChannelFade(D2ClientSoundChannelStrc* 
 
 // 1.12a: 0x6FAE1130
 // Custom calling convention: EAX = pUnit, ECX = pfOutX, EDX = pfOutY, stack = pfOutZ
-static void __fastcall D2Client_ComputeSound3DOffsetFromPlayer(D2UnitStrc* pUnit, float* pfOutX, float* pfOutY, float* pfOutZ)
+void __fastcall D2Client_ComputeSound3DOffsetFromPlayer(D2UnitStrc* pUnit, float* pfOutX, float* pfOutY, float* pfOutZ)
 {
     *pfOutX = 0.0f;
     *pfOutY = 0.0f;
@@ -273,7 +274,7 @@ static void __fastcall D2Client_ComputeSound3DOffsetFromPlayer(D2UnitStrc* pUnit
 
 // 1.12a: 0x6FAE11E0
 // Custom calling convention: EAX = pUnit
-static D2ClientSoundChannelStrc* __fastcall D2Client_FindActiveSpeechChannelForUnit(D2UnitStrc* pUnit)
+D2ClientSoundChannelStrc* __fastcall D2Client_FindActiveSpeechChannelForUnit(D2UnitStrc* pUnit)
 {
     for (D2ClientSoundChannelStrc* pChan = gpActiveSoundList_6FBCC36C; pChan; pChan = pChan->pNext)
     {
@@ -303,7 +304,7 @@ uint32_t __fastcall D2Client_FindSoundChannelHandleBySoundId(int32_t nSoundId)
 
 // 1.12a: 0x6FAE1270
 // Custom calling convention: EAX = dwHandle
-static D2ClientSoundChannelStrc* __fastcall D2Client_FindSoundChannelByHandle(uint32_t dwHandle)
+D2ClientSoundChannelStrc* __fastcall D2Client_FindSoundChannelByHandle(uint32_t dwHandle)
 {
     if (!dwHandle)
         return nullptr;
@@ -317,7 +318,7 @@ static D2ClientSoundChannelStrc* __fastcall D2Client_FindSoundChannelByHandle(ui
 }
 
 // 1.12a: 0x6FAE12A0
-static D2ClientSoundChannelStrc* __cdecl D2Client_AllocSoundChannel(void)
+D2ClientSoundChannelStrc* __cdecl D2Client_AllocSoundChannel(void)
 {
     for (int32_t i = 0; i < 200; ++i)
     {
@@ -407,7 +408,7 @@ int32_t __fastcall D2Client_GetSoundChannelVolume(uint32_t dwHandle)
 
 // 1.12a: 0x6FAE14D0
 // Custom calling convention: EAX = nGroup
-static D2ClientSoundChannelStrc* __fastcall D2Client_FindOldestSoundChannelInGroup(int32_t nGroup)
+D2ClientSoundChannelStrc* __fastcall D2Client_FindOldestSoundChannelInGroup(int32_t nGroup)
 {
     uint32_t dwOldestTick = 0xFFFFFFFF;
     D2ClientSoundChannelStrc* pOldest = nullptr;
@@ -427,7 +428,7 @@ static D2ClientSoundChannelStrc* __fastcall D2Client_FindOldestSoundChannelInGro
 
 // 1.12a: 0x6FAE1560
 // Custom calling convention: EAX = nGroup
-static int32_t __fastcall D2Client_CountActiveSoundChannelsInGroup(int32_t nGroup)
+int32_t __fastcall D2Client_CountActiveSoundChannelsInGroup(int32_t nGroup)
 {
     int32_t nCount = 0;
     for (D2ClientSoundChannelStrc* pChan = gpActiveSoundList_6FBCC36C; pChan; pChan = pChan->pNext)
@@ -538,7 +539,7 @@ void __fastcall D2Client_DetachUnitFromSoundChannel(uint32_t dwHandle, D2UnitStr
 
 // 1.12a: 0x6FAE2230
 // Custom calling convention: EAX = pChan
-static void __fastcall D2Client_FreeSoundChannel(D2ClientSoundChannelStrc* pChan)
+void __fastcall D2Client_FreeSoundChannel(D2ClientSoundChannelStrc* pChan)
 {
     if (pChan->pSmpStream)
     {
@@ -646,7 +647,7 @@ BOOL __fastcall D2Client_HasMonsterModeVelocityOverride(D2UnitStrc* pUnit, int32
     if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
         return FALSE;
 
-    D2MonStats2Txt* pMonStats2Txt = MONSTERS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
+    D2MonStats2Txt* pMonStats2Txt = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
     if (!pMonStats2Txt)
         return FALSE;
 
@@ -684,8 +685,7 @@ void __fastcall D2Client_UpdateMonsterLightRadiusAndColor(D2UnitStrc* pUnit)
     if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
         return;
 
-    uint8_t nColor[3] = { 255, 255, 255 };
-    int32_t nRadius = MONSTERS_GetMaximalLightRadius(pUnit, nColor);
+    int32_t nRadius = MONSTERS_GetMaximalLightRadius(pUnit);
     if (nRadius > 0)
     {
         // Set light radius and RGB on pUnit->pLight (+0x64)
@@ -987,8 +987,7 @@ void __fastcall D2Client_InitMonsterUnitClientSide(D2UnitStrc* pUnit)
 
     if (!pUnit->pStatListEx)
     {
-        D2StatListExStrc* pStatListEx = STATLIST_AllocStatListEx(pUnit->pMemoryPool, 0, 0, UNIT_MONSTER, pUnit->dwUnitId);
-        pUnit->pStatListEx = pStatListEx;
+        STATLIST_AllocStatListEx(pUnit, 0, nullptr, nullptr);
     }
 
     STATLIST_SetUnitStat(pUnit, STAT_LEVEL, pMonStatsTxt->nLevel[0], 0);

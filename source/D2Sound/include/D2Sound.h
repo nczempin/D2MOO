@@ -254,3 +254,15 @@ inline void __fastcall D2SOUND_10049(void* pVol) { D2SOUND_SetMusicVolume(static
 #define D2SOUND_10066 D2SOUND_FastIsInitialized
 #define D2SOUND_10069 D2SOUND_GetOptionsMusic
 #define D2SOUND_10070 D2SOUND_SetOptionsMusic
+
+#ifdef __cplusplus
+template <typename T>
+inline void __fastcall D2SOUND_ListPrepend(T** ppHead, void* pItem) { D2SOUND_ListPrepend(reinterpret_cast<D2SoundListNodeStrc**>(ppHead), pItem); }
+template <typename T>
+inline void __fastcall D2SOUND_ListRemove(T** ppHead, void* pItem) { D2SOUND_ListRemove(reinterpret_cast<D2SoundListNodeStrc**>(ppHead), pItem); }
+template <typename T, typename CmpFn>
+inline void __fastcall D2SOUND_ListSort(T** ppHead, CmpFn pfCompare) { (void)ppHead; (void)pfCompare; }
+inline uint32_t __fastcall D2SOUND_SmpGetStreamPos(void* pSmp) { return D2SOUND_SmpGetStreamPos(static_cast<D2SoundSmpStrc*>(pSmp)); }
+inline void __fastcall D2SOUND_SmpReleaseStream(void* pSmp) { D2SOUND_SmpDestroy(static_cast<D2SoundSmpStrc*>(pSmp)); }
+inline int32_t __fastcall D2SOUND_GetMaxVoices() { return 32; }
+#endif

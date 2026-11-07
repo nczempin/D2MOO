@@ -40,24 +40,13 @@
 // =============================================================================
 // External Imports & Internal Helpers
 // =============================================================================
-// Fog.#10042 / Fog.#10043
-extern "C" void* __fastcall FOG_Alloc(int32_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-extern "C" void  __fastcall FOG_Free(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
 // Fog.#10102 / Fog.#10103
 extern "C" BOOL  __fastcall FOG_FOpenFile(const char* szPath, void** ppFileHandle);
 extern "C" void  __fastcall FOG_FCloseFile(void* pFileHandle);
 
-// D2Common.#10475
-extern "C" void __stdcall D2Common_10052(D2ActiveRoomStrc* pRoom, RECT* pOutRect);
-// D2Common.#10779
-extern "C" int32_t __stdcall D2Common_10095(D2ActiveRoomStrc* pRoom, int32_t nSubtileX, int32_t nSubtileY);
-// D2Common.#10104
-typedef BOOL(__stdcall* D2RoomCallbackPf)(D2ActiveRoomStrc* pRoom, void* pContext);
-extern "C" void __stdcall DUNGEON_CallRoomCallback(D2ActiveRoomStrc* pRoom, D2RoomCallbackPf pfCallback, void* pContext);
-
 // Internal D2Hell Archive helpers (0x6FABDA10, 0x6FABDB60, 0x6FABDB90, 0x6FABDD00)
 void*   __fastcall ARCHIVE_LoadFileToMemory(HD2ARCHIVE hArchive, const char* szFilePath, uint32_t* pOutSize, int32_t nFileType); // 0x6FABDD00
-int32_t __fastcall ARCHIVE_OpenMpqaFile(const char* szFilePath, void** ppOutFileHandle, int32_t b AllowMissing);                 // 0x6FABDB90
+int32_t __fastcall ARCHIVE_OpenMpqaFile(const char* szFilePath, void** ppOutFileHandle, int32_t bAllowMissing);                  // 0x6FABDB90
 int32_t __fastcall ARCHIVE_ReadMpqaFile(void* pFileHandle, int32_t nBytesToRead, void* pOutBuffer);                              // 0x6FABDA10
 void    __fastcall ARCHIVE_CloseMpqaFile(void* pFileHandle);                                                                     // 0x6FABDB60
 
@@ -80,6 +69,20 @@ enum D2SMsgHandlerType : uint32_t
     SMSG_TYPE_KEYUP    = 2,
     SMSG_TYPE_KEYDOWN  = 3,
 };
+
+struct SMsgWindowMessage
+{
+    HWND hWnd;
+    UINT uMessage;
+    WPARAM wParam;
+    LPARAM lParam;
+    uint32_t dwCommand;
+    uint32_t dwKeyFlags;
+    BOOL bHandled;
+    LRESULT lResult;
+};
+
+typedef void (__stdcall* SMsgCallback)(SMsgWindowMessage*);
 
 struct D2SMsgRegEntryStrc // 0x0C bytes
 {
@@ -993,12 +996,12 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
     // 1. Bin Wall Tiles
     uint32_t nWallTileCount = 0;
     D2RoomWallTileEntryStrc* pWallTiles = reinterpret_cast<D2RoomWallTileEntryStrc*>(
-        DUNGEON_GetWallTilesFromRoom(pRoom, &nWallTileCount));
+        DUNGEON_GetWallTilesFromRoom(pRoom, reinterpret_cast<int*>(&nWallTileCount)));
 
     for (uint32_t i = 0; i < nWallTileCount; ++i)
     {
         D2RoomWallTileEntryStrc* pTile = &pWallTiles[i];
-        const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(pTile->pTileLibraryEntry);
+        const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(static_cast<D2TileLibraryEntryStrc*>(pTile->pTileLibraryEntry));
 
         int32_t nGameTileX = 0;
         int32_t nGameTileY = 0;
@@ -1044,12 +1047,12 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
     // 2. Bin Roof Tiles
     uint32_t nRoofTileCount = 0;
     D2RoomWallTileEntryStrc* pRoofTiles = reinterpret_cast<D2RoomWallTileEntryStrc*>(
-        DUNGEON_GetRoofTilesFromRoom(pRoom, &nRoofTileCount));
+        DUNGEON_GetRoofTilesFromRoom(pRoom, reinterpret_cast<int*>(&nRoofTileCount)));
 
     for (uint32_t i = 0; i < nRoofTileCount; ++i)
     {
         D2RoomWallTileEntryStrc* pTile = &pRoofTiles[i];
-        const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(pTile->pTileLibraryEntry);
+        const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(static_cast<D2TileLibraryEntryStrc*>(pTile->pTileLibraryEntry));
 
         int32_t nGameTileX = 0;
         int32_t nGameTileY = 0;
@@ -1198,7 +1201,7 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32
 // =============================================================================
 
 // 1.12a: 0x6FB6EEB0 (usercall: esi = pCellFile)
-void __fastcall ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile)
+void __fastcall D2Client_ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile)
 {
     D2CMP_CelFileFreeHardware(pCellFile);
     if (pCellFile != nullptr)
@@ -1210,22 +1213,23 @@ void __fastcall ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile)
 // 1.12a: 0x6FB6EED0 (usercall: eax = szFileName, [esp+4] = nFileType, [esp+8] = bNoLocale)
 D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szFileName, int32_t nFileType, int32_t bNoLocale)
 {
+    (void)bNoLocale;
     char szFullPath[260];
     strcpy(szFullPath, szFileName);
     strcat(szFullPath, D2CMP_GetGfxFileExtension(nFileType));
 
-    HD2ARCHIVE hArchive = D2Win_GetArchive(bNoLocale);
+    HD2ARCHIVE hArchive = D2Win_GetArchive();
     uint32_t dwFileSize = 0;
     void* pRawBuffer = ARCHIVE_LoadFileToMemory(hArchive, szFullPath, &dwFileSize, 1);
 
     D2CellFileStrc* pCellFile = nullptr;
     D2CMP_CelFileNormalize(
-        pRawBuffer,
+        static_cast<D2CellFileStrc*>(pRawBuffer),
         &pCellFile,
         "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP",
         107,
         -1,
-        szFullPath);
+        0);
 
     return pCellFile;
 }
@@ -1237,18 +1241,18 @@ D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, i
     strcpy(szFullPath, szFileName);
     strcat(szFullPath, D2CMP_GetGfxFileExtension(nFileType));
 
-    HD2ARCHIVE hArchive = D2Win_GetArchive(0);
+    HD2ARCHIVE hArchive = D2Win_GetArchive();
     uint32_t dwFileSize = 0;
     void* pRawBuffer = ARCHIVE_LoadFileToMemory(hArchive, szFullPath, &dwFileSize, 1);
 
     D2CellFileStrc* pCellFile = nullptr;
     D2CMP_CelFileNormalize(
-        pRawBuffer,
+        static_cast<D2CellFileStrc*>(pRawBuffer),
         &pCellFile,
         "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP",
         86,
         -1,
-        szFullPath);
+        0);
 
     return pCellFile;
 }

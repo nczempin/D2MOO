@@ -243,13 +243,13 @@ extern "C"
 // ----------------------------------------------------------------------------
 // Global Variables
 // ----------------------------------------------------------------------------
-static int32_t(&g_aTileVertexRowCounts)[5]    = *(int32_t(*)[5])0x6FB813B8;
-static int32_t(&g_aTileVertexRowStarts)[5]    = *(int32_t(*)[5])0x6FB813CC;
-static int32_t(&g_aTileVertexRowEnds)[5]      = *(int32_t(*)[5])0x6FB813E0;
-static int32_t(&g_aTileSubGridYOffsets)[9]    = *(int32_t(*)[9])0x6FB813F4;
-static int32_t(&g_aTileSubGridXOffsets)[9]    = *(int32_t(*)[9])0x6FB81418;
-static int32_t(&g_aTileDiamondVertexIdx)[12]  = *(int32_t(*)[12])0x6FB8143C;
-static D2StatButtonDescStrc(&g_aCharStatButtons)[4] = *(D2StatButtonDescStrc(*)[4])0x6FB938B8;
+int32_t(&g_aTileVertexRowCounts)[5]    = *(int32_t(*)[5])0x6FB813B8;
+int32_t(&g_aTileVertexRowStarts)[5]    = *(int32_t(*)[5])0x6FB813CC;
+int32_t(&g_aTileVertexRowEnds)[5]      = *(int32_t(*)[5])0x6FB813E0;
+int32_t(&g_aTileSubGridYOffsets)[9]    = *(int32_t(*)[9])0x6FB813F4;
+int32_t(&g_aTileSubGridXOffsets)[9]    = *(int32_t(*)[9])0x6FB81418;
+int32_t(&g_aTileDiamondVertexIdx)[12]  = *(int32_t(*)[12])0x6FB8143C;
+D2StatButtonDescStrc(&g_aCharStatButtons)[4] = *(D2StatButtonDescStrc(*)[4])0x6FB938B8;
 
 static D2WardenHostCallbacksStrc g_tWardenHostCallbacks;     // 0x6FB93A90
 static D2WardenHostCallbacksStrc* g_pWardenHostCallbacks;    // 0x6FB93AAC

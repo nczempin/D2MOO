@@ -157,6 +157,7 @@ FOG_DLL_DECL int __fastcall FOG_SetLogPrefix(const char* szLogPrefix);										
 FOG_DLL_DECL void* __cdecl FOG_GetSystemInfo();																										//Fog.#10022
 FOG_DLL_DECL void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int nLine);														//Fog.#10023
 FOG_DLL_DECL void __cdecl FOG_DisplayHalt(const char* szMsg, const char* szFile, int nLine);														//Fog.#10024
+inline void FOG_DisplayHalt(const char* szFile, int nLine) { FOG_DisplayHalt("Halt", szFile, nLine); }
 FOG_DLL_DECL void __cdecl FOG_DisplayWarning(const char* szMsg, const char* szFile, int nLine);														//Fog.#10025
 FOG_DLL_DECL void __cdecl FOG_DisplayError(int nCategory, const char* szMsg, const char* szFile, int nLine);										//Fog.#10026
 // Log to default logfile with date and `\n` at end of message
@@ -171,6 +172,8 @@ FOG_DLL_DECL void __fastcall FOG_CrashDumpThread(HANDLE hThreadToWalk);									
 FOG_DLL_DECL BOOL __cdecl FOG_IsHandlingError();																									//Fog.#10039
 FOG_DLL_DECL void* __fastcall FOG_Alloc(int nSize, const char* szFile, int nLine, int n0);															//Fog.#10042
 FOG_DLL_DECL void __fastcall FOG_Free(void* pFree, const char* szFile, int nLine, int n0);															//Fog.#10043
+inline void* __fastcall FOG_AllocClientMemory(int nSize, const char* szFile, int nLine, int n0) { return FOG_Alloc(nSize, szFile, nLine, n0); }
+inline void __fastcall FOG_FreeClientMemory(void* pFree, const char* szFile, int nLine, int n0) { FOG_Free(pFree, szFile, nLine, n0); }
 FOG_DLL_DECL void* __fastcall FOG_Realloc(void* pMemory, int nSize, const char* szFile, int nLine, int n0);											//Fog.#10044
 FOG_DLL_DECL void* __fastcall FOG_AllocPool(void* pMemPool, int nSize, const char* szFile, int nLine, int n0);										//Fog.#10045
 FOG_DLL_DECL void __fastcall FOG_FreePool(void* pMemPool, void* pFree, const char* szFile, int nLine, int n0);										//Fog.#10046

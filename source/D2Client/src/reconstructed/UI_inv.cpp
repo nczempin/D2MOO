@@ -27,10 +27,20 @@
 #include <D2Unicode.h>
 #include <Units/Units.h>
 #include <D2Gfx.h>
+#include <DrawMode.h>
+#include <Texture.h>
 #include <D2Win.h>
+#include <D2WinFont.h>
 #include <D2CMP.h>
 #include <Fog.h>
 #include <Storm.h>
+
+#ifndef DRAW_MODE_NORMAL
+#define DRAW_MODE_NORMAL DRAWMODE_NORMAL
+#endif
+#ifndef DRAW_MODE_TRANS_25
+#define DRAW_MODE_TRANS_25 DRAWMODE_TRANS25
+#endif
 
 // ----------------------------------------------------------------------------
 // External Structures & Types
@@ -235,6 +245,7 @@ extern BOOL g_bCubeCloseInputHookInstalled;         // 0x6FBD33FC
 // Forward Declarations of External Helpers
 // ----------------------------------------------------------------------------
 
+void __fastcall NET_SendByte(uint8_t bPacketId);
 void __fastcall NET_SendByteAndDword(uint8_t bPacketId, uint32_t dwArg);                                // 0x6FB29810
 void __fastcall NET_SendByteAndTwoDwords(uint8_t bPacketId, uint32_t dwArg1, uint32_t dwArg2);          // 0x6FB297E0
 void __fastcall NET_SendByteAndWord(uint8_t bPacketId, uint16_t wArg);                                  // 0x6FB298E0
@@ -242,8 +253,6 @@ void __fastcall NET_SendByteAndThreeDwords(uint8_t bPacketId, uint32_t dw1, uint
 void __fastcall NET_SendByteAndFourDwords(uint8_t bPacketId, uint32_t dw1, uint32_t dw2, uint32_t dw3, uint32_t dw4); // 0x6FB29730
 void __stdcall SOUND_PlayUnitSpeech(D2UnitStrc* pUnit, uint32_t nSpeechId);                             // 0x6FAE7250
 void __stdcall SOUND_PlaySoundEffect(uint32_t nSoundId, D2UnitStrc* pUnit, int32_t nX, int32_t nY, BOOL bGlobal); // 0x6FAE1FA0
-D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szPath, int32_t nType);                     // 0x6FB6EA50
-void __fastcall ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile);                                        // 0x6FB6EEB0
 BOOL __fastcall ITEMS_IsItemLockedInInventory(D2UnitStrc* pItem);                                       // 0x6FB454E0
 void __fastcall ITEMS_LockItemInInventory(D2UnitStrc* pItem);                                           // 0x6FB45730
 int32_t __stdcall ITEMS_GetEquipOrDropSoundId(D2UnitStrc* pUnit, D2UnitStrc* pItem, int32_t a3, int32_t a4, int32_t a5); // 0x6FB45920
@@ -257,12 +266,36 @@ int32_t __stdcall UI_HandleBeltMouseClick(D2WinMsgStrc* pMsg);                  
 void __fastcall UI_SetPanelState(int32_t nPanelIdx, int32_t nAction, BOOL bUpdateView);                 // 0x6FB3EF00
 
 // Forward declarations within UI_inv.cpp
+int32_t __fastcall INV_HitTestShopSubButtonColumn(int32_t nX);                                          // 0x6FB55790
+BOOL __fastcall INV_HitTestWeaponSwapButtons(int32_t nY, int32_t nX);                                   // 0x6FB55D30
 void __stdcall INV_ClearHoveredItemState();                                                             // 0x6FB559A0
 void __stdcall INV_InitInventoryLayoutRectsAndGrids();                                                  // 0x6FB58B70
 BOOL __fastcall INV_CheckCursorItemClear(D2UnitStrc* pPlayer);                                          // 0x6FB5C2C0
 void __stdcall INV_RenderHoveredItemTooltip(D2UnitStrc* pOwnerUnit, BOOL bIsNpcShop);                   // 0x6FB5D320
 void __stdcall INV_CloseHoradricCubeSession();                                                          // 0x6FB615D0
 D2UnitStrc* __stdcall INV_GetInteractedNpcUnit();                                                       // 0x6FB61B30
+
+#ifndef QUESTSTATEFLAG_A2Q2
+#define QUESTSTATEFLAG_A2Q2 10
+#define QUESTSTATEFLAG_A3Q3 19
+#endif
+
+static inline BOOL ITEMS_CanItemsBeEquippedSimultaneously(D2UnitStrc* pPlayer, D2UnitStrc* pItem1, D2UnitStrc* pItem2, int32_t nWieldType)
+{
+    (void)nWieldType;
+    return sub_6FD91E80(pPlayer, pItem1, pItem2);
+}
+
+static inline BOOL ITEMS_CanSocketFillerFitIntoItem(D2UnitStrc* pHostItem, D2UnitStrc* pFillerItem)
+{
+    return ITEMS_IsSocketable(pHostItem) && ITEMS_IsSocketFiller(pFillerItem);
+}
+
+static inline D2BitBufferStrc* QUESTRECORD_GetPlayerQuestFlags(D2UnitStrc* pPlayer)
+{
+    D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(pPlayer);
+    return pPlayerData ? pPlayerData->pQuestData[g_nGameDifficulty] : nullptr;
+}
 
 // ============================================================================
 // Functions (0x6FB54EF0 .. 0x6FB564B0)
@@ -407,7 +440,7 @@ void __fastcall INV_FacePlayerTowardTarget(int32_t nTargetX, int32_t nTargetY)
 
     if (nDeltaX < -1 || nDeltaX > 1 || nDeltaY < -1 || nDeltaY > 1)
     {
-        D2COMMON_10160_PathUpdateDirection(g_pPlayerUnit->pDynamicPath, nTargetX, nTargetY);
+        D2COMMON_10170_PathSetTargetPos(g_pPlayerUnit->pDynamicPath, nTargetX, nTargetY);
     }
 }
 
@@ -440,8 +473,8 @@ void __stdcall INV_DrawEmptyBodyLocSlotBackgrounds(D2InventoryStrc* pInventory)
             }
             D2UnitStrc* pRightArm = INVENTORY_GetItemFromBodyLoc(pInventory, BODYLOC_RARM);
             if (pRightArm &&
-                (ITEMS_CheckIfTwoHanded(pRightArm) ||
-                 (g_pPlayerUnit && ITEMS_CheckTwoHandedByClass(g_pPlayerUnit, pRightArm) == 2)))
+                (ITEMS_CheckWeaponIfTwoHanded(pRightArm) ||
+                 (g_pPlayerUnit && ITEMS_Is1Or2Handed(g_pPlayerUnit, pRightArm) == 2)))
             {
                 continue;
             }
@@ -459,8 +492,8 @@ void __stdcall INV_DrawEmptyBodyLocSlotBackgrounds(D2InventoryStrc* pInventory)
             }
             D2UnitStrc* pLeftArm = INVENTORY_GetItemFromBodyLoc(pInventory, BODYLOC_LARM);
             if (pLeftArm &&
-                (ITEMS_CheckIfTwoHanded(pLeftArm) ||
-                 (g_pPlayerUnit && ITEMS_CheckTwoHandedByClass(g_pPlayerUnit, pLeftArm) == 2)))
+                (ITEMS_CheckWeaponIfTwoHanded(pLeftArm) ||
+                 (g_pPlayerUnit && ITEMS_Is1Or2Handed(g_pPlayerUnit, pLeftArm) == 2)))
             {
                 continue;
             }
@@ -903,12 +936,12 @@ BOOL __stdcall INV_CanCursorItemEquipToBodyLoc(D2InventoryStrc* pInventory, int3
         {
             if (ITEMS_CheckBodyLocation(pCursorItem, BODYLOC_RARM))
             {
-                if (ITEMS_CheckIfTwoHanded(pCursorItem) &&
-                    (!ITEMS_CheckTwoHandedByClass(g_pPlayerUnit, pCursorItem) || nWieldType != 2))
+                if (ITEMS_CheckWeaponIfTwoHanded(pCursorItem) &&
+                    (!ITEMS_Is1Or2Handed(g_pPlayerUnit, pCursorItem) || nWieldType != 2))
                 {
                     return FALSE;
                 }
-                if (ITEMS_CanItemStackWith(pCursorItem, pLeftArm))
+                if (ITEMS_AreStackablesEqual(pCursorItem, pLeftArm))
                 {
                     return TRUE;
                 }
@@ -919,7 +952,7 @@ BOOL __stdcall INV_CanCursorItemEquipToBodyLoc(D2InventoryStrc* pInventory, int3
                 return TRUE;
             }
             if (ITEMS_CheckBodyLocation(pCursorItem, BODYLOC_LARM) &&
-                ITEMS_CanItemStackWith(pCursorItem, pLeftArm) &&
+                ITEMS_AreStackablesEqual(pCursorItem, pLeftArm) &&
                 ITEMS_CanItemsBeEquippedSimultaneously(g_pPlayerUnit, pRightArm, pCursorItem, nWieldType))
             {
                 return TRUE;
@@ -935,12 +968,12 @@ BOOL __stdcall INV_CanCursorItemEquipToBodyLoc(D2InventoryStrc* pInventory, int3
         {
             if (ITEMS_CheckBodyLocation(pCursorItem, BODYLOC_LARM))
             {
-                if (ITEMS_CheckIfTwoHanded(pCursorItem) &&
-                    (!ITEMS_CheckTwoHandedByClass(g_pPlayerUnit, pCursorItem) || nWieldType != 2))
+                if (ITEMS_CheckWeaponIfTwoHanded(pCursorItem) &&
+                    (!ITEMS_Is1Or2Handed(g_pPlayerUnit, pCursorItem) || nWieldType != 2))
                 {
                     return FALSE;
                 }
-                if (ITEMS_CanItemStackWith(pCursorItem, pRightArm))
+                if (ITEMS_AreStackablesEqual(pCursorItem, pRightArm))
                 {
                     return TRUE;
                 }
@@ -951,7 +984,7 @@ BOOL __stdcall INV_CanCursorItemEquipToBodyLoc(D2InventoryStrc* pInventory, int3
                 return TRUE;
             }
             if (ITEMS_CheckBodyLocation(pCursorItem, BODYLOC_RARM) &&
-                ITEMS_CanItemStackWith(pCursorItem, pRightArm) &&
+                ITEMS_AreStackablesEqual(pCursorItem, pRightArm) &&
                 ITEMS_CanItemsBeEquippedSimultaneously(g_pPlayerUnit, pCursorItem, pLeftArm, nWieldType))
             {
                 return TRUE;
@@ -1023,8 +1056,8 @@ void __stdcall INV_ToggleWeaponSwapState()
 BOOL __fastcall INV_CheckTwoHandedWeaponLeftSlot(D2UnitStrc* pPlayer, D2UnitStrc* pItem)
 {
     int32_t nWieldType = INVENTORY_GetWieldType(pPlayer, pPlayer->pInventory);
-    if (ITEMS_CheckIfTwoHanded(pItem) &&
-        (!ITEMS_CheckTwoHandedByClass(pPlayer, pItem) || nWieldType != 2))
+    if (ITEMS_CheckWeaponIfTwoHanded(pItem) &&
+        (!ITEMS_Is1Or2Handed(pPlayer, pItem) || nWieldType != 2))
     {
         return FALSE;
     }
@@ -1036,8 +1069,8 @@ BOOL __fastcall INV_CheckTwoHandedWeaponLeftSlot(D2UnitStrc* pPlayer, D2UnitStrc
 BOOL __fastcall INV_CheckTwoHandedWeaponRightSlot(D2UnitStrc* pPlayer, D2UnitStrc* pItem)
 {
     int32_t nWieldType = INVENTORY_GetWieldType(pPlayer, pPlayer->pInventory);
-    if (ITEMS_CheckIfTwoHanded(pItem) &&
-        (!ITEMS_CheckTwoHandedByClass(pPlayer, pItem) || nWieldType != 2))
+    if (ITEMS_CheckWeaponIfTwoHanded(pItem) &&
+        (!ITEMS_Is1Or2Handed(pPlayer, pItem) || nWieldType != 2))
     {
         return FALSE;
     }
@@ -1318,7 +1351,7 @@ BOOL __fastcall INV_HitTestShopCloseButton(int32_t nX, int32_t nY)
 // Draws a colored semi-transparent highlight box over an item slot or grid cell.
 void __fastcall INV_DrawItemHighlightBox(RECT* pRect, uint8_t nColorIndex, int32_t nDrawMode)
 {
-    D2GFX_DrawBox(pRect->left, pRect->top, pRect->right, pRect->bottom, nColorIndex, (D2DrawMode)nDrawMode);
+    D2GFX_DrawBox(pRect->left, pRect->top, pRect->right, pRect->bottom, nColorIndex, (DrawMode)nDrawMode);
 }
 
 // 1.12a: 0x6FB56290
@@ -1352,7 +1385,7 @@ int32_t __fastcall INV_CountUnicodeLines(const Unicode* wszText)
 // Draws the multi-line mercenary dialogue / hireling status text box on the mercenary screen.
 void __stdcall INV_DrawMercDialogueBox()
 {
-    D2Win_10127_SetFont(FONT_16);
+    D2Win_10127_SetFont(D2FONT_FONT16);
     const Unicode* wszStr = D2LANG_GetStringFromTblIndex((uint16_t)g_nMercTalkStringId);
 
     Unicode wszLines[8][128];
@@ -1529,7 +1562,7 @@ void __stdcall INV_DrawGoldAmountBox(int32_t nMode)
         return;
     }
 
-    D2Win_10127_SetFont(FONT_16);
+    D2Win_10127_SetFont(D2FONT_FONT16);
     Unicode wszBuf[128] = {};
     char szNum[32] = {};
 
@@ -2042,12 +2075,14 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
         return;
     }
 
+    int32_t bHigherRes = (D2GFX_GetResolutionMode() != 0);
+
     // 1. Player Inventory & Paperdoll (InvPage 0)
     int32_t nInvRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_INVENTORY, g_bExpansionMode);
-    DATATBLS_GetInventoryRect(nInvRecId, &g_rInvPanelRect);
+    DATATBLS_GetInventoryRect(nInvRecId, bHigherRes, (D2InvRectStrc*)&g_rInvPanelRect);
 
     D2InventoryGridInfoStrc tGridInfo = {};
-    DATATBLS_GetInventoryGridInfo(nInvRecId, &tGridInfo);
+    DATATBLS_GetInventoryGridInfo(nInvRecId, bHigherRes, &tGridInfo);
     g_tInvGridLayout.nGridX         = tGridInfo.nGridX;
     g_tInvGridLayout.nGridY         = tGridInfo.nGridY;
     g_tInvGridLayout.nLeft          = tGridInfo.nGridLeft;
@@ -2059,18 +2094,18 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
 
     for (int32_t i = 0; i < 10; ++i)
     {
-        RECT rSlot = {};
-        DATATBLS_GetInventoryComponentGrid(nInvRecId, i, &rSlot);
-        g_atBodyLocRects[i + 1].nLeft   = rSlot.left;
-        g_atBodyLocRects[i + 1].nRight  = rSlot.right;
-        g_atBodyLocRects[i + 1].nTop    = rSlot.top;
-        g_atBodyLocRects[i + 1].nBottom = rSlot.bottom;
+        D2InvCompGridStrc tCompGrid = {};
+        DATATBLS_GetInventoryComponentGrid(nInvRecId, bHigherRes, &tCompGrid, i);
+        g_atBodyLocRects[i + 1].nLeft   = tCompGrid.rect.nLeft;
+        g_atBodyLocRects[i + 1].nRight  = tCompGrid.rect.nRight;
+        g_atBodyLocRects[i + 1].nTop    = tCompGrid.rect.nTop;
+        g_atBodyLocRects[i + 1].nBottom = tCompGrid.rect.nBottom;
     }
 
     // 2. Stash (InvPage 4)
     int32_t nStashRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_STASH, g_bExpansionMode);
-    DATATBLS_GetInventoryRect(nStashRecId, &g_rStashPanelRect);
-    DATATBLS_GetInventoryGridInfo(nStashRecId, &tGridInfo);
+    DATATBLS_GetInventoryRect(nStashRecId, bHigherRes, (D2InvRectStrc*)&g_rStashPanelRect);
+    DATATBLS_GetInventoryGridInfo(nStashRecId, bHigherRes, &tGridInfo);
     g_tStashGridLayout.nGridX         = tGridInfo.nGridX;
     g_tStashGridLayout.nGridY         = tGridInfo.nGridY;
     g_tStashGridLayout.nLeft          = tGridInfo.nGridLeft;
@@ -2082,7 +2117,7 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
 
     // 3. Horadric Cube (InvPage 3)
     int32_t nCubeRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_CUBE, g_bExpansionMode);
-    DATATBLS_GetInventoryGridInfo(nCubeRecId, &tGridInfo);
+    DATATBLS_GetInventoryGridInfo(nCubeRecId, bHigherRes, &tGridInfo);
     D2InvGridLayoutStrc* pCubeGrid = g_bExpansionMode ? &g_tCubeLoDGridLayout : &g_tCubeClassicGridLayout;
     pCubeGrid->nGridX         = tGridInfo.nGridX;
     pCubeGrid->nGridY         = tGridInfo.nGridY;
@@ -2095,7 +2130,7 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
 
     // 4. Trade Grid (InvPage 2)
     int32_t nTradeRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_TRADE, g_bExpansionMode);
-    DATATBLS_GetInventoryGridInfo(nTradeRecId, &tGridInfo);
+    DATATBLS_GetInventoryGridInfo(nTradeRecId, bHigherRes, &tGridInfo);
     g_tTradeTopGridLayout.nGridX         = tGridInfo.nGridX;
     g_tTradeTopGridLayout.nGridY         = tGridInfo.nGridY;
     g_tTradeTopGridLayout.nLeft          = tGridInfo.nGridLeft;
@@ -2198,7 +2233,7 @@ void __stdcall INV_RenderMercenaryInventoryPanel()
         return;
     }
 
-    D2Win_10127_SetFont(FONT_16);
+    D2Win_10127_SetFont(D2FONT_FONT16);
 }
 
 // 1.12a: 0x6FB59AB0
@@ -2312,12 +2347,12 @@ void __stdcall INV_DrawShopActionBtnTooltip()
     if (g_nHoveredShopSubBtnIndex == 4 && INV_HasRepairAllButton())
     {
         int32_t nRepairCost = ITEMS_GetAllRepairCosts(
-            1,
+            nullptr,
             g_pPlayerUnit,
             g_nInteractedNpcGUID,
-            g_nGameDifficulty,
+            (D2C_Difficulties)g_nGameDifficulty,
             NULL,
-            0);
+            nullptr);
         (void)nRepairCost;
     }
 }

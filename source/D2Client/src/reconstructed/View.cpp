@@ -28,10 +28,6 @@
 // =============================================================================
 // External D2Common / D2Gfx / Fog Imports
 // =============================================================================
-extern "C" void* __fastcall FOG_AllocClientMemory(size_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-extern "C" void  __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
-extern "C" void  __cdecl    FOG_DisplayAssert(const char* szMsg, const char* szFile, int32_t nLine);
-
 // D2Common.#10391: void __stdcall DRLGACTIVATE_Update(D2DrlgStrc* pDrlg)
 extern "C" void __stdcall DRLGACTIVATE_Update(D2DrlgStrc* pDrlg);
 // D2Gfx.#10079: int32_t __stdcall WINDOW_GetDimensions(int32_t* pWidth, int32_t* pHeight)
@@ -459,7 +455,7 @@ void __fastcall PLAYER_UpdateCameraOffsets(void)
 //   4. Marks gpClientViewport dirty (VIEWFLAG_DIRTY) whenever the camera position changes
 //   5. Rebuilds the visible room grid (VIEW_UpdateViewportVisibility)
 //   6. Renders the world (VIEW_RenderViewport)
-void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender)
+static void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender)
 {
     if (gpClientPlayer == nullptr || gpClientViewport == nullptr)
     {
@@ -527,7 +523,10 @@ void __fastcall GAME_UpdateWorldAndStreaming(void)
 
     // 1. Animate animated floor/wall tiles in active rooms
     // D2Common.#10928: DUNGEON_AnimateTiles
-    DUNGEON_AnimateTiles(gpClientAct);
+    if (gpClientAct->pRoom != nullptr)
+    {
+        DUNGEON_AnimateTiles(gpClientAct->pRoom);
+    }
 
     // 2. Advance day/night cycle lighting in the current act
     // D2Common.#10190: ENVIRONMENT_UpdatePeriodOfDay
@@ -571,7 +570,7 @@ void __fastcall PLAYER_OnRoomChanged(D2UnitStrc* pPlayer)
     if (pNextRoom != nullptr && gpClientAct != nullptr)
     {
         // D2Common.#10930: DUNGEON_InitRoomTileAnimation
-        DUNGEON_InitRoomTileAnimation(gpClientAct, pNextRoom);
+        DUNGEON_InitRoomTileAnimation(gpClientAct, pCurrentRoom, pNextRoom);
     }
 
     if (pCurrentRoom != nullptr)

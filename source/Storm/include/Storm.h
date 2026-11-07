@@ -551,6 +551,17 @@ D2FUNC_DLL_NP(STORM, SMsgPopRegisterState, BOOL, __stdcall, (int type), 0x1d440)
 /// Imported by ['D2Client.dll']
 D2FUNC_DLL_NP(STORM, SMsgPushRegisterState, BOOL, __stdcall, (int type), 0x1d480);  //Storm.#419
 
+inline BOOL __stdcall SMsgPopRegisterState(HWND hWnd) { return SMsgPopRegisterState((int)(intptr_t)hWnd); }
+inline BOOL __stdcall SMsgPushRegisterState(HWND hWnd) { return SMsgPushRegisterState((int)(intptr_t)hWnd); }
+template <typename T>
+inline BOOL __stdcall SMsgRegisterCommand(HWND hWnd, uint32_t nId, T pHandler) { return SMsgRegisterCommand(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgRegisterKeyDown(HWND hWnd, uint32_t nId, T pHandler) { return SMsgRegisterKeyDown(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgRegisterKeyUp(HWND hWnd, uint32_t nId, T pHandler) { return SMsgRegisterKeyUp(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgRegisterMessage(HWND hWnd, uint32_t nId, T pHandler) { return SMsgRegisterMessage(hWnd, nId, (SMSGHANDLER)pHandler); }
+
 enum SREG_Flags {
 	SREG_DEFAULT                = 0x00, // Look into both HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER and under "Software\Blizzard Entertainment\"
 	SREG_EXCLUDE_LOCAL_MACHINE  = 0x01, // excludes checking the HKEY_LOCAL_MACHINE hive
@@ -821,6 +832,17 @@ D2FUNC_DLL_NP(STORM, SMsgUnregisterKeyUp, BOOL, __stdcall, (HWND hWnd, uint32_t 
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
 D2FUNC_DLL_NP(STORM, SMsgUnregisterMessage, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d6c0);  //Storm.#515
+
+inline BOOL __stdcall SMsgBreakHandlerChain(void* pData) { return SMsgBreakHandlerChain((SMSGHANDLER_PARAMS*)pData); }
+template <typename T>
+inline BOOL __stdcall SMsgUnregisterCommand(HWND hWnd, uint32_t nId, T pHandler) { return SMsgUnregisterCommand(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgUnregisterKeyDown(HWND hWnd, uint32_t nId, T pHandler) { return SMsgUnregisterKeyDown(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgUnregisterKeyUp(HWND hWnd, uint32_t nId, T pHandler) { return SMsgUnregisterKeyUp(hWnd, nId, (SMSGHANDLER)pHandler); }
+template <typename T>
+inline BOOL __stdcall SMsgUnregisterMessage(HWND hWnd, uint32_t nId, T pHandler) { return SMsgUnregisterMessage(hWnd, nId, (SMSGHANDLER)pHandler); }
+inline size_t __stdcall SStrNCpy(char* dest, const char* source, size_t destsize) { return SStrCopy(dest, source, destsize); }
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SMsgGetDispatcher, int, __stdcall, (int a1), 0x1d3a0);  //Storm.#516

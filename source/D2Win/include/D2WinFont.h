@@ -44,9 +44,18 @@ struct D2FontCacheStrc
 
 struct D2SplittedTextStrc
 {
-	Unicode* wszLine;								//0x00
-	D2SplittedTextStrc* pNextLine;					//0x04
+	union
+	{
+		Unicode* wszLine;								//0x00
+		Unicode* pwszLine;								//0x00
+	};
+	union
+	{
+		D2SplittedTextStrc* pNextLine;					//0x04
+		D2SplittedTextStrc* pNext;						//0x04
+	};
 };
+typedef D2SplittedTextStrc D2WrappedTextNodeStrc;
 #pragma pack(pop)
 
 
@@ -66,6 +75,9 @@ void __fastcall sub_6F8A9E90(int a1);
 void __stdcall D2Win_10116();
 //D2Win.0x6F8A9FF0
 Font __fastcall D2Win_10127_SetFont(Font nFontSize);
+#ifdef __cplusplus
+inline Font __fastcall D2Win_10127_SetFont(int nFontSize) { return D2Win_10127_SetFont(static_cast<Font>(nFontSize)); }
+#endif
 //D2Win.0x6F8AA100
 D2CharStrc* __fastcall sub_6F8AA100(Unicode wszChar);
 //D2Win.0x6F8AA140

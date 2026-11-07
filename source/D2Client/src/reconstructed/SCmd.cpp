@@ -18,6 +18,7 @@
 #include <string.h>
 #include <windows.h>
 
+#include <Fog.h>
 #include <D2Dungeon.h>
 #include <Units/Units.h>
 #include <Path/Path.h>
@@ -29,6 +30,8 @@
 #include <D2DataTbls.h>
 #include <D2BitManip.h>
 
+typedef D2ActiveRoomStrc D2RoomStrc;
+
 // =============================================================================
 // External D2Net / Fog / D2Common Imports
 // =============================================================================
@@ -36,12 +39,6 @@
 extern "C" int32_t __fastcall SERVER_GetServerPacketSize(const uint8_t* pBuffer, int32_t nBufferSize, int32_t* pOutVarHeader);
 // D2Net.#10036: int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket)
 extern "C" int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket);
-// Fog.#10023: void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int32_t nLine)
-extern "C" void __cdecl FOG_DisplayAssert(const char* szMsg, const char* szFile, int32_t nLine);
-// Fog.#10042: void* __fastcall FOG_AllocClientMemory(size_t nSize, const char* szFile, int32_t nLine, int32_t nZero)
-extern "C" void* __fastcall FOG_AllocClientMemory(size_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-// Fog.#10043: void __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int32_t nLine, int32_t nZero)
-extern "C" void __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
 
 // =============================================================================
 // S->C Dispatch Table Entry & Unit Packet Queue Structs

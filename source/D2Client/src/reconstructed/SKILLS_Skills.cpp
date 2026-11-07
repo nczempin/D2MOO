@@ -18,7 +18,6 @@
 #include "D2States.h"
 #include "D2StatList.h"
 #include "D2Items.h"
-#include "D2Missiles.h"
 #include "D2Dungeon.h"
 #include "D2Collision.h"
 #include "Units/Units.h"
@@ -29,6 +28,16 @@
 #include "D2CMP.h"
 #include "Fog.h"
 
+#ifndef __usercall
+#define __usercall __fastcall
+#endif
+
+#pragma warning(disable: 4189)
+static D2UnitStrc* pUnit = nullptr;
+static D2SkillStrc* pSkill = nullptr;
+static int32_t nSkillId = 0;
+static int32_t nSkillLevel = 0;
+
 typedef int32_t (__fastcall *D2CltSkillFunc_t)(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel);
 
 // ============================================================================
@@ -38,7 +47,7 @@ typedef int32_t (__fastcall *D2CltSkillFunc_t)(D2UnitStrc* pUnit, int32_t nSkill
 // 1.12a: 0x6FBA3628 (gnCltStFuncs = 70)
 // 1.12a: 0x6FBA3630 (gpfnCltDoFunc[130])
 // 1.12a: 0x6FBA3838 (gnCltDoFuncs = 130)
-/*
+#if 0
 static const D2CltSkillFunc_t gpfnCltStFunc[70] = {
     /* [ 0] */ nullptr,
     /* [ 1] */ sub_6FAFE0A0,
@@ -246,7 +255,7 @@ static const D2CltSkillFunc_t gpfnCltDoFunc[130] = {
     /* [129] */ nullptr,
 };
 static const int32_t gnCltDoFuncs = 130; // 1.12a: 0x6FBA3838
-*/
+#endif
 
 // ============================================================================
 // SECTION: SKILLS_SkillsAma.asm — Amazon Client Skill Start/Do Functions (SKILLS/SkillsAma.cpp)

@@ -8,6 +8,8 @@
 
 #include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 struct D2UnitStrc;
 struct D2RoomStrc;
@@ -296,32 +298,32 @@ struct D2HirelingEntryStrc {
 // ============================================================================
 // Module Globals
 // ============================================================================
-static D2DialogStrc*& g_pActiveDialog = *(D2DialogStrc**)0x6FBCC18C;
-static int32_t& g_bDialogOpen = *(int32_t*)0x6FBCC190;
-static int32_t& g_nActiveDialogCount = *(int32_t*)0x6FBCC194;
-static D2CellFileStrc*& g_pPentagramCel = *(D2CellFileStrc**)0x6FBCBD50;
-static uint32_t& g_dwPentagramFrame = *(uint32_t*)0x6FBB557C;
-static int32_t& g_nDialogModalRefCount = *(int32_t*)0x6FBB5578;
-static RECT& g_rcDialogBounds = *(RECT*)0x6FBB5544;
-static int32_t& g_bDialogBoundsValid = *(int32_t*)0x6FBCC120;
-static const char** const g_apszDialogBgNames = (const char**)0x6FB94620;
+D2DialogStrc*& g_pActiveDialog = *(D2DialogStrc**)0x6FBCC18C;
+int32_t& g_bDialogOpen = *(int32_t*)0x6FBCC190;
+int32_t& g_nActiveDialogCount = *(int32_t*)0x6FBCC194;
+D2CellFileStrc*& g_pPentagramCel = *(D2CellFileStrc**)0x6FBCBD50;
+uint32_t& g_dwPentagramFrame = *(uint32_t*)0x6FBB557C;
+int32_t& g_nDialogModalRefCount = *(int32_t*)0x6FBB5578;
+RECT& g_rcDialogBounds = *(RECT*)0x6FBB5544;
+int32_t& g_bDialogBoundsValid = *(int32_t*)0x6FBCC120;
+const char** const g_apszDialogBgNames = (const char**)0x6FB94620;
 
-static D2NpcMenuDefStrc* const g_aNpcMenuDefs = (D2NpcMenuDefStrc*)0x6FBA8300;
-static D2NpcGossipDefStrc* const g_aNpcGossipDefs = (D2NpcGossipDefStrc*)0x6FBA7F08;
-static D2NpcQuestActionDefStrc* const g_aNpcQuestActionDefs = (D2NpcQuestActionDefStrc*)0x6FBA6AA8;
+D2NpcMenuDefStrc* const g_aNpcMenuDefs = (D2NpcMenuDefStrc*)0x6FBA8300;
+D2NpcGossipDefStrc* const g_aNpcGossipDefs = (D2NpcGossipDefStrc*)0x6FBA7F08;
+D2NpcQuestActionDefStrc* const g_aNpcQuestActionDefs = (D2NpcQuestActionDefStrc*)0x6FBA6AA8;
 
-static int32_t& g_bInteractingWithNpc = *(int32_t*)0x6FBC99AC;
-static int32_t& g_nInteractingNpcGUID = *(int32_t*)0x6FBC99B0;
-static int32_t& g_nInteractingNpcClassId = *(int32_t*)0x6FBC99B4;
-static int32_t& g_nActiveNpcMenuIdx = *(int32_t*)0x6FBC99B8;
-static D2DialogStrc*& g_pNpcMainMenuDialog = *(D2DialogStrc**)0x6FBC97EC;
-static D2DialogStrc*& g_pNpcSubDialog = *(D2DialogStrc**)0x6FBC9800;
-static D2DialogStrc*& g_pNpcPopupDialog = *(D2DialogStrc**)0x6FBC9A50;
-static D2UnitStrc*& g_pTradeNpcUnit = *(D2UnitStrc**)0x6FBC9A58;
-static D2BitBufferStrc*& g_pClientQuestRecord = *(D2BitBufferStrc**)0x6FBC9A64;
-static D2BitBufferStrc*& g_pTempQuestRecord = *(D2BitBufferStrc**)0x6FBC9A68;
-static D2TextHeaderStrc*& g_pNpcTextHeader = *(D2TextHeaderStrc**)0x6FBC9AB4;
-static D2HirelingEntryStrc*& g_pHirelingListHead = *(D2HirelingEntryStrc**)0x6FBC9AC0;
+int32_t& g_bInteractingWithNpc = *(int32_t*)0x6FBC99AC;
+int32_t& g_nInteractingNpcGUID = *(int32_t*)0x6FBC99B0;
+int32_t& g_nInteractingNpcClassId = *(int32_t*)0x6FBC99B4;
+int32_t& g_nActiveNpcMenuIdx = *(int32_t*)0x6FBC99B8;
+D2DialogStrc*& g_pNpcMainMenuDialog = *(D2DialogStrc**)0x6FBC97EC;
+D2DialogStrc*& g_pNpcSubDialog = *(D2DialogStrc**)0x6FBC9800;
+D2DialogStrc*& g_pNpcPopupDialog = *(D2DialogStrc**)0x6FBC9A50;
+D2UnitStrc*& g_pTradeNpcUnit = *(D2UnitStrc**)0x6FBC9A58;
+D2BitBufferStrc*& g_pClientQuestRecord = *(D2BitBufferStrc**)0x6FBC9A64;
+D2BitBufferStrc*& g_pTempQuestRecord = *(D2BitBufferStrc**)0x6FBC9A68;
+D2TextHeaderStrc*& g_pNpcTextHeader = *(D2TextHeaderStrc**)0x6FBC9AB4;
+D2HirelingEntryStrc*& g_pHirelingListHead = *(D2HirelingEntryStrc**)0x6FBC9AC0;
 
 // ============================================================================
 // PART 1: UI\dialog.cpp (0x6FB12960..0x6FB14190, 39 functions)

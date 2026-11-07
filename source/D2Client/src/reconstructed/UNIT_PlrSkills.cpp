@@ -37,6 +37,11 @@
 #include "D2Seed.h"
 #include "Fog.h"
 
+inline void __stdcall D2CMP_10064_LightSetColor(void* pLight, uint8_t nR, uint8_t nG, uint8_t nB) { (void)pLight; (void)nR; (void)nG; (void)nB; }
+inline void __stdcall D2CMP_10085_RemoveOverlay(void* pOverlayControl, int32_t nOverlayId) { (void)pOverlayControl; (void)nOverlayId; }
+inline D2UnitGUID __stdcall MISSILE_GetOwnerGUID(D2UnitStrc* pMissile) { return (pMissile && pMissile->dwUnitType == UNIT_MISSILE && pMissile->pMissileData) ? pMissile->pMissileData->dwOwnerGUID : (D2UnitGUID)-1; }
+inline int32_t __stdcall MISSILE_GetOwnerType(D2UnitStrc* pMissile) { return (pMissile && pMissile->dwUnitType == UNIT_MISSILE && pMissile->pMissileData) ? pMissile->pMissileData->nOwnerType : -1; }
+
 // ============================================================================
 // Client Missile Initialization Struct (0x5C bytes)
 // Used by D2Client_CreateClientMissile (0x6FAD4B20)
@@ -379,7 +384,7 @@ void __stdcall D2Client_SetUnitStateStatAndRefresh(D2UnitStrc* pUnit, int32_t nS
             return;
         }
         STATLIST_SetState(pStatList, nState);
-        STATLIST_MergeStatList(pUnit, pStatList, 1);
+        D2COMMON_10475_PostStatToStatList(pUnit, pStatList, 1);
     }
 
     STATLIST_SetStatIfListIsValid(pStatList, nStatId, nStatVal, nLayer);
@@ -516,7 +521,7 @@ int32_t __fastcall D2Client_ClearMonsterLeapCollisionOnStateEnd(D2UnitStrc* pUni
         return 0;
     }
 
-    if (SKILLS_GetSkillInfoBlock(pSkill)->wSkillId != 0xA7)
+    if (!SKILLS_GetSkillsTxtRecordFromSkill(pSkill) || SKILLS_GetSkillsTxtRecordFromSkill(pSkill)->nSkillId != 0xA7)
     {
         return 0;
     }
@@ -526,8 +531,8 @@ int32_t __fastcall D2Client_ClearMonsterLeapCollisionOnStateEnd(D2UnitStrc* pUni
         D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit);
         if (pRoom)
         {
-            int32_t nX = CLIENTS_GetUnitX(pUnit);
-            int32_t nY = CLIENTS_GetUnitY(pUnit);
+            int32_t nX = UNITS_GetClientCoordX(pUnit);
+            int32_t nY = UNITS_GetClientCoordY(pUnit);
             int32_t nSize = UNITS_GetUnitSizeX(pUnit);
             COLLISION_ResetMaskWithPattern(pRoom, nX, nY, nSize, 0x100);
         }
@@ -955,12 +960,12 @@ BOOL __fastcall D2Client_RayTraceMissileWallCollision(D2UnitStrc* pUnit, int32_t
     }
 
     D2CoordStrc pCoords[2];
-    pCoords[0].nX = CLIENTS_GetUnitX(pUnit);
-    pCoords[0].nY = CLIENTS_GetUnitY(pUnit);
+    pCoords[0].nX = UNITS_GetClientCoordX(pUnit);
+    pCoords[0].nY = UNITS_GetClientCoordY(pUnit);
     pCoords[1].nX = *pTargetX;
     pCoords[1].nY = *pTargetY;
 
-    BOOL bClear = COLLISION_RayTrace(pRoom, pCoords, 0x04);
+    BOOL bClear = COLLISION_RayTrace(pRoom, &pCoords[0], &pCoords[1], 0x04);
     *pTargetX = pCoords[1].nX;
     *pTargetY = pCoords[1].nY;
     return !bClear;
@@ -1051,8 +1056,8 @@ D2UnitStrc* __fastcall D2Client_SpawnSubMissileFromMissile(
     missileInit.pOwner = pOwner;
     missileInit.pOrigin = pParentMissile;
     missileInit.nMissileId = nMissileId;
-    missileInit.nX = CLIENTS_GetUnitX(pParentMissile);
-    missileInit.nY = CLIENTS_GetUnitY(pParentMissile);
+    missileInit.nX = UNITS_GetClientCoordX(pParentMissile);
+    missileInit.nY = UNITS_GetClientCoordY(pParentMissile);
     missileInit.nSkillId = MISSILE_GetSkill(pParentMissile);
     missileInit.nSkillLevel = MISSILE_GetLevel(pParentMissile);
     missileInit.nCltSubMissileIndex = nSubMissileIndex;
@@ -1101,8 +1106,8 @@ int32_t __fastcall D2Client_DestroyClientMissile(D2UnitStrc* pMissile, D2UnitStr
         return 2;
     }
 
-    int32_t nX = CLIENTS_GetUnitX(pMissile);
-    int32_t nY = CLIENTS_GetUnitY(pMissile);
+    int32_t nX = UNITS_GetClientCoordX(pMissile);
+    int32_t nY = UNITS_GetClientCoordY(pMissile);
 
     if (pTarget)
     {
@@ -1131,7 +1136,7 @@ int32_t __fastcall D2Client_DestroyClientMissile(D2UnitStrc* pMissile, D2UnitStr
             {
                 STATLIST_SetState(pDelayStatList, 0x56);
                 STATLIST_SetStatRemoveCallback(pDelayStatList, D2Client_OnMissileHitState56Removed);
-                STATLIST_MergeStatList(pTarget, pDelayStatList, 1);
+                D2COMMON_10475_PostStatToStatList(pTarget, pDelayStatList, 1);
                 STATES_ToggleState(pTarget, 0x56, 1);
             }
         }
@@ -1210,8 +1215,9 @@ void __fastcall D2Client_StepMissileMovementAndCollision(D2UnitStrc* pMissile)
     // Step dynamic path if active
     if (pMissile->pDynamicPath && MISSILE_GetRemainingFrames(pMissile) <= MISSILE_GetActivateFrame(pMissile))
     {
-        D2CoordStrc* pSaveSteps = nullptr;
+        D2PathPointStrc* pSaveSteps = nullptr;
         int32_t nSaveStepCount = D2COMMON_10198_PathGetSaveStep(pMissile->pDynamicPath, &pSaveSteps);
+        (void)nSaveStepCount;
 
         D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pMissile);
         if (!pRoom)

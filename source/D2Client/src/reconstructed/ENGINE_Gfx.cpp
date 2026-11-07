@@ -9,6 +9,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Forward declarations for D2MOO / engine types
@@ -116,7 +117,7 @@ extern "C" {
 // ============================================================================
 // Internal D2Client Cross-Module Helpers
 // ============================================================================
-void* __fastcall ARCHIVE_LoadFile(uint32_t hArchive, const char* szPath, DWORD* pdwSize, int b IsSystem, int bAllowFail); // 0x6FB6EF10
+void* __fastcall ARCHIVE_LoadFile(uint32_t hArchive, const char* szPath, DWORD* pdwSize, int bIsSystem, int bAllowFail); // 0x6FB6EF10
 void  __stdcall  LIGHTMAP_GetViewportOffset(int* pOutX, int* pOutY); // 0x6FB3DF50
 int   __stdcall  LIGHTMAP_GetViewportShiftX();                       // 0x6FB3E080
 int   __stdcall  LIGHTMAP_GetViewportShiftY();                       // 0x6FB3E060

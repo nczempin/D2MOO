@@ -28,17 +28,6 @@
 // =============================================================================
 // External Imports (D2Common, D2Gfx, D2Win, D2Lang, D2CMP, Fog, Storm)
 // =============================================================================
-// D2Common.#10600
-extern "C" int32_t __stdcall QUESTRECORD_GetQuestState(D2BitBufferStrc* pQuestRecord, int32_t nQuestId, int32_t nState);
-// D2Common.#10637
-extern "C" void __stdcall QUESTRECORD_SetQuestState(D2BitBufferStrc* pQuestRecord, int32_t nQuestId, int32_t nState);
-// D2Common.#10366
-extern "C" D2RoomStrc* __stdcall UNITS_GetRoom(D2UnitStrc* pUnit);
-// D2Common.#10511
-extern "C" int32_t __stdcall DUNGEON_GetLevelIdFromRoom(D2RoomStrc* pRoom);
-// D2Common.#10124
-extern "C" uint8_t __stdcall DRLG_GetActNoFromLevelId(int32_t nLevelId);
-
 // D2Gfx.#10024
 extern "C" void __stdcall TEXTURE_CelDraw(void* pData, int32_t nX, int32_t nY, uint32_t dwGamma, int32_t nDrawMode, uint8_t* pPalette);
 // D2Gfx.#10043
@@ -54,9 +43,6 @@ extern "C" int32_t __stdcall D2CMP_CelGetWidth(void* pCelHandle);
 extern "C" void* __stdcall D2CMP_CelGetHandle(void* pCelData);
 // D2CMP.#10106
 extern "C" int32_t __stdcall D2CMP_CelFileFreeHardware(void* pFile);
-
-// D2Lang.#10005
-extern "C" const Unicode* __fastcall D2LANG_GetStringFromTblIndex(uint16_t nIndex);
 
 // D2Win.#10001
 extern "C" void __fastcall D2Win_10117_DrawText(const Unicode* pText, int32_t nX, int32_t nY, int32_t nColor, int32_t bCentered);
@@ -74,12 +60,6 @@ extern "C" D2WinWrappedTextNodeStrc* __fastcall D2Win_10199_WrapTextLines(Unicod
 // D2Win.#10132
 extern "C" int32_t __fastcall D2Win_10121_GetTextWidth(const Unicode* pText);
 
-// Fog.#10024
-extern "C" void __cdecl FOG_DisplayHalt(const char* szMsg, const char* szFile, int32_t nLine);
-// Fog.#10043
-extern "C" void __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
-// Fog.#10227
-extern "C" int32_t __stdcall FOG_IsExpansion(void);
 // Fog.#10265
 extern "C" const char* __stdcall FOG_GetErrorLocation(int32_t nLine);
 
@@ -394,7 +374,7 @@ const D2QuestLogTableRecordStrc g_aQuestLogRecords[41] = {
 // =============================================================================
 
 // 1.12a: 0x6FB6F870 (__cdecl)
-static void __cdecl QUESTLOG_DebugWritePrintf(HANDLE hFile, const char* szFormat, ...)
+void __cdecl QUESTLOG_DebugWritePrintf(HANDLE hFile, const char* szFormat, ...)
 {
     char szBuffer[256];
     va_list va;
@@ -463,7 +443,7 @@ void __stdcall QUESTLOG_AcknowledgeQuestAlert(void)
 }
 
 // 1.12a: 0x6FB6FDD0 (__fastcall, eax = nViewShiftState)
-static int32_t __fastcall QUESTLOG_GetAlertButtonLayoutIndex(int32_t nViewShiftState)
+int32_t __fastcall QUESTLOG_GetAlertButtonLayoutIndex(int32_t nViewShiftState)
 {
     extern int32_t g_bMiniPanelOpen;     // 0x6FBB2B70
     extern int32_t g_bbeltExpanded;      // 0x6FBB2B60
@@ -498,7 +478,7 @@ void __fastcall QUESTLOG_HandleMonsterCounterPacket(const D2QuestCounterPacketSt
 }
 
 // 1.12a: 0x6FB6FE60 (__fastcall, ecx = nCallbackArg)
-static void __fastcall QUESTLOG_OnQuestSpeechComplete(int32_t nCallbackArg, int32_t nUnused)
+void __fastcall QUESTLOG_OnQuestSpeechComplete(int32_t nCallbackArg, int32_t nUnused)
 {
     extern void*   g_pfnSpeechCallback;     // 0x6FBCC0F4
     extern int32_t g_nSpeechCallbackParam;  // 0x6FBCC0F8
@@ -509,7 +489,7 @@ static void __fastcall QUESTLOG_OnQuestSpeechComplete(int32_t nCallbackArg, int3
 }
 
 // 1.12a: 0x6FB6FE80 (eax = nRelY, esi = nRelX)
-static int32_t __fastcall QUESTLOG_HitTestActTab(int32_t nRelY, int32_t nRelX)
+int32_t __fastcall QUESTLOG_HitTestActTab(int32_t nRelY, int32_t nRelX)
 {
     if (nRelY < 0 || nRelY > 0x1B || nRelX < 0 || nRelX > 0x13F)
     {
@@ -543,7 +523,7 @@ static int32_t __fastcall QUESTLOG_HitTestActTab(int32_t nRelY, int32_t nRelX)
 }
 
 // 1.12a: 0x6FB6FEF0 (eax = nRelX, ecx = nRelY)
-static uint8_t __fastcall QUESTLOG_HitTestCloseButton(int32_t nRelX, int32_t nRelY)
+uint8_t __fastcall QUESTLOG_HitTestCloseButton(int32_t nRelX, int32_t nRelY)
 {
     if (nRelX >= 0x116 && nRelX <= 0x139 && nRelY >= 0x188 && nRelY <= 0x1A9)
     {
@@ -553,7 +533,7 @@ static uint8_t __fastcall QUESTLOG_HitTestCloseButton(int32_t nRelX, int32_t nRe
 }
 
 // 1.12a: 0x6FB6FF20 (ebx = nRelX, edi = nRelY)
-static int32_t __fastcall QUESTLOG_HitTestQuestSocket(int32_t nRelX, int32_t nRelY)
+int32_t __fastcall QUESTLOG_HitTestQuestSocket(int32_t nRelX, int32_t nRelY)
 {
     if ((uint32_t)g_nActiveActSocketCount > 6)
     {
@@ -574,7 +554,7 @@ static int32_t __fastcall QUESTLOG_HitTestQuestSocket(int32_t nRelX, int32_t nRe
 }
 
 // 1.12a: 0x6FB6FF80 (eax = nRelX, ecx = nRelY)
-static uint8_t __fastcall QUESTLOG_HitTestPlayAudioButton(int32_t nRelX, int32_t nRelY)
+uint8_t __fastcall QUESTLOG_HitTestPlayAudioButton(int32_t nRelX, int32_t nRelY)
 {
     if (nRelX > 0xE5 && nRelX < 0x104 && nRelY > 0x186 && nRelY < 0x1A8)
     {
@@ -702,7 +682,7 @@ void __stdcall QUESTLOG_ResetActSelections(void)
 }
 
 // 1.12a: 0x6FB70210 (__fastcall, ecx = pUnit)
-static void __fastcall QUESTLOG_ClearAncientsStatueCollisionFlag(D2UnitStrc* pUnit)
+void __fastcall QUESTLOG_ClearAncientsStatueCollisionFlag(D2UnitStrc* pUnit)
 {
     if (pUnit && pUnit->dwClassId == 0x20F) // MONSTER_ANCIENTSTATUE1..3
     {
@@ -711,7 +691,7 @@ static void __fastcall QUESTLOG_ClearAncientsStatueCollisionFlag(D2UnitStrc* pUn
 }
 
 // 1.12a: 0x6FB70230 (__fastcall, ecx = pUnit)
-static void __fastcall QUESTLOG_ClearCairnStoneCollisionFlag(D2UnitStrc* pUnit)
+void __fastcall QUESTLOG_ClearCairnStoneCollisionFlag(D2UnitStrc* pUnit)
 {
     if (pUnit && pUnit->dwClassId == 0x92)
     {
@@ -720,7 +700,7 @@ static void __fastcall QUESTLOG_ClearCairnStoneCollisionFlag(D2UnitStrc* pUnit)
 }
 
 // 1.12a: 0x6FB70250 (__fastcall, edx = nQuestIndex)
-static void __fastcall QUESTLOG_QueueActSocketSelectionForQuest(int32_t nQuestIndex)
+void __fastcall QUESTLOG_QueueActSocketSelectionForQuest(int32_t nQuestIndex)
 {
     for (int32_t i = 0; i < 41; ++i)
     {
@@ -755,7 +735,7 @@ int32_t __stdcall QUESTLOG_HitTestQuestAlertButton(int32_t nX, int32_t nY)
 }
 
 // 1.12a: 0x6FB70340 (__stdcall)
-static void __stdcall QUESTLOG_SendCompletedAnimationAcks(void)
+void __stdcall QUESTLOG_SendCompletedAnimationAcks(void)
 {
     for (int32_t i = 0; i < g_nActiveActSocketCount; ++i)
     {
@@ -904,7 +884,7 @@ void __fastcall QUESTLOG_SelectActTab(int32_t nActNo)
 }
 
 // 1.12a: 0x6FB70710 (__fastcall, esi = pSocketState)
-static void __fastcall QUESTLOG_EvaluateQuestSocketState(D2QuestSocketStateStrc* pSocket)
+void __fastcall QUESTLOG_EvaluateQuestSocketState(D2QuestSocketStateStrc* pSocket)
 {
     pSocket->wTitleStrId     = 0x0E8C; // str_Empty
     pSocket->wAudioStrId     = 0x0E8C;
@@ -1198,7 +1178,7 @@ void __fastcall QUESTLOG_UpdateServerQuestStateArray(const uint8_t* pStateBytes)
 }
 
 // 1.12a: 0x6FB71480 (__fastcall, esi = nSocketIdx)
-static void __fastcall QUESTLOG_PlaySelectedQuestSpeech(int32_t nSocketIdx)
+void __fastcall QUESTLOG_PlaySelectedQuestSpeech(int32_t nSocketIdx)
 {
     for (int32_t i = 0; i < g_nActiveActSocketCount; ++i)
     {

@@ -87,13 +87,6 @@ struct D2MsgHandlerRegStrc
 };
 static_assert(sizeof(D2MsgHandlerRegStrc) == 0x0C, "D2MsgHandlerRegStrc must be 0x0C bytes");
 
-// Wrapped text line node returned by D2Win.#10117 (D2Win_10199)
-struct D2WrappedTextNodeStrc
-{
-    Unicode*               pwszLine; // +0x00
-    D2WrappedTextNodeStrc* pNext;    // +0x04
-};
-
 // 17-byte C2S 0x44 (C2S_STAFFINTOORIFICE) packet
 struct D2C2SStaffIntoOrificePacketStrc
 {
@@ -110,21 +103,6 @@ static_assert(sizeof(D2C2SStaffIntoOrificePacketStrc) == 0x11, "D2C2SStaffIntoOr
 // =============================================================================
 // External Imports & D2Client Internal Prototypes
 // =============================================================================
-extern "C" {
-    // D2Win.dll!#10010
-    int32_t __fastcall D2Win_10127_SetFont(int32_t nFont);
-    // D2Win.dll!#10132
-    int32_t __fastcall D2Win_10121_GetTextWidth(const Unicode* pText);
-    // D2Win.dll!#10146
-    int32_t __fastcall D2Win_10125(void);
-    // D2Win.dll!#10001
-    void __fastcall D2Win_10117_DrawText(const Unicode* pText, int32_t nX, int32_t nY, int32_t nColor, int32_t nCentered);
-    // D2Win.dll!#10117
-    D2WrappedTextNodeStrc* __fastcall D2Win_10199(const Unicode* pText, int32_t* pLineCount, int32_t nMaxWidth);
-    // D2Win.dll!#10031
-    void __fastcall D2Win_10130_DrawFramedTextEx(const Unicode* pText, int32_t nX, int32_t nY, int32_t nColor, int32_t nCentered, int32_t nTransLvl);
-}
-
 // D2Client internal cross-unit helpers
 void __fastcall NPCMENU_SendCancelUpgrade(void);                                    // 0x6FACA430
 void __fastcall NPCMENU_SendQuestUpgradeRequest(uint32_t dwItemGUID);               // 0x6FAC8410
@@ -365,7 +343,7 @@ void __stdcall USEITEM_DrawPanel(void)
         D2CellBufferStrc sCelBuf = {};
         sCelBuf.pCelFile = (g_nUseItemPanelMode == 0) ? g_pHoradricBackCel : g_pUpgradeCel;
         sCelBuf.nFrame   = 0;
-        TEXTURE_CelDraw(&sCelBuf, 105, 270, -1, 5, nullptr);
+        TEXTURE_CelDraw(&sCelBuf, 105, 270, -1, (DrawMode)5, nullptr);
 
         if (gpBuySellBtnCel == nullptr)
         {
@@ -380,7 +358,7 @@ void __stdcall USEITEM_DrawPanel(void)
         {
             const D2UseItemButtonStrc& rBtn = g_aUseItemButtons[i];
             sCelBuf.nFrame = rBtn.nBaseFrame + (rBtn.bIsPressed != 0 ? 1 : 0);
-            TEXTURE_CelDraw(&sCelBuf, rBtn.nDrawX, rBtn.nDrawY, -1, 5, nullptr);
+            TEXTURE_CelDraw(&sCelBuf, rBtn.nDrawX, rBtn.nDrawY, -1, (DrawMode)5, nullptr);
         }
 
         // Draw button hover tooltip if cursor is within the left panel viewport
@@ -422,7 +400,7 @@ void __stdcall USEITEM_DrawPanel(void)
                     const int32_t nBoxTop  = (rBtn.nTooltipY - nAscent) - 42;
                     const int32_t nBoxBot  = nBoxTop + nFontH;
 
-                    D2GFX_DrawBox(nBoxLeft, nBoxTop, nBoxRight, nBoxBot, 0, 2);
+                    D2GFX_DrawBox(nBoxLeft, nBoxTop, nBoxRight, nBoxBot, 0, (DrawMode)2);
                     D2Win_10117_DrawText(
                         pwszTooltip,
                         (rBtn.nTooltipX - nHalfW) + 16,
@@ -447,7 +425,7 @@ void __stdcall USEITEM_DrawPanel(void)
             }
 
             const Unicode* pwszDesc = D2LANG_GetStringFromTblIndex(wDescStrId);
-            int32_t nLineCount = 0;
+            int nLineCount = 0;
             D2WrappedTextNodeStrc* pLineNode = D2Win_10199(pwszDesc, &nLineCount, 300);
             int32_t nDrawY = 30;
             while (pLineNode != nullptr)

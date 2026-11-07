@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // ----------------------------------------------------------------------------
@@ -854,6 +855,8 @@ void __stdcall PARTY_RebuildPartyNodeList()
     }
     PARTY_UpdateNodeButtons();
 }
+
+int32_t __stdcall PARTY_CountTotalRosterPlayers();
 
 // 1.12a: 0x6FB110C0
 // Calling convention: __stdcall

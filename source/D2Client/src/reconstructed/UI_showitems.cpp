@@ -75,12 +75,6 @@ static_assert(sizeof(D2GroundItemLabelStrc) == 0x120, "D2GroundItemLabelStrc mus
 // External Imports & D2Client Globals
 // =============================================================================
 extern "C" {
-    // D2Win.dll!#10097
-    uint8_t __stdcall D2Win_10034_MixRGB(uint8_t nRed, uint8_t nGreen, uint8_t nBlue);
-    // D2Win.dll!#10096
-    void __fastcall D2Win_10131_GetTextDimensions(const Unicode* pText, int32_t* pWidth, int32_t* pHeight);
-    // D2Win.dll!#10031
-    void __fastcall D2Win_10130_DrawFramedTextEx(const Unicode* pText, int32_t nX, int32_t nY, int32_t nColor, int32_t nCentered, int32_t nTransLvl);
     // D2Win.dll!#10082
     void __fastcall D2Win_10132(const Unicode* pText, int32_t nLeft, int32_t nBottom, int32_t nBackColor, int32_t nTransLvl, int32_t nTextColor);
 }
@@ -538,7 +532,7 @@ void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
             {
                 const int32_t nPrecX = UNITS_GetPrecisionX(pUnit);
                 const int32_t nCoordX = UNITS_GetClientCoordX(pUnit);
-                if (!SCALE_SetPerspectiveScale(nPrecX, nCoordX))
+                if (!SCALE_CheckPerspectivePosition(nPrecX, nCoordX))
                 {
                     continue;
                 }

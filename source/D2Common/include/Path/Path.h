@@ -177,7 +177,15 @@ struct D2StaticPathStrc
 	D2ActiveRoomStrc* pRoom;				//0x00
 	int32_t dwClientCoordX;					//0x04
 	int32_t dwClientCoordY;					//0x08
-	D2CoordStrc tGameCoords;				//0x0C
+	union
+	{
+		D2CoordStrc tGameCoords;			//0x0C
+		struct
+		{
+			int32_t nXPos;					//0x0C
+			int32_t nYPos;					//0x10
+		};
+	};
 	uint32_t unk0x14[2];					//0x14
 	uint8_t nDirection;						//0x1C
 	uint8_t bRoomNeedsUpdate;				//0x1D

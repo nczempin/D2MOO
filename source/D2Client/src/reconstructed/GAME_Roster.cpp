@@ -35,8 +35,6 @@
 // =============================================================================
 // External Imports & Internal Helpers
 // =============================================================================
-extern "C" void* __fastcall FOG_Alloc(int32_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-extern "C" void  __fastcall FOG_Free(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
 extern "C" void  __stdcall  GAME_SetInitSeed(int32_t nInitSeed); // D2Game.#10053
 
 // Internal D2Client helpers
@@ -2158,9 +2156,9 @@ void __fastcall ROSTERPETS_UpdatePetLifeAndName(uint32_t dwPetUnitId, int32_t nL
         D2UnitStrc* pMercUnit = ROSTERPETS_FindMonsterUnitInHash(dwPetUnitId);
         if (pMercUnit != nullptr)
         {
-            const int32_t nMaxLife = STATLIST_GetMaxLifeFromUnit(pMercUnit, 0);
+            const int32_t nMaxLife = STATLIST_GetMaxLifeFromUnit(pMercUnit);
             const int32_t nScaledLife = (nMaxLife * nLifePercent) / 100;
-            STATLIST_SetStat(pMercUnit, STAT_HITPOINTS, nScaledLife);
+            STATLIST_SetUnitStat(pMercUnit, STAT_HITPOINTS, nScaledLife, 0);
         }
     }
 }

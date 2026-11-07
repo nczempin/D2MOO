@@ -26,7 +26,11 @@ struct D2OverlayTxt
 	uint32_t dwFrames;					//0x44
 	uint8_t nPreDraw;					//0x48
 	uint8_t pad0x49[3];					//0x49
-	uint32_t dw1ofN;					//0x4C
+	union
+	{
+		uint32_t dw1ofN;				//0x4C
+		uint32_t dw1OfN;				//0x4C
+	};
 	uint8_t nDir;						//0x50
 	uint8_t nOpen;						//0x51
 	uint8_t nBeta;						//0x52
@@ -71,3 +75,9 @@ D2COMMON_DLL_DECL uint32_t __stdcall DATATBLS_Get1OfNFromOverlayTxt(int nOverlay
 D2COMMON_DLL_DECL int __stdcall DATATBLS_GetDirFromOverlayTxt(int nOverlayId);
 //Inlined at various places
 D2OverlayTxt* __fastcall DATATBLS_GetOverlayTxtRecord(int nOverlay);
+
+inline uint32_t __stdcall DATATBLS_Get1OfNFromOverlayTxt(int nOverlayId, D2SeedStrc* pSeed)
+{
+	(void)pSeed;
+	return DATATBLS_Get1OfNFromOverlayTxt(nOverlayId);
+}

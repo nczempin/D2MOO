@@ -3,6 +3,9 @@
 #include "D2CommonDefinitions.h"
 #include <Drlg/D2DrlgDrlg.h>
 
+typedef D2ActiveRoomStrc D2RoomStrc;
+typedef D2DrlgActStrc D2ActStrc;
+
 #pragma pack(1)
 
 
@@ -223,6 +226,11 @@ D2COMMON_DLL_DECL void __stdcall DUNGEON_GameToClientTileDrawPositionCoords(int 
 D2COMMON_DLL_DECL void __stdcall DUNGEON_ClientSubileDrawPositionToGameCoords(int nX, int nY, int* pX, int* pY);
 //D2Common.0x6FD8D830 (#10117)
 D2COMMON_DLL_DECL void __stdcall DUNGEON_GameToClientSubtileDrawPositionCoords(int nX, int nY, int* pX, int* pY);
+
+inline void __stdcall DUNGEON_GameCoordsToSubtileDrawPosition(int nX, int nY, int* pX, int* pY)
+{
+	DUNGEON_GameToClientSubtileDrawPositionCoords(nX, nY, pX, pY);
+}
 
 // Helper function, official name coming from D2Common.0x6FDBCF10
 inline bool DungeonTestRoomGame(const D2ActiveRoomStrc* pRoom, int nX, int nY)

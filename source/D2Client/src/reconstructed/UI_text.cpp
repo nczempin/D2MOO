@@ -9,7 +9,9 @@
 
 #include <windows.h>
 #include <imm.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // ----------------------------------------------------------------------------
@@ -20,7 +22,7 @@ struct D2CellFileStrc;
 struct D2GfxDataStrc;
 struct D2HoverTextStrc;
 struct D2MsgStrc;
-struct Unicode;
+typedef uint16_t Unicode;
 
 struct D2MsgHandlerStrc
 {

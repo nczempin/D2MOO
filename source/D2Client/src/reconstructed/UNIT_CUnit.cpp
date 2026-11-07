@@ -25,7 +25,11 @@
 #include <windows.h>
 
 #include <Units/Units.h>
+#include <Units/UnitRoom.h>
 #include <Path/Path.h>
+#include <Path/PathMisc.h>
+#include <Path/Step.h>
+#include <UselessOrdinals.h>
 #include <D2Collision.h>
 #include <D2Dungeon.h>
 #include <Drlg/D2DrlgDrlg.h>
@@ -39,6 +43,7 @@
 #include <D2States.h>
 #include <D2StatList.h>
 #include <D2DataTbls.h>
+#include <D2Gfx.h>
 #include <D2Lang.h>
 #include <Fog.h>
 #include <Storm.h>
@@ -209,7 +214,7 @@ void __fastcall MONUNIQUE_DurielUModHandler(D2UnitStrc* pUnit, int32_t nUnused)
     else if (pUnit->dwAnimMode == MONMODE_DEAD)
     {
         // Advance unit PRNG seed and 1% chance to spawn up to 25 (dwDurielFlag < 100, +4 each) maggots
-        uint64_t u SeedProd = static_cast<uint64_t>(pUnit->pSeed.nLowSeed) * 0x6AC690C5ULL + pUnit->pSeed.nHighSeed;
+        uint64_t SeedProd = static_cast<uint64_t>(pUnit->pSeed.nLowSeed) * 0x6AC690C5ULL + pUnit->pSeed.nHighSeed;
         pUnit->pSeed.nLowSeed  = static_cast<uint32_t>(SeedProd);
         pUnit->pSeed.nHighSeed = static_cast<uint32_t>(SeedProd >> 32);
 
@@ -1001,7 +1006,8 @@ void __fastcall D2Client_SetUnitNeutralAndFaceLocalPlayer(D2UnitStrc* pUnit /*ea
 // PART 3: Core CUnit.cpp Functions (0x6FACED40 .. 0x6FAD1940)
 // =============================================================================
 
-static D2Client_CorpseFilter1* const g_apfnCorpseFilters[7] = { // 0x6FBA6A84
+typedef int32_t (__fastcall* D2CorpseFilterFn)(D2UnitStrc*, D2UnitStrc*);
+static const D2CorpseFilterFn g_apfnCorpseFilters[7] = { // 0x6FBA6A84
     nullptr,
     &D2Client_CorpseFilter1,
     &D2Client_CorpseFilter2,
@@ -1067,10 +1073,9 @@ int32_t __stdcall D2Client_CanSkillTargetCorpse(int32_t nSkillId /*eax*/, D2Unit
         return 0;
     }
 
-    typedef int32_t (__fastcall* CorpseFilterFn)(D2UnitStrc*, D2UnitStrc*);
-    CorpseFilterFn pfnFilter = (nSelectProc == 3)
+    D2CorpseFilterFn pfnFilter = (nSelectProc == 3)
         ? &D2Client_CorpseFilter3
-        : reinterpret_cast<CorpseFilterFn>(g_apfnCorpseFilters[nSelectProc]);
+        : g_apfnCorpseFilters[nSelectProc];
 
     if (pfnFilter == nullptr || !pfnFilter(pCaster, pTarget))
     {
@@ -1461,7 +1466,7 @@ const Unicode* __fastcall D2Client_GetUnitDisplayName(D2UnitStrc* pUnit /*eax*/)
     case UNIT_OBJECT:
     {
         D2ObjectsTxt* pObjectsTxt = pUnit->pObjectData->pObjectTxt;
-        if (pObjectsTxt->nPortal != 0 && pUnit->dwAnimMode == OBJMODE_OPERATING)
+        if ((pObjectsTxt->nSubClass & OBJSUBCLASS_PORTAL) != 0 && pUnit->dwAnimMode == OBJMODE_OPERATING)
         {
             D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit);
             D2UnitStrc* pWarpTile = D2Client_FindFirstTileUnitInRoomList(DUNGEON_GetFirstUnitInRoom(pRoom));
@@ -1518,7 +1523,7 @@ const Unicode* __fastcall D2Client_GetUnitDisplayName(D2UnitStrc* pUnit /*eax*/)
     case UNIT_ITEM:
     {
         D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(pUnit->dwClassId);
-        return D2LANG_GetStringFromTblIndex(pItemsTxt->wNamestr);
+        return D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr);
     }
 
     default:
@@ -1713,7 +1718,7 @@ int32_t __fastcall D2Client_ShouldDrawUnitBeforeEntities(D2UnitStrc* pUnit /*eax
         {
             return 1;
         }
-        return (pUnit->dwAnimMode == OBJMODE_OPERATED && (pObjectsTxt->nPreOperate & 1)) ? 1 : 0;
+        return (pUnit->dwAnimMode == OBJMODE_OPENED && (pObjectsTxt->nPreOperate & 1)) ? 1 : 0;
     }
 
     case UNIT_MISSILE:

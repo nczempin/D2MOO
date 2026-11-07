@@ -127,7 +127,11 @@ struct D2MonSoundsTxt
 	uint32_t dwHitSound;					//0x34
 	uint32_t dwHitDelay;					//0x38
 	uint32_t dwDeathSound;					//0x3C
-	uint32_t dwDeaDelay;					//0x40
+	union
+	{
+		uint32_t dwDeaDelay;				//0x40
+		uint32_t dwDeaDel;					//0x40
+	};
 	uint32_t dwSkill[4];					//0x44
 	uint32_t dwFootstep;					//0x54
 	uint32_t dwFootstepLayer;				//0x58
@@ -426,7 +430,11 @@ struct D2MonStatsTxt
 	int16_t nSkill[8];						//0x170
 	uint8_t nSkillMode[8];					//0x180
 	uint16_t nSequence[8];					//0x188
-	uint8_t nSkLvl[8];						//0x198
+	union
+	{
+		uint8_t nSkLvl[8];					//0x198
+		uint8_t nSkillLvl[8];				//0x198
+	};
 	uint32_t dwDamageRegen;					//0x1A0
 	uint8_t nSplEndDeath;					//0x1A4
 	uint8_t nSplGetModeChart;				//0x1A5
@@ -500,7 +508,11 @@ struct D2MonStats2Txt
 	uint16_t whtHeight;						//0x114
 	uint8_t pad0x116[2];					//0x116
 	uint32_t dwAutomapCel;					//0x118
-	uint8_t nLocalBlood;					//0x11C
+	union
+	{
+		uint8_t nLocalBlood;				//0x11C
+		uint8_t nBloodLocal;				//0x11C
+	};
 	uint8_t nBleed;							//0x11D
 	uint8_t nLight;							//0x11E
 	uint8_t nLight_R;						//0x11F
@@ -640,12 +652,24 @@ struct D2HirelingTxt
 	uint32_t dwTorso;						//0x6C
 	uint32_t dwWeapon;						//0x70
 	uint32_t dwShield;						//0x74
-	uint32_t dwSkill[6];					//0x78
+	union
+	{
+		uint32_t dwSkill[6];				//0x78
+		int32_t nSkill[6];					//0x78
+	};
 	uint32_t dwChance[6];					//0x90
 	uint32_t dwChancePerLvl[6];				//0xA8
 	uint8_t nMode[6];						//0xC0
-	uint8_t nLevel[6];						//0xC6
-	uint8_t nSLvlPerLvl[6];					//0xCC
+	union
+	{
+		uint8_t nLevel[6];					//0xC6
+		uint8_t nLvl[6];					//0xC6
+	};
+	union
+	{
+		uint8_t nSLvlPerLvl[6];				//0xCC
+		uint8_t nLvlPerLvl[6];				//0xCC
+	};
 	uint8_t nHireDesc;						//0xD2
 	char szNameFirst[32];					//0xD3
 	char szNameLast[32];					//0xF3
@@ -676,6 +700,7 @@ struct D2MonStatsInitStrc
 	int32_t nElMaxD;							//0x30
 	int32_t nElDur;								//0x34
 };
+typedef D2MonStatsInitStrc D2MonStatInitStrc;
 
 #pragma pack()
 

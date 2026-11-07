@@ -25,6 +25,7 @@
 #include <Units/Units.h>
 #include <Units/Object.h>
 #include <Units/Player.h>
+#include <Units/UnitRoom.h>
 #include <Fog.h>
 #include <Storm.h>
 
@@ -406,7 +407,7 @@ void __fastcall D2Client_UpdateObjectLightRadius(D2UnitStrc* pObject, uint16_t w
     if (!pLight)
     {
         pLight = D2Client_AllocLightMap_6FB0EAF0(wLightRadius >> 1, 0xFF, nRed, nGreen, nBlue);
-        pObject->pLight = pLight;
+        pObject->pLight = (D2GfxLightStrc*)pLight;
         if (!pLight)
         {
             return;

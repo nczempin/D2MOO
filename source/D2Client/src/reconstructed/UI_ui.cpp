@@ -11,14 +11,29 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Forward types matching D2MOO 1.12a headers
 struct D2UnitStrc;
 struct D2CellFileStrc;
-struct D2GfxDataStrc;
 struct D2StatListStrc;
-struct D2StatStrc;
+
+struct D2GfxDataStrc
+{
+    uint8_t pad0x00[0x38];
+    uint32_t nDirection;        // +0x38
+    D2CellFileStrc* pCellFile;  // +0x3C
+    uint32_t nFrame;            // +0x40
+    int32_t nMaxFrames;         // +0x44 (total 0x48 = 72 bytes)
+};
+
+struct D2StatStrc
+{
+    int16_t nLayer;
+    int16_t nStat;
+    int32_t nValue;
+};
 struct D2ItemStatCostTxt;
 struct D2SkillsTxt;
 struct D2SkillStrc;
@@ -1616,7 +1631,7 @@ void __stdcall UI_CloseMercInteract()
         if (*(int32_t*)0x6FBCB673 != 0) {
             ((void(__stdcall*)())0x6FB13290)();
             if (*pppMercMenu != nullptr) {
-                ((void(__thiscall*)(void**, int32_t))(**pppMercMenu)[0])(*pppMercMenu, 1);
+                reinterpret_cast<void(__thiscall*)(void*, int32_t)>((*reinterpret_cast<void***>(*pppMercMenu))[0])(*pppMercMenu, 1);
             }
             *pppMercMenu = nullptr;
             *(int32_t*)0x6FBCB673 = 0;

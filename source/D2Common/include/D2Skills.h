@@ -378,3 +378,18 @@ D2COMMON_DLL_DECL int __stdcall D2Common_11043(D2UnitStrc* pUnit);
 D2COMMON_DLL_DECL int __stdcall SKILLS_GetConcentrationDamageBonus(D2UnitStrc* pUnit, int nSkillId);
 //D2Common.0x6FDB4260 (#11283)
 D2COMMON_DLL_DECL void __stdcall SKILLS_CalculateKickDamage(D2UnitStrc* pUnit, int* pMinDamage, int* pMaxDamage, int* pDamagePercent);
+
+#ifdef __cplusplus
+inline void __stdcall SKILLS_SetSkillLevel(D2SkillStrc* pSkill, int nSkillLevel) { if (pSkill) pSkill->nSkillLevel = nSkillLevel; }
+template <typename UnitT = D2UnitStrc>
+inline int __stdcall SKILLS_GetSkillCount(UnitT* pUnit)
+{
+	int nCount = 0;
+	if (pUnit && pUnit->pSkills)
+	{
+		for (D2SkillStrc* pSkill = pUnit->pSkills->pFirstSkill; pSkill; pSkill = pSkill->pNextSkill)
+			++nCount;
+	}
+	return nCount;
+}
+#endif

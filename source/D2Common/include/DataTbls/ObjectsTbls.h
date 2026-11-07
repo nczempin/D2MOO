@@ -1,6 +1,8 @@
 #pragma once 
 
 #include <D2BasicTypes.h>
+#include <D2Unicode.h>
+#include <Archive.h>
 
 #pragma pack(1)
 
@@ -44,8 +46,16 @@ struct D2ObjectsTxt
 	uint8_t nTrans;							//0x13E
 	uint8_t nMode[8];						//0x13F
 	uint8_t pad0x147;						//0x147
-	int32_t dwXOffset;						//0x148
-	int32_t dwYOffset;						//0x14C
+	union
+	{
+		int32_t dwXOffset;						//0x148
+		int32_t nXOffset;						//0x148
+	};
+	union
+	{
+		int32_t dwYOffset;						//0x14C
+		int32_t nYOffset;						//0x14C
+	};
 	uint8_t nDraw;							//0x150
 	uint8_t nHD;							//0x151
 	uint8_t nTR;							//0x152

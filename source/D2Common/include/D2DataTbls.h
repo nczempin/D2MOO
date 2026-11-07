@@ -245,7 +245,11 @@ struct D2StatesTxt
 	uint16_t wState;						//0x00
 	uint16_t wOverlay[4];					//0x02
 	uint16_t wCastOverlay;					//0x0A
-	uint16_t wRemoveOverlay;				//0x0C
+	union
+	{
+		uint16_t wRemoveOverlay;			//0x0C
+		int16_t wRemOverlay;				//0x0C
+	};
 	uint16_t wPrgOverlay;					//0x0E
 	union
 	{
@@ -259,7 +263,16 @@ struct D2StatesTxt
 	uint16_t wGroup;						//0x1E
 	uint8_t nColorPri;						//0x20
 	uint8_t nColorShift;					//0x21
-	uint8_t nLightRGB[3];					//0x22
+	union
+	{
+		uint8_t nLightRGB[3];				//0x22
+		struct
+		{
+			uint8_t nLightR;				//0x22
+			uint8_t nLightG;				//0x23
+			uint8_t nLightB;				//0x24
+		};
+	};
 	uint8_t pad0x25;						//0x25
 	uint16_t wOnSound;						//0x26
 	uint16_t wOffSound;						//0x28
@@ -625,4 +638,14 @@ inline D2MonStatsTxt* __fastcall DATATBLS_GetMonStatsTxtRecord(int nMonsterId)
 inline int __fastcall DATATBLS_GetMonStatsTxtRecordCount()
 {
 	return sgptDataTables->nMonStatsTxtRecordCount;
+}
+
+inline D2ItemStatCostTxt* __fastcall DATATBLS_GetItemStatCostTxtRecord(int nStatId)
+{
+	if (nStatId >= 0 && nStatId < sgptDataTables->nItemStatCostTxtRecordCount)
+	{
+		return &sgptDataTables->pItemStatCostTxt[nStatId];
+	}
+
+	return NULL;
 }

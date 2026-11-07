@@ -190,6 +190,7 @@ enum D2C_ItemStats
 	STAT_CONVERSION_LEVEL,
 	STAT_CONVERSION_MAXHP,
 	STAT_UNIT_DOOVERLAY,
+	STAT_MONSTER_TRAIL = STAT_UNIT_DOOVERLAY,
 	STAT_ATTACK_VS_MONTYPE,
 	STAT_DAMAGE_VS_MONTYPE,
 	STAT_FADE,
@@ -216,6 +217,7 @@ enum D2C_ItemStats
 	STAT_UNUSED202,
 	STAT_UNUSED203,
 	STAT_ITEM_CHARGED_SKILL,
+	STAT_CHARGED_SKILL = STAT_ITEM_CHARGED_SKILL,
 	STAT_UNUSED204,
 	STAT_UNUSED205,
 	STAT_UNUSED206,
@@ -696,3 +698,12 @@ D2COMMON_DLL_DECL int __stdcall D2Common_11273(D2UnitStrc* pUnit, int nStatId);
 D2COMMON_DLL_DECL BOOL __stdcall D2Common_11274(D2UnitStrc* pTarget, D2UnitStrc* pUnit);
 //D2Common.0x6FDB9E60 (#11275)
 D2COMMON_DLL_DECL BOOL __stdcall D2Common_11275(D2UnitStrc* pTarget, D2UnitStrc* pUnit);
+
+#ifdef __cplusplus
+#define D2Common_10475_PostStatToStatList D2COMMON_10475_PostStatToStatList
+#define D2Common_10474_FreeStatList D2Common_10474
+#define STATLIST_MergeStatList STATLIST_MergeStatLists
+inline void __stdcall STATLIST_SetStatListFlags(D2StatListStrc* pStatList, uint32_t dwFlags) { if (pStatList) pStatList->dwFlags = dwFlags; }
+template <typename Fn>
+inline void __stdcall STATLIST_SetStatRemoveCallback(D2StatListStrc* pStatList, Fn pfStatRemove) { STATLIST_SetStatRemoveCallback(pStatList, reinterpret_cast<StatListRemoveCallback>(pfStatRemove)); }
+#endif

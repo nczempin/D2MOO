@@ -124,11 +124,17 @@ struct D2GfxDataStrc
 	int32_t nMaxDirections;					//0x30
 	D2GfxCellStrc* pCurrentCell;			//0x34
 	uint32_t nDirection;					//0x38
-	D2CellFileStrc* pCellFile;				//0x3C
+	union
+	{
+		D2CellFileStrc* pCellFile;			//0x3C
+		D2CellFileStrc* pCelFile;			//0x3C
+	};
 	uint32_t nFrame;						//0x40
 	int32_t nMaxFrames;						//0x44
 #endif
 };
+
+typedef D2GfxDataStrc D2CellBufferStrc;
 
 struct D2GfxLightStrc
 {

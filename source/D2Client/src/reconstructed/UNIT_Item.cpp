@@ -14,6 +14,18 @@
 #include "D2Structs.h"
 #include "D2Constants.h"
 #include "D2CommonImports.h"
+#include <Units/UnitRoom.h>
+#include <Fog.h>
+
+inline void D2Common_10474(D2StatListStrc* pStatList)
+{
+    STATLIST_FreeStatList(pStatList);
+}
+
+inline int SKILLS_GetSkillCount()
+{
+    return sgptDataTables ? sgptDataTables->nSkillsTxtRecordCount : 0;
+}
 
 // ----------------------------------------------------------------------------
 // External Globals (1.12a D2Client.dll)
@@ -68,6 +80,11 @@ void __fastcall D2Client_SetLeftSkillForLocalPlayer(int32_t nSkillId, int32_t nO
 void __fastcall D2Client_SetRightSkillForLocalPlayer(int32_t nSkillId, int32_t nOwnerGUID); // 0x6FB077B0
 void __fastcall D2Client_SendClientPacket0(uint8_t bHeader);                                // 0x6FADC960
 void __fastcall D2Client_SendClientPacket1Dword(uint8_t bHeader, uint32_t dwArg);           // 0x6FADCA30
+D2ActiveRoomStrc* __fastcall D2Client_FindRoomAtCoords(int32_t nX, int32_t nY);
+D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket13(const uint8_t* pPacket);
+D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket8(const uint8_t* pPacket);
+void __fastcall D2Client_RecalculateAllEquippedAndCharmItems(D2UnitStrc* pUnit, BOOL bUpdateAnimAndComponents);
+inline D2UnitStrc* __fastcall ITEMS_GetOwner(D2UnitStrc* pItem) { return pItem ? D2Client_FindServerSideUnit(ITEMS_GetOwnerId(pItem), UNIT_PLAYER) : nullptr; }
 
 // ============================================================================
 // PART 1: Environment & Ambient Sound Controller (0x6FB44FE0..0x6FB454D3)
@@ -156,10 +173,10 @@ void __stdcall D2Client_UpdateEnvironmentSoundsPerTick(void)
         return;
     }
 
-    D2DrlgRoomStrc* pRoom = UNITS_GetRoom(pPlayer);
+    D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pPlayer);
     int32_t nLevelId = pRoom ? DUNGEON_GetLevelIdFromRoom(pRoom) : 0;
     D2LevelsTxt* pLevelsTxt = nLevelId ? DATATBLS_GetLevelsTxtRecord(nLevelId) : nullptr;
-    int32_t nSoundEnvId = pLevelsTxt ? pLevelsTxt->nSoundEnv : 0;
+    int32_t nSoundEnvId = pLevelsTxt ? pLevelsTxt->dwSoundEnv : 0;
 
     // Evaluates SoundEnviron.txt record (DATATBLS_GetSoundEnvironTxtRecord),
     // updates day/night ambient loops, random one-shot ambient events, and rain loops.
@@ -195,7 +212,8 @@ BOOL __fastcall D2Client_IsItemIdentifiedOrCursor(D2UnitStrc* pItem)
 int32_t __fastcall D2Client_OnItemIdentifyStateRemoved(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
 {
     (void)bSet;
-    return STATES_ToggleState(pUnit, nState, FALSE);
+    STATES_ToggleState(pUnit, nState, FALSE);
+    return 0;
 }
 
 // 1.12a: 0x6FB45520
@@ -308,11 +326,11 @@ BOOL __fastcall D2Client_CheckEquippedItemRequirementsAndQuiver(D2UnitStrc* pOwn
         return FALSE;
     }
 
-    int32_t nQuiverType = ITEMS_GetQuiverTypeFromItemType(pItem);
+    int32_t nQuiverType = ITEMS_GetQuiverType(pItem);
     if (bCheckQuiver && nQuiverType)
     {
         D2UnitStrc* pLeftItem  = INVENTORY_GetLeftHandWeapon(pOwner ? pOwner->pInventory : nullptr);
-        int32_t nOtherBodyLoc  = (INVENTORY_GetItemBodyLoc(pLeftItem) == BODYLOC_RARM) ? BODYLOC_LARM : BODYLOC_RARM;
+        int32_t nOtherBodyLoc  = (ITEMS_GetBodyLocation(pLeftItem) == BODYLOC_RARM) ? BODYLOC_LARM : BODYLOC_RARM;
         D2UnitStrc* pOtherItem = INVENTORY_GetItemFromBodyLoc(pOwner ? pOwner->pInventory : nullptr, nOtherBodyLoc);
         if (!ITEMS_CheckItemTypeId(pOtherItem, nQuiverType))
         {
@@ -552,7 +570,7 @@ void __fastcall D2Client_ApplySocketedOrEquippedItemStats(D2UnitStrc* pTargetUni
         return;
     }
 
-    if (!ITEMS_CanHaveSockets(pItem))
+    if (!ITEMS_GetMaxSockets(pItem))
     {
         return;
     }
@@ -716,7 +734,7 @@ void __fastcall D2Client_FreeItemUnitClientSide(D2UnitStrc* pItem)
             D2Client_RemoveUnitFromServerHashTable(pChecked);
             D2Client_FreeClientUnit(pChecked);
         }
-        INVENTORY_FreeInventory(pItem->pMemoryPool, pItem->pInventory);
+        INVENTORY_FreeInventory(pItem->pInventory);
         pItem->pInventory = nullptr;
     }
 
@@ -813,7 +831,7 @@ BOOL __fastcall D2Client_PlaceItemInUnitInventoryPage(
         {
             pOwner->pInventory = INVENTORY_AllocInventory(pOwner->pMemoryPool, pOwner);
         }
-        int32_t nRecordId = D2Common_10275_GetInvRecordId(pOwner, bInvPage, pOwner->dwFlags & UNITFLAG_ISEXPANSION);
+        int32_t nRecordId = UNITS_GetInventoryRecordId(pOwner, bInvPage, pOwner->dwFlags & UNITFLAG_ISEXPANSION);
         if (!INVENTORY_PlaceItemInSocket(pOwner->pInventory, pItem, 1))
         {
             (void)nRecordId;
@@ -824,7 +842,7 @@ BOOL __fastcall D2Client_PlaceItemInUnitInventoryPage(
         return TRUE;
     }
 
-    int32_t nRecordId = D2Common_10275_GetInvRecordId(pOwner, bInvPage, pOwner->dwFlags & UNITFLAG_ISEXPANSION);
+    int32_t nRecordId = UNITS_GetInventoryRecordId(pOwner, bInvPage, pOwner->dwFlags & UNITFLAG_ISEXPANSION);
     if (!INVENTORY_PlaceItemAtInventoryPage(pOwner->pInventory, pItem, nX, nY, nRecordId, TRUE, bInvPage))
     {
         return FALSE;
@@ -875,7 +893,7 @@ BOOL __fastcall D2Client_SetupItemUnitAnimModeAndPath(
     case ITEMMODE_ONFLOOR:
     case ITEMMODE_DROPPING:
     {
-        D2DrlgRoomStrc* pRoom = D2Client_FindRoomAtCoords(nX, nY);
+        D2ActiveRoomStrc* pRoom = D2Client_FindRoomAtCoords(nX, nY);
         if (!pRoom)
         {
             return FALSE;
@@ -1092,7 +1110,7 @@ void __fastcall D2Client_UpdateItemUnitPerTick(D2UnitStrc* pItem)
     if (pItem->dwAnimMode == ITEMMODE_ONFLOOR || pItem->dwAnimMode == ITEMMODE_DROPPING)
     {
         D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(pItem->dwClassId);
-        if (pItemsTxt && pItemsTxt->nSparky)
+        if (pItemsTxt && (pItemsTxt->dwBitField1 & 1))
         {
             // Spawns sparkle client missile (missile ID 0xFF) periodically on floor item
         }
@@ -1217,7 +1235,12 @@ D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket13(const uint8_t* pPacke
         return D2Client_DecodeFullItemPacket(pPacket, pItem);
     }
 
-    int32_t nClassId = ITEMS_GetCompactItemDataFromBitstream((uint8_t*)(pPacket + 8), *(const uint8_t*)(pPacket + 2) - 8, 0);
+    D2ItemSaveStrc itemSave = {};
+    if (!ITEMS_GetCompactItemDataFromBitstream((uint8_t*)(pPacket + 8), *(const uint8_t*)(pPacket + 2) - 8, 0, &itemSave))
+    {
+        return nullptr;
+    }
+    int32_t nClassId = itemSave.nClassId;
     if (nClassId < 0)
     {
         return nullptr;
@@ -1231,7 +1254,7 @@ D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket13(const uint8_t* pPacke
 
     pItem->dwClassId = nClassId;
     pItem->dwUnitId  = nUnitId;
-    pItem->pItemData = ITEMS_AllocItemData(pItem->pMemoryPool, pItem);
+    ITEMS_AllocItemData(pItem->pMemoryPool, pItem);
     UNITS_AllocStaticPath(pItem);
     return D2Client_DecodeFullItemPacket(pPacket, pItem);
 }
@@ -1617,6 +1640,7 @@ void __stdcall D2Client_RefreshLocalPlayerEquipment(void)
 // Total class instance size: 0x180776 bytes (128 entries * 0x300E bytes/entry)
 // ============================================================================
 
+#pragma pack(push, 1)
 struct D2ScrollTextEntryStrc
 {
     wchar_t wszLines[6][1024]; // 6 lines of 1024 wide chars (0x3000 bytes)
@@ -1638,12 +1662,13 @@ struct D2ScrollTextListStrc
     D2ScrollTextEntryStrc aEntries[128];      // +0x18 (0x180700 bytes)
     // Additional scrollbar and layout state up to +0x180776
 };
+#pragma pack(pop)
 
 // 1.12a: 0x6FB4AB40 (thunk at 0x6FB4AA60)
 // Calling convention: __stdcall
 D2ScrollTextListStrc* __stdcall D2Client_CreateScrollTextListWidget(void)
 {
-    D2ScrollTextListStrc* pWidget = (D2ScrollTextListStrc*)D2AllocMem(0, sizeof(D2ScrollTextListStrc), __FILE__, __LINE__, 0);
+    D2ScrollTextListStrc* pWidget = (D2ScrollTextListStrc*)FOG_AllocClientMemory(sizeof(D2ScrollTextListStrc), __FILE__, __LINE__, 0);
     if (pWidget)
     {
         memset(pWidget, 0, sizeof(D2ScrollTextListStrc));
@@ -1657,7 +1682,7 @@ void __fastcall D2Client_DestroyScrollTextListWidget(D2ScrollTextListStrc* pWidg
 {
     if (pWidget)
     {
-        D2FreeMem(0, pWidget, __FILE__, __LINE__, 0);
+        FOG_FreeClientMemory(pWidget, __FILE__, __LINE__, 0);
     }
 }
 
@@ -1722,7 +1747,7 @@ int32_t __fastcall D2Client_StepMultiHitMeleeSkillFrame(D2UnitStrc* pUnit)
     }
 
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
+    D2SkillsTxt* pSkillsTxt = DATATBLS_GetSkillsTxtRecord(nSkillId);
     if (!pSkillsTxt)
     {
         return 0;
@@ -1743,7 +1768,7 @@ int32_t __fastcall D2Client_StepMultiHitMeleeSkillFrame(D2UnitStrc* pUnit)
         SKILLS_SetParam1(pSkill, nRemainingHits);
         if (nRemainingHits > 0)
         {
-            UNITS_SetAnimationFrame(pUnit, pSkillsTxt->dwAnimLoopFrame);
+            UNITS_SetAnimationFrame(pUnit, pSkillsTxt->nSeqInput);
             pUnit->dwFrameFlags &= ~1u;
         }
         return 1;

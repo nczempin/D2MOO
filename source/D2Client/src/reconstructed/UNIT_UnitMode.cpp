@@ -8,15 +8,189 @@
 
 #include <windows.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
-struct D2UnitStrc;
-struct D2RoomStrc;
-struct D2DynamicPathStrc;
-struct D2StaticPathStrc;
-struct D2SkillStrc;
-struct D2StatListStrc;
-struct D2MonSoundsTxt;
-struct D2SoundNodeStrc;
+#include <Units/Units.h>
+#include <Units/UnitRoom.h>
+#include <Units/Object.h>
+#include <Path/Path.h>
+#include <Path/PathMisc.h>
+#include <Path/Step.h>
+#include <UselessOrdinals.h>
+#include <D2Collision.h>
+#include <D2Dungeon.h>
+#include <Drlg/D2DrlgDrlg.h>
+#include <Drlg/D2DrlgPreset.h>
+#include <D2Environment.h>
+#include <D2Inventory.h>
+#include <D2Items.h>
+#include <D2Monsters.h>
+#include <D2Seed.h>
+#include <D2Skills.h>
+#include <D2States.h>
+#include <D2StatList.h>
+#include <D2DataTbls.h>
+#include <D2Gfx.h>
+#include <D2Lang.h>
+#include <D2Sound.h>
+#include <Fog.h>
+#include <Storm.h>
+
+#ifndef PLRMODE_SKILL1
+#define PLRMODE_SKILL1 PLRMODE_SPECIAL1
+#define PLRMODE_SKILL2 PLRMODE_SPECIAL2
+#define PLRMODE_SKILL3 PLRMODE_SPECIAL3
+#define PLRMODE_SKILL4 PLRMODE_SPECIAL4
+#endif
+
+inline int32_t PATH_GetStaticPosX(D2StaticPathStrc* pStaticPath)
+{
+    return pStaticPath ? pStaticPath->nXPos : 0;
+}
+
+inline int32_t PATH_GetStaticPosY(D2StaticPathStrc* pStaticPath)
+{
+    return pStaticPath ? pStaticPath->nYPos : 0;
+}
+
+inline int32_t D2Common_10398(int32_t nX1, int32_t nY1, int32_t nX2, int32_t nY2)
+{
+    return PATH_ComputeSquaredDistance(nX1, nY1, nX2, nY2);
+}
+
+inline void D2Common_10212(D2DynamicPathStrc* pDynamicPath, D2UnitStrc* pUnit, int32_t a3, int32_t nX, int32_t nY)
+{
+    (void)a3;
+    if (pDynamicPath)
+    {
+        D2COMMON_10170_PathSetTargetPos(pDynamicPath, nX, nY);
+    }
+    if (pUnit)
+    {
+        D2COMMON_10212_PATH_SetMoveFlags(pUnit, TRUE);
+    }
+}
+
+inline uint32_t ITEMS_GetItemCode(D2UnitStrc* pItem)
+{
+    return ITEMS_GetBaseCode(pItem);
+}
+
+inline void UNITS_UpdateOverlays(D2UnitStrc* pUnit)
+{
+    (void)pUnit;
+}
+
+struct D2SoundNodeStrc
+{
+    int32_t nSoundId;
+    int32_t unk04;
+    D2SoundNodeStrc* pNext;
+};
+
+struct D2ClientPlayerQueueDataStrc
+{
+    uint8_t pad0x00[0x150];
+    int32_t dwQueuedActionMode;      // +0x150
+    int32_t dwQueuedTargetType;      // +0x154
+    uint32_t dwQueuedTargetGUID;     // +0x158
+    int32_t bHasQueuedTargetedAction;// +0x15C
+    int32_t dwQueuedLocationMode;    // +0x160
+    int32_t dwQueuedLocationX;       // +0x164
+    int32_t dwQueuedLocationY;       // +0x168
+    int32_t bHasQueuedLocationAction;// +0x16C
+};
+
+// Forward declarations for internal & external D2Client helpers
+void __fastcall D2Client_PlayMonsterDeathSound(D2UnitStrc* pUnit);
+void __fastcall D2Client_PlayPlayerFootstepSound(D2UnitStrc* pUnit);
+void __fastcall D2Client_PlayMonsterAttack1Sound(D2UnitStrc* pUnit);
+void __fastcall D2Client_PlayMonsterAttack2Sound(D2UnitStrc* pUnit);
+void __fastcall D2Client_PlayMonsterSkillModeSound(D2UnitStrc* pUnit, int32_t nSkillIndex);
+void __fastcall D2Client_InteractWithServerUnit(int32_t nTargetUnitType, uint32_t dwTargetUnitId);
+void __fastcall D2Client_TryInteractWithObject(int32_t nTargetUnitType, uint32_t dwTargetUnitId);
+void __fastcall D2Client_TryAttackOrCastOnMonster(int32_t nTargetUnitType, uint32_t dwTargetUnitId);
+void __fastcall D2Client_TryAttackOrCastOnPlayer(int32_t nTargetUnitType, uint32_t dwTargetUnitId);
+
+int32_t __fastcall D2Client_PlayUnitPositionalSound(D2UnitStrc* pUnit, int32_t nSoundId, uint32_t dwDelay, int32_t nProb, int32_t nVol);
+void __fastcall D2Client_RemoveUnitSoundNode_6FAE19F0(D2UnitStrc* pUnit, D2SoundNodeStrc* pNode);
+void __fastcall D2Client_PlayGlobalSound_6FAE1470(int32_t nSoundId, int32_t nVol);
+void __fastcall D2Client_PlayPositionalSoundAtCoords_6FAE12B0(int32_t nSoundId, int32_t nX, int32_t nY, int32_t a4, int32_t a5, int32_t a6);
+void __fastcall D2Client_PreloadSound_6FAE1220(int32_t nSoundId);
+BOOL __fastcall D2Client_IsSoundLooping_6FAE20B0(int32_t nSoundId);
+void __fastcall D2Client_OpenSpecialQuestDialog_6FB1EBF0(D2UnitStrc* pUnit, int32_t nDialogId);
+void __fastcall D2Client_SetDelayedQuestSpeechTicks_6FB08DC0(uint32_t dwTicks);
+BOOL __fastcall D2Client_IsUnitSoundChannelActive_6FAE11E0(D2UnitStrc* pUnit, int32_t nChannel);
+D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitId, int32_t nUnitType);
+void __fastcall D2Client_SendPacket02_WalkToEntity_6FB6E730(int32_t nTargetType, uint32_t dwTargetId);
+void __fastcall D2Client_SendPacket01_WalkToLocation_6FB6ED00(int32_t nX, int32_t nY);
+void __fastcall D2Client_SendPacket04_RunToEntity_6FB6E770(int32_t nTargetType, uint32_t dwTargetId);
+void __fastcall D2Client_SendPacket03_RunToLocation_6FB6ED30(int32_t nX, int32_t nY);
+void __fastcall D2Client_SendTargetedSkillPacket_6FB6E5F0(D2UnitStrc* pUnit, int32_t nTargetType, uint32_t dwTargetId);
+void __fastcall D2Client_SendLocationSkillPacket_6FB6EC60(D2UnitStrc* pUnit, int32_t nX, int32_t nY);
+void __fastcall D2Client_UpdateUnitGfxAndAnim_6FB42000(D2UnitStrc* pUnit);
+void __fastcall D2Client_ClearPlayerMapWaypoints_6FAE0490(D2UnitStrc* pUnit);
+void __cdecl D2Client_NotifySoundSystemPlayerTeleported_6FAE1240(void);
+void __fastcall D2Client_ForcePlayerToNeutralMode_6FB09AA0(D2UnitStrc* pUnit);
+void __fastcall D2Client_DispatchMonsterModeChange_6FAE48D0(D2UnitStrc* pUnit, int32_t nMode);
+void __fastcall D2Client_DispatchPlayerModeChange_6FB0A820(D2UnitStrc* pUnit, int32_t nMode, int32_t bTargeted, int32_t nTargetType, uint32_t dwTargetId, int32_t nTargetX, int32_t nTargetY, int32_t bSendPacket);
+void __fastcall D2Client_DispatchMonsterMoveOrSkill_6FAE5100(D2UnitStrc* pUnit, int32_t nMode, int32_t nTargetType, uint32_t dwTargetId, int32_t nTargetX, int32_t nTargetY);
+void __fastcall D2Client_ProcessUnitBlazeMissileTrail_6FB515F0(D2UnitStrc* pUnit);
+void __fastcall D2Client_ProcessUnitInfernoState_6FB516D0(D2UnitStrc* pUnit);
+void __fastcall D2Client_ChangeObjectAnimMode_6FAEB3C0(D2UnitStrc* pUnit, int32_t nMode);
+void __fastcall D2Client_DispatchItemModeChange_6FB45810(D2UnitStrc* pUnit, int32_t nMode);
+BOOL __cdecl D2Client_IsPlayerMouseButtonHeld_6FB08BF0(void);
+void __fastcall D2Client_SetUnitSkillId_6FB51590(D2SkillStrc* pSkill, int32_t nSkillId);
+void __fastcall D2Client_TryPickUpGroundItem_6FB0A2D0(int32_t nUnitType, uint32_t dwUnitId);
+void __fastcall D2Client_TryTakeWarpTile_6FB09140(int32_t nUnitType, uint32_t dwUnitId);
+void __fastcall D2Client_OperateObjectClientSide(D2UnitStrc* pPlayer, D2UnitStrc* pObject);
+void __fastcall D2Client_InteractWithNPC_6FAE30C0(D2UnitStrc* pMonster);
+int32_t __fastcall D2Client_GetPlayerSkillActionMode_6FB0B5B0(D2UnitStrc* pPlayer);
+BOOL __fastcall D2Client_IsInTownOrTownSkillRestricted_6FB0B900(D2UnitStrc* pPlayer, int32_t nZero);
+void __fastcall D2Client_SendPacket13_UnitInteract_6FB6E7B0(int32_t nUnitType, uint32_t dwUnitId);
+BOOL __fastcall D2Client_CheckPlayerRosterFlag_6FAE0830(uint32_t dwPlayerId1, uint32_t dwPlayerId2, int32_t nFlag);
+void __fastcall D2Client_OpenCorpseInventory_6FB08730(D2UnitStrc* pTargetPlayer);
+BOOL __fastcall D2Client_AreUnitsHostile_6FB08B60(D2UnitStrc* pUnit1, D2UnitStrc* pUnit2);
+BOOL __fastcall D2Client_TryCastFriendlyTargetedSkill_6FB0BE20(D2UnitStrc* pPlayer, int32_t nTargetType, uint32_t dwTargetId);
+int32_t __cdecl D2Client_GetMouseX_6FB55BC0(void);
+int32_t __cdecl D2Client_GetMouseY_6FB55BD0(void);
+void __fastcall D2Client_ScreenToWorldCoords_6FB23AD0(int32_t nScreenX, int32_t nScreenY, int32_t* pWorldX, int32_t* pWorldY);
+BOOL __cdecl D2Client_ShouldPlayerRun_6FB08840(void);
+void __fastcall D2Client_ApplyUnitStateRemovedClientSide_6FACEBC0(D2UnitStrc* pUnit, int32_t nState);
+void __fastcall D2Client_UpdatePlayerUnitPerTick_6FB0D140(D2UnitStrc* pUnit);
+void __fastcall D2Client_UpdateMonsterUnitPerTick_6FAE6100(D2UnitStrc* pUnit);
+void __fastcall D2Client_UpdateObjectPerTick(D2UnitStrc* pUnit);
+void __fastcall D2Client_UpdateMissileUnitPerTick_6FAD3520(D2UnitStrc* pUnit);
+void __fastcall D2Client_UpdateItemUnitPerTick_6FB468F0(D2UnitStrc* pUnit);
+void __fastcall D2Client_OnPlayerAnimSequenceFinished_6FB0CF70(D2UnitStrc* pUnit);
+void __fastcall D2Client_OnMonsterAnimSequenceFinished_6FAE5D10(D2UnitStrc* pUnit);
+void __fastcall D2Client_OnObjectAnimEnd(D2UnitStrc* pUnit);
+BOOL __fastcall D2Client_OnMissileAnimSequenceFinished_6FAD2F50(D2UnitStrc* pUnit);
+void __fastcall D2Client_OnItemAnimSequenceFinished_6FB450B0(D2UnitStrc* pUnit);
+
+// D2Common ordinal helpers
+extern "C" {
+    uint32_t __stdcall D2Common_10920(D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY);
+    int32_t __stdcall D2Common_11076(D2UnitStrc* pUnit, int32_t nAnimMode);
+}
+
+static inline int32_t UNITS_GetCurrentFrame(D2UnitStrc* pUnit)
+{
+    return pUnit ? pUnit->nSeqCurrentFramePrecise : 0;
+}
+
+static inline int32_t UNITS_GetAnimOrSeqFrameCount(D2UnitStrc* pUnit)
+{
+    return pUnit ? (pUnit->wAnimSpeed ? (pUnit->nActionFrame ? pUnit->nActionFrame : 8) : 8) : 8;
+}
+
+static inline int32_t INVENTORY_GetWornItemComponent(D2UnitStrc* pUnit, D2InventoryStrc* pInventory, int32_t nBodyLoc)
+{
+    (void)pUnit;
+    D2UnitStrc* pItem = INVENTORY_GetItemFromBodyLoc(pInventory, nBodyLoc);
+    return pItem ? ITEMS_GetComponent(pItem) : 0;
+}
 
 // ============================================================================
 // External Globals (1.12a D2Client.dll)
@@ -298,7 +472,7 @@ int32_t __fastcall D2Client_GetUnitX(D2UnitStrc* pUnit)
     }
     if (pUnit->dwUnitType <= UNIT_OBJECT || pUnit->dwUnitType == UNIT_ITEM || pUnit->dwUnitType == UNIT_TILE)
     {
-        return pUnit->pStaticPath ? D2COMMON_10175_PathGetFirstPointX(pUnit->pStaticPath) : 0;
+        return pUnit->pStaticPath ? PATH_GetStaticPosX(pUnit->pStaticPath) : 0;
     }
     return pUnit->pDynamicPath ? PATH_GetXPosition(pUnit->pDynamicPath) : 0;
 }
@@ -312,7 +486,7 @@ int32_t __fastcall D2Client_GetUnitY(D2UnitStrc* pUnit)
     }
     if (pUnit->dwUnitType <= UNIT_OBJECT || pUnit->dwUnitType == UNIT_ITEM || pUnit->dwUnitType == UNIT_TILE)
     {
-        return pUnit->pStaticPath ? D2COMMON_10176_PathGetFirstPointY(pUnit->pStaticPath) : 0;
+        return pUnit->pStaticPath ? PATH_GetStaticPosY(pUnit->pStaticPath) : 0;
     }
     return pUnit->pDynamicPath ? PATH_GetYPosition(pUnit->pDynamicPath) : 0;
 }
@@ -433,7 +607,7 @@ int32_t __fastcall D2Client_GetUnitTileSoundMaterial(D2UnitStrc* pUnit)
     if (dwTileFlags & 0x40000000) return 15;
     if ((int32_t)dwTileFlags < 0) return 16;
 
-    switch (LEVEL_GetActFromRoom(pRoom))
+    switch (DRLG_GetActNoFromLevelId(DUNGEON_GetLevelIdFromRoom(pRoom)))
     {
     case 0:  return 18;
     case 1:  return 19;
@@ -464,7 +638,7 @@ int32_t __fastcall D2Client_GetUnitActiveWeaponSwingSound(D2UnitStrc* pUnit)
     }
     else if (nWeapSwitch == 12) // Right
     {
-        pWeapon = D2Common_10306(pUnit->pInventory);
+        pWeapon = INVENTORY_GetSecondaryWeapon(pUnit->pInventory);
     }
     else
     {
@@ -480,7 +654,7 @@ int32_t __fastcall D2Client_GetUnitActiveWeaponSwingSound(D2UnitStrc* pUnit)
     {
         if (ITEMS_CheckItemTypeId(pWeapon, ITEMTYPE_WEAPON))
         {
-            nHitClass = ITEMS_GetHitClass(pWeapon);
+            nHitClass = ITEMS_GetHitClassFromItem(pWeapon);
         }
         else
         {
@@ -535,13 +709,13 @@ int32_t __fastcall D2Client_GetUnitDefaultWeaponImpactSound(D2UnitStrc* pUnit)
             return 0;
         }
         D2UnitStrc* pWeapon = INVENTORY_GetLeftHandWeapon(pUnit->pInventory);
-        int32_t nHitClass = pWeapon ? ITEMS_GetHitClass(pWeapon) : 1;
+        int32_t nHitClass = pWeapon ? ITEMS_GetHitClassFromItem(pWeapon) : 1;
         return D2Client_GetWeaponImpactSoundByHitClass(nHitClass);
     }
     else if (dwUnitType == UNIT_MONSTER)
     {
         int32_t nClassId = D2Client_GetUnitClassIdChecked(pUnit);
-        int32_t nHitClass = sgptDataTables->pMonStatsTxt[nClassId].nA1TH; // +0x154
+        int32_t nHitClass = sgptDataTables->pMonStatsTxt[nClassId].nA1TH[0]; // +0x154
         return D2Client_GetWeaponImpactSoundByHitClass(nHitClass);
     }
     return 0;
@@ -619,7 +793,8 @@ void __stdcall D2Client_ResolveHitClassImpactSounds(D2UnitStrc* pUnit, int32_t* 
     if (D2Client_GetUnitTypeChecked(pUnit) == UNIT_MONSTER)
     {
         int32_t nClassId = D2Client_GetUnitClassIdChecked(pUnit);
-        uint8_t nHitClassOverride = sgptDataTables->pMonStatsTxt[nClassId].nHitClass; // +0x93
+        D2MonStats2Txt* pMonStats2 = UNITS_GetMonStats2TxtRecordFromMonsterId(nClassId);
+        uint8_t nHitClassOverride = pMonStats2 ? pMonStats2->nHitClass : 0; // +0x93
         switch (nHitClassOverride)
         {
         case 0x0B: *pOutPhysSoundId = 113; break;
@@ -651,9 +826,9 @@ D2MonSoundsTxt* __fastcall D2Client_GetUnitMonSoundsTxt(D2UnitStrc* pUnit)
     }
     if (STATLIST_GetUnitAlignment(pUnit) == UNIT_ALIGNMENT_GOOD)
     {
-        return D2Client_GetMonSoundsTxtRecord(pMonStatsTxt->wPetSound);
+        return D2Client_GetMonSoundsTxtRecord(pMonStatsTxt->wUMonSound);
     }
-    if (MONSTER_IsBoss(nullptr, pUnit))
+    if (MONSTERS_IsBoss(nullptr, pUnit))
     {
         return D2Client_GetMonSoundsTxtRecord(pMonStatsTxt->wUMonSound);
     }
@@ -913,7 +1088,7 @@ void __fastcall D2Client_PlayMonsterInitSound(D2UnitStrc* pUnit)
         return;
     }
 
-    D2MonStats2Txt* pMonStats2Txt = MONSTERMODE_GetMonStats2Txt(pUnit->dwClassId);
+    D2MonStats2Txt* pMonStats2Txt = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
     if (pMonStats2Txt && (pMonStats2Txt->dwFlags & 0x00010000))
     {
         D2Client_PlayGlobalSound_6FAE1470(nInitSound, 0xFF);
@@ -1559,10 +1734,10 @@ void __fastcall D2Client_PlayMonsterFootstepSoundPerTick(D2UnitStrc* pUnit)
 
         if (pMonSoundsTxt->dwFootstep > 0)
         {
-            D2Client_PlayUnitPositionalSound(pUnit, pMonSoundsTxt->dwFootstep, pMonSoundsTxt->dwFsOff, pMonSoundsTxt->dwFsPrb, pMonSoundsTxt->dwFsVol);
+            D2Client_PlayUnitPositionalSound(pUnit, pMonSoundsTxt->dwFootstep, pMonSoundsTxt->dwFsOff, pMonSoundsTxt->dwFsPrb, 0);
             if (pMonSoundsTxt->dwFootstepLayer > 0)
             {
-                D2Client_PlayUnitPositionalSound(pUnit, pMonSoundsTxt->dwFootstepLayer, pMonSoundsTxt->dwFsOff, pMonSoundsTxt->dwFsPrb, pMonSoundsTxt->dwFsVol);
+                D2Client_PlayUnitPositionalSound(pUnit, pMonSoundsTxt->dwFootstepLayer, pMonSoundsTxt->dwFsOff, pMonSoundsTxt->dwFsPrb, 0);
             }
             uint32_t dwTick = gdwClientTickCount;
             pUnit->dwLastGenericSoundTick = dwTick;
@@ -1976,8 +2151,9 @@ void __fastcall D2Client_SetPathTargetPosition(D2DynamicPathStrc* pDynamicPath, 
 BOOL __fastcall D2Client_ValidatePathTargetUnit(D2DynamicPathStrc* pDynamicPath)
 {
     int32_t nTargetType = 0;
-    uint32_t dwTargetGUID = 0;
-    if (!PATH_GetTargetTypeAndGUID(pDynamicPath, &nTargetType, (int*)&dwTargetGUID))
+    D2UnitGUID dwTargetGUID = 0;
+    PATH_GetTargetTypeAndGUID(pDynamicPath, &nTargetType, &dwTargetGUID);
+    if (!pDynamicPath || !PATH_GetTargetUnit(pDynamicPath))
     {
         return TRUE;
     }
@@ -2098,8 +2274,8 @@ BOOL __fastcall D2Client_SyncUnitPosition(D2UnitStrc* pUnit, int32_t nServerX, i
     }
     else
     {
-        nUnitX = pUnit->pStaticPath ? D2COMMON_10175_PathGetFirstPointX(pUnit->pStaticPath) : 0;
-        nUnitY = pUnit->pStaticPath ? D2COMMON_10176_PathGetFirstPointY(pUnit->pStaticPath) : 0;
+        nUnitX = pUnit->pStaticPath ? PATH_GetStaticPosX(pUnit->pStaticPath) : 0;
+        nUnitY = pUnit->pStaticPath ? PATH_GetStaticPosY(pUnit->pStaticPath) : 0;
     }
 
     int32_t nDistance = D2Common_10398(nUnitX, nUnitY, nServerX, nServerY);
@@ -2286,8 +2462,8 @@ void __fastcall D2Client_MoveUnitToTargetCoords(D2UnitStrc* pUnit, int32_t nTarg
     }
     else
     {
-        nUnitX = pUnit->pStaticPath ? D2COMMON_10175_PathGetFirstPointX(pUnit->pStaticPath) : 0;
-        nUnitY = pUnit->pStaticPath ? D2COMMON_10176_PathGetFirstPointY(pUnit->pStaticPath) : 0;
+        nUnitX = pUnit->pStaticPath ? PATH_GetStaticPosX(pUnit->pStaticPath) : 0;
+        nUnitY = pUnit->pStaticPath ? PATH_GetStaticPosY(pUnit->pStaticPath) : 0;
     }
 
     if (D2Common_10398(nUnitX, nUnitY, nTargetX, nTargetY) > 1)
@@ -2333,7 +2509,7 @@ void __fastcall D2Client_ApplyElementalHitOverlay(D2UnitStrc* pUnit)
     {
         if (pUnit->dwUnitType == UNIT_MONSTER)
         {
-            D2MonStats2Txt* pMonStats2Txt = MONSTERMODE_GetMonStats2Txt(pUnit->dwClassId);
+            D2MonStats2Txt* pMonStats2Txt = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
             if (!pMonStats2Txt)
             {
                 return;
@@ -2354,7 +2530,7 @@ void __fastcall D2Client_ApplyElementalHitOverlay(D2UnitStrc* pUnit)
     {
         if (pUnit->dwUnitType == UNIT_MONSTER)
         {
-            D2MonStats2Txt* pMonStats2Txt = MONSTERMODE_GetMonStats2Txt(pUnit->dwClassId);
+            D2MonStats2Txt* pMonStats2Txt = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
             if (!pMonStats2Txt)
             {
                 return;
@@ -2461,7 +2637,7 @@ void __fastcall D2Client_ExecuteLocalPlayerTargetedAction(int32_t nMode, int32_t
 
     if (!D2Client_CanUnitInterruptCurrentMode(gpPlayerUnit))
     {
-        D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(gpPlayerUnit);
+        D2ClientPlayerQueueDataStrc* pPlayerData = reinterpret_cast<D2ClientPlayerQueueDataStrc*>(UNITS_GetPlayerData(gpPlayerUnit));
         pPlayerData->dwQueuedActionMode = nMode;               // +0x150
         pPlayerData->dwQueuedTargetType = nTargetUnitType;     // +0x154
         pPlayerData->dwQueuedTargetGUID = dwTargetUnitId;      // +0x158
@@ -2543,8 +2719,9 @@ void __fastcall D2Client_ExecuteOrQueuePlayerMoveOrInteract(D2UnitStrc* pUnit, i
     }
 
     int32_t nTargetType = 0;
-    uint32_t dwTargetGUID = 0;
-    if (PATH_GetTargetTypeAndGUID(pUnit->pDynamicPath, &nTargetType, (int*)&dwTargetGUID)
+    D2UnitGUID dwTargetGUID = 0;
+    PATH_GetTargetTypeAndGUID(pUnit->pDynamicPath, &nTargetType, &dwTargetGUID);
+    if (pUnit->pDynamicPath && PATH_GetTargetUnit(pUnit->pDynamicPath)
         && D2Client_FindServerSideUnit(dwTargetGUID, nTargetType))
     {
         D2Client_ExecuteLocalPlayerTargetedAction(nMode, nTargetType, dwTargetGUID);
@@ -2553,7 +2730,7 @@ void __fastcall D2Client_ExecuteOrQueuePlayerMoveOrInteract(D2UnitStrc* pUnit, i
 
     if (pUnit == gpPlayerUnit && !D2Client_CanUnitInterruptCurrentMode(pUnit))
     {
-        D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(pUnit);
+        D2ClientPlayerQueueDataStrc* pPlayerData = reinterpret_cast<D2ClientPlayerQueueDataStrc*>(UNITS_GetPlayerData(pUnit));
         pPlayerData->dwQueuedLocationMode = nMode;     // +0x160
         pPlayerData->dwQueuedLocationX = nTargetX;     // +0x164
         pPlayerData->dwQueuedLocationY = nTargetY;     // +0x168
@@ -2573,8 +2750,8 @@ void __fastcall D2Client_ExecuteOrQueuePlayerMoveOrInteract(D2UnitStrc* pUnit, i
         }
         else
         {
-            nUnitX = pUnit->pStaticPath ? D2COMMON_10175_PathGetFirstPointX(pUnit->pStaticPath) : 0;
-            nUnitY = pUnit->pStaticPath ? D2COMMON_10176_PathGetFirstPointY(pUnit->pStaticPath) : 0;
+            nUnitX = pUnit->pStaticPath ? PATH_GetStaticPosX(pUnit->pStaticPath) : 0;
+            nUnitY = pUnit->pStaticPath ? PATH_GetStaticPosY(pUnit->pStaticPath) : 0;
         }
 
         if (nUnitX == nTargetX && nUnitY == nTargetY)
@@ -2718,7 +2895,7 @@ void __fastcall D2Client_TryAttackOrCastOnMonster(int32_t nTargetUnitType, uint3
         return;
     }
 
-    if (D2Common_11017_CheckUnitIfConsumeable(pMonster, 0))
+    if (D2COMMON_11017_CheckUnitIfConsumeable(pMonster, 0))
     {
         D2Client_DispatchPlayerModeChange_6FB0A820(gpPlayerUnit, PLRMODE_NEUTRAL, 0, 0, 0, 0, 0, 1);
         D2Client_InteractWithNPC_6FAE30C0(pMonster);
@@ -2812,7 +2989,7 @@ void __fastcall D2Client_ProcessQueuedPlayerAction(D2UnitStrc* pUnit)
         return;
     }
 
-    D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(pUnit);
+    D2ClientPlayerQueueDataStrc* pPlayerData = reinterpret_cast<D2ClientPlayerQueueDataStrc*>(UNITS_GetPlayerData(pUnit));
     if (pPlayerData->bHasQueuedTargetedAction)
     {
         pPlayerData->bHasQueuedTargetedAction = 0;
@@ -2862,12 +3039,12 @@ BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit)
         D2StatListStrc* pStateList = STATLIST_GetStatListFromUnitStateAndFlag(pUnit, 0, 0x40);
         while (pStateList)
         {
-            D2StatListStrc* pNext = STATLIST_GetNextStatList(pStateList);
-            int32_t nExpireFrame = D2Common_10472_GetStatListExpireFrame(pStateList);
-            if (nExpireFrame && nExpireFrame <= (int32_t)pUnit->dwCorrectFrame)
+            D2StatListStrc* pNext = STATLIST_GetStatListFromFlag(pStateList, 0x40);
+            int32_t nExpireFrame = STATLIST_GetExpireFrame(pStateList);
+            if (nExpireFrame && nExpireFrame <= (int32_t)pUnit->dwSeqFrame)
             {
                 int32_t nState = STATLIST_GetState(pStateList);
-                D2Common_10474(pUnit, pStateList);
+                STATLIST_FreeStatList(pStateList);
                 STATES_ToggleState(pUnit, nState, FALSE);
                 D2Client_ApplyUnitStateRemovedClientSide_6FACEBC0(pUnit, nState);
             }

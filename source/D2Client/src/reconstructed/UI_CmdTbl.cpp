@@ -8,6 +8,8 @@
 
 #include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 struct D2UnitStrc;
 struct D2InventoryStrc;
@@ -15,11 +17,19 @@ struct D2SkillStrc;
 struct D2SkillsTxt;
 struct D2MonStatsTxt;
 struct D2CellFileStrc;
-struct D2GfxDataStrc;
 struct D2RoomStrc;
 struct D2StatListStrc;
 struct D2RosterUnitStrc;
-struct Unicode;
+struct Unicode { uint16_t ch; };
+
+struct D2GfxDataStrc
+{
+    uint8_t pad0x00[0x38];
+    uint32_t nDirection;        // +0x38
+    D2CellFileStrc* pCellFile;  // +0x3C
+    uint32_t nFrame;            // +0x40
+    int32_t nMaxFrames;         // +0x44 (total 0x48 = 72 bytes)
+};
 
 struct D2WindowMsgStrc
 {
