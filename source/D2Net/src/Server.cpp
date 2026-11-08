@@ -670,7 +670,7 @@ int32_t __fastcall SERVER_GetClientPacketSize(D2PacketBufferStrc* pBuffer, uint3
 			return 0;
 		}
 
-		*pSize = *(uint8_t*)(pBuffer + 1) + 7;
+		*pSize = pBuffer->data[1] + 7;
 		return *pSize;
 	}
 	default:

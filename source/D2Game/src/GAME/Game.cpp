@@ -750,7 +750,7 @@ void __fastcall GAME_SendGameInit(int32_t nClientId, char* szGameName, uint8_t n
     D2ClientStrc* pClient = CLIENTS_AddToGame(pGame, nClientId, nCharTemplate, szClientName, gszEmptyString_6FD447EC, 0, nLocale, a13, a14);
     SERVER_SetClientGameGUID(nClientId, GetHashValueFromGameHandle(hGame));
 
-    if (pGame->nGameType == 1)
+    if (pGame->nGameType == 0 || pGame->nGameType == 1)
     {
         CLIENT_SetSaveLoaded_6FC34390(pClient);
     }
@@ -1952,7 +1952,7 @@ void __fastcall D2GAME_UpdateAllClients_6FC389C0(D2GameStrc* pGame)
     int32_t bUpdateLadder = 0;
     bool bPlayerDisconnected = false;
 
-    if (!(pGame->dwGameFrame % 8192))
+    if (pGame->dwGameFrame > 0 && !(pGame->dwGameFrame % 8192))
     {
         bUpdateLadder = 1;
     }
@@ -2048,10 +2048,15 @@ void __fastcall D2GAME_UpdateAllClients_6FC389C0(D2GameStrc* pGame)
 
             if (D2Common_10073(pClient->pRoom) && CLIENTS_GetPlayerFromClient(pClient, 0))
             {
+                D2UnitStrc* pPlayer = CLIENTS_GetPlayerFromClient(pClient, 0);
+                if (pPlayer)
+                {
+                    D2GAME_SAVE_WriteFile_6FC8A500(pGame, pPlayer, pClient->szName, 0);
+                }
+
                 D2GAME_PACKETS_SendHeaderOnlyPacket(pClient, 4u);
                 CLIENTS_SetClientState(pClient, CLIENTSTATE_INGAME);
 
-                D2UnitStrc* pPlayer = CLIENTS_GetPlayerFromClient(pClient, 0);
                 if (pPlayer)
                 {
                     D2GAME_ITEMS_UpdateInventoryItems_6FC45050(pGame, pPlayer, 0, 1);
@@ -2109,6 +2114,7 @@ void __fastcall D2GAME_UpdateAllClients_6FC389C0(D2GameStrc* pGame)
                 if (pPlayer)
                 {
                     D2GAME_ITEMS_UpdateInventoryItems_6FC45050(pGame, pPlayer, 0, 1);
+                    D2GAME_SAVE_WriteFile_6FC8A500(pGame, pPlayer, pClient->szName, 0);
                 }
             }
             break;
@@ -2291,7 +2297,7 @@ void __fastcall sub_6FC39030(D2GameStrc* pGame, D2ClientStrc* pClient, int32_t a
             }
         }
     }
-    while ((pGame->nGameType != 1 && pGame->nGameType != 2 || nCounter < 3) && !bError);
+    while ((!a3 || (pGame->nGameType != 1 && pGame->nGameType != 2) || nCounter < 3) && !bError);
 }
 
 //D2Game.0x6FC39270

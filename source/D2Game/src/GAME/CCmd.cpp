@@ -98,6 +98,85 @@ void __fastcall CCMD_ProcessClientSystemMessage(void* pData, int32_t nSize)
     case D2CLTSYS_NEWGAME:
     {
         D2GSPacketClt66* pPacket66 = (D2GSPacketClt66*)pPacket;
+        const int32_t nExistingClientId = CLIENTS_GetClientIdByName(pPacket66->szClientName);
+        if (nExistingClientId && nExistingClientId != nClientId)
+        {
+            GAME_DisconnectClientById(nExistingClientId, EVENTTYPE_DISCONNECT);
+        }
+
+        for (uint16_t id = 1; id <= 1024; ++id)
+        {
+            const D2GameGUID nGUID = GAME_GetGameGUIDFromGameId(id);
+            if (!nGUID || nGUID == static_cast<D2GameGUID>(-1))
+            {
+                continue;
+            }
+            if (D2GameStrc* pExistingGame = GAME_LockGame(nGUID))
+            {
+                const int32_t nClientsInGame = pExistingGame->nClients;
+                D2_UNLOCK(pExistingGame->lpCriticalSection);
+                if (nClientsInGame <= 0)
+                {
+                    GAME_CloseGame(nGUID);
+                }
+            }
+        }
+
+        if (!(pPacket66->nGameFlags & 6))
+        {
+            pPacket66->nGameFlags |= 0x000004u;
+        }
+
+        {
+            char szSaveDir[1024] = {};
+            FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
+            char szSaveFile[1024] = {};
+            std::snprintf(szSaveFile, sizeof(szSaveFile), "%s%s.d2s", szSaveDir, pPacket66->szClientName);
+            FILE* pSaveFp = std::fopen(szSaveFile, "rb");
+            if (!pSaveFp)
+            {
+                static const char* const kFallbackDirs[] = { "Debug\\save\\", "Release\\save\\" };
+                for (const char* szRel : kFallbackDirs)
+                {
+                    std::snprintf(szSaveFile, sizeof(szSaveFile), "%s..\\..\\%s%s.d2s", szSaveDir, szRel, pPacket66->szClientName);
+                    pSaveFp = std::fopen(szSaveFile, "rb");
+                    if (pSaveFp)
+                    {
+                        break;
+                    }
+                }
+            }
+            if (pSaveFp)
+            {
+                uint8_t aHdr[64] = {};
+                const size_t nRead = std::fread(aHdr, 1, sizeof(aHdr), pSaveFp);
+                std::fclose(pSaveFp);
+                if (nRead >= 44 && *reinterpret_cast<const uint32_t*>(&aHdr[0]) == 0xAA55AA55u)
+                {
+                    const uint32_t nVersion = *reinterpret_cast<const uint32_t*>(&aHdr[4]);
+                    const uint32_t dwSaveFlags = *reinterpret_cast<const uint32_t*>(nVersion > 91u ? &aHdr[0x24] : &aHdr[24]);
+                    pPacket66->nGameFlags &= ~(0x100000u | 0x200000u | 0x000800u);
+                    if (dwSaveFlags & CLIENTSAVEFLAG_EXPANSION)
+                    {
+                        pPacket66->nGameFlags |= 0x100000u;
+                    }
+                    if (dwSaveFlags & CLIENTSAVEFLAG_LADDER)
+                    {
+                        pPacket66->nGameFlags |= 0x200000u;
+                    }
+                    if (dwSaveFlags & CLIENTSAVEFLAG_HARDCORE)
+                    {
+                        pPacket66->nGameFlags |= 0x000800u;
+                    }
+                    const uint8_t nHdrClass = (nVersion > 91u) ? aHdr[0x28] : aHdr[34];
+                    if (nHdrClass < 7u)
+                    {
+                        pPacket66->nPlayerClass = nHdrClass;
+                    }
+                }
+            }
+        }
+
         if (GAME_VerifyCreateNewGame(nClientId, pPacket66))
         {
             GAME_SendGameInit(nClientId, pPacket66->szGameName, pPacket66->nGameType, pPacket66->nPlayerClass, pPacket66->szClientName, pPacket66->wArena, pPacket66->nGameFlags, pPacket66->nTemplate, pPacket66->unk0x2B, pPacket66->unk0x2C, pPacket66->nDifficulty, pPacket66->nLocale, 0, 0);

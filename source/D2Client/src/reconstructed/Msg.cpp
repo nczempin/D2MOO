@@ -760,7 +760,7 @@ int32_t __fastcall MSG_UploadSaveFile_6C(void* pSaveBuffer, uint32_t dwSaveSize)
         uint8_t  bOpcode;
         uint8_t  nChunkBytes;
         uint32_t dwTotalSaveSize;
-        uint8_t  abChunk[250];
+        uint8_t  abChunk[256];
     } pkt;
 #pragma pack(pop)
 
@@ -769,15 +769,15 @@ int32_t __fastcall MSG_UploadSaveFile_6C(void* pSaveBuffer, uint32_t dwSaveSize)
 
     pkt.bOpcode = C2S_UPLOADSAVECHUNK;
 
-    while (dwRemaining > 250)
+    while (dwRemaining > 255)
     {
-        pkt.nChunkBytes = 250;
+        pkt.nChunkBytes = 255;
         pkt.dwTotalSaveSize = dwSaveSize;
-        memcpy(pkt.abChunk, pCursor, 250);
-        pCursor += 250;
-        dwRemaining -= 250;
+        memcpy(pkt.abChunk, pCursor, 255);
+        pCursor += 255;
+        dwRemaining -= 255;
 
-        const int32_t nSent = CLIENT_Send(sizeof(pkt), 0, &pkt);
+        const int32_t nSent = CLIENT_Send(0x106, 0, &pkt);
         if (nSent != 0)
         {
             g_dwBytesSent += nSent;
@@ -790,7 +790,7 @@ int32_t __fastcall MSG_UploadSaveFile_6C(void* pSaveBuffer, uint32_t dwSaveSize)
     pkt.dwTotalSaveSize = dwSaveSize;
     memcpy(pkt.abChunk, pCursor, dwRemaining);
 
-    const int32_t nSent = CLIENT_Send(static_cast<int32_t>(dwRemaining + 6), 0, &pkt);
+    const int32_t nSent = CLIENT_Send(static_cast<int32_t>(dwRemaining + 7), 0, &pkt);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;

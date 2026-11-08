@@ -680,8 +680,39 @@ int32_t __fastcall D2GAME_SAVE_WriteFile_6FC8A500(D2GameStrc* pGame, D2UnitStrc*
 
         D2_ASSERT(nFileSize > 0);
 
-        CLIENTS_AttachSaveFile(CLIENTS_GetClientId(pClient), pSaveData, nFileSize, nFileSize, 0, 0, 0);
-        D2GAME_SetSaveLoadComplete_6FC34300(pClient);
+        if (pClient->dwClientState == CLIENTSTATE_INGAME)
+        {
+            CLIENTS_AttachSaveFile(CLIENTS_GetClientId(pClient), pSaveData, nFileSize, nFileSize, 0, 0, 0);
+            D2GAME_SetSaveLoadComplete_6FC34300(pClient);
+        }
+
+        if (gbWriteSaveFile_6FD30E08 && nFileSize > 0)
+        {
+            char szDirectory[1024] = {};
+            FOG_GetSavePath(szDirectory, 1024);
+            char szFileName[500] = {};
+            sprintf(szFileName, "%s%s.d2s", szDirectory, szName);
+            if (FILE* pFile = fopen(szFileName, "wb"))
+            {
+                FileLockAndWrite(pSaveData, nFileSize, 1u, pFile);
+                fclose(pFile);
+            }
+            static const char* const kSiblingSaveDirs[] = { "Debug\\save\\", "Release\\save\\" };
+            for (const char* szRel : kSiblingSaveDirs)
+            {
+                char szSiblingFile[1024] = {};
+                sprintf(szSiblingFile, "%s..\\..\\%s%s.d2s", szDirectory, szRel, szName);
+                if (FILE* pCheck = fopen(szSiblingFile, "rb"))
+                {
+                    fclose(pCheck);
+                    if (FILE* pSibOut = fopen(szSiblingFile, "wb"))
+                    {
+                        FileLockAndWrite(pSaveData, nFileSize, 1u, pSibOut);
+                        fclose(pSibOut);
+                    }
+                }
+            }
+        }
         return 1;
     }
 
