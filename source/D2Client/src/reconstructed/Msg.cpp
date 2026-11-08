@@ -33,8 +33,8 @@ typedef D2ActiveRoomStrc D2RoomStrc;
 // =============================================================================
 // External D2Net / Fog / D2Common / D2Lang Imports
 // =============================================================================
-// D2Net.#10036: int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket)
-extern "C" int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket);
+// D2Net.#10005 / #10036: int32_t __stdcall CLIENT_Send(int32_t nQueue, const void* pPacket, int32_t nSize)
+extern "C" int32_t __stdcall CLIENT_Send(int32_t nQueue, const void* pPacket, int32_t nSize);
 // D2Net.#10023: int32_t __stdcall D2NET_10023_GetSendQueueBacklog()
 extern "C" int32_t __stdcall D2NET_10023_GetSendQueueBacklog(void);
 // D2Lang.#10009: int32_t __fastcall Unicode::win2utf8(char* pDest, const wchar_t* pSrc, int32_t nDestSize)
@@ -223,7 +223,20 @@ int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize)
     }
     else if (bOpcode >= C2S_INCREMENTSTAT) // >= 0x3A
     {
-        dwThrottleWindowMs = 200;
+        if (bOpcode == C2S_INCREMENTSTAT ||
+            bOpcode == C2S_INCREMENTSKILL ||
+            bOpcode == C2S_SELECTSKILL ||
+            bOpcode == C2S_QUESTLOG ||
+            bOpcode == C2S_TOWNFOLKINVITE ||
+            bOpcode == C2S_SWITCHWEAPONS ||
+            bOpcode == C2S_BELTSHIFTCLICK)
+        {
+            dwThrottleWindowMs = 0;
+        }
+        else
+        {
+            dwThrottleWindowMs = 200;
+        }
     }
     else
     {
@@ -247,7 +260,7 @@ int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize)
     g_dwLastSendTick = GetTickCount();
     memcpy(g_abLastSentPacket, pPacketData, nSize);
 
-    const int32_t nSent = CLIENT_Send(static_cast<int32_t>(nSize), 1, abStackCopy);
+    const int32_t nSent = CLIENT_Send(1, abStackCopy, static_cast<int32_t>(nSize));
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -268,7 +281,7 @@ void __fastcall MSG_ResetLastSentPacket(void)
 int32_t __fastcall MSG_Send6A(void)
 {
     uint8_t bPacket = 0x6A;
-    const int32_t nSent = CLIENT_Send(1, 0, &bPacket);
+    const int32_t nSent = CLIENT_Send(0, &bPacket, 1);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -292,7 +305,7 @@ int32_t __fastcall MSG_SendLeaveGame_69(void)
     }
 
     uint8_t bPacket = C2S_LEAVEGAME;
-    const int32_t nSent = CLIENT_Send(1, 0, &bPacket);
+    const int32_t nSent = CLIENT_Send(0, &bPacket, 1);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -316,7 +329,7 @@ int32_t __fastcall MSG_SendLeaveGame_69(void)
 int32_t __fastcall MSG_SendJoinActComplete_6B(void)
 {
     uint8_t bPacket = C2S_JOINACTCOMPLETE;
-    const int32_t nSent = CLIENT_Send(1, 0, &bPacket);
+    const int32_t nSent = CLIENT_Send(0, &bPacket, 1);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -377,7 +390,7 @@ int32_t __fastcall MSG_SendCreateGame_67(
     abPacket[0x2C] = nUnk2C;
     abPacket[0x2D] = nLocale;
 
-    const int32_t nSent = CLIENT_Send(0x1D, 0, abPacket);
+    const int32_t nSent = CLIENT_Send(0, abPacket, 0x1D);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -396,7 +409,7 @@ int32_t __fastcall MSG_SendWardenResponse_66(uint16_t wPayloadSize, const void* 
     *reinterpret_cast<uint16_t*>(&pPacket[1]) = wPayloadSize;
     memcpy(&pPacket[3], pPayload, wPayloadSize);
 
-    const int32_t nSent = CLIENT_Send(static_cast<int32_t>(nTotalSize), 1, pPacket);
+    const int32_t nSent = CLIENT_Send(1, pPacket, static_cast<int32_t>(nTotalSize));
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -706,7 +719,7 @@ int32_t __fastcall MSG_SendJoinGame_68(
         abPacket[0x24] = 0;
     }
 
-    const int32_t nSent = CLIENT_Send(0x25, 0, abPacket);
+    const int32_t nSent = CLIENT_Send(0, abPacket, 0x25);
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -740,7 +753,7 @@ void __fastcall MSG_SendPing_6D(void)
     pkt.dwPongDelta = pkt.dwTickCount - g_dwPingTimestamp;
     pkt.dwZero = 0;
 
-    const int32_t nSent = CLIENT_Send(sizeof(pkt), 0, &pkt);
+    const int32_t nSent = CLIENT_Send(0, &pkt, sizeof(pkt));
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -777,7 +790,7 @@ int32_t __fastcall MSG_UploadSaveFile_6C(void* pSaveBuffer, uint32_t dwSaveSize)
         pCursor += 255;
         dwRemaining -= 255;
 
-        const int32_t nSent = CLIENT_Send(0x106, 0, &pkt);
+        const int32_t nSent = CLIENT_Send(0, &pkt, 0x106);
         if (nSent != 0)
         {
             g_dwBytesSent += nSent;
@@ -790,7 +803,7 @@ int32_t __fastcall MSG_UploadSaveFile_6C(void* pSaveBuffer, uint32_t dwSaveSize)
     pkt.dwTotalSaveSize = dwSaveSize;
     memcpy(pkt.abChunk, pCursor, dwRemaining);
 
-    const int32_t nSent = CLIENT_Send(static_cast<int32_t>(dwRemaining + 7), 0, &pkt);
+    const int32_t nSent = CLIENT_Send(0, &pkt, static_cast<int32_t>(dwRemaining + 7));
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;

@@ -183,9 +183,14 @@ static void SyncClientModeEnv()
 {
 	if (!gbClientModeInitialized)
 	{
+		char szNativeEnv[16] = {};
 		char szOrigEnv[16] = {};
 		char szTsEnv[16] = {};
-		if (GetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", szOrigEnv, sizeof(szOrigEnv)) > 0 && szOrigEnv[0] != '0')
+		if (GetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", szNativeEnv, sizeof(szNativeEnv)) > 0 && szNativeEnv[0] != '0')
+		{
+			gnClientMode = 2;
+		}
+		else if (GetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", szOrigEnv, sizeof(szOrigEnv)) > 0 && szOrigEnv[0] != '0')
 		{
 			gnClientMode = 1;
 		}
@@ -202,6 +207,7 @@ static void SyncClientModeEnv()
 
 	SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", (gnClientMode == 0) ? "1" : "0");
 	SetEnvironmentVariableA("D2MOO_USE_ORIGINAL_CLIENT", (gnClientMode == 1) ? "1" : "0");
+	SetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", (gnClientMode == 2) ? "1" : "0");
 }
 
 static void RefreshClientModeButtonText()
@@ -588,6 +594,11 @@ void __fastcall D2LAUNCH_InitNewSaveAndPreview(
 	const uint32_t dwNow = static_cast<uint32_t>(std::time(nullptr));
 	gD2SaveHeader.dwCreateTime = dwNow;
 	gD2SaveHeader.dwLastTime = dwNow;
+	std::memset(gD2SaveHeader.dwSkillHotkeys, 0xFF, sizeof(gD2SaveHeader.dwSkillHotkeys));
+	gD2SaveHeader.dwLeftSkill1 = 0xFFFFFFFFu;
+	gD2SaveHeader.dwRightSkill1 = 0xFFFFFFFFu;
+	gD2SaveHeader.dwLeftSkill2 = 0xFFFFFFFFu;
+	gD2SaveHeader.dwRightSkill2 = 0xFFFFFFFFu;
 	std::memcpy(gD2SaveHeader.nAppearanceComponents, kDefaultAppearance, sizeof(gD2SaveHeader.nAppearanceComponents));
 	std::memset(gD2SaveHeader.nAppearanceColors, 0xFF, sizeof(gD2SaveHeader.nAppearanceColors));
 
@@ -2041,8 +2052,69 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 	D2SOUND_FastCacheSound("data\\global\\sfx\\cursor\\button.wav");
 
 	D2Win_10005(D2GAMERES_800x600);
+	SyncClientModeEnv();
 
-	if (pCfg->bSkipToBNet && !pCfg->bShownLogo)
+	char szAutoChar[32] = {};
+	const DWORD nAutoCharLen = GetEnvironmentVariableA("D2MOO_AUTO_CHAR", szAutoChar, sizeof(szAutoChar));
+	if (nAutoCharLen > 0 && szAutoChar[0] != '\0')
+	{
+		if (pCfg->bShownLogo)
+		{
+			// Returned from D2Client after an auto-entered session: exit cleanly
+			gdwNextModule = D2LAUNCH_MODULE_NONE;
+		}
+		else
+		{
+			pCfg->bShownLogo = 1;
+			gnLaunchMode = 0;
+			EnumerateSavedCharacters();
+			D2LaunchCharNodeStrc* pMatch = nullptr;
+			for (D2LaunchCharNodeStrc* pNode = gpCharListHead; pNode != nullptr; pNode = pNode->pNext)
+			{
+				if (_stricmp(pNode->szCharName, szAutoChar) == 0)
+				{
+					pMatch = pNode;
+					break;
+				}
+			}
+
+			if (pMatch)
+			{
+				gpSelectedChar = pMatch;
+				pCfg->tCharPreviewInfo = pMatch->tPreview;
+				pCfg->unpackedCTemp.nCharacterClassId = pMatch->nCharClass;
+				D2LAUNCH_EnterSelectedCharacter(pMatch->szCharName, "", pMatch->wSaveFlags);
+			}
+			else
+			{
+				char szAutoClass[16] = {};
+				uint8_t nClass = 1; // Default: Sorceress
+				if (GetEnvironmentVariableA("D2MOO_AUTO_CLASS", szAutoClass, sizeof(szAutoClass)) > 0)
+				{
+					const int nParsed = std::atoi(szAutoClass);
+					if (nParsed >= 0 && nParsed < 7)
+					{
+						nClass = static_cast<uint8_t>(nParsed);
+					}
+				}
+				const uint16_t wSaveFlags = FOG_IsExpansion() ? 0x20u : 0x00u;
+				SStrCopy(pCfg->szName, szAutoChar, sizeof(pCfg->szName));
+				pCfg->unpackedCTemp.nCharacterSaveFlags = wSaveFlags;
+				pCfg->unpackedCTemp.nCharacterClassId = nClass;
+				D2LAUNCH_InitNewSaveAndPreview(
+					&pCfg->tCharPreviewInfo,
+					nClass,
+					pCfg->szName,
+					wSaveFlags);
+				D2LAUNCH_WriteNewSaveFile(pCfg->szName);
+				pCfg->nArenaFlags = (wSaveFlags & 0x20u) ? 0x100004u : 0x000004u;
+				pCfg->nLaunchType = LAUNCHTYPE_LOCAL;
+				pCfg->dwGameType = 0;
+				gdwNextModule = D2LAUNCH_MODULE_CLIENT;
+			}
+		}
+	}
+	else if (pCfg->bSkipToBNet && !pCfg->bShownLogo)
 	{
 		pCfg->bShownLogo = 1;
 		pCfg->nLaunchType = LAUNCHTYPE_REALM;
