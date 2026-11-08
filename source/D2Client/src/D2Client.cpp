@@ -43,8 +43,9 @@
 #include <PLAYER/Player.h>
 #include <PLAYER/PlrSave.h>
 #include <DEBUG/Debug.h>
+#include <D2IgnoreList.h>
 
-// Reconstructed 1.12a D2Client Translation Unit Entry Points (Msg.cpp, UI_QuestLog.cpp)
+// Reconstructed 1.12a D2Client Translation Unit Entry Points (Msg.cpp, UI_QuestLog.cpp, UNIT_CUnit.cpp)
 void __fastcall MSG_ResetCounters(void);
 void __fastcall MSG_GetTrafficCounters(uint32_t* pBytesReceived, uint32_t* pPacketsReceived, uint32_t* pBytesSent, uint32_t* pPacketsSent);
 int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize);
@@ -69,6 +70,105 @@ int32_t __fastcall UNITMODE_SendActionPacket(
 int32_t __fastcall GAME_SendTownFolkInit_2F(uint32_t dwNpcUnitType, uint32_t dwNpcUnitGUID);
 int32_t __fastcall GAME_SendTownFolkCancel_30(uint32_t dwNpcUnitType, uint32_t dwNpcUnitGUID);
 void __stdcall QUESTLOG_InitSession(void);
+
+// Reconstructed UNIT_CUnit.cpp Globals & Lifecycle APIs (Milestone 3.1 Cutover)
+extern D2UnitStrc* gpPlayerUnit;                                           // 0x6FBCC3D0
+extern D2DrlgActStrc* gpClientAct;                                         // 0x6FBCC3C0
+extern D2UnitStrc* gapServerSideUnitHashTables[UNIT_TYPES_COUNT][128];     // 0x6FBB9D60
+extern D2UnitStrc* gapClientSideUnitHashTables[UNIT_TYPES_COUNT][128];     // 0x6FBB9160
+void __stdcall D2Client_ClearAllUnitHashTables();
+void __fastcall D2Client_ExpireUnitModStatsCallback(D2UnitStrc* pUnit);
+void __stdcall D2Client_ForEachUnitInHashTable(void (__fastcall* pfnCallback)(D2UnitStrc*), D2UnitStrc** ppHashBuckets);
+D2UnitStrc* __stdcall D2Client_GetLocalPlayerUnit();
+void __fastcall D2Client_SetLocalPlayerUnit(D2UnitStrc* pPlayerUnit);
+D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
+D2UnitStrc* __fastcall D2Client_FindClientSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
+D2UnitStrc* __fastcall D2Client_RegisterUnitInHashTable(D2UnitStrc* pUnit);
+
+static void RemoveReconstructedServerUnit(uint32_t nUnitType, uint32_t dwGuid)
+{
+	if (nUnitType >= UNIT_TYPES_COUNT || dwGuid == 0)
+	{
+		return;
+	}
+	const uint32_t nBucket = dwGuid & 0x7Fu;
+	D2UnitStrc* pPrev = nullptr;
+	D2UnitStrc* pCurr = gapServerSideUnitHashTables[nUnitType][nBucket];
+	while (pCurr != nullptr)
+	{
+		if (pCurr->dwUnitId == dwGuid && pCurr->dwUnitType == nUnitType)
+		{
+			if (pPrev == nullptr)
+			{
+				gapServerSideUnitHashTables[nUnitType][nBucket] = pCurr->pListNext;
+			}
+			else
+			{
+				pPrev->pListNext = pCurr->pListNext;
+			}
+			if (pCurr == gpPlayerUnit)
+			{
+				D2Client_SetLocalPlayerUnit(nullptr);
+			}
+			UNITS_FreeUnit(pCurr);
+			return;
+		}
+		pPrev = pCurr;
+		pCurr = pCurr->pListNext;
+	}
+}
+
+static void FreeAllReconstructedServerUnits()
+{
+	for (int32_t t = 0; t < UNIT_TYPES_COUNT; ++t)
+	{
+		for (int32_t b = 0; b < 128; ++b)
+		{
+			D2UnitStrc* pCurr = gapServerSideUnitHashTables[t][b];
+			gapServerSideUnitHashTables[t][b] = nullptr;
+			while (pCurr != nullptr)
+			{
+				D2UnitStrc* pNext = pCurr->pListNext;
+				UNITS_FreeUnit(pCurr);
+				pCurr = pNext;
+			}
+		}
+	}
+	D2Client_SetLocalPlayerUnit(nullptr);
+	D2Client_ClearAllUnitHashTables();
+}
+
+static void StepReconstructedUnitTablesPerTick()
+{
+	D2Client_ForEachUnitInHashTable(&D2Client_ExpireUnitModStatsCallback, gapServerSideUnitHashTables[UNIT_PLAYER]);
+	D2Client_ForEachUnitInHashTable(&D2Client_ExpireUnitModStatsCallback, gapServerSideUnitHashTables[UNIT_MONSTER]);
+	D2Client_ForEachUnitInHashTable(&D2Client_ExpireUnitModStatsCallback, gapServerSideUnitHashTables[UNIT_OBJECT]);
+}
+
+static D2UnitStrc* RegisterReconstructedServerUnit(uint32_t nUnitType, uint32_t dwGuid, uint32_t dwClassId, uint32_t dwMode)
+{
+	if (nUnitType >= UNIT_TYPES_COUNT || dwGuid == 0)
+	{
+		return nullptr;
+	}
+	if (D2UnitStrc* pExisting = D2Client_FindServerSideUnit(dwGuid, nUnitType))
+	{
+		pExisting->dwClassId = dwClassId;
+		pExisting->dwAnimMode = dwMode;
+		return pExisting;
+	}
+	D2UnitStrc* pUnit = UNITS_AllocUnit(nullptr, nUnitType);
+	if (!pUnit)
+	{
+		return nullptr;
+	}
+	pUnit->dwUnitType = nUnitType;
+	pUnit->dwUnitId = dwGuid;
+	pUnit->dwClassId = dwClassId;
+	pUnit->dwAnimMode = dwMode;
+	pUnit->pDrlgAct = gpClientAct;
+	return D2Client_RegisterUnitInHashTable(pUnit);
+}
 
 // 1.12a Globals
 static D2ConfigStrc* gpD2Config = nullptr;                     // 0x6FBCB908
@@ -127,7 +227,12 @@ static D2CellFileStrc* gpPlayerClassNu1 = nullptr;
 static D2CellFileStrc* gpPlayerClassFw = nullptr;
 static D2CompositeUnitStrc* gpPlayerCompIdle = nullptr;
 static D2CompositeUnitStrc* gpPlayerCompWalk = nullptr;
-static D2DrlgActStrc* gpClientAct = nullptr;
+static D2CellFileStrc* gpStashPanel = nullptr;
+static D2CellFileStrc* gpCubePanel = nullptr;
+static D2CellFileStrc* gpTransmuteBtn = nullptr;
+static D2CellFileStrc* gpWaypointBg = nullptr;
+static D2CellFileStrc* gpWaypointTabs = nullptr;
+static D2CellFileStrc* gpMercInvPanel = nullptr;
 
 enum LeftPanelType : int32_t
 {
@@ -137,6 +242,10 @@ enum LeftPanelType : int32_t
 	LEFTPANEL_PARTY = 3,
 	LEFTPANEL_MSGLOG = 4,
 	LEFTPANEL_VENDOR = 5,
+	LEFTPANEL_STASH = 6,
+	LEFTPANEL_CUBE = 7,
+	LEFTPANEL_WAYPOINT = 8,
+	LEFTPANEL_MERC = 9,
 };
 
 enum RightPanelType : int32_t
@@ -155,9 +264,33 @@ static int32_t gnEscSubMenu = 0;       // 0 = Main ESC Menu, 1 = Options Menu, 2
 static int32_t gnEscSelectedIndex = 0;
 static int32_t gnActiveSkillTab = 0;   // 0..2
 static int32_t gnSelectedQuest = 0;    // 0..5
+static int32_t gnQuestLogActTab = 0;   // 0..4 (Acts I..V)
 static bool gbRunEnabled = true;
 static bool gbSoundEnabled = true;
 static bool gbScaled1200x900 = true;
+
+// Milestone 3.2/3.3: Stash, Horadric Cube, Waypoint, Mercenary, Belt 4x4, Cursor Item & Chat/Slash State
+static int32_t gnStashGold = 2500;
+static int32_t gnWaypointActTab = 0;   // 0..4 (Acts I..V)
+static uint32_t gdwWaypointUnlockMask[5] = { 0x1FFu, 0x1FFu, 0x1FFu, 0x007u, 0x1FFu };
+static uint32_t gdwActiveWaypointGuid = 0;
+static bool gbMercHired = true;
+static uint32_t gdwMercUnitGuid = 0;
+static uint16_t gwMercClassId = 271;   // Rogue Scout (Act 1)
+static int32_t gnMercLevel = 5;
+static int32_t gnMercLifePct = 128;
+static char gszMercName[32] = "Kyoko";
+static bool gbBeltExpanded = false;
+static int32_t gnCursorItemIdx = -1;
+static bool gbChatInputOpen = false;
+static char gszChatInputBuf[96] = {};
+static int32_t gnChatInputLen = 0;
+static bool gbShowFpsOverlay = false;
+static DWORD gdwActTransitionEndTick = 0;
+static uint8_t gnTransitionTargetAct = 0;
+static uint32_t gdwTransmutesSent = 0;
+static uint32_t gdwWaypointsUsed = 0;
+static uint32_t gdwSlashCommandsExecuted = 0;
 
 // NPC Dialog Menu & Vendor Trade State (1.12a UI/npcmenu.cpp & UI/inv.cpp)
 static bool gbNpcMenuOpen = false;
@@ -246,7 +379,58 @@ enum ClientItemLocation : uint8_t
 	CLI_ITEMLOC_BELT = 3,
 	CLI_ITEMLOC_CURSOR = 4,
 	CLI_ITEMLOC_VENDOR = 5,
+	CLI_ITEMLOC_STASH = 6,
+	CLI_ITEMLOC_CUBE = 7,
+	CLI_ITEMLOC_MERC = 8,
 };
+
+struct ClientMissileEntry
+{
+	float fWorldX;
+	float fWorldY;
+	float fVelX;
+	float fVelY;
+	int32_t nFramesRemaining;
+	uint16_t wMissileId;
+	uint8_t nColor;
+	uint8_t nRadius;
+	bool bActive;
+	uint8_t nPad[3];
+};
+
+struct ClientOverlayEntry
+{
+	uint32_t dwTargetGuid;
+	int32_t nFramesRemaining;
+	int32_t nMaxFrames;
+	uint16_t wOverlayId;
+	uint8_t nTargetType;
+	uint8_t nColor;
+	bool bActive;
+	uint8_t nPad[3];
+};
+
+struct WeatherParticle
+{
+	float fScreenX;
+	float fScreenY;
+	float fVelX;
+	float fVelY;
+	uint8_t nLength;
+	uint8_t nPad[3];
+};
+
+static constexpr int32_t kMaxClientMissiles = 64;
+static ClientMissileEntry gClientMissiles[kMaxClientMissiles] = {};
+static uint32_t gdwClientMissilesSpawned = 0;
+
+static constexpr int32_t kMaxClientOverlays = 32;
+static ClientOverlayEntry gClientOverlays[kMaxClientOverlays] = {};
+static uint32_t gdwClientOverlaysSpawned = 0;
+
+static constexpr int32_t kMaxWeatherParticles = 96;
+static WeatherParticle gWeatherParticles[kMaxWeatherParticles] = {};
+static bool gbWeatherInitialized = false;
 
 struct ClientWorldUnit
 {
@@ -508,6 +692,272 @@ static void SendUseBeltItem(uint32_t dwItemGuid)
 	MSG_SendByte3Dwords(0x26u, dwItemGuid, 0u, 0u);
 }
 
+static void SpawnClientOverlay(uint8_t nTargetType, uint32_t dwTargetGuid, uint16_t wOverlayId, uint8_t nColor, int32_t nDurationFrames = 30)
+{
+	for (int32_t i = 0; i < kMaxClientOverlays; ++i)
+	{
+		if (!gClientOverlays[i].bActive)
+		{
+			gClientOverlays[i].bActive = true;
+			gClientOverlays[i].nTargetType = nTargetType;
+			gClientOverlays[i].dwTargetGuid = dwTargetGuid;
+			gClientOverlays[i].wOverlayId = wOverlayId;
+			gClientOverlays[i].nColor = nColor;
+			gClientOverlays[i].nFramesRemaining = nDurationFrames;
+			gClientOverlays[i].nMaxFrames = std::max<int32_t>(1, nDurationFrames);
+			++gdwClientOverlaysSpawned;
+			return;
+		}
+	}
+}
+
+static void SpawnClientMissile(uint16_t wMissileId, float fStartWorldX, float fStartWorldY, float fTargetWorldXPos, float fTargetWorldYPos, uint8_t nColor = 0x62u)
+{
+	const float dx = fTargetWorldXPos - fStartWorldX;
+	const float dy = fTargetWorldYPos - fStartWorldY;
+	const float dist = std::max<float>(1.0f, std::sqrt(dx * dx + dy * dy));
+	const float fSpeed = 16.0f;
+	for (int32_t i = 0; i < kMaxClientMissiles; ++i)
+	{
+		if (!gClientMissiles[i].bActive)
+		{
+			gClientMissiles[i].bActive = true;
+			gClientMissiles[i].wMissileId = wMissileId;
+			gClientMissiles[i].fWorldX = fStartWorldX;
+			gClientMissiles[i].fWorldY = fStartWorldY;
+			gClientMissiles[i].fVelX = (dx / dist) * fSpeed;
+			gClientMissiles[i].fVelY = (dy / dist) * fSpeed;
+			gClientMissiles[i].nColor = nColor;
+			gClientMissiles[i].nRadius = 5;
+			gClientMissiles[i].nFramesRemaining = std::max<int32_t>(8, std::min<int32_t>(45, static_cast<int32_t>(dist / fSpeed) + 4));
+			++gdwClientMissilesSpawned;
+			return;
+		}
+	}
+}
+
+// C2S 0x4F: UI Button Action (0x12=CloseStash, 0x13=WithdrawGold, 0x14=DepositGold, 0x18=Transmute, 0x19=CloseCube)
+static void SendUiButtonAction_4F(uint16_t wAction, uint16_t wGoldLow = 0, uint16_t wGoldHigh = 0)
+{
+	uint8_t aPkt[7] = {};
+	aPkt[0] = 0x4Fu;
+	*reinterpret_cast<uint16_t*>(&aPkt[1]) = wAction;
+	*reinterpret_cast<uint16_t*>(&aPkt[3]) = wGoldLow;
+	*reinterpret_cast<uint16_t*>(&aPkt[5]) = wGoldHigh;
+	MSG_SendPacket(aPkt, sizeof(aPkt));
+}
+
+static void SendHoradricCubeTransmute()
+{
+	SendUiButtonAction_4F(0x18u, 0, 0);
+	++gdwTransmutesSent;
+	SpawnClientOverlay(UNIT_PLAYER, gdwClientPlayerGuid, 148u, 0x6Au, 25);
+	D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\transmutebutton.wav");
+	AppendClientChatLog("Horadric Cube: Transmute activated (C2S 0x4F action 0x18).");
+}
+
+static void SendStashDepositGold(uint32_t dwAmount)
+{
+	SendUiButtonAction_4F(0x14u, static_cast<uint16_t>(dwAmount & 0xFFFFu), static_cast<uint16_t>((dwAmount >> 16) & 0xFFFFu));
+	const int32_t nTransfer = std::min<int32_t>(static_cast<int32_t>(dwAmount), std::max<int32_t>(0, gaClientStats[STAT_GOLD]));
+	gaClientStats[STAT_GOLD] -= nTransfer;
+	gnStashGold += nTransfer;
+	D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
+}
+
+static void SendStashWithdrawGold(uint32_t dwAmount)
+{
+	SendUiButtonAction_4F(0x13u, static_cast<uint16_t>(dwAmount & 0xFFFFu), static_cast<uint16_t>((dwAmount >> 16) & 0xFFFFu));
+	const int32_t nTransfer = std::min<int32_t>(static_cast<int32_t>(dwAmount), std::max<int32_t>(0, gnStashGold));
+	gnStashGold -= nTransfer;
+	gaClientStats[STAT_GOLD] += nTransfer;
+	D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
+}
+
+// C2S 0x18: InsertItemToBuffer (dwItemGUID, dwX, dwY, dwBufferType: 0=Inv, 3=Cube, 4=Stash)
+static void SendInsertItemToBuffer_18(uint32_t dwItemGuid, uint32_t dwX, uint32_t dwY, uint32_t dwBufferType)
+{
+	MSG_SendByte4Dwords(0x18u, dwItemGuid, dwX, dwY, dwBufferType);
+}
+
+// C2S 0x19: RemoveItemFromBuffer (dwItemGUID)
+static void SendRemoveItemFromBuffer_19(uint32_t dwItemGuid)
+{
+	MSG_SendByteDword(0x19u, dwItemGuid);
+}
+
+// C2S 0x17: DropCursorItem (dwItemGUID)
+static void SendDropCursorItem_17(uint32_t dwItemGuid)
+{
+	MSG_SendByteDword(0x17u, dwItemGuid);
+}
+
+// C2S 0x49: WaypointTeleport (dwWaypointGUID, nDestinationLevelId)
+static void SendWaypointTeleport_49(uint32_t dwWaypointGuid, uint8_t nDestLevelId, uint8_t nTargetAct)
+{
+	uint8_t aPkt[9] = {};
+	aPkt[0] = 0x49u;
+	*reinterpret_cast<uint32_t*>(&aPkt[1]) = dwWaypointGuid;
+	aPkt[5] = nDestLevelId;
+	MSG_SendPacket(aPkt, sizeof(aPkt));
+	++gdwWaypointsUsed;
+	if (nDestLevelId > 0)
+	{
+		if (nTargetAct != gnCurrentAct)
+		{
+			gnTransitionTargetAct = nTargetAct;
+			gdwActTransitionEndTick = GetTickCount() + 2200u;
+			gnCurrentAct = nTargetAct;
+		}
+		gnCurrentLevelId = nDestLevelId;
+		gnLeftPanel = LEFTPANEL_NONE;
+		SpawnClientOverlay(UNIT_PLAYER, gdwClientPlayerGuid, 120u, 0x97u, 28);
+		D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\waygate.wav");
+	}
+}
+
+// C2S 0x36: HireMerc (dwNpcGUID, dwMercListId)
+static void SendHireMerc_36(uint32_t dwNpcGuid, uint32_t dwMercId)
+{
+	MSG_SendByte2Dwords(0x36u, dwNpcGuid, dwMercId);
+	gbMercHired = true;
+	gnMercLifePct = 128;
+	AppendClientChatLog("Hired town mercenary companion (C2S 0x36).");
+}
+
+// C2S 0x62: ResurrectMerc (dwNpcGUID)
+static void SendResurrectMerc_62(uint32_t dwNpcGuid)
+{
+	MSG_SendByteDword(0x62u, dwNpcGuid);
+	gbMercHired = true;
+	gnMercLifePct = 128;
+	AppendClientChatLog("Resurrected mercenary companion (C2S 0x62).");
+}
+
+// C2S 0x61: MercEquipItem (wBodyLoc)
+static void SendMercEquip_61(uint16_t wBodyLoc)
+{
+	MSG_SendByteWord(0x61u, wBodyLoc);
+}
+
+// C2S 0x15: SendChatMessage + 1.13d Slash Commands (/fps, /ignore, /unignore, /ignorelist, /ignorepersist, /filtermsg, /unfiltermsg)
+static void ExecuteChatOrSlashCommand(const char* szInput)
+{
+	if (!szInput || !szInput[0])
+	{
+		return;
+	}
+	if (szInput[0] == '/')
+	{
+		++gdwSlashCommandsExecuted;
+		#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+		IIgnoreList* pIgnore = IGNORELIST_GetSingleton();
+#else
+		IIgnoreList* pIgnore = nullptr;
+#endif
+		if (std::strncmp(szInput, "/fps", 4) == 0)
+		{
+			gbShowFpsOverlay = !gbShowFpsOverlay;
+			AppendClientChatLog(gbShowFpsOverlay ? "FPS / Network Diagnostics Overlay: ON" : "FPS / Network Diagnostics Overlay: OFF");
+			return;
+		}
+		if (std::strncmp(szInput, "/ignorelist", 11) == 0)
+		{
+			char szMsg[96] = {};
+			std::snprintf(
+				szMsg,
+				sizeof(szMsg),
+				"Ignore List active (persist=%d).",
+				pIgnore ? pIgnore->GetPersistence() : 0);
+			AppendClientChatLog(szMsg);
+			return;
+		}
+		if (std::strncmp(szInput, "/ignorepersist", 14) == 0)
+		{
+			if (pIgnore)
+			{
+				pIgnore->SetPersistence(!pIgnore->GetPersistence());
+			}
+			AppendClientChatLog(pIgnore && pIgnore->GetPersistence() ? "Ignore persistence enabled (ignorelist)." : "Ignore persistence disabled.");
+			return;
+		}
+		if (std::strncmp(szInput, "/ignore ", 8) == 0)
+		{
+			const char* szTarget = szInput + 8;
+			if (pIgnore && szTarget[0])
+			{
+				pIgnore->AddCharacterIgnore(szTarget, pIgnore->GetPersistence());
+			}
+			char szMsg[96] = {};
+			std::snprintf(szMsg, sizeof(szMsg), "Ignored player: %s", szTarget);
+			AppendClientChatLog(szMsg);
+			return;
+		}
+		if (std::strncmp(szInput, "/unignore ", 10) == 0)
+		{
+			const char* szTarget = szInput + 10;
+			if (pIgnore && szTarget[0])
+			{
+				pIgnore->RemoveCharacterIgnore(szTarget, pIgnore->GetPersistence());
+			}
+			char szMsg[96] = {};
+			std::snprintf(szMsg, sizeof(szMsg), "Unignored player: %s", szTarget);
+			AppendClientChatLog(szMsg);
+			return;
+		}
+		if (std::strncmp(szInput, "/filtermsg ", 11) == 0)
+		{
+			const char* szSub = szInput + 11;
+			if (pIgnore && szSub[0])
+			{
+				pIgnore->AddTextFilter(szSub, pIgnore->GetPersistence());
+			}
+			char szMsg[96] = {};
+			std::snprintf(szMsg, sizeof(szMsg), "Added message filter: %s", szSub);
+			AppendClientChatLog(szMsg);
+			return;
+		}
+		if (std::strncmp(szInput, "/unfiltermsg ", 13) == 0)
+		{
+			const char* szSub = szInput + 13;
+			if (pIgnore && szSub[0])
+			{
+				pIgnore->RemoveTextFilter(szSub, pIgnore->GetPersistence());
+			}
+			char szMsg[96] = {};
+			std::snprintf(szMsg, sizeof(szMsg), "Removed message filter: %s", szSub);
+			AppendClientChatLog(szMsg);
+			return;
+		}
+	}
+
+	uint8_t aChatPkt[128] = {};
+	aChatPkt[0] = 0x15u;
+	aChatPkt[1] = 0x01u;
+	const size_t nMsgLen = std::min<size_t>(90u, std::strlen(szInput));
+	std::memcpy(&aChatPkt[3], szInput, nMsgLen);
+	MSG_SendPacket(aChatPkt, nMsgLen + 6u);
+
+	char szLine[128] = {};
+	std::snprintf(szLine, sizeof(szLine), "%s: %s", gszCharName, szInput);
+	AppendClientChatLog(szLine);
+}
+
+static bool IsWaypointObjectClass(uint16_t wObjClassId)
+{
+	static const uint16_t kWaypointObjIds[] = {
+		119, 145, 156, 157, 237, 238, 288, 323, 324, 398, 402, 429, 494, 496, 511, 539
+	};
+	for (uint16_t id : kWaypointObjIds)
+	{
+		if (wObjClassId == id)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 static void SendLeaveGamePacket()
 {
 	MSG_SendLeaveGame_69();
@@ -722,6 +1172,22 @@ static void SetMoveTargetFromScreenPoint(int32_t nScreenX, int32_t nScreenY, boo
 			gnPendingNpcGuid = 0;
 			SendWalkOrRunToUnit(u.nUnitType, u.dwUnitGuid, gbRunEnabled);
 			SendUnitInteract(u.nUnitType, u.dwUnitGuid);
+			if (u.nUnitType == UNIT_OBJECT)
+			{
+				if (u.wClassId == 267) // OBJECT_STASH (Bank)
+				{
+					gnLeftPanel = LEFTPANEL_STASH;
+					gnRightPanel = RIGHTPANEL_INV;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				}
+				else if (IsWaypointObjectClass(u.wClassId))
+				{
+					gdwActiveWaypointGuid = u.dwUnitGuid;
+					gnWaypointActTab = std::min<int32_t>(4, gnCurrentAct);
+					gnLeftPanel = LEFTPANEL_WAYPOINT;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\waygate.wav");
+				}
+			}
 		}
 		return;
 	}
@@ -774,6 +1240,13 @@ static void HandleRightClickCast(int32_t nScreenX, int32_t nScreenY)
 					SendTownFolkSell(gnActiveNpcGuid, it.dwItemGuid, 0u, std::max<uint32_t>(1u, it.dwCost / 2u));
 					D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
 				}
+				else if (it.wItemClassId == 549) // Horadric Cube (box)
+				{
+					SendUseInventoryItem(it.dwItemGuid);
+					gnLeftPanel = LEFTPANEL_CUBE;
+					gnRightPanel = RIGHTPANEL_INV;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				}
 				else
 				{
 					SendUseInventoryItem(it.dwItemGuid);
@@ -790,6 +1263,7 @@ static void HandleRightClickCast(int32_t nScreenX, int32_t nScreenY)
 	{
 		const ClientWorldUnit& u = gClientUnits[gnHoveredUnitIdx];
 		SendRightSkillOnUnit(u.nUnitType, u.dwUnitGuid);
+		SpawnClientMissile(gwRightSkillId ? gwRightSkillId : 36u, gfPlayerWorldX, gfPlayerWorldY, u.fWorldX, u.fWorldY, 0x62u);
 	}
 	else
 	{
@@ -799,6 +1273,13 @@ static void HandleRightClickCast(int32_t nScreenX, int32_t nScreenY)
 		if (nSubX > 0 && nSubY > 0)
 		{
 			SendRightSkillOnLocation(nSubX, nSubY);
+			SpawnClientMissile(
+				gwRightSkillId ? gwRightSkillId : 36u,
+				gfPlayerWorldX,
+				gfPlayerWorldY,
+				gfPlayerWorldX + static_cast<float>(nScreenX - 400),
+				gfPlayerWorldY + static_cast<float>(nScreenY - 280),
+				0x62u);
 		}
 	}
 	D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
@@ -829,12 +1310,23 @@ static void ActivateNpcMenuOption(int32_t nOption)
 		}
 		AppendClientChatLog(szLine);
 	}
-	else if (nOption == 1) // Trade / Gamble / Hire / Travel East
+	else if (nOption == 1) // Trade / Gamble / Hire / Travel
 	{
-		if (gwActiveNpcClassId == 155) // Warriv (no shop, offers Travel East once Act I is completed)
+		if (gwActiveNpcClassId == 155) // Warriv -> Travel East to Act II Lut Gholein
 		{
-			AppendClientChatLog("Warriv: My caravan will travel East to Lut Gholein once Andariel is defeated.");
+			SendTownFolkMenuSelect(2u, gnActiveNpcGuid, 0u);
+			SendWaypointTeleport_49(gnActiveNpcGuid, LEVEL_LUTGHOLEIN, 1);
+			AppendClientChatLog("Warriv: Travelling East to Act II - Lut Gholein.");
 			CloseNpcDialogAndVendor();
+			return;
+		}
+		if (gwActiveNpcClassId == 150 || gwActiveNpcClassId == 198 || gwActiveNpcClassId == 252 || gwActiveNpcClassId == 515) // Mercenary Captains
+		{
+			SendHireMerc_36(gnActiveNpcGuid, 0u);
+			SendResurrectMerc_62(gnActiveNpcGuid);
+			CloseNpcDialogAndVendor();
+			gnLeftPanel = LEFTPANEL_MERC;
+			gnRightPanel = RIGHTPANEL_INV;
 			return;
 		}
 		gbNpcMenuOpen = false;
@@ -844,6 +1336,13 @@ static void ActivateNpcMenuOption(int32_t nOption)
 		SendTownFolkMenuSelect(1u, gnActiveNpcGuid, 0u);
 		gnLeftPanel = LEFTPANEL_VENDOR;
 		gnRightPanel = RIGHTPANEL_INV;
+	}
+	else if (nOption == 2 && gwActiveNpcClassId == 148) // Akara Respec (1.13c+ nType=0)
+	{
+		SendTownFolkMenuSelect(0u, gnActiveNpcGuid, 0u);
+		SpawnClientOverlay(UNIT_PLAYER, gdwClientPlayerGuid, 148u, 0x6Au, 30);
+		AppendClientChatLog("Akara: Your stats and skill points have been reset (1.13c Respec).");
+		CloseNpcDialogAndVendor();
 	}
 	else // Cancel
 	{
@@ -1043,8 +1542,8 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 		return true;
 	}
 
-	// 4b. Belt Potion Slots on HUD (x=422..546, y=560..594)
-	if (nX >= 422 && nX < 546 && nY >= 560 && nY <= 594)
+	// 4b. Belt Potion Slots on HUD (x=422..546, y=560..594, or y=452..594 when 4x4 expanded)
+	if (nX >= 422 && nX < 546 && nY >= (gbBeltExpanded ? 452 : 560) && nY <= 594)
 	{
 		const int32_t nBeltCol = (nX - 422) / 31;
 		for (int32_t i = 0; i < kMaxClientItems; ++i)
@@ -1056,6 +1555,8 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 				return true;
 			}
 		}
+		gbBeltExpanded = !gbBeltExpanded;
+		return true;
 	}
 
 	// 5. Open Left Panel interactions (x=80..400, y=60..492)
@@ -1164,10 +1665,18 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 				}
 			}
 		}
-		// Quest Log 6 quest icon sockets (3 columns x 2 rows)
+		// Quest Log Act I..V tabs (y=64..96) & 6 quest icon sockets (3 columns x 2 rows)
 		if (gnLeftPanel == LEFTPANEL_QUEST)
 		{
-			for (int32_t q = 0; q < 6; ++q)
+			if (nY >= 64 && nY <= 96 && nX >= 86 && nX < 390)
+			{
+				gnQuestLogActTab = std::max<int32_t>(0, std::min<int32_t>((nX - 86) / 60, 4));
+				gnSelectedQuest = 0;
+				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				return true;
+			}
+			const int32_t nMaxQuestsForAct = (gnQuestLogActTab == 3) ? 3 : 6;
+			for (int32_t q = 0; q < nMaxQuestsForAct; ++q)
 			{
 				const int32_t qCol = q % 3;
 				const int32_t qRow = q / 3;
@@ -1179,6 +1688,129 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 					return true;
 				}
+			}
+		}
+		// Stash Panel (Deposit/Withdraw Gold buttons + 6x8 Stash grid)
+		if (gnLeftPanel == LEFTPANEL_STASH)
+		{
+			if (nX >= 96 && nX <= 226 && nY >= 104 && nY <= 132)
+			{
+				SendStashDepositGold(100u);
+				return true;
+			}
+			if (nX >= 238 && nX <= 368 && nY >= 104 && nY <= 132)
+			{
+				SendStashWithdrawGold(100u);
+				return true;
+			}
+			if (nX >= 153 && nX < 153 + 6 * 29 && nY >= 142 && nY < 142 + 8 * 29)
+			{
+				const int32_t gX = (nX - 153) / 29;
+				const int32_t gY = (nY - 142) / 29;
+				if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+				{
+					ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
+					cur.nLocation = CLI_ITEMLOC_STASH;
+					cur.nStorePage = 4;
+					cur.nGridX = gX;
+					cur.nGridY = gY;
+					SendInsertItemToBuffer_18(cur.dwItemGuid, static_cast<uint32_t>(gX), static_cast<uint32_t>(gY), 4u);
+					gnCursorItemIdx = -1;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+					return true;
+				}
+				for (int32_t i = 0; i < kMaxClientItems; ++i)
+				{
+					ClientItemEntry& it = gClientItems[i];
+					if (it.bActive && it.nLocation == CLI_ITEMLOC_STASH &&
+						gX >= it.nGridX && gX < it.nGridX + it.nInvW &&
+						gY >= it.nGridY && gY < it.nGridY + it.nInvH)
+					{
+						it.nLocation = CLI_ITEMLOC_CURSOR;
+						gnCursorItemIdx = i;
+						SendRemoveItemFromBuffer_19(it.dwItemGuid);
+						D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+						return true;
+					}
+				}
+			}
+		}
+		// Horadric Cube Panel (Transmute button + 3x4 Cube grid)
+		if (gnLeftPanel == LEFTPANEL_CUBE)
+		{
+			if (nX >= 180 && nX <= 300 && nY >= 352 && nY <= 394)
+			{
+				SendHoradricCubeTransmute();
+				return true;
+			}
+			if (nX >= 196 && nX < 196 + 3 * 29 && nY >= 198 && nY < 198 + 4 * 29)
+			{
+				const int32_t gX = (nX - 196) / 29;
+				const int32_t gY = (nY - 198) / 29;
+				if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+				{
+					ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
+					cur.nLocation = CLI_ITEMLOC_CUBE;
+					cur.nStorePage = 3;
+					cur.nGridX = gX;
+					cur.nGridY = gY;
+					SendInsertItemToBuffer_18(cur.dwItemGuid, static_cast<uint32_t>(gX), static_cast<uint32_t>(gY), 3u);
+					gnCursorItemIdx = -1;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+					return true;
+				}
+				for (int32_t i = 0; i < kMaxClientItems; ++i)
+				{
+					ClientItemEntry& it = gClientItems[i];
+					if (it.bActive && it.nLocation == CLI_ITEMLOC_CUBE &&
+						gX >= it.nGridX && gX < it.nGridX + it.nInvW &&
+						gY >= it.nGridY && gY < it.nGridY + it.nInvH)
+					{
+						it.nLocation = CLI_ITEMLOC_CURSOR;
+						gnCursorItemIdx = i;
+						SendRemoveItemFromBuffer_19(it.dwItemGuid);
+						D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+						return true;
+					}
+				}
+			}
+		}
+		// Waypoint Menu (Act I..V tabs + 9 destination rows)
+		if (gnLeftPanel == LEFTPANEL_WAYPOINT)
+		{
+			if (nY >= 64 && nY <= 96 && nX >= 86 && nX < 390)
+			{
+				gnWaypointActTab = std::max<int32_t>(0, std::min<int32_t>((nX - 86) / 60, 4));
+				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				return true;
+			}
+			static const uint8_t kWaypointDestLevels[5][9] = {
+				{ LEVEL_ROGUEENCAMPMENT, LEVEL_COLDPLAINS, LEVEL_STONYFIELD, LEVEL_DARKWOOD, LEVEL_BLACKMARSH, LEVEL_OUTERCLOISTER, LEVEL_JAILLEV1, LEVEL_INNERCLOISTER, LEVEL_CATACOMBSLEV2 },
+				{ LEVEL_LUTGHOLEIN, LEVEL_SEWERSLEV2, LEVEL_DRYHILLS, LEVEL_HALLSOFTHEDEADLEV2, LEVEL_FAROASIS, LEVEL_LOSTCITY, LEVEL_PALACECELLARLEV1, LEVEL_ARCANESANCTUARY, LEVEL_CANYONOFTHEMAGI },
+				{ LEVEL_KURASTDOCKTOWN, LEVEL_SPIDERFOREST, LEVEL_GREATMARSH, LEVEL_FLAYERJUNGLE, LEVEL_LOWERKURAST, LEVEL_KURASTBAZAAR, LEVEL_UPPERKURAST, LEVEL_TRAVINCAL, LEVEL_DURANCEOFHATELEV2 },
+				{ LEVEL_THEPANDEMONIUMFORTRESS, LEVEL_CITYOFTHEDAMNED, LEVEL_RIVEROFFLAME, 0, 0, 0, 0, 0, 0 },
+				{ LEVEL_HARROGATH, LEVEL_ID_ACT5_BARRICADE_1, LEVEL_ARREATPLATEAU, LEVEL_CRYSTALIZEDCAVERNLEV1, LEVEL_CRYSTALIZEDCAVERNLEV2, LEVEL_HALLSOFDEATHSCALLING, LEVEL_TUNDRAWASTELANDS, LEVEL_GLACIALCAVESLEV1, LEVEL_THEWORLDSTONEKEEPLEV2 },
+			};
+			const int32_t nMaxRows = (gnWaypointActTab == 3) ? 3 : 9;
+			if (nX >= 96 && nX <= 384 && nY >= 112 && nY < 112 + nMaxRows * 34)
+			{
+				const int32_t nRow = (nY - 112) / 34;
+				const uint8_t nDestLvl = kWaypointDestLevels[gnWaypointActTab][nRow];
+				if (nDestLvl > 0)
+				{
+					SendWaypointTeleport_49(gdwActiveWaypointGuid, nDestLvl, static_cast<uint8_t>(gnWaypointActTab));
+				}
+				return true;
+			}
+		}
+		// Mercenary Inventory Panel (Head, Torso, Right Arm, Left Arm slots)
+		if (gnLeftPanel == LEFTPANEL_MERC)
+		{
+			if (nX >= 140 && nX <= 340 && nY >= 120 && nY <= 340)
+			{
+				SendMercEquip_61(1u);
+				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				return true;
 			}
 		}
 		return true;
@@ -1195,6 +1827,38 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 			gnRightPanel = RIGHTPANEL_NONE;
 			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 			return true;
+		}
+		// Inventory 10x4 grid left-click item pickup/drop onto cursor (C2S 0x18 / 0x19)
+		if (gnRightPanel == RIGHTPANEL_INV && nX >= 418 && nX < 418 + 10 * 29 && nY >= 315 && nY < 315 + 4 * 29)
+		{
+			const int32_t gX = (nX - 418) / 29;
+			const int32_t gY = (nY - 315) / 29;
+			if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+			{
+				ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
+				cur.nLocation = CLI_ITEMLOC_CONTAINER;
+				cur.nStorePage = 0;
+				cur.nGridX = gX;
+				cur.nGridY = gY;
+				SendInsertItemToBuffer_18(cur.dwItemGuid, static_cast<uint32_t>(gX), static_cast<uint32_t>(gY), 0u);
+				gnCursorItemIdx = -1;
+				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+				return true;
+			}
+			for (int32_t i = 0; i < kMaxClientItems; ++i)
+			{
+				ClientItemEntry& it = gClientItems[i];
+				if (it.bActive && it.nLocation == CLI_ITEMLOC_CONTAINER &&
+					gX >= it.nGridX && gX < it.nGridX + it.nInvW &&
+					gY >= it.nGridY && gY < it.nGridY + it.nInvH)
+				{
+					it.nLocation = CLI_ITEMLOC_CURSOR;
+					gnCursorItemIdx = i;
+					SendRemoveItemFromBuffer_19(it.dwItemGuid);
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+					return true;
+				}
+			}
 		}
 		// Skill Tree 3 right-hand tabs (x=628..720)
 		if (gnRightPanel == RIGHTPANEL_SKILL && nX >= 628 && nX < 720)
@@ -1354,7 +2018,51 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 			return 0;
 		}
 		break;
+	case WM_CHAR:
+		if (gbChatInputOpen)
+		{
+			if (wParam == VK_BACK)
+			{
+				if (gnChatInputLen > 0)
+				{
+					gszChatInputBuf[--gnChatInputLen] = '\0';
+				}
+			}
+			else if (wParam >= 32 && wParam < 127 && gnChatInputLen < static_cast<int32_t>(sizeof(gszChatInputBuf) - 2))
+			{
+				gszChatInputBuf[gnChatInputLen++] = static_cast<char>(wParam);
+				gszChatInputBuf[gnChatInputLen] = '\0';
+			}
+			return 0;
+		}
+		break;
 	case WM_KEYDOWN:
+		if (gbChatInputOpen)
+		{
+			if (wParam == VK_RETURN)
+			{
+				ExecuteChatOrSlashCommand(gszChatInputBuf);
+				gbChatInputOpen = false;
+				gszChatInputBuf[0] = '\0';
+				gnChatInputLen = 0;
+				return 0;
+			}
+			if (wParam == VK_ESCAPE)
+			{
+				gbChatInputOpen = false;
+				gszChatInputBuf[0] = '\0';
+				gnChatInputLen = 0;
+				return 0;
+			}
+			return 0;
+		}
+		if (wParam == VK_RETURN && !gbEscMenuOpen && !gbNpcMenuOpen)
+		{
+			gbChatInputOpen = true;
+			gszChatInputBuf[0] = '\0';
+			gnChatInputLen = 0;
+			return 0;
+		}
 		if (wParam == VK_MENU)
 		{
 			gbShowGroundItems = true;
@@ -1486,6 +2194,34 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 		else if (wParam == 'R')
 		{
 			gbRunEnabled = !gbRunEnabled;
+		}
+		else if (wParam == 'O')
+		{
+			gnLeftPanel = (gnLeftPanel == LEFTPANEL_MERC) ? LEFTPANEL_NONE : LEFTPANEL_MERC;
+			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+		}
+		else if (wParam == 'S')
+		{
+			gnLeftPanel = (gnLeftPanel == LEFTPANEL_STASH) ? LEFTPANEL_NONE : LEFTPANEL_STASH;
+			if (gnLeftPanel == LEFTPANEL_STASH)
+			{
+				gnRightPanel = RIGHTPANEL_INV;
+			}
+			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+		}
+		else if (wParam == 'H')
+		{
+			gnLeftPanel = (gnLeftPanel == LEFTPANEL_CUBE) ? LEFTPANEL_NONE : LEFTPANEL_CUBE;
+			if (gnLeftPanel == LEFTPANEL_CUBE)
+			{
+				gnRightPanel = RIGHTPANEL_INV;
+			}
+			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+		}
+		else if (wParam == VK_OEM_3) // '~' / '`' key: toggle 4x4 expanded belt
+		{
+			gbBeltExpanded = !gbBeltExpanded;
+			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 		}
 		else if (wParam == VK_LEFT)
 		{
@@ -1770,6 +2506,11 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 		it.nLocation = CLI_ITEMLOC_VENDOR;
 		++gdwVendorItemsReceived;
 	}
+	else if (nAction == 0x04 || tSave.nAnimMode == IMODE_ONCURSOR)
+	{
+		it.nLocation = CLI_ITEMLOC_CURSOR;
+		gnCursorItemIdx = nIdx;
+	}
 	else if (nAction == 0x00 || nAction == 0x02 || nAction == 0x03 || tSave.nAnimMode == IMODE_ONGROUND || tSave.nAnimMode == IMODE_DROPPING)
 	{
 		it.nLocation = CLI_ITEMLOC_GROUND;
@@ -1781,6 +2522,14 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 	else if (nAction == 0x0E || nAction == 0x10 || tSave.nAnimMode == IMODE_INBELT)
 	{
 		it.nLocation = CLI_ITEMLOC_BELT;
+	}
+	else if (tSave.nStorePage == 4) // STORE_STASH
+	{
+		it.nLocation = CLI_ITEMLOC_STASH;
+	}
+	else if (tSave.nStorePage == 3) // STORE_CUBE
+	{
+		it.nLocation = CLI_ITEMLOC_CUBE;
 	}
 	else
 	{
@@ -1922,6 +2671,10 @@ static void DrainNetworkPackets()
 			{
 				const uint8_t nUnitType = aBuffer[1];
 				const uint32_t dwGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[2]);
+				if (nUnitType < UNIT_TYPES_COUNT && dwGuid != gdwClientPlayerGuid)
+				{
+					RemoveReconstructedServerUnit(nUnitType, dwGuid);
+				}
 				if (nUnitType == UNIT_ITEM)
 				{
 					for (int32_t i = 0; i < kMaxClientItems; ++i)
@@ -2278,6 +3031,7 @@ static void DrainNetworkPackets()
 				const uint16_t wSubX = *reinterpret_cast<const uint16_t*>(&aBuffer[8]);
 				const uint16_t wSubY = *reinterpret_cast<const uint16_t*>(&aBuffer[10]);
 				const uint8_t nMode = aBuffer[12];
+				RegisterReconstructedServerUnit(UNIT_OBJECT, dwGuid, wObjId, nMode);
 				if (ClientWorldUnit* pObj = FindOrAllocClientUnit(nUnitType, dwGuid))
 				{
 					pObj->wClassId = wObjId;
@@ -2309,6 +3063,13 @@ static void DrainNetworkPackets()
 				const uint8_t nClass = aBuffer[5];
 				const uint16_t wSubX = *reinterpret_cast<const uint16_t*>(&aBuffer[22]);
 				const uint16_t wSubY = *reinterpret_cast<const uint16_t*>(&aBuffer[24]);
+				if (D2UnitStrc* pPlrUnit = RegisterReconstructedServerUnit(UNIT_PLAYER, dwGuid, nClass < 7 ? nClass : 0, 5u))
+				{
+					if (gdwClientPlayerGuid == 0 || dwGuid == gdwClientPlayerGuid)
+					{
+						D2Client_SetLocalPlayerUnit(pPlrUnit);
+					}
+				}
 				if (gdwClientPlayerGuid == 0 || dwGuid == gdwClientPlayerGuid)
 				{
 					gdwClientPlayerGuid = dwGuid;
@@ -2433,6 +3194,70 @@ static void DrainNetworkPackets()
 			}
 			break;
 
+		case 0x4E: // MercForHireList
+			gbMercHired = true;
+			break;
+
+		case 0x63: // OpenWaypoint (dwWaypointGUID, ...)
+			if (nPacketLen >= 5)
+			{
+				gdwActiveWaypointGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[1]);
+				gnWaypointActTab = std::min<int32_t>(4, gnCurrentAct);
+				gnLeftPanel = LEFTPANEL_WAYPOINT;
+			}
+			break;
+
+		case 0x73: // Server Missile Packet
+			if (nPacketLen >= 16)
+			{
+				const uint16_t wMissileId = *reinterpret_cast<const uint16_t*>(&aBuffer[6]);
+				const int16_t wCurSubX = *reinterpret_cast<const int16_t*>(&aBuffer[8]);
+				const int16_t wCurSubY = *reinterpret_cast<const int16_t*>(&aBuffer[10]);
+				const int16_t wDstSubX = *reinterpret_cast<const int16_t*>(&aBuffer[12]);
+				const int16_t wDstSubY = *reinterpret_cast<const int16_t*>(&aBuffer[14]);
+				int nStartIsoX = wCurSubX, nStartIsoY = wCurSubY;
+				int nEndIsoX = wDstSubX, nEndIsoY = wDstSubY;
+				DUNGEON_GameSubtileToClientCoords(&nStartIsoX, &nStartIsoY);
+				DUNGEON_GameSubtileToClientCoords(&nEndIsoX, &nEndIsoY);
+				SpawnClientMissile(wMissileId, static_cast<float>(nStartIsoX), static_cast<float>(nStartIsoY), static_cast<float>(nEndIsoX), static_cast<float>(nEndIsoY), 0x62u);
+			}
+			break;
+
+		case 0x77: // UpdateUI (0x09 = OpenStash, 0x15 = OpenCube)
+			if (nPacketLen >= 2)
+			{
+				if (aBuffer[1] == 0x09u)
+				{
+					gnLeftPanel = LEFTPANEL_STASH;
+					gnRightPanel = RIGHTPANEL_INV;
+				}
+				else if (aBuffer[1] == 0x15u)
+				{
+					gnLeftPanel = LEFTPANEL_CUBE;
+					gnRightPanel = RIGHTPANEL_INV;
+				}
+			}
+			break;
+
+		case 0x79: // Overlay (nUnitType, dwGUID, wOverlayId)
+			if (nPacketLen >= 8)
+			{
+				const uint8_t nUnitType = aBuffer[1];
+				const uint32_t dwGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[2]);
+				const uint16_t wOverlayId = *reinterpret_cast<const uint16_t*>(&aBuffer[6]);
+				SpawnClientOverlay(nUnitType, dwGuid, wOverlayId, 0x6Au, 30);
+			}
+			break;
+
+		case 0x81: // AssignMerc (nUnk, wClassId, dwOwnerGUID, dwMercGUID, ...)
+			if (nPacketLen >= 12)
+			{
+				gwMercClassId = *reinterpret_cast<const uint16_t*>(&aBuffer[2]);
+				gdwMercUnitGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[8]);
+				gbMercHired = true;
+			}
+			break;
+
 		case 0xAC: // AssignNPC (dwGUID, wClassId, wX, wY, nLifePct, nPacketSize, bitstream...)
 			if (nPacketLen >= 13)
 			{
@@ -2441,6 +3266,7 @@ static void DrainNetworkPackets()
 				const uint16_t wSubX = *reinterpret_cast<const uint16_t*>(&aBuffer[7]);
 				const uint16_t wSubY = *reinterpret_cast<const uint16_t*>(&aBuffer[9]);
 				const uint8_t nLifePct = aBuffer[11];
+				RegisterReconstructedServerUnit(UNIT_MONSTER, dwGuid, wClassId, (nLifePct == 0) ? MONMODE_DEAD : MONMODE_NEUTRAL);
 				if (ClientWorldUnit* pMon = FindOrAllocClientUnit(UNIT_MONSTER, dwGuid))
 				{
 					pMon->wClassId = wClassId;
@@ -2527,10 +3353,11 @@ static void InitInGameAssets()
 	D2Win_10177(0);
 	LoadCharacterSaveAppearance();
 
-	// Initialize reconstructed Msg & QuestLog subsystems
+	// Initialize reconstructed Msg, QuestLog & UNIT_CUnit subsystems
 	MSG_ResetCounters();
 	MSG_ResetLastSentPacket();
 	QUESTLOG_InitSession();
+	D2Client_ClearAllUnitHashTables();
 
 	// Reset authoritative client tables
 	gdwClientPlayerGuid = 0;
@@ -2617,10 +3444,27 @@ static void InitInGameAssets()
 	gpInvBoots = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\inv_boots", 0);
 	gpInvBelt = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\inv_belt", 0);
 	gpInvRingAmulet = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\inv_ring_amulet", 0);
+	gpStashPanel = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\TradeStash", 0);
+	gpCubePanel = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\HoradricCube", 0);
+	gpTransmuteBtn = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\Transmute", 0);
+	gpWaypointBg = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\MENU\\waygatebackground", 0);
+	gpWaypointTabs = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\MENU\\expwaygatetabs", 0);
+	gpMercInvPanel = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\PANEL\\inv_merc", 0);
 	gpClassSkillIcon = ARCHIVE_LoadCellFile(kClassSkillIconPaths[nSafeClass], 0);
 	gpSkillTreeBg = ARCHIVE_LoadCellFile(kClassSkillTreeBgPaths[nSafeClass], 0);
 	gpPlayerClassNu1 = ARCHIVE_LoadCellFile(kClassNu1Paths[nSafeClass], 0);
 	gpPlayerClassFw = ARCHIVE_LoadCellFile(kClassFwPaths[nSafeClass], 0);
+
+	gnQuestLogActTab = 0;
+	gnWaypointActTab = 0;
+	gbBeltExpanded = false;
+	gnCursorItemIdx = -1;
+	gbChatInputOpen = false;
+	gszChatInputBuf[0] = '\0';
+	gnChatInputLen = 0;
+	std::memset(gClientMissiles, 0, sizeof(gClientMissiles));
+	std::memset(gClientOverlays, 0, sizeof(gClientOverlays));
+	gbWeatherInitialized = false;
 
 	gnLeftPanel = LEFTPANEL_NONE;
 	gnRightPanel = RIGHTPANEL_NONE;
@@ -2723,11 +3567,18 @@ static void FreeCellPtr(D2CellFileStrc** ppCell)
 
 static void ShutdownInGameAssets()
 {
+	FreeAllReconstructedServerUnits();
 	if (gpClientAct)
 	{
 		DUNGEON_FreeAct(gpClientAct);
 		gpClientAct = nullptr;
 	}
+	FreeCellPtr(&gpMercInvPanel);
+	FreeCellPtr(&gpWaypointTabs);
+	FreeCellPtr(&gpWaypointBg);
+	FreeCellPtr(&gpTransmuteBtn);
+	FreeCellPtr(&gpCubePanel);
+	FreeCellPtr(&gpStashPanel);
 	for (int32_t i = 0; i < kMaxClientItems; ++i)
 	{
 		FreeCellPtr(&gClientItems[i].pInvCell);
@@ -3299,6 +4150,125 @@ static void DrawServerUnitsAndGroundItems(int32_t nCamX, int32_t nCamY)
 			DrawMonsterByClassAndMode(u.wClassId, u.nAnimMode, nScreenX, nScreenY, dwTick);
 		}
 	}
+
+	// 3. Update & Draw Active Client Missiles (Milestone 3.4)
+	for (int32_t i = 0; i < kMaxClientMissiles; ++i)
+	{
+		ClientMissileEntry& m = gClientMissiles[i];
+		if (!m.bActive)
+		{
+			continue;
+		}
+		m.fWorldX += m.fVelX;
+		m.fWorldY += m.fVelY;
+		if (--m.nFramesRemaining <= 0)
+		{
+			m.bActive = false;
+			continue;
+		}
+		const int32_t mScreenX = static_cast<int32_t>(m.fWorldX) - nCamX + 400;
+		const int32_t mScreenY = static_cast<int32_t>(m.fWorldY) - nCamY + 280 - 18;
+		if (mScreenX >= -32 && mScreenX <= 832 && mScreenY >= -32 && mScreenY <= 632)
+		{
+			D2GFX_DrawBox(mScreenX - 6, mScreenY - 6, mScreenX + 6, mScreenY + 6, m.nColor, DRAWMODE_TRANS50);
+			D2GFX_DrawBox(mScreenX - 3, mScreenY - 3, mScreenX + 3, mScreenY + 3, 0xFFu, DRAWMODE_NORMAL);
+			const int32_t tailX = mScreenX - static_cast<int32_t>(m.fVelX * 0.6f);
+			const int32_t tailY = mScreenY - static_cast<int32_t>(m.fVelY * 0.6f);
+			D2GFX_DrawLine(mScreenX, mScreenY, tailX, tailY, m.nColor, 0xFFu);
+		}
+	}
+
+	// 4. Update & Draw Active Unit Overlays (Level-up, Shrines, Auras, Curses — Milestone 3.4)
+	for (int32_t i = 0; i < kMaxClientOverlays; ++i)
+	{
+		ClientOverlayEntry& ov = gClientOverlays[i];
+		if (!ov.bActive)
+		{
+			continue;
+		}
+		if (--ov.nFramesRemaining <= 0)
+		{
+			ov.bActive = false;
+			continue;
+		}
+		int32_t ovScreenX = 400;
+		int32_t ovScreenY = 264;
+		if (ov.nTargetType != UNIT_PLAYER && ov.dwTargetGuid != 0)
+		{
+			for (int32_t uIdx = 0; uIdx < kMaxClientUnits; ++uIdx)
+			{
+				if (gClientUnits[uIdx].bActive && gClientUnits[uIdx].dwUnitGuid == ov.dwTargetGuid)
+				{
+					ovScreenX = static_cast<int32_t>(gClientUnits[uIdx].fWorldX) - nCamX + 400;
+					ovScreenY = static_cast<int32_t>(gClientUnits[uIdx].fWorldY) - nCamY + 264;
+					break;
+				}
+			}
+		}
+		const int32_t nRingRadius = 14 + ((ov.nMaxFrames - ov.nFramesRemaining) * 24) / std::max<int32_t>(1, ov.nMaxFrames);
+		RECT rcRing = { ovScreenX - nRingRadius, ovScreenY - nRingRadius / 2, ovScreenX + nRingRadius, ovScreenY + nRingRadius / 2 };
+		D2GFX_UtilRect(&rcRing, ov.nColor);
+		D2GFX_DrawBox(ovScreenX - 3, ovScreenY - 42, ovScreenX + 3, ovScreenY, ov.nColor, DRAWMODE_TRANS50);
+	}
+
+	// 5. Update & Draw Per-Act Procedural Weather Particles (Act 1/3 Rain, Act 2 Sand, Act 4 Embers, Act 5 Snow — Milestone 3.4)
+	if (!gbWeatherInitialized)
+	{
+		gbWeatherInitialized = true;
+		for (int32_t i = 0; i < kMaxWeatherParticles; ++i)
+		{
+			gWeatherParticles[i].fScreenX = static_cast<float>((i * 73) % 800);
+			gWeatherParticles[i].fScreenY = static_cast<float>((i * 47) % 540);
+			gWeatherParticles[i].fVelX = -2.0f;
+			gWeatherParticles[i].fVelY = 9.0f;
+			gWeatherParticles[i].nLength = static_cast<uint8_t>(6 + (i % 6));
+		}
+	}
+	for (int32_t i = 0; i < kMaxWeatherParticles; ++i)
+	{
+		WeatherParticle& wp = gWeatherParticles[i];
+		uint8_t nWeatherColor = 0x97u; // Act 1/3 Rain (slate blue/white)
+		if (gnCurrentAct == 1) // Act 2 Sandstorm motes
+		{
+			wp.fVelX = 7.5f;
+			wp.fVelY = 1.5f;
+			nWeatherColor = 0x6Au;
+		}
+		else if (gnCurrentAct == 3) // Act 4 Rising Hell Embers
+		{
+			wp.fVelX = (i & 1) ? 1.0f : -1.0f;
+			wp.fVelY = -3.5f;
+			nWeatherColor = 0x62u;
+		}
+		else if (gnCurrentAct == 4) // Act 5 Harrogath Snowflakes
+		{
+			wp.fVelX = (i & 1) ? 1.2f : -1.2f;
+			wp.fVelY = 3.2f;
+			nWeatherColor = 0xFFu;
+		}
+		else // Act 1 & Act 3 Rain
+		{
+			wp.fVelX = -2.5f;
+			wp.fVelY = 11.0f;
+			nWeatherColor = 0x97u;
+		}
+		wp.fScreenX += wp.fVelX;
+		wp.fScreenY += wp.fVelY;
+		if (wp.fScreenX < 0.0f) wp.fScreenX += 800.0f;
+		if (wp.fScreenX >= 800.0f) wp.fScreenX -= 800.0f;
+		if (wp.fScreenY < 0.0f) wp.fScreenY += 540.0f;
+		if (wp.fScreenY >= 540.0f) wp.fScreenY -= 540.0f;
+		const int32_t px = static_cast<int32_t>(wp.fScreenX);
+		const int32_t py = static_cast<int32_t>(wp.fScreenY);
+		if (gnCurrentAct == 0 || gnCurrentAct == 2)
+		{
+			D2GFX_DrawLine(px, py, px - 2, py + wp.nLength, nWeatherColor, 0xA0u);
+		}
+		else
+		{
+			D2GFX_DrawBox(px, py, px + 2, py + 2, nWeatherColor, DRAWMODE_TRANS75);
+		}
+	}
 }
 
 int32_t __stdcall TILE_ShadowTileDraw(D2TileLibraryEntryStrc* pTile, int32_t nXPos, int32_t nYPos, DrawMode eDrawMode, int32_t nScreenPanels);
@@ -3814,29 +4784,69 @@ static void DrawLeftPanel()
 		{
 			D2GFX_DrawBox(80, 60, 400, 492, 0x00u, DRAWMODE_TRANS75);
 		}
-		if (gpQuestTabs)
+		const int32_t nActTab = std::max<int32_t>(0, std::min<int32_t>(gnQuestLogActTab, 4));
+		static const char* const kActRoman[5] = { "Act I", "Act II", "Act III", "Act IV", "Act V" };
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		for (int32_t t = 0; t < 5; ++t)
 		{
-			DrawSingleCelTopLeft(gpQuestTabs, 86, 66, 0);
+			const int32_t tabX = 86 + t * 60;
+			const bool bSelTab = (t == nActTab);
+			D2GFX_DrawBox(tabX, 66, tabX + 58, 92, bSelTab ? 0x16u : 0x00u, DRAWMODE_TRANS75);
+			RECT rcTab = { tabX, 66, tabX + 58, 92 };
+			D2GFX_UtilRect(&rcTab, bSelTab ? 0x6Au : 0x16u);
+			DrawAsciiText(kActRoman[t], tabX + 29, 83, bSelTab ? 4 : 0, TRUE);
 		}
 
-		static const char* const kAct1QuestTitles[6] = {
-			"I. Den of Evil",
-			"II. Sisters' Burial Grounds",
-			"III. The Search for Cain",
-			"IV. The Forgotten Tower",
-			"V. Tools of the Trade",
-			"VI. Sisters to the Slaughter",
+		static const char* const kAllActQuestTitles[5][6] = {
+			{ "I. Den of Evil", "II. Sisters' Burial Grounds", "III. The Search for Cain", "IV. The Forgotten Tower", "V. Tools of the Trade", "VI. Sisters to the Slaughter" },
+			{ "I. Radament's Lair", "II. The Horadric Staff", "III. Tainted Sun", "IV. Arcane Sanctuary", "V. The Summoner", "VI. The Seven Tombs" },
+			{ "I. The Golden Bird", "II. Blade of the Old Religion", "III. Khalim's Will", "IV. Lam Esen's Tome", "V. The Blackened Temple", "VI. The Guardian" },
+			{ "I. The Fallen Angel", "II. Hell's Forge", "III. Terror's End", "", "", "" },
+			{ "I. Siege on Harrogath", "II. Rescue on Mount Arreat", "III. Prison of Ice", "IV. Betrayal of Harrogath", "V. Rite of Passage", "VI. Eve of Destruction" },
 		};
-		static const char* const kAct1QuestDescs[6][2] = {
-			{ "Speak to Akara in the Rogue Encampment", "to begin the Den of Evil quest." },
-			{ "Defeat Blood Raven in the Burial", "Grounds beyond the Cold Plains." },
-			{ "Search for Deckard Cain in the", "forsaken ruins of Tristram." },
-			{ "Explore the Forgotten Tower", "deep within the Black Marsh." },
-			{ "Recover the Horadric Malus from", "the Monastery Barracks for Charsi." },
-			{ "Defeat the Demon Queen Andariel", "in the fourth level of the Catacombs." },
+		static const char* const kAllActQuestDescs[5][6][2] = {
+			{
+				{ "Speak to Akara in the Rogue Encampment", "to cleanse the Den of Evil." },
+				{ "Defeat Blood Raven in the Burial", "Grounds beyond the Cold Plains." },
+				{ "Rescue Deckard Cain from the", "forsaken ruins of Tristram." },
+				{ "Explore the Forgotten Tower", "deep within the Black Marsh." },
+				{ "Recover the Horadric Malus from", "the Monastery Barracks for Charsi." },
+				{ "Defeat the Demon Queen Andariel", "in Catacombs Level 4." },
+			},
+			{
+				{ "Slay Radament in the Sewers", "beneath Lut Gholein for Atma." },
+				{ "Assemble the Horadric Staff using", "the Horadric Cube in the Halls/Maggot Lair." },
+				{ "Destroy the Tainted Sun Altar in", "the Claw Viper Temple Level 2." },
+				{ "Locate the hidden portal to the", "Arcane Sanctuary in the Palace Cellar." },
+				{ "Defeat the Summoner in the Arcane", "Sanctuary and read Horazon's Journal." },
+				{ "Defeat Duriel, Lord of Pain, in", "Tal Rasha's True Tomb." },
+			},
+			{
+				{ "Bring the Jade Figurine to Meshif", "and receive the Golden Bird." },
+				{ "Recover the Gidbinn from the", "Flayer Jungle for Ormus and Asheara." },
+				{ "Transmute Khalim's Eye, Brain, Heart", "and Flail in the Horadric Cube." },
+				{ "Recover Lam Esen's Tome from the", "Ruined Temple in the Kurast Bazaar." },
+				{ "Defeat the High Council of Zakarum", "in Travincal." },
+				{ "Defeat Mephisto, Lord of Hatred,", "in the Durance of Hate Level 3." },
+			},
+			{
+				{ "Defeat Izual on the Plains of", "Despair and speak to Tyrael." },
+				{ "Smash Mephisto's Soulstone upon", "the Hellforge in the River of Flame." },
+				{ "Defeat Diablo, Lord of Terror,", "within the Chaos Sanctuary." },
+				{ "", "" }, { "", "" }, { "", "" },
+			},
+			{
+				{ "Slay Shenk the Overseer in the", "Bloody Foothills for Larzuk." },
+				{ "Free the 15 Barbarian soldiers in", "the Frigid Highlands for Qual-Kehk." },
+				{ "Rescue Anya from the Frozen River", "with Malah's thawing potion." },
+				{ "Defeat Nihlathak in the Halls of", "Vaught to stop his betrayal." },
+				{ "Defeat the Ancients at the Arreat", "Summit to enter the Worldstone Keep." },
+				{ "Defeat Baal, Lord of Destruction,", "in the Worldstone Chamber." },
+			},
 		};
 
-		for (int32_t q = 0; q < 6; ++q)
+		const int32_t nQuestsInAct = (nActTab == 3) ? 3 : 6;
+		for (int32_t q = 0; q < nQuestsInAct; ++q)
 		{
 			const int32_t qCol = q % 3;
 			const int32_t qRow = q / 3;
@@ -3850,12 +4860,12 @@ static void DrawLeftPanel()
 			D2GFX_UtilRect(&rcSocket, (q == gnSelectedQuest) ? 0x6Au : 0x16u);
 		}
 
-		const int32_t nSafeQ = std::max<int32_t>(0, std::min<int32_t>(gnSelectedQuest, 5));
+		const int32_t nSafeQ = std::max<int32_t>(0, std::min<int32_t>(gnSelectedQuest, nQuestsInAct - 1));
 		D2Win_10127_SetFont(D2FONT_FONT16);
-		DrawAsciiText(kAct1QuestTitles[nSafeQ], 240, 340, 4, TRUE);
+		DrawAsciiText(kAllActQuestTitles[nActTab][nSafeQ], 240, 340, 4, TRUE);
 		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
-		DrawAsciiText(kAct1QuestDescs[nSafeQ][0], 240, 368, 0, TRUE);
-		DrawAsciiText(kAct1QuestDescs[nSafeQ][1], 240, 388, 0, TRUE);
+		DrawAsciiText(kAllActQuestDescs[nActTab][nSafeQ][0], 240, 368, 0, TRUE);
+		DrawAsciiText(kAllActQuestDescs[nActTab][nSafeQ][1], 240, 388, 0, TRUE);
 
 		if (gpBuySellBtn)
 		{
@@ -3993,6 +5003,211 @@ static void DrawLeftPanel()
 		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
 		DrawAsciiText("Right-click item to buy/sell", 215, 464, 0, TRUE);
 
+		if (gpBuySellBtn)
+		{
+			DrawSingleCelTopLeft(gpBuySellBtn, 356, 448, 10);
+		}
+	}
+	else if (gnLeftPanel == LEFTPANEL_STASH)
+	{
+		if (gpStashPanel)
+		{
+			DrawTiledPanelCellFile(gpStashPanel, 80, 60, 0, 2, 2);
+		}
+		else
+		{
+			D2GFX_DrawBox(80, 60, 400, 492, 0x00u, DRAWMODE_TRANS75);
+		}
+		RECT rcStash = { 80, 60, 400, 492 };
+		D2GFX_UtilRect(&rcStash, 0x6Au);
+		D2Win_10127_SetFont(D2FONT_FONT16);
+		DrawAsciiText("PRIVATE STASH", 240, 82, 4, TRUE);
+
+		char szStashGold[64] = {};
+		std::snprintf(szStashGold, sizeof(szStashGold), "Stash Gold: %d  (Max 2,500,000)", gnStashGold);
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		DrawAsciiText(szStashGold, 240, 99, 0, TRUE);
+
+		// Deposit / Withdraw Gold Buttons (C2S 0x4F 0x14 / 0x13)
+		D2GFX_DrawBox(96, 104, 226, 132, 0x16u, DRAWMODE_TRANS75);
+		RECT rcDep = { 96, 104, 226, 132 };
+		D2GFX_UtilRect(&rcDep, 0x6Au);
+		DrawAsciiText("DEPOSIT GOLD", 161, 122, 4, TRUE);
+
+		D2GFX_DrawBox(238, 104, 368, 132, 0x16u, DRAWMODE_TRANS75);
+		RECT rcWit = { 238, 104, 368, 132 };
+		D2GFX_UtilRect(&rcWit, 0x6Au);
+		DrawAsciiText("WITHDRAW GOLD", 303, 122, 4, TRUE);
+
+		// 6x8 Stash Grid (x=153..327, y=142..374)
+		for (int32_t r = 0; r < 8; ++r)
+		{
+			for (int32_t c = 0; c < 6; ++c)
+			{
+				RECT rcCell = { 153 + c * 29, 142 + r * 29, 153 + (c + 1) * 29, 142 + (r + 1) * 29 };
+				D2GFX_UtilRect(&rcCell, 0x16u);
+			}
+		}
+		for (int32_t i = 0; i < kMaxClientItems; ++i)
+		{
+			const ClientItemEntry& it = gClientItems[i];
+			if (!it.bActive || it.nLocation != CLI_ITEMLOC_STASH)
+			{
+				continue;
+			}
+			const int32_t cx = 153 + std::max<int32_t>(0, std::min<int32_t>(it.nGridX, 5)) * 29;
+			const int32_t cy = 142 + std::max<int32_t>(0, std::min<int32_t>(it.nGridY, 7)) * 29;
+			D2GFX_DrawBox(cx, cy, cx + it.nInvW * 29 - 1, cy + it.nInvH * 29 - 1, 0x97u, DRAWMODE_TRANS25);
+			if (it.pInvCell)
+			{
+				DrawSingleCelTopLeft(it.pInvCell, cx, cy, 0);
+			}
+		}
+		if (gpBuySellBtn)
+		{
+			DrawSingleCelTopLeft(gpBuySellBtn, 356, 448, 10);
+		}
+	}
+	else if (gnLeftPanel == LEFTPANEL_CUBE)
+	{
+		if (gpCubePanel)
+		{
+			DrawTiledPanelCellFile(gpCubePanel, 80, 60, 0, 2, 2);
+		}
+		else
+		{
+			D2GFX_DrawBox(80, 60, 400, 492, 0x00u, DRAWMODE_TRANS75);
+		}
+		RECT rcCube = { 80, 60, 400, 492 };
+		D2GFX_UtilRect(&rcCube, 0x6Au);
+		D2Win_10127_SetFont(D2FONT_FONT16);
+		DrawAsciiText("HORADRIC CUBE", 240, 105, 4, TRUE);
+
+		// 3x4 Horadric Cube Grid (x=196..283, y=198..314)
+		for (int32_t r = 0; r < 4; ++r)
+		{
+			for (int32_t c = 0; c < 3; ++c)
+			{
+				RECT rcCell = { 196 + c * 29, 198 + r * 29, 196 + (c + 1) * 29, 198 + (r + 1) * 29 };
+				D2GFX_UtilRect(&rcCell, 0x6Au);
+			}
+		}
+		for (int32_t i = 0; i < kMaxClientItems; ++i)
+		{
+			const ClientItemEntry& it = gClientItems[i];
+			if (!it.bActive || it.nLocation != CLI_ITEMLOC_CUBE)
+			{
+				continue;
+			}
+			const int32_t cx = 196 + std::max<int32_t>(0, std::min<int32_t>(it.nGridX, 2)) * 29;
+			const int32_t cy = 198 + std::max<int32_t>(0, std::min<int32_t>(it.nGridY, 3)) * 29;
+			D2GFX_DrawBox(cx, cy, cx + it.nInvW * 29 - 1, cy + it.nInvH * 29 - 1, 0x97u, DRAWMODE_TRANS25);
+			if (it.pInvCell)
+			{
+				DrawSingleCelTopLeft(it.pInvCell, cx, cy, 0);
+			}
+		}
+		// Transmute Button (x=180..300, y=352..394)
+		if (gpTransmuteBtn)
+		{
+			DrawSingleCelTopLeft(gpTransmuteBtn, 216, 354, 0);
+		}
+		D2GFX_DrawBox(180, 352, 300, 390, 0x16u, DRAWMODE_TRANS50);
+		RECT rcTrans = { 180, 352, 300, 390 };
+		D2GFX_UtilRect(&rcTrans, 0x6Au);
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+		DrawAsciiText("TRANSMUTE", 240, 376, 4, TRUE);
+		if (gpBuySellBtn)
+		{
+			DrawSingleCelTopLeft(gpBuySellBtn, 356, 448, 10);
+		}
+	}
+	else if (gnLeftPanel == LEFTPANEL_WAYPOINT)
+	{
+		if (gpWaypointBg)
+		{
+			DrawTiledPanelCellFile(gpWaypointBg, 80, 60, 0, 2, 2);
+		}
+		else
+		{
+			D2GFX_DrawBox(80, 60, 400, 492, 0x00u, DRAWMODE_TRANS75);
+		}
+		RECT rcWp = { 80, 60, 400, 492 };
+		D2GFX_UtilRect(&rcWp, 0x6Au);
+
+		const int32_t nWpAct = std::max<int32_t>(0, std::min<int32_t>(gnWaypointActTab, 4));
+		static const char* const kWpActTabs[5] = { "Act I", "Act II", "Act III", "Act IV", "Act V" };
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		for (int32_t t = 0; t < 5; ++t)
+		{
+			const int32_t tabX = 86 + t * 60;
+			const bool bSel = (t == nWpAct);
+			D2GFX_DrawBox(tabX, 66, tabX + 58, 92, bSel ? 0x16u : 0x00u, DRAWMODE_TRANS75);
+			RECT rcTab = { tabX, 66, tabX + 58, 92 };
+			D2GFX_UtilRect(&rcTab, bSel ? 0x6Au : 0x16u);
+			DrawAsciiText(kWpActTabs[t], tabX + 29, 83, bSel ? 4 : 0, TRUE);
+		}
+
+		static const char* const kWpNames[5][9] = {
+			{ "Rogue Encampment", "Cold Plains", "Stony Field", "Dark Wood", "Black Marsh", "Outer Cloister", "Jail Level 1", "Inner Cloister", "Catacombs Level 2" },
+			{ "Lut Gholein", "Sewers Level 2", "Dry Hills", "Halls of the Dead 2", "Far Oasis", "Lost City", "Palace Cellar 1", "Arcane Sanctuary", "Canyon of the Magi" },
+			{ "Kurast Docks", "Spider Forest", "Great Marsh", "Flayer Jungle", "Lower Kurast", "Kurast Bazaar", "Upper Kurast", "Travincal", "Durance of Hate 2" },
+			{ "Pandemonium Fortress", "City of the Damned", "River of Flame", "", "", "", "", "", "" },
+			{ "Harrogath", "Frigid Highlands", "Arreat Plateau", "Crystalline Passage", "Glacial Trail", "Halls of Pain", "Frozen Tundra", "The Ancients' Way", "Worldstone Keep 2" },
+		};
+		const int32_t nRows = (nWpAct == 3) ? 3 : 9;
+		for (int32_t r = 0; r < nRows; ++r)
+		{
+			const int32_t rowY = 112 + r * 34;
+			const bool bUnlocked = ((gdwWaypointUnlockMask[nWpAct] >> r) & 1u) != 0;
+			D2GFX_DrawBox(96, rowY, 384, rowY + 30, bUnlocked ? 0x16u : 0x00u, DRAWMODE_TRANS50);
+			RECT rcRow = { 96, rowY, 384, rowY + 30 };
+			D2GFX_UtilRect(&rcRow, bUnlocked ? 0x6Au : 0x16u);
+			DrawAsciiText(kWpNames[nWpAct][r], 240, rowY + 20, bUnlocked ? 4 : 0, TRUE);
+		}
+		if (gpBuySellBtn)
+		{
+			DrawSingleCelTopLeft(gpBuySellBtn, 356, 448, 10);
+		}
+	}
+	else if (gnLeftPanel == LEFTPANEL_MERC)
+	{
+		if (gpMercInvPanel)
+		{
+			DrawTiledPanelCellFile(gpMercInvPanel, 80, 60, 0, 2, 2);
+		}
+		else
+		{
+			D2GFX_DrawBox(80, 60, 400, 492, 0x00u, DRAWMODE_TRANS75);
+		}
+		RECT rcMerc = { 80, 60, 400, 492 };
+		D2GFX_UtilRect(&rcMerc, 0x6Au);
+		D2Win_10127_SetFont(D2FONT_FONT16);
+		DrawAsciiText("MERCENARY COMPANION (O)", 240, 88, 4, TRUE);
+
+		char szMercInfo[96] = {};
+		std::snprintf(szMercInfo, sizeof(szMercInfo), "%s  -  Level %d Rogue Scout", gszMercName, gnMercLevel);
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+		DrawAsciiText(szMercInfo, 240, 118, 0, TRUE);
+
+		// Mercenary Paperdoll Equipment Slots (Helm, Armor, Weapon, Shield)
+		static const int32_t kMercSlots[4][4] = {
+			{ 212, 136, 56, 56 }, // Helm
+			{ 212, 204, 56, 84 }, // Armor
+			{ 118, 178, 56, 112 },// Weapon
+			{ 306, 178, 56, 112 },// Shield/Bow
+		};
+		static const char* const kMercSlotLabels[4] = { "Helm", "Armor", "Weapon", "Off-Hand" };
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		for (int32_t s = 0; s < 4; ++s)
+		{
+			D2GFX_DrawBox(kMercSlots[s][0], kMercSlots[s][1], kMercSlots[s][0] + kMercSlots[s][2], kMercSlots[s][1] + kMercSlots[s][3], 0x00u, DRAWMODE_TRANS75);
+			RECT rcSlot = { kMercSlots[s][0], kMercSlots[s][1], kMercSlots[s][0] + kMercSlots[s][2], kMercSlots[s][1] + kMercSlots[s][3] };
+			D2GFX_UtilRect(&rcSlot, 0x6Au);
+			DrawAsciiText(kMercSlotLabels[s], kMercSlots[s][0] + kMercSlots[s][2] / 2, kMercSlots[s][1] + kMercSlots[s][3] / 2 + 4, 0, TRUE);
+		}
+		DrawAsciiText("Life: 180 / 180   Resist All: +35%", 240, 340, 4, TRUE);
+		DrawAsciiText("Damage: 24 - 52   Defense: 145", 240, 366, 0, TRUE);
 		if (gpBuySellBtn)
 		{
 			DrawSingleCelTopLeft(gpBuySellBtn, 356, 448, 10);
@@ -4458,14 +5673,35 @@ static void DrawHudControlPanel()
 		DrawSingleCelTopLeft(gpHudRunBtn, 255, 573, gbRunEnabled ? 2 : 0);
 	}
 
-	// 4b. Belt Potion Slots (x=423 + slot*31, y=561)
+	// 4b. Belt Potion Slots (x=423 + col*31, y=561) + 4x4 Expanded Belt Grid ('~' or hover)
+	const bool bBeltHovered = (gMousePos.x >= 422 && gMousePos.x < 546 && gMousePos.y >= 556 && gMousePos.y <= 594);
+	if (gbBeltExpanded || bBeltHovered)
+	{
+		D2GFX_DrawBox(420, 452, 548, 556, 0x00u, DRAWMODE_TRANS75);
+		for (int32_t r = 1; r < 4; ++r)
+		{
+			for (int32_t c = 0; c < 4; ++c)
+			{
+				RECT rcBeltCell = { 422 + c * 31, 560 - r * 34, 422 + (c + 1) * 31 - 2, 560 - (r - 1) * 34 - 2 };
+				D2GFX_UtilRect(&rcBeltCell, 0x6Au);
+			}
+		}
+	}
 	for (int32_t i = 0; i < kMaxClientItems; ++i)
 	{
 		const ClientItemEntry& it = gClientItems[i];
 		if (it.bActive && it.nLocation == CLI_ITEMLOC_BELT && it.pInvCell)
 		{
-			const int32_t nBeltSlot = std::max<int32_t>(0, it.nGridX) % 4;
-			DrawSingleCelTopLeft(it.pInvCell, 423 + nBeltSlot * 31, 561, 0);
+			const int32_t nCol = std::max<int32_t>(0, it.nGridX) % 4;
+			const int32_t nRow = std::max<int32_t>(0, it.nGridX) / 4;
+			if (nRow == 0)
+			{
+				DrawSingleCelTopLeft(it.pInvCell, 423 + nCol * 31, 561, 0);
+			}
+			else if ((gbBeltExpanded || bBeltHovered) && nRow < 4)
+			{
+				DrawSingleCelTopLeft(it.pInvCell, 423 + nCol * 31, 561 - nRow * 34, 0);
+			}
 		}
 	}
 
@@ -4564,8 +5800,10 @@ static void DrawNpcDialogMenu()
 
 	const char* const aOptions[3] = {
 		"talk",
-		(gwActiveNpcClassId == 147 || gwActiveNpcClassId == 148 || gwActiveNpcClassId == 154) ? "trade / repair" : "trade",
-		"cancel",
+		(gwActiveNpcClassId == 155) ? "travel east (act ii)"
+			: ((gwActiveNpcClassId == 150 || gwActiveNpcClassId == 198 || gwActiveNpcClassId == 252 || gwActiveNpcClassId == 515) ? "hire / resurrect"
+			: ((gwActiveNpcClassId == 147 || gwActiveNpcClassId == 148 || gwActiveNpcClassId == 154) ? "trade / repair" : "trade")),
+		(gwActiveNpcClassId == 148) ? "reset stats / skills" : "cancel",
 	};
 
 	const int32_t nPentFrames = gpPentSpin ? D2CMP_CelFileGetCelsPerDirection(gpPentSpin) : 0;
@@ -4630,17 +5868,26 @@ static void RenderInGameFrame()
 		(gwCharSaveFlags & 0x04) ? " (Hardcore)" : "");
 
 	const char* szAreaName = "Act I - Rogue Encampment";
-	if (gnCurrentLevelId == LEVEL_BLOODMOOR)
+	switch (gnCurrentLevelId)
 	{
-		szAreaName = "Act I - Blood Moor";
-	}
-	else if (gnCurrentLevelId == LEVEL_COLDPLAINS)
-	{
-		szAreaName = "Act I - Cold Plains";
-	}
-	else if (gnCurrentLevelId == LEVEL_DENOFEVIL)
-	{
-		szAreaName = "Act I - Den of Evil";
+	case LEVEL_BLOODMOOR: szAreaName = "Act I - Blood Moor"; break;
+	case LEVEL_COLDPLAINS: szAreaName = "Act I - Cold Plains"; break;
+	case LEVEL_STONYFIELD: szAreaName = "Act I - Stony Field"; break;
+	case LEVEL_DARKWOOD: szAreaName = "Act I - Dark Wood"; break;
+	case LEVEL_BLACKMARSH: szAreaName = "Act I - Black Marsh"; break;
+	case LEVEL_DENOFEVIL: szAreaName = "Act I - Den of Evil"; break;
+	case LEVEL_LUTGHOLEIN: szAreaName = "Act II - Lut Gholein"; break;
+	case LEVEL_DRYHILLS: szAreaName = "Act II - Dry Hills"; break;
+	case LEVEL_FAROASIS: szAreaName = "Act II - Far Oasis"; break;
+	case LEVEL_ARCANESANCTUARY: szAreaName = "Act II - Arcane Sanctuary"; break;
+	case LEVEL_KURASTDOCKTOWN: szAreaName = "Act III - Kurast Docks"; break;
+	case LEVEL_TRAVINCAL: szAreaName = "Act III - Travincal"; break;
+	case LEVEL_THEPANDEMONIUMFORTRESS: szAreaName = "Act IV - Pandemonium Fortress"; break;
+	case LEVEL_RIVEROFFLAME: szAreaName = "Act IV - River of Flame"; break;
+	case LEVEL_HARROGATH: szAreaName = "Act V - Harrogath"; break;
+	case LEVEL_ID_ACT5_BARRICADE_1: szAreaName = "Act V - Frigid Highlands"; break;
+	case LEVEL_THEWORLDSTONEKEEPLEV2: szAreaName = "Act V - Worldstone Keep"; break;
+	default: break;
 	}
 	Unicode::win2Unicode(wszArea, szAreaName, 127);
 	Unicode::win2Unicode(wszChar, szCharLine, 127);
@@ -4672,10 +5919,72 @@ static void RenderInGameFrame()
 	// 7. Diablo II 800x600 Bottom HUD Control Panel, Mini-Panel & Orbs
 	DrawHudControlPanel();
 
+	// 7b. Mercenary Top-Left Portrait & Life Bar (if hired)
+	if (gbMercHired)
+	{
+		D2GFX_DrawBox(16, 36, 92, 68, 0x00u, DRAWMODE_TRANS75);
+		RECT rcMercHud = { 16, 36, 92, 68 };
+		D2GFX_UtilRect(&rcMercHud, 0x6Au);
+		const int32_t nMercBarW = std::max<int32_t>(0, std::min<int32_t>(72, (gnMercLifePct * 72) / 128));
+		if (nMercBarW > 0)
+		{
+			D2GFX_DrawBox(18, 38, 18 + nMercBarW, 46, 0x84u, DRAWMODE_TRANS75);
+		}
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		DrawAsciiText(gszMercName, 54, 62, 0, TRUE);
+	}
+
+	// 7c. /fps Overlay & Chat Input Bar (1.13d slash command & Enter chat input)
+	if (gbShowFpsOverlay)
+	{
+		char szFpsLine[128] = {};
+		std::snprintf(
+			szFpsLine,
+			sizeof(szFpsLine),
+			"FPS: 25  Ping: 0ms  Act: %u  Lvl: %u  S2C: %u",
+			static_cast<unsigned int>(gnCurrentAct + 1),
+			static_cast<unsigned int>(gnCurrentLevelId),
+			gdwGamePacketsReceived);
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+		DrawAsciiText(szFpsLine, 400, 48, 4, TRUE);
+	}
+	if (gbChatInputOpen)
+	{
+		D2GFX_DrawBox(24, 498, 520, 524, 0x00u, DRAWMODE_TRANS75);
+		RECT rcChat = { 24, 498, 520, 524 };
+		D2GFX_UtilRect(&rcChat, 0x6Au);
+		char szPrompt[128] = {};
+		std::snprintf(szPrompt, sizeof(szPrompt), "Say: %s_", gszChatInputBuf);
+		D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+		DrawAsciiText(szPrompt, 32, 516, 4, FALSE);
+	}
+
+	// 7d. Act Transition Cutscene Banner (Milestone 3.5)
+	if (gdwActTransitionEndTick > GetTickCount())
+	{
+		static const char* const kActCutsceneTitles[5] = {
+			"ACT I  -  THE SIGHTLESS EYE",
+			"ACT II  -  THE SECRET OF THE VIZJEREI",
+			"ACT III  -  THE INFERNAL GATE",
+			"ACT IV  -  THE HARROWING",
+			"ACT V  -  LORD OF DESTRUCTION",
+		};
+		D2GFX_DrawBox(120, 210, 680, 286, 0x00u, DRAWMODE_TRANS75);
+		RECT rcCut = { 120, 210, 680, 286 };
+		D2GFX_UtilRect(&rcCut, 0x6Au);
+		D2Win_10127_SetFont(D2FONT_FONT24);
+		DrawAsciiText(kActCutsceneTitles[std::min<uint8_t>(4u, gnTransitionTargetAct)], 400, 256, 4, TRUE);
+	}
+
 	// 8. ESC Game Menu (Options / Save and Exit Game / Return to Game)
 	DrawEscGameMenu();
 
-	// 9. Hand Cursor
+	// 9. Held Cursor Item Sprite & Hand Cursor
+	if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems &&
+		gClientItems[gnCursorItemIdx].bActive && gClientItems[gnCursorItemIdx].pInvCell)
+	{
+		DrawSingleCelTopLeft(gClientItems[gnCursorItemIdx].pInvCell, gMousePos.x - 14, gMousePos.y - 14, 0);
+	}
 	if (gpHudCursor)
 	{
 		D2GfxDataStrc tCur = {};
@@ -4880,9 +6189,34 @@ static void RunNativeClientAutotestStep()
 		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step5_quest_automap.bmp", s_szOutDir);
 		CaptureWindowBmpToFile(hWnd, szBmpPath);
 	}
+	else if (dwTick == 58)
+	{
+		// Exercise Stash, Horadric Cube Transmute, Mercenary Inventory, 4x4 Belt & 1.13d Slash Commands
+		gnLeftPanel = LEFTPANEL_STASH;
+		gnRightPanel = RIGHTPANEL_INV;
+		gbBeltExpanded = true;
+		SendStashDepositGold(50u);
+		ExecuteChatOrSlashCommand("/fps");
+		ExecuteChatOrSlashCommand("/ignore TestSpammer");
+		ExecuteChatOrSlashCommand("/ignorelist");
+		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step6_stash_belt.bmp", s_szOutDir);
+		CaptureWindowBmpToFile(hWnd, szBmpPath);
+	}
 	else if (dwTick == 62)
 	{
-		// Close panels, step toward Blood Moor / attack hostile monster if any, use belt slot 0
+		// Exercise Horadric Cube & Waypoint Menu + Ranged Missile & Overlay
+		gnLeftPanel = LEFTPANEL_CUBE;
+		SendHoradricCubeTransmute();
+		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step7_horadric_cube.bmp", s_szOutDir);
+		CaptureWindowBmpToFile(hWnd, szBmpPath);
+		gnLeftPanel = LEFTPANEL_WAYPOINT;
+		gnWaypointActTab = 1; // Act II Waypoints preview
+		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step8_waypoint_menu.bmp", s_szOutDir);
+		CaptureWindowBmpToFile(hWnd, szBmpPath);
+		gnLeftPanel = LEFTPANEL_MERC;
+		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step9_mercenary.bmp", s_szOutDir);
+		CaptureWindowBmpToFile(hWnd, szBmpPath);
+
 		gnLeftPanel = LEFTPANEL_NONE;
 		gnRightPanel = RIGHTPANEL_NONE;
 		SendUseBeltItem(0);
@@ -4891,6 +6225,7 @@ static void RunNativeClientAutotestStep()
 		DUNGEON_ClientToGameSubtileCoords(&nCurSubX, &nCurSubY);
 		SendWalkOrRunToLocation(static_cast<uint16_t>(nCurSubX + 8), static_cast<uint16_t>(nCurSubY + 8), true);
 		SendRightSkillOnLocation(static_cast<uint16_t>(nCurSubX + 10), static_cast<uint16_t>(nCurSubY + 10));
+		SpawnClientMissile(36u, gfPlayerWorldX, gfPlayerWorldY, gfPlayerWorldX + 120.0f, gfPlayerWorldY + 80.0f, 0x62u);
 	}
 	else if (dwTick == 72)
 	{
@@ -4976,6 +6311,18 @@ static void RunNativeClientAutotestStep()
 			CloseHandle(hSnap);
 		}
 
+		int32_t nReconstructedHashUnits = 0;
+		for (int32_t t = 0; t < UNIT_TYPES_COUNT; ++t)
+		{
+			for (int32_t h = 0; h < 128; ++h)
+			{
+				for (D2UnitStrc* pU = gapServerSideUnitHashTables[t][h]; pU != nullptr; pU = pU->pListNext)
+				{
+					++nReconstructedHashUnits;
+				}
+			}
+		}
+
 		char szJsonPath[MAX_PATH * 2] = {};
 		std::snprintf(szJsonPath, sizeof(szJsonPath), "%s\\native_autotest_report.json", s_szOutDir);
 		if (FILE* pJson = std::fopen(szJsonPath, "wb"))
@@ -4991,6 +6338,8 @@ static void RunNativeClientAutotestStep()
 				"  \"c2sPacketsSentViaMsgCpp\": %u,\n"
 				"  \"c2sBytesSentViaMsgCpp\": %u,\n"
 				"  \"playerGuid\": %u,\n"
+				"  \"reconstructedLocalPlayerUnitLinked\": %s,\n"
+				"  \"reconstructedUnitHashTableCount\": %d,\n"
 				"  \"serverSubX\": %d,\n"
 				"  \"serverSubY\": %d,\n"
 				"  \"currentLevelId\": %d,\n"
@@ -5003,6 +6352,11 @@ static void RunNativeClientAutotestStep()
 				"  \"inventoryItems\": %d,\n"
 				"  \"beltItems\": %d,\n"
 				"  \"vendorShopItems\": %d,\n"
+				"  \"stashGold\": %d,\n"
+				"  \"horadricCubeTransmutes\": %u,\n"
+				"  \"slashCommandsExecuted\": %u,\n"
+				"  \"clientMissilesSpawned\": %u,\n"
+				"  \"clientOverlaysSpawned\": %u,\n"
 				"  \"statStrength\": %d,\n"
 				"  \"statDexterity\": %d,\n"
 				"  \"statVitality\": %d,\n"
@@ -5020,6 +6374,8 @@ static void RunNativeClientAutotestStep()
 				dwSentPkts,
 				dwSentBytes,
 				gdwClientPlayerGuid,
+				(gpPlayerUnit != nullptr) ? "true" : "false",
+				nReconstructedHashUnits,
 				gnServerSubX,
 				gnServerSubY,
 				gnCurrentLevelId,
@@ -5032,6 +6388,11 @@ static void RunNativeClientAutotestStep()
 				nInventoryItems,
 				nBeltItems,
 				nVendorItems,
+				gnStashGold,
+				gdwTransmutesSent,
+				gdwSlashCommandsExecuted,
+				gdwClientMissilesSpawned,
+				gdwClientOverlaysSpawned,
 				gaClientStats[STAT_STRENGTH],
 				gaClientStats[STAT_DEXTERITY],
 				gaClientStats[STAT_VITALITY],
@@ -5124,6 +6485,7 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 		}
 
 		DrainNetworkPackets();
+		StepReconstructedUnitTablesPerTick();
 		RenderInGameFrame();
 		RunNativeClientAutotestStep();
 		Sleep(40);

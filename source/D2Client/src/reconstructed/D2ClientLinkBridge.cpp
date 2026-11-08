@@ -1,5 +1,10 @@
 // Auto-generated 1.12a D2Client link & address bridge
 #include <stdint.h>
+#include <string.h>
+#include <windows.h>
+#include <D2DataTbls.h>
+#include <Units/Units.h>
+#include <Client.h>
 
 extern "C" {
 
@@ -331,6 +336,212 @@ int32_t __stdcall bridge_ret_36(int32_t a0, int32_t a1, int32_t a2, int32_t a3, 
 
 } // extern "C"
 
+// Authoritative Reconstructed Bridge Implementations (Milestone 3 Cutover)
+extern D2UnitStrc* gpPlayerUnit;
+int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize);
+extern D2UnitStrc* gapServerSideUnitHashTables[6][128];
+extern D2UnitStrc* gapClientSideUnitHashTables[6][128];
+extern D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
+extern D2UnitStrc* __fastcall D2Client_FindClientSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
+extern void __stdcall D2Client_DestroyAndFreeUnit(D2UnitStrc* pUnit);
+
+D2SkillsTxt* __fastcall DATATBLS_GetSkillsTxtRecord(int32_t nSkillId)
+{
+    if (!sgptDataTables || nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pSkillsTxt[nSkillId];
+}
+
+D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId)
+{
+    return DATATBLS_GetSkillsTxtRecord(nSkillId);
+}
+
+D2StatesTxt* __cdecl DATATBLS_GetStatesTxtRecord(int32_t nStateId)
+{
+    if (!sgptDataTables || nStateId < 0 || nStateId >= sgptDataTables->nStatesTxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pStatesTxt[nStateId];
+}
+
+D2MissilesTxt* __fastcall DATATBLS_GetMissilesTxtRecord(int32_t nMissileId)
+{
+    if (!sgptDataTables || nMissileId < 0 || nMissileId >= sgptDataTables->nMissilesTxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pMissilesTxt[nMissileId];
+}
+
+D2OverlayTxt* __fastcall DATATBLS_GetOverlayTxtRecord(int32_t nOverlayId)
+{
+    if (!sgptDataTables || nOverlayId < 0 || nOverlayId >= sgptDataTables->nOverlayTxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pOverlayTxt[nOverlayId];
+}
+
+D2MonStatsTxt* __fastcall ENGINE_GetMonStatsTxtRecord(int32_t nClassId)
+{
+    if (!sgptDataTables || nClassId < 0 || nClassId >= sgptDataTables->nMonStatsTxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pMonStatsTxt[nClassId];
+}
+
+D2MonStats2Txt* __fastcall ENGINE_GetMonStats2TxtRecord(int32_t nMonStats2Id)
+{
+    if (!sgptDataTables || nMonStats2Id < 0 || nMonStats2Id >= sgptDataTables->nMonStats2TxtRecordCount)
+    {
+        return nullptr;
+    }
+    return &sgptDataTables->pMonStats2Txt[nMonStats2Id];
+}
+
+int32_t __fastcall ENGINE_GetMonStatsRecordCount(void)
+{
+    return sgptDataTables ? sgptDataTables->nMonStatsTxtRecordCount : 0;
+}
+
+D2UnitStrc* __stdcall PLAYER_GetLocalPlayer(void)
+{
+    return gpPlayerUnit;
+}
+
+D2UnitStrc* __fastcall UNIT_GetClientPlayer(void)
+{
+    return gpPlayerUnit;
+}
+
+D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitGUID, int32_t nUnitType)
+{
+    D2UnitStrc* pUnit = D2Client_FindServerSideUnit(static_cast<uint32_t>(nUnitGUID), static_cast<uint32_t>(nUnitType));
+    if (!pUnit)
+    {
+        pUnit = D2Client_FindClientSideUnit(static_cast<uint32_t>(nUnitGUID), static_cast<uint32_t>(nUnitType));
+    }
+    return pUnit;
+}
+
+void __fastcall D2Client_FreeClientUnit(D2UnitStrc* pUnit)
+{
+    if (pUnit)
+    {
+        D2Client_DestroyAndFreeUnit(pUnit);
+    }
+}
+
+int32_t __fastcall UNITS_GetXPosition(D2UnitStrc* pUnit)
+{
+    return pUnit ? UNITS_GetClientCoordX(pUnit) : 0;
+}
+
+int32_t __fastcall UNITS_GetYPosition(D2UnitStrc* pUnit)
+{
+    return pUnit ? UNITS_GetClientCoordY(pUnit) : 0;
+}
+
+int32_t __fastcall UNIT_GetSubtileX(D2UnitStrc* pUnit)
+{
+    return pUnit ? UNITS_GetClientCoordX(pUnit) : 0;
+}
+
+int32_t __fastcall UNIT_GetSubtileY(D2UnitStrc* pUnit)
+{
+    return pUnit ? UNITS_GetClientCoordY(pUnit) : 0;
+}
+
+void __fastcall MSG_SendBytePacket(uint8_t nOpcode)
+{
+    MSG_SendPacket(&nOpcode, 1);
+}
+
+void __fastcall MSG_SendSingleBytePacket(uint8_t nOpcode)
+{
+    MSG_SendPacket(&nOpcode, 1);
+}
+
+void __fastcall MSG_SendByteWordPacket(uint8_t nOpcode, uint16_t wValue)
+{
+    uint8_t aPacket[3];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint16_t*>(&aPacket[1]) = wValue;
+    MSG_SendPacket(aPacket, 3);
+}
+
+void __fastcall MSG_SendClientPacket(uint32_t nSize, const void* pPacket)
+{
+    if (pPacket && nSize > 0)
+    {
+        MSG_SendPacket(const_cast<void*>(pPacket), nSize);
+    }
+}
+
+void __fastcall NET_SendByte(uint8_t nOpcode)
+{
+    MSG_SendPacket(&nOpcode, 1);
+}
+
+void __fastcall NET_SendByteAndWord(uint8_t nOpcode, uint16_t wArg)
+{
+    uint8_t aPacket[3];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint16_t*>(&aPacket[1]) = wArg;
+    MSG_SendPacket(aPacket, 3);
+}
+
+void __fastcall NET_SendByteAndDword(uint8_t nOpcode, uint32_t dwArg)
+{
+    uint8_t aPacket[5];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint32_t*>(&aPacket[1]) = dwArg;
+    MSG_SendPacket(aPacket, 5);
+}
+
+void __fastcall NET_SendByteAndTwoDwords(uint8_t nOpcode, uint32_t dwArg1, uint32_t dwArg2)
+{
+    uint8_t aPacket[9];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint32_t*>(&aPacket[1]) = dwArg1;
+    *reinterpret_cast<uint32_t*>(&aPacket[5]) = dwArg2;
+    MSG_SendPacket(aPacket, 9);
+}
+
+void __fastcall NET_SendByteAndThreeDwords(uint8_t nOpcode, uint32_t dwArg1, uint32_t dwArg2, uint32_t dwArg3)
+{
+    uint8_t aPacket[13];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint32_t*>(&aPacket[1]) = dwArg1;
+    *reinterpret_cast<uint32_t*>(&aPacket[5]) = dwArg2;
+    *reinterpret_cast<uint32_t*>(&aPacket[9]) = dwArg3;
+    MSG_SendPacket(aPacket, 13);
+}
+
+void __fastcall NET_SendByteAndFourDwords(uint8_t nOpcode, uint32_t dwArg1, uint32_t dwArg2, uint32_t dwArg3, uint32_t dwArg4)
+{
+    uint8_t aPacket[17];
+    aPacket[0] = nOpcode;
+    *reinterpret_cast<uint32_t*>(&aPacket[1]) = dwArg1;
+    *reinterpret_cast<uint32_t*>(&aPacket[5]) = dwArg2;
+    *reinterpret_cast<uint32_t*>(&aPacket[9]) = dwArg3;
+    *reinterpret_cast<uint32_t*>(&aPacket[13]) = dwArg4;
+    MSG_SendPacket(aPacket, 17);
+}
+
+void __stdcall NET_SendC2SPacket(const void* pPacket, int32_t nSize)
+{
+    if (pPacket && nSize > 0)
+    {
+        MSG_SendPacket(const_cast<void*>(pPacket), static_cast<size_t>(nSize));
+    }
+}
+
 // Global variable linker aliases
 #pragma comment(linker, "/alternatename:?gAutomapColors@@3PAEA=_g_d2client_addr_6FBCC300")
 #pragma comment(linker, "/alternatename:?gCharBarkSoundIndices_6FBA2068@@3PAHA=_g_d2client_addr_6FBA2068")
@@ -506,7 +717,7 @@ int32_t __stdcall bridge_ret_36(int32_t a0, int32_t a1, int32_t a2, int32_t a3, 
 #pragma comment(linker, "/alternatename:?g_pInvGoldBtnCell@@3PAUD2CellFileStrc@@A=_g_d2client_addr_6FBCBC70")
 #pragma comment(linker, "/alternatename:?g_pMusicTrackResumeOffsets@@3PAHA=_g_d2client_addr_6FBB5574")
 #pragma comment(linker, "/alternatename:?g_pPlayerQuestRecord@@3PAUD2BitBufferStrc@@A=_g_d2client_addr_6FBCB643")
-#pragma comment(linker, "/alternatename:?g_pPlayerUnit@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBCC3D0")
+#pragma comment(linker, "/alternatename:?g_pPlayerUnit@@3PAUD2UnitStrc@@A=?gpPlayerUnit@@3PAUD2UnitStrc@@A")
 #pragma comment(linker, "/alternatename:?g_pRecipeScrollCell@@3PAUD2CellFileStrc@@A=_g_d2client_addr_6FBCBA2C")
 #pragma comment(linker, "/alternatename:?g_pSkillDescTxt_6FDD1C44@@3PAUD2SkillDescTxt@@A=_g_d2client_addr_6FB7D5FC")
 #pragma comment(linker, "/alternatename:?g_pTradePanelCell@@3PAUD2CellFileStrc@@A=_g_d2client_addr_6FBCBA40")
@@ -678,14 +889,14 @@ int32_t __stdcall bridge_ret_36(int32_t a0, int32_t a1, int32_t a2, int32_t a3, 
 #pragma comment(linker, "/alternatename:?gpAutomapSprites@@3PAPAUD2CellFileStrc@@A=_g_d2client_addr_6FBCC2B8")
 #pragma comment(linker, "/alternatename:?gpBuySellBtnCel@@3PAUD2CellFileStrc@@A=_g_d2client_addr_6FBCBD4C")
 #pragma comment(linker, "/alternatename:?gpChatMessageList@@3PAXA=_g_d2client_addr_6FBB54CC")
-#pragma comment(linker, "/alternatename:?gpClientPlayer@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBCC3D0")
+#pragma comment(linker, "/alternatename:?gpClientPlayer@@3PAUD2UnitStrc@@A=?gpPlayerUnit@@3PAUD2UnitStrc@@A")
 #pragma comment(linker, "/alternatename:?gpClientViewport@@3PAXA=_g_d2client_addr_6FBCC1E0")
 #pragma comment(linker, "/alternatename:?gpCurrentAutomapLayer@@3PAUD2AutomapLayerStrc@@A=_g_d2client_addr_6FBCC2B4")
 #pragma comment(linker, "/alternatename:?gpCursorItemCellFile@@3PAUD2CellFileStrc@@A=_g_d2client_addr_6FBB1670")
 #pragma comment(linker, "/alternatename:?gpCursorLockedItem@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBB1644")
-#pragma comment(linker, "/alternatename:?gpLocalPlayerUnit@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBCC3D0")
+#pragma comment(linker, "/alternatename:?gpLocalPlayerUnit@@3PAUD2UnitStrc@@A=?gpPlayerUnit@@3PAUD2UnitStrc@@A")
 #pragma comment(linker, "/alternatename:?gpLocalQuestFlags@@3PAUD2BitBufferStrc@@A=_g_d2client_var_gpLocalQuestFlags")
-#pragma comment(linker, "/alternatename:?gpPlayerUnit_6FBCC3D0@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBCC3D0")
+#pragma comment(linker, "/alternatename:?gpPlayerUnit_6FBCC3D0@@3PAUD2UnitStrc@@A=?gpPlayerUnit@@3PAUD2UnitStrc@@A")
 #pragma comment(linker, "/alternatename:?gpQuestMonster_6FBC57D0@@3PAUD2UnitStrc@@A=_g_d2client_addr_6FBC57D0")
 #pragma comment(linker, "/alternatename:?gpfnClientLoopHook@@3PAXA=_g_d2client_addr_6FBCC54C")
 #pragma comment(linker, "/alternatename:?gpfnMouseLButtonDown@@3P6IXXZA=_g_d2client_addr_6FBB0D24")
@@ -746,7 +957,7 @@ int32_t __stdcall bridge_ret_36(int32_t a0, int32_t a1, int32_t a2, int32_t a3, 
 #pragma comment(linker, "/alternatename:?D2Client_GetMouseX_6FB55BC0@@YAHXZ=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?D2Client_GetMouseY_6FB55BD0@@YAHXZ=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?D2Client_GetPlayerSkillActionMode_6FB0B5B0@@YIHPAUD2UnitStrc@@@Z=_bridge_ret_0")
-#pragma comment(linker, "/alternatename:?D2Client_GetPlayerUnit@@YIPAUD2UnitStrc@@XZ=_g_d2client_addr_6FBA6938")
+#pragma comment(linker, "/alternatename:?D2Client_GetPlayerUnit@@YIPAUD2UnitStrc@@XZ=?D2Client_GetLocalPlayerUnit@@YGPAUD2UnitStrc@@XZ")
 #pragma comment(linker, "/alternatename:?D2Client_GetUniqueClientUnitId@@YIHXZ=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?D2Client_GetUnitX_6FAB1590@@YIHPAUD2UnitStrc@@@Z=?D2Client_GetUnitX@@YIHPAUD2UnitStrc@@@Z")
 #pragma comment(linker, "/alternatename:?D2Client_GetUnitY_6FAB15C0@@YIHPAUD2UnitStrc@@@Z=?D2Client_GetUnitY@@YIHPAUD2UnitStrc@@@Z")
@@ -992,7 +1203,7 @@ int32_t __stdcall bridge_ret_36(int32_t a0, int32_t a1, int32_t a2, int32_t a3, 
 #pragma comment(linker, "/alternatename:?UNITSND_InitMonsterAudio@@YIXPAUD2UnitStrc@@@Z=?D2Client_PlayMonsterSkillModeSound@@YIXPAUD2UnitStrc@@H@Z")
 #pragma comment(linker, "/alternatename:?UNITSND_PlayUiOrVoiceSound@@YGXHHHHH@Z=_bridge_ret_20@20")
 #pragma comment(linker, "/alternatename:?UNITSND_PlayUnitModeSound@@YIXPAUD2UnitStrc@@HH@Z=_bridge_ret_4@4")
-#pragma comment(linker, "/alternatename:?UNITSND_StopUnitLoopingSound@@YIXHPAUD2UnitStrc@@@Z=?D2Client_StopAllUnitLoopingSoundsExcept@@YIXPAUD2UnitStrc@@H@Z")
+#pragma comment(linker, "/alternatename:?UNITSND_StopUnitLoopingSound@@YIXHPAUD2UnitStrc@@@Z=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?UNITS_GetMonStats2TxtRecordFromMonsterId@@YIPAUD2MonStats2Txt@@H@Z=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?UNITS_GetXPosition@@YIHPAUD2UnitStrc@@@Z=_bridge_ret_0")
 #pragma comment(linker, "/alternatename:?UNITS_GetYPosition@@YIHPAUD2UnitStrc@@@Z=_bridge_ret_0")

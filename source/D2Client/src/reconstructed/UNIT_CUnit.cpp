@@ -1827,7 +1827,10 @@ void __fastcall D2Client_SetLocalPlayerUnit(D2UnitStrc* pNewPlayerUnit /*esi*/)
 {
     if (pNewPlayerUnit != nullptr)
     {
-        PATH_SetDirection(pNewPlayerUnit->pDynamicPath, 0);
+        if (pNewPlayerUnit->pDynamicPath != nullptr)
+        {
+            PATH_SetDirection(pNewPlayerUnit->pDynamicPath, 0);
+        }
         gnLocalPlayerCharClass = static_cast<uint8_t>(pNewPlayerUnit->dwClassId);
         gnPlayerStandStillFlag = 0;
     }
