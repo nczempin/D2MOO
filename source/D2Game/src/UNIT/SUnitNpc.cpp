@@ -31,6 +31,7 @@
 #include "PLAYER/PlrMsg.h"
 #include "PLAYER/PlrTrade.h"
 #include "QUESTS/Quests.h"
+#include "QUESTS/ACT1/A1Q1.h"
 #include "QUESTS/ACT1/A1Q3.h"
 #include "QUESTS/ACT5/A5Q1.h"
 #include "QUESTS/ACT5/A5Q4.h"
@@ -1842,6 +1843,16 @@ int32_t __fastcall NPC_HandleDialogMessage(D2GameStrc* pGame, D2UnitStrc* pPlaye
     const int32_t nClassId = pMonster->dwClassId;
     switch (nType)
     {
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+    case 0:
+    {
+        if (nClassId == MONSTER_AKARA)
+        {
+            ACT1Q1_UnusedRewardRespec(pGame, pPlayer);
+        }
+        return 0;
+    }
+#endif
     case 1:
     {
         switch (nClassId)

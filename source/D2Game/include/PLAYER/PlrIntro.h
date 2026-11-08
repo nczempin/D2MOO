@@ -26,3 +26,7 @@ void __fastcall PLRINTRO_CopyBufferToNpcIntroFlags(D2PlrIntroStrc* pPlayerIntro,
 D2PlrIntroStrc* __fastcall PLRINTRO_Create(D2GameStrc* pGame);
 //D2Game.0x6FC7F2A0
 void __fastcall PLRINTRO_Destroy(D2GameStrc* pGame, D2PlrIntroStrc* pPlayerIntro);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Game.0x6FC67790
+void __fastcall PLRINTRO_ResetPlayerStats(D2GameStrc* pGame, D2UnitStrc* pPlayer);
+#endif

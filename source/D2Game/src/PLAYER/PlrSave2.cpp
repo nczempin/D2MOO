@@ -787,6 +787,12 @@ int32_t __fastcall PLRSAVE2_ReadSaveHeader(D2GameStrc* pGame, D2ClientStrc* pCli
     {
         return PLRSAVE2ERROR_CLIENT_ERROR;
     }
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (!pGame->bExpansion && nClass >= 5)
+    {
+        return PLRSAVE2ERROR_EXPANSIONGAME;
+    }
+#endif
 
     CLIENTS_SetClassId(pClient, nClass);
 

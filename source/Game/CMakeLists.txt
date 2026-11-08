@@ -15,6 +15,7 @@ target_link_libraries(Game
   PRIVATE
     Fog
 	Storm
+	D2Common
 	D2Win
 	D2Gfx
 	D2Sound

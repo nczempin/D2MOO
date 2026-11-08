@@ -349,6 +349,30 @@ D2UnitStrc* __fastcall MISSILES_CreateMissileFromParams(D2GameStrc* pGame, D2Mis
         MISSILE_SetFlags(pMissile, MISSILE_GetFlags(pMissile) | 2);
     }
 
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (missileParams->pOwner && (pMissilesTxtRecord->dwMissileFlags & gdwBitMasks[MISSILESFLAGINDEX_APPLYMASTERY]))
+    {
+        static constexpr int32_t aCreatorWeaponStats[] = {
+            STAT_ITEM_OPENWOUNDS,
+            STAT_ITEM_CRUSHINGBLOW,
+            STAT_ITEM_DEADLYSTRIKE,
+            STAT_ITEM_SLOW,
+            STAT_ITEM_FREEZE,
+            STAT_ITEM_PREVENTHEAL,
+            STAT_ITEM_IGNORETARGETAC,
+            STAT_ITEM_STUPIDITY,
+        };
+        for (int32_t nStatId : aCreatorWeaponStats)
+        {
+            const int32_t nVal = STATLIST_UnitGetStatValue(missileParams->pOwner, nStatId, 0);
+            if (nVal > 0)
+            {
+                STATLIST_SetUnitStat(pMissile, nStatId, nVal, 0);
+            }
+        }
+    }
+#endif
+
     sub_6FC6E8B0(pGame, missileParams->pOwner, pMissile);
     STATLIST_SetUnitStat(pMissile, STAT_DAMAGE_FRAMERATE, pMissilesTxtRecord->dwDamageRate, 0);
 

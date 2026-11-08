@@ -32,3 +32,29 @@
 #if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 11
 #define D2_VERSION_HAS_UBERS
 #endif
+
+#if defined(D2_VERSION_110F)
+#define D2_BUILD_NUMBER 39
+#elif defined(D2_VERSION_111)
+#define D2_BUILD_NUMBER 45
+#elif defined(D2_VERSION_111B)
+#define D2_BUILD_NUMBER 46
+#elif defined(D2_VERSION_112A)
+#define D2_BUILD_NUMBER 49
+#elif defined(D2_VERSION_113C)
+#define D2_BUILD_NUMBER 60
+#elif defined(D2_VERSION_113D) || defined(D2_VERSION_114A)
+#define D2_BUILD_NUMBER 64
+#elif defined(D2_VERSION_114B)
+#define D2_BUILD_NUMBER 68
+#elif defined(D2_VERSION_114C)
+#define D2_BUILD_NUMBER 70
+#elif defined(D2_VERSION_114D)
+#define D2_BUILD_NUMBER 71
+#else
+#define D2_BUILD_NUMBER 0
+#endif
+
+#define D2_VERSION_PACKED \
+	((D2_VERSION_MAJOR * 1000000) + (D2_VERSION_MINOR * 10000) + ((D2_VERSION_PATCH - 'A' + 1) * 100) + D2_BUILD_NUMBER)
+

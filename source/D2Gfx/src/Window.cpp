@@ -509,3 +509,70 @@ void __stdcall WINDOW_ShowAll()
         }
     }
 }
+
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+RECT gWindowRect;
+
+//1.13c: D2Gfx.0x6FA87FD0 (#10025) / 1.13d: (#10064)
+void __stdcall WINDOW_GetDimensionsByResolutionMode(int32_t nMode, int32_t* pWidth, int32_t* pHeight)
+{
+    switch (nMode)
+    {
+    case D2GAMERES_640x480:
+        *pWidth = 640;
+        *pHeight = 480;
+        break;
+    case D2GAMERES_800x600:
+    case NUM_GAME_RESOLUTIONS:
+        *pWidth = 800;
+        *pHeight = 600;
+        break;
+    case D2GAMERES_1344x700:
+        *pWidth = 1344;
+        *pHeight = 700;
+        break;
+    default:
+        *pWidth = 0;
+        *pHeight = 0;
+        break;
+    }
+}
+
+//1.13c: D2Gfx.0x6FA880D0 (#10067) / 1.13d: (#10025)
+int32_t __stdcall WINDOW_CenterAndResize(D2GameResolutionMode nResolution)
+{
+    gnResolutionMode = nResolution;
+    if (gbIsWindowed != 1)
+    {
+        return 1;
+    }
+
+    RECT clientRect = {};
+    GetClientRect(ghWnd, &clientRect);
+    if (clientRect.right > 800 || clientRect.bottom > 600)
+    {
+        return 1;
+    }
+
+    RECT rect = {};
+    WINDOW_GetDimensionsByResolutionMode(nResolution, (int32_t*)&rect.right, (int32_t*)&rect.bottom);
+    AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, FALSE, WS_EX_APPWINDOW);
+
+    const int32_t nWidth = rect.right - rect.left;
+    const int32_t nHeight = rect.bottom - rect.top;
+
+    RECT workArea = {};
+    SystemParametersInfoA(SPI_GETWORKAREA, 0, &workArea, 0);
+
+    const int32_t nWorkWidth = workArea.right - workArea.left;
+    const int32_t nWorkHeight = workArea.bottom - workArea.top;
+
+    const int32_t nX = workArea.left + std::max<int32_t>((nWorkWidth - nWidth) / 2, 0);
+    const int32_t nY = workArea.top + std::max<int32_t>((nWorkHeight - nHeight) / 2, 0);
+
+    MoveWindow(ghWnd, nX, nY, nWidth, nHeight, TRUE);
+    GetClientRect(ghWnd, &gWindowRect);
+    return 1;
+}
+#endif
+

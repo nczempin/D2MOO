@@ -41,15 +41,20 @@
  * 1.12a: D2Lang.0x6FC08FC0 (#10002)
  * 1.13c: D2Lang.0x6FC09290 (#10009)
  * 1.14c: Game.0x00522610
+ * 1.14d: Game.0x00525150
  */
 D2LANG_DLL_DECL D2C_Language STRTABLE_GetLanguage();
 
 // 1.10f: D2Lang.0x6FC13E70 (#10012)
 // 1.12a: D2Lang.0x6FC08EB0 (#10001)
+// 1.14c: Game.0x00522670
+// 1.14d: Game.0x005251C0
 D2LANG_DLL_DECL D2C_Language __stdcall STRTABLE_GetSystemLanguage();
 
 // 1.10f: D2Lang.0x6FC13EE0 (#10011)
 // 1.12a: D2Lang.0x6FC09BC0 (#10004)
+// 1.14c: Game.0x005227A0
+// 1.14d: Game.0x00525260
 D2LANG_DLL_DECL void __stdcall STRTABLE_GetLanguageInfo(void* pOut, int nMode);
 
 // 1.10f: D2Lang.0x6FC13290 (#10001)

@@ -327,3 +327,10 @@ D2GFX_DLL_DECL void __stdcall D2GFX_SetAmbientColor(uint8_t nRed, uint8_t nGreen
 D2GFX_DLL_DECL void __cdecl D2GFX_OutputString(int32_t nXPos, int32_t nYPos, const char* szFormat, ...);
 //D2Gfx.0x6FA73F10 (#10070)
 D2GFX_DLL_DECL void __stdcall D2GFX_DebugDraw(uint32_t* pLight, uint32_t* pPlayerLight, int32_t nXPos, int32_t nYPos);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Gfx.0x6FA8B300 (#10065) / 1.13d: (#10076)
+D2GFX_DLL_DECL int32_t __stdcall D2GFX_CheckFixedAspectRatio();
+//1.13c: D2Gfx.0x6FA8B1B0 (#10066) / 1.13d: (#10049)
+D2GFX_DLL_DECL void __stdcall D2GFX_DisableFixedAspectRatio();
+#endif
+

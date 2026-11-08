@@ -13,6 +13,9 @@
 #include <D2WinArchive.h>
 #include <D2MCPClient.h>
 #include <BnClient.h>
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 14)
+#include <D2IgnoreList.h>
+#endif
 
 // Thanks to galaxyhaxz for providing the base to work on ! https://github.com/galaxyhaxz/d2src
 
@@ -451,8 +454,12 @@ int GAMEAPI GameStart(HINSTANCE hInstance, D2ConfigStrc* pCfg, D2_MODULES nModTy
 	SRegLoadValue("Diablo II", "Fixed Aspect Ratio", 0, &bRegistryFixedAspectRatio);
 	if (pCfg->bNoFixedAspect || bRegistryFixedAspectRatio != 1)
 	{
-		// D2gfx_10066(); // TODO
+		D2GFX_DisableFixedAspectRatio();
 	}
+#endif
+
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 14)
+	IGNORELIST_Alloc(TRUE);
 #endif
 
 	if (!pCfg->bIsExpansion)
@@ -519,6 +526,10 @@ int GAMEAPI GameStart(HINSTANCE hInstance, D2ConfigStrc* pCfg, D2_MODULES nModTy
 
 	if(pCfg->pComInterface)
 		pCfg->pComInterface->CloseBNetConnection();
+
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 14)
+	IGNORELIST_Destroy();
+#endif
 
 	FOG_DestroyMemoryPoolSystem(nullptr);
 

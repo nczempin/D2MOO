@@ -2,6 +2,8 @@
 #include <Storm.h>
 #include <System/System.h>
 #include <Windows.h>
+#include <ShlObj.h>
+#include <objbase.h>
 #include <ctime>
 #include <cstring>
 
@@ -225,8 +227,132 @@ static bool FOG_TryGetLocalGameDir(char* pPathBuffer, size_t nBufferSize)
 	return false;
 }
 
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 14
+// 1.14a: Game.0x00408980
+static BOOL FOG_GetKnownSavedGamesPath(char* pszOutPath)
+{
+	if (!pszOutPath)
+	{
+		return FALSE;
+	}
+
+	static const GUID kFolderIdSavedGames = { 0x4C5C32FF, 0xBB9D, 0x43B0, { 0xB5, 0xB4, 0x2D, 0x72, 0xE5, 0x4E, 0xAA, 0xA4 } };
+	using FnSHGetKnownFolderPath = HRESULT(WINAPI*)(const GUID&, DWORD, HANDLE, PWSTR*);
+
+	HMODULE hShell32 = GetModuleHandleA("Shell32.dll");
+	if (!hShell32)
+	{
+		hShell32 = LoadLibraryA("Shell32.dll");
+	}
+	if (!hShell32)
+	{
+		return FALSE;
+	}
+
+	auto pfnSHGetKnownFolderPath = reinterpret_cast<FnSHGetKnownFolderPath>(GetProcAddress(hShell32, "SHGetKnownFolderPath"));
+	if (!pfnSHGetKnownFolderPath)
+	{
+		return FALSE;
+	}
+
+	PWSTR ppszPath = nullptr;
+	if (FAILED(pfnSHGetKnownFolderPath(kFolderIdSavedGames, 0x00008000 /* KF_FLAG_CREATE */, nullptr, &ppszPath)) || !ppszPath)
+	{
+		return FALSE;
+	}
+
+	const int nConverted = WideCharToMultiByte(CP_ACP, 0, ppszPath, -1, pszOutPath, MAX_PATH, nullptr, nullptr);
+	CoTaskMemFree(ppszPath);
+	return nConverted > 0;
+}
+
+// 1.14a: Game.0x00408DE0
+static BOOL FOG_GetDefaultSavePath(char* pszOutPath, size_t nBufferSize)
+{
+	if (FOG_GetKnownSavedGamesPath(pszOutPath))
+	{
+		SStrNCat(pszOutPath, "\\Diablo II\\", static_cast<int>(nBufferSize));
+		return TRUE;
+	}
+
+	if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr, 0, pszOutPath)))
+	{
+		SStrNCat(pszOutPath, "\\Diablo II\\Save\\", static_cast<int>(nBufferSize));
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+// 1.14a: Game.0x00408E90
+static void FOG_MigrateSaveDirectory(const char* szOldDir, const char* szNewDir)
+{
+	if (!szOldDir || !szNewDir || szOldDir[0] == '\0' || szNewDir[0] == '\0')
+	{
+		return;
+	}
+
+	char szNewCopy[MAX_PATH] = {};
+	SStrCopy(szNewCopy, szNewDir, sizeof(szNewCopy));
+	FOG_CreatePathHierarchy(szNewCopy);
+
+	char szSearchPattern[MAX_PATH] = {};
+	SStrCopy(szSearchPattern, szOldDir, sizeof(szSearchPattern));
+	const size_t nOldLen = static_cast<size_t>(SStrLen(szSearchPattern));
+	if (nOldLen > 0 && szSearchPattern[nOldLen - 1] != '\\')
+	{
+		SStrNCat(szSearchPattern, "\\", sizeof(szSearchPattern));
+	}
+	SStrNCat(szSearchPattern, "*", sizeof(szSearchPattern));
+
+	WIN32_FIND_DATAA findData = {};
+	HANDLE hFind = FindFirstFileA(szSearchPattern, &findData);
+	if (hFind == INVALID_HANDLE_VALUE)
+	{
+		return;
+	}
+
+	do
+	{
+		if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0)
+		{
+			continue;
+		}
+
+		char szSrcItem[MAX_PATH] = {};
+		char szDstItem[MAX_PATH] = {};
+		SStrCopy(szSrcItem, szOldDir, sizeof(szSrcItem));
+		if (szSrcItem[SStrLen(szSrcItem) - 1] != '\\')
+		{
+			SStrNCat(szSrcItem, "\\", sizeof(szSrcItem));
+		}
+		SStrNCat(szSrcItem, findData.cFileName, sizeof(szSrcItem));
+
+		SStrCopy(szDstItem, szNewDir, sizeof(szDstItem));
+		if (szDstItem[SStrLen(szDstItem) - 1] != '\\')
+		{
+			SStrNCat(szDstItem, "\\", sizeof(szDstItem));
+		}
+		SStrNCat(szDstItem, findData.cFileName, sizeof(szDstItem));
+
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			FOG_MigrateSaveDirectory(szSrcItem, szDstItem);
+		}
+		else
+		{
+			MoveFileA(szSrcItem, szDstItem);
+		}
+	} while (FindNextFileA(hFind, &findData));
+
+	FindClose(hFind);
+	RemoveDirectoryA(szOldDir);
+}
+#endif
+
 // 1.10f: Fog.0x6FF61900 (#10115)
 // 1.12a: Fog.0x6FF6F060 (#10115)
+// 1.14a: Game.0x004090B0
 size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 {
 	char szEnvSaveDir[MAX_PATH] = {};
@@ -240,6 +366,25 @@ size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 	}
 	else
 	{
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 14
+		if (!SRegLoadString("Diablo II", "NewSavePath", 1, pPathBuffer, static_cast<unsigned int>(nBufferSize)) || pPathBuffer[0] == '\0')
+		{
+			char szOldSavePath[MAX_PATH] = {};
+			if (!SRegLoadString("Diablo II", "Save Path", 0, szOldSavePath, sizeof(szOldSavePath)))
+			{
+				szOldSavePath[0] = '\0';
+			}
+
+			if (FOG_GetDefaultSavePath(pPathBuffer, nBufferSize))
+			{
+				if (szOldSavePath[0] != '\0' && GetFileAttributesA(szOldSavePath) != INVALID_FILE_ATTRIBUTES)
+				{
+					FOG_MigrateSaveDirectory(szOldSavePath, pPathBuffer);
+				}
+				SRegSaveString("Diablo II", "NewSavePath", 1, pPathBuffer);
+			}
+		}
+#else
 		if (!SRegLoadString("Diablo II", "Save Path", 0, pPathBuffer, static_cast<unsigned int>(nBufferSize)))
 		{
 			pPathBuffer[0] = '\0';
@@ -256,6 +401,7 @@ size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize)
 			SStrNCat(pPathBuffer, "save\\", static_cast<int>(nBufferSize));
 			SRegSaveString("Diablo II", "Save Path", 0, pPathBuffer);
 		}
+#endif
 	}
 
 	if (nBufferSize != 0)

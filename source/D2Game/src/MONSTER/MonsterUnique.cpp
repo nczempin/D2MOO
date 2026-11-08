@@ -736,7 +736,17 @@ void __fastcall MONSTERUNIQUE_UMod9_FireEnchanted(D2UnitStrc* pUnit, int32_t nUM
         return;
     }
 
-    const int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+    int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nDifficulty == DIFFMODE_NIGHTMARE)
+    {
+        nDamage = 3 * nDamage / 4;
+    }
+    else if (nDifficulty == DIFFMODE_HELL)
+    {
+        nDamage /= 2;
+    }
+#endif
     if (bUnique)
     {
         D2MonUModTxt* pMonUModTxtRecord = MONSTERUNIQUE_GetMonUModTxtRecord(nDifficulty + 28);
@@ -788,7 +798,17 @@ void __fastcall MONSTERUNIQUE_UMod17_LightningEnchanted(D2UnitStrc* pUnit, int32
         return;
     }
 
-    const int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+    int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nDifficulty == DIFFMODE_NIGHTMARE)
+    {
+        nDamage = 3 * nDamage / 4;
+    }
+    else if (nDifficulty == DIFFMODE_HELL)
+    {
+        nDamage /= 2;
+    }
+#endif
     if (bUnique)
     {
         D2MonUModTxt* pMonUModTxtRecord = MONSTERUNIQUE_GetMonUModTxtRecord(nDifficulty + 28);
@@ -840,7 +860,17 @@ void __fastcall MONSTERUNIQUE_UMod18_ColdEnchanted(D2UnitStrc* pUnit, int32_t nU
         return;
     }
 
-    const int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+    int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nDifficulty == DIFFMODE_NIGHTMARE)
+    {
+        nDamage = 3 * nDamage / 4;
+    }
+    else if (nDifficulty == DIFFMODE_HELL)
+    {
+        nDamage /= 2;
+    }
+#endif
     if (bUnique)
     {
         D2MonUModTxt* pMonUModTxtRecord = MONSTERUNIQUE_GetMonUModTxtRecord(nDifficulty + 28);
@@ -894,7 +924,17 @@ void __fastcall MONSTERUNIQUE_UMod23_PoisonEnchanted(D2UnitStrc* pUnit, int32_t 
         return;
     }
 
-    const int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+    int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nDifficulty == DIFFMODE_NIGHTMARE)
+    {
+        nDamage = 3 * nDamage / 4;
+    }
+    else if (nDifficulty == DIFFMODE_HELL)
+    {
+        nDamage /= 2;
+    }
+#endif
     if (bUnique)
     {
         D2MonUModTxt* pMonUModTxtRecord = MONSTERUNIQUE_GetMonUModTxtRecord(nDifficulty + 28);
@@ -948,7 +988,17 @@ void __fastcall MONSTERUNIQUE_UMod25_ManaSteal(D2UnitStrc* pUnit, int32_t nUMod,
         return;
     }
 
-    const int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+    int32_t nDamage = nGameType ? pMonLvlTxtRecord->dwLDM[nDifficulty] : pMonLvlTxtRecord->dwDM[nDifficulty];
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nDifficulty == DIFFMODE_NIGHTMARE)
+    {
+        nDamage = 3 * nDamage / 4;
+    }
+    else if (nDifficulty == DIFFMODE_HELL)
+    {
+        nDamage /= 2;
+    }
+#endif
     if (bUnique)
     {
         D2MonUModTxt* pMonUModTxtRecord = MONSTERUNIQUE_GetMonUModTxtRecord(nDifficulty + 28);
@@ -1076,8 +1126,13 @@ void __fastcall MONSTERUNIQUE_CastCorpseExplode(D2GameStrc* pGame, D2UnitStrc* p
         return;
     }
 
-    const int32_t nMaxDamage = MONSTERUNIQUE_CalculatePercentage(monStatsInit.nMaxHP, pDifficultyLevelsTxtRecord->dwMonsterCEDmgPercent, 100);
-    const int32_t nMinDamage = MONSTERUNIQUE_CalculatePercentage(nMaxDamage, 60, 100);
+    int32_t nMaxDamage = MONSTERUNIQUE_CalculatePercentage(monStatsInit.nMaxHP, pDifficultyLevelsTxtRecord->dwMonsterCEDmgPercent, 100);
+    int32_t nMinDamage = MONSTERUNIQUE_CalculatePercentage(nMaxDamage, 60, 100);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+    const int32_t nDifficultyScale = (pGame->nDifficulty == DIFFMODE_NIGHTMARE) ? 15 : ((pGame->nDifficulty == DIFFMODE_HELL) ? 10 : 100);
+    nMaxDamage = MONSTERUNIQUE_CalculatePercentage(nMaxDamage, nDifficultyScale, 100);
+    nMinDamage = MONSTERUNIQUE_CalculatePercentage(nMinDamage, nDifficultyScale, 100);
+#endif
     const int32_t nDamage = ITEMS_RollLimitedRandomNumber(&pUnit->pSeed, nMaxDamage - nMinDamage);
 
     D2DamageStrc damage = {};
@@ -2962,6 +3017,18 @@ void __fastcall D2GAME_BOSSES_AssignUMod_6FC6FF10(D2GameStrc* pGame, D2UnitStrc*
 
         pUnit->pMonsterData->nTypeFlag |= MONTYPEFLAG_UNIQUE;
     }
+#if (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 13)
+    else if (nUMod == MONUMOD_KILLMINIONSDEATH)
+    {
+        for (int32_t i = 0; i < 9; ++i)
+        {
+            if (pUMods[i] == MONUMOD_KILLMINIONSDEATH)
+            {
+                return;
+            }
+        }
+    }
+#endif
 
     for (int32_t i = 0; i < 9; ++i)
     {

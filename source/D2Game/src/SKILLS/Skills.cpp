@@ -4233,3 +4233,58 @@ D2MissilesTxt* __fastcall SKILLS_GetMissilesTxtRecord(int32_t nMissileId)
 
     return nullptr;
 }
+
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Game.0x6FD12950
+void __fastcall SKILLS_ResetPlayerSkills(D2GameStrc* pGame, D2UnitStrc* pPlayer)
+{
+    if (!pPlayer || pPlayer->dwUnitType != UNIT_PLAYER || !pPlayer->pSkills)
+    {
+        return;
+    }
+
+    D2ClientStrc* pClient = SUNIT_GetClientFromPlayer(pPlayer, __FILE__, __LINE__);
+    int32_t nRefundedSkillPoints = 0;
+
+    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(pPlayer->pSkills); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
+    {
+        D2SkillsTxt* pSkillsTxtRecord = SKILLS_GetSkillsTxtRecordFromSkill(pSkill);
+        if (!pSkillsTxtRecord || pSkillsTxtRecord->nCharClass < 0)
+        {
+            continue;
+        }
+
+        const int32_t nBaseLevel = SKILLS_GetSkillLevel(pPlayer, pSkill, 0);
+        if (nBaseLevel > 0)
+        {
+            const int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
+            sub_6FD12950(pGame, pPlayer, nSkillId, nBaseLevel, 1);
+            nRefundedSkillPoints += nBaseLevel;
+            SKILLS_SetSkillLevel(pSkill, 0);
+            SKILLS_SetFlags(pSkill, 0);
+            D2GAME_PACKETS_SendPacket0x21_UpdateSkills_6FC3DB50(pClient, pPlayer, nSkillId, 0, 1);
+        }
+    }
+
+    for (int32_t i = 0; i < sgptDataTables->nStatesTxtRecordCount; ++i)
+    {
+        if (STATES_CheckState(pPlayer, i))
+        {
+            D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pPlayer, i);
+            if (pStatList)
+            {
+                D2Common_10474(pPlayer, pStatList);
+                STATLIST_FreeStatList(pStatList);
+            }
+            STATES_ToggleState(pPlayer, i, 0);
+        }
+    }
+
+    sub_6FC7DF40(pGame, pPlayer);
+
+    if (nRefundedSkillPoints > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_SKILLPTS, nRefundedSkillPoints, 0);
+    }
+}
+#endif

@@ -9,6 +9,7 @@
 #include <Units/Units.h>
 
 #include "GAME/Game.h"
+#include "PLAYER/PlrIntro.h"
 #include "QUESTS/Quests.h"
 #include "UNIT/Party.h"
 #include "UNIT/SUnit.h"
@@ -243,6 +244,9 @@ void __fastcall ACT1Q1_Callback11_ScrollMessage(D2QuestDataStrc* pQuestData, D2Q
 		QUESTRECORD_SetQuestState(pQuestFlags, pQuestData->nQuestFilter, QFLAG_REWARDGRANTED);
 		QUESTRECORD_ClearQuestState(pQuestFlags, pQuestData->nQuestFilter, QFLAG_REWARDPENDING);
 		QUESTRECORD_ResetIntermediateStateFlags(pQuestFlags, pQuestData->nQuestFilter);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+		QUESTRECORD_SetQuestState(pQuestFlags, pQuestData->nQuestFilter, QFLAG_CUSTOM7);
+#endif
 		STATLIST_AddUnitStat(pQuestArg->pPlayer, STAT_SKILLPTS, 1, 0);
 
 		QUESTS_AddPlayerGUID(&pQuestData->tPlayerGUIDs, (pQuestArg->pPlayer ? pQuestArg->pPlayer->dwUnitId : -1));
@@ -576,3 +580,36 @@ void __fastcall ACT1Q1_Callback10_PlayerLeavesGame(D2QuestDataStrc* pQuestData, 
 		QUESTS_FastRemovePlayerGUID(&pQuestDataEx->pQuestGUID, -1);
 	}
 }
+
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Game.0x6FCADFA0
+void __fastcall ACT1Q1_UnusedRewardRespec(D2GameStrc* pGame, D2UnitStrc* pPlayer)
+{
+	if (!pGame || !pPlayer)
+	{
+		return;
+	}
+
+	D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(pPlayer);
+	if (!pPlayerData)
+	{
+		return;
+	}
+
+	D2BitBufferStrc* pQuestFlags = pPlayerData->pQuestData[pGame->nDifficulty];
+	if (!pQuestFlags)
+	{
+		return;
+	}
+
+	if (QUESTRECORD_GetQuestState(pQuestFlags, QUESTSTATEFLAG_A1Q1, QFLAG_REWARDGRANTED) &&
+		!QUESTRECORD_GetQuestState(pQuestFlags, QUESTSTATEFLAG_A1Q1, QFLAG_CUSTOM6))
+	{
+		QUESTRECORD_SetQuestState(pQuestFlags, QUESTSTATEFLAG_A1Q1, QFLAG_CUSTOM6);
+		QUESTRECORD_ClearQuestState(pQuestFlags, QUESTSTATEFLAG_A1Q1, QFLAG_CUSTOM7);
+		PLRINTRO_ResetPlayerStats(pGame, pPlayer);
+		QUESTS_SendLogUpdateEx(pPlayer, QUEST_A1Q1_DENOFEVIL, 0);
+	}
+}
+#endif
+

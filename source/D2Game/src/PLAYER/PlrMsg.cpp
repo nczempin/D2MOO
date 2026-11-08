@@ -1506,6 +1506,20 @@ int32_t __fastcall D2GAME_PACKETCALLBACK_Rcv0x14_HandleOverheadChat_6FC84690(D2G
     SStrCopy(szText, (char*)pPacket + 3, sizeof(szText));
 
     const int32_t nStringLength = SStrLen((char*)pPacket + 3);
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (nStringLength == 0)
+    {
+        if (pUnit && pUnit->pHoverText)
+        {
+            CHAT_FreeHoverMsg(pGame->pMemoryPool, pUnit->pHoverText);
+            pUnit->pHoverText = nullptr;
+            pUnit->dwFlags &= ~UNITFLAG_HASTXTMSG;
+            UNITROOM_RefreshUnit(pUnit);
+            D2GAME_EVENTS_Delete_6FC34840(pGame, pUnit, EVENTTYPE_FREEHOVER, 0);
+        }
+        return 0;
+    }
+#endif
     if (nStringLength < 256)
     {
         char szName[16] = {};

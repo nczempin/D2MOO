@@ -24,7 +24,28 @@ HMODULE delayedD2GameDllBaseGet()
 static const int D2GameImageBase = 0x6FC30000;
 D2FUNC(D2Game, SpawnSuperUnique_6FC6F690, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nSuperUnique), 0x6FC6F690 - D2GameImageBase);
 D2FUNC(D2Game, SpawnMonster_6FC69F10, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nMonsterId, int32_t nAnimMode, int32_t a7, int16_t nFlags), 0x6FC69F10 - D2GameImageBase);
+#elif defined(D2_VERSION_114C)
+#define HAS_SPAWN_FUNCTIONS
+HMODULE delayedD2GameDllBaseGet()
+{
+    static HMODULE DLLBASE_D2Game = GetModuleHandleA(nullptr);
+    return DLLBASE_D2Game;
+}
+
+static const int D2GameImageBase = 0x00400000;
+D2FUNC(D2Game, SpawnSuperUnique_6FC6F690, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nSuperUnique), 0x005A2070 - D2GameImageBase);
+D2FUNC(D2Game, SpawnMonster_6FC69F10, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nMonsterId, int32_t nAnimMode, int32_t a7, int16_t nFlags), 0x005B0750 - D2GameImageBase);
 #elif defined(D2_VERSION_114D)
+#define HAS_SPAWN_FUNCTIONS
+HMODULE delayedD2GameDllBaseGet()
+{
+    static HMODULE DLLBASE_D2Game = GetModuleHandleA(nullptr);
+    return DLLBASE_D2Game;
+}
+
+static const int D2GameImageBase = 0x00400000;
+D2FUNC(D2Game, SpawnSuperUnique_6FC6F690, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nSuperUnique), 0x005A49B0 - D2GameImageBase);
+D2FUNC(D2Game, SpawnMonster_6FC69F10, D2UnitStrc*, __fastcall, (D2GameStrc* pGame, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY, int32_t nMonsterId, int32_t nAnimMode, int32_t a7, int16_t nFlags), 0x005B2F20 - D2GameImageBase);
 #else
 #pragma message("Warning: Unsupported D2 version for D2Debugger")
 #endif

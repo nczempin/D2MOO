@@ -183,6 +183,10 @@ D2UnitStrc* __fastcall sub_6FD11710(D2GameStrc* pGame, int32_t nMissileId, D2Uni
 int32_t __fastcall sub_6FD118C0(D2GameStrc* pGame, D2UnitStrc* pUnit);
 //D2Game.0x6FD119C0
 int32_t __fastcall sub_6FD119C0(D2UnitStrc* pUnit);
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Game.0x6FD12950
+void __fastcall SKILLS_ResetPlayerSkills(D2GameStrc* pGame, D2UnitStrc* pPlayer);
+#endif
 //D2Game.0x6FD11AE0
 void __fastcall sub_6FD11AE0(D2GameStrc* pGame, D2UnitStrc* pUnit, D2UnitStrc* pItem);
 //D2Game.0x6FD11B50

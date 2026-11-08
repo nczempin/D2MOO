@@ -7,6 +7,7 @@
 #include <D2BitManip.h>
 
 #include <D2DataTbls.h>
+#include <DataTbls/MonsterIds.h>
 #include <DataTbls/ObjectsIds.h>
 #include <D2Dungeon.h>
 #include <D2Items.h>
@@ -26,6 +27,7 @@
 #include "OBJECTS/ObjMode.h"
 #include "PLAYER/Player.h"
 #include "PLAYER/PlrSave.h"
+#include "QUESTS/ACT1/A1Q1.h"
 #include "QUESTS/ACT1/A1Q4.h"
 #include "QUESTS/ACT2/A2Q2.h"
 #include "QUESTS/ACT3/A3Q2.h"
@@ -1373,6 +1375,17 @@ int32_t __fastcall sub_6FC91250(D2GameStrc* pGame, D2UnitStrc* pPlayer, uint16_t
 			break;
         }
     }
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+    else if (nButton == 0x18 && nInteractUnitType == UNIT_MONSTER)
+    {
+        D2UnitStrc* pInteractNpc = SUNIT_GetServerUnit(pGame, UNIT_MONSTER, nInteractUnitGUID);
+        if (pInteractNpc && pInteractNpc->dwClassId == MONSTER_AKARA)
+        {
+            ACT1Q1_UnusedRewardRespec(pGame, pPlayer);
+        }
+        return 0;
+    }
+#endif
     else
     {
         if (nInteractUnitType != UNIT_PLAYER)

@@ -55,3 +55,12 @@ D2GFX_DLL_DECL void __stdcall WINDOW_CloseSmacker(void* pContext);
 D2GFX_DLL_DECL void __stdcall WINDOW_UpdatePlacement();
 //D2Gfx.0x6FA74FA0 (#10040)
 D2GFX_DLL_DECL void __stdcall WINDOW_ShowAll();
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Gfx.0x6FA9D470 (#10087) / 1.13d: (#10087)
+extern D2GFX_DLL_DECL RECT gWindowRect;
+//1.13c: D2Gfx.0x6FA87FD0 (#10025) / 1.13d: (#10064)
+D2GFX_DLL_DECL void __stdcall WINDOW_GetDimensionsByResolutionMode(int32_t nMode, int32_t* pWidth, int32_t* pHeight);
+//1.13c: D2Gfx.0x6FA880D0 (#10067) / 1.13d: (#10025)
+D2GFX_DLL_DECL int32_t __stdcall WINDOW_CenterAndResize(D2GameResolutionMode nResolution);
+#endif
+

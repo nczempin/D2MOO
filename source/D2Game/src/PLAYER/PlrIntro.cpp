@@ -4,8 +4,12 @@
 
 #include <Fog.h>
 #include <D2BitManip.h>
-
+#include <D2DataTbls.h>
+#include <D2StatList.h>
 #include <DataTbls/MonsterIds.h>
+
+#include "PLAYER/PlayerStats.h"
+#include "SKILLS/Skills.h"
 
 
 #pragma pack(push, 1)
@@ -197,3 +201,58 @@ void __fastcall PLRINTRO_Destroy(D2GameStrc* pGame, D2PlrIntroStrc* pPlayerIntro
 
     D2_FREE_POOL(pGame->pMemoryPool, pPlayerIntro);
 }
+
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+//1.13c: D2Game.0x6FC67790
+void __fastcall PLRINTRO_ResetPlayerStats(D2GameStrc* pGame, D2UnitStrc* pPlayer)
+{
+    if (!pPlayer || pPlayer->dwUnitType != UNIT_PLAYER || pPlayer->dwClassId >= sgptDataTables->nCharStatsTxtRecordCount)
+    {
+        return;
+    }
+
+    SKILLS_ResetPlayerSkills(pGame, pPlayer);
+
+    D2CharStatsTxt* pCharStatsTxtRecord = &sgptDataTables->pCharStatsTxt[pPlayer->dwClassId];
+
+    const int32_t nCurStr = STATLIST_GetUnitBaseStat(pPlayer, STAT_STRENGTH, 0);
+    const int32_t nCurDex = STATLIST_GetUnitBaseStat(pPlayer, STAT_DEXTERITY, 0);
+    const int32_t nCurVit = STATLIST_GetUnitBaseStat(pPlayer, STAT_VITALITY, 0);
+    const int32_t nCurEne = STATLIST_GetUnitBaseStat(pPlayer, STAT_ENERGY, 0);
+
+    const int32_t nDiffStr = std::max(0, nCurStr - (int32_t)pCharStatsTxtRecord->nStr);
+    const int32_t nDiffDex = std::max(0, nCurDex - (int32_t)pCharStatsTxtRecord->nDex);
+    const int32_t nDiffVit = std::max(0, nCurVit - (int32_t)pCharStatsTxtRecord->nVit);
+    const int32_t nDiffEne = std::max(0, nCurEne - (int32_t)pCharStatsTxtRecord->nInt);
+
+    if (nDiffStr > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_STRENGTH, -nDiffStr, 0);
+    }
+    if (nDiffDex > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_DEXTERITY, -nDiffDex, 0);
+    }
+    if (nDiffVit > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_VITALITY, -nDiffVit, 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_MAXHP, -(nDiffVit * ((int32_t)pCharStatsTxtRecord->nLifePerVitality << 6)), 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_HITPOINTS, -(nDiffVit * ((int32_t)pCharStatsTxtRecord->nLifePerVitality << 6)), 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_MAXSTAMINA, -(nDiffVit * ((int32_t)pCharStatsTxtRecord->nStaminaPerVitality << 6)), 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_STAMINA, -(nDiffVit * ((int32_t)pCharStatsTxtRecord->nStaminaPerVitality << 6)), 0);
+    }
+    if (nDiffEne > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_ENERGY, -nDiffEne, 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_MAXMANA, -(nDiffEne * ((int32_t)pCharStatsTxtRecord->nManaPerMagic << 6)), 0);
+        STATLIST_AddUnitStat(pPlayer, STAT_MANA, -(nDiffEne * ((int32_t)pCharStatsTxtRecord->nManaPerMagic << 6)), 0);
+    }
+
+    const int32_t nTotalRefund = nDiffStr + nDiffDex + nDiffVit + nDiffEne;
+    if (nTotalRefund > 0)
+    {
+        STATLIST_AddUnitStat(pPlayer, STAT_STATPTS, nTotalRefund, 0);
+    }
+}
+#endif
+

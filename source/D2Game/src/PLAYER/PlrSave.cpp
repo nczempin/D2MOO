@@ -438,7 +438,11 @@ int32_t __stdcall PLRSAVE_WriteItems_6FC89B50(D2InventoryStrc* pInventory, uint8
     }
 
     D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(pInventory);
+#if defined(D2_VERSION_113D) || (D2_VERSION_MAJOR == 1 && D2_VERSION_MINOR >= 14)
+    if (!a5 && pCursorItem && pCursorItem->dwUnitType == UNIT_ITEM)
+#else
     if (pCursorItem && pCursorItem->dwUnitType == UNIT_ITEM)
+#endif
     {
         nSize = D2GAME_SAVE_SerializeItem_6FC89AD0(pCursorItem, pData, nBitstreamSize + pBitstream - pData, a4, a5);
         if (nSize < 0)

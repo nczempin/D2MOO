@@ -161,6 +161,7 @@ inline static void GroupCStrDigits(Unicode* pUnicode, const char* pcSrc, int nMa
  * 1.10: D2Lang.0x6FC13DF0 (#10007)
  * 1.13c: D2Lang.0x6FC09290 (#10009)
  * 1.14c: Game.0x00522610
+ * 1.14d: Game.0x00525150
  */
 D2C_Language STRTABLE_GetLanguage()
 {
@@ -329,8 +330,11 @@ static D2C_Language LookupLanguageByCode1(const char* szCode)
 }
 
 // 1.12a: D2Lang.0x6FC08EB0 (#10001)
+// 1.14c: Game.0x00522670
+// 1.14d: Game.0x005251C0
 D2C_Language __stdcall STRTABLE_GetSystemLanguage()
 {
+#if !defined(D2_VERSION_114D)
 	OSVERSIONINFOA osvi = {};
 	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOA);
 	if (!GetVersionExA(&osvi))
@@ -345,6 +349,7 @@ D2C_Language __stdcall STRTABLE_GetSystemLanguage()
 		return LookupLanguageByCode1(szLang);
 	}
 	else if (osvi.dwPlatformId == VER_PLATFORM_WIN32_NT)
+#endif
 	{
 		HKEY hKey = nullptr;
 		if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\International", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
@@ -368,6 +373,8 @@ D2C_Language __stdcall STRTABLE_GetSystemLanguage()
 }
 
 // 1.12a: D2Lang.0x6FC09BC0 (#10004)
+// 1.14c: Game.0x005227A0
+// 1.14d: Game.0x00525260
 void __stdcall STRTABLE_GetLanguageInfo(void* pOut, int nMode)
 {
 	D2C_Language nLang = STRTABLE_GetLanguage();

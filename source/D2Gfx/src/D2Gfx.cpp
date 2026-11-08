@@ -447,3 +447,20 @@ void __stdcall D2GFX_DebugDraw(uint32_t* pLight, uint32_t* pPlayerLight, int32_t
 {
     return gpGraphicsInterface->pfDebugDraw(pLight, pPlayerLight, nXPos, nYPos);
 }
+
+#if D2_VERSION_MAJOR >= 1 && D2_VERSION_MINOR >= 13
+int32_t gbFixedAspectRatio = 1;
+
+//1.13c: D2Gfx.0x6FA8B300 (#10065) / 1.13d: (#10076)
+int32_t __stdcall D2GFX_CheckFixedAspectRatio()
+{
+    return gbFixedAspectRatio;
+}
+
+//1.13c: D2Gfx.0x6FA8B1B0 (#10066) / 1.13d: (#10049)
+void __stdcall D2GFX_DisableFixedAspectRatio()
+{
+    gbFixedAspectRatio = 0;
+}
+#endif
+

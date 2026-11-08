@@ -58,6 +58,7 @@ typedef struct HD2ARCHIVE__* HD2ARCHIVE; // NOLINT(bugprone-reserved-identifier)
  * 1.10: Inline OR D2Common.0x6FDC40F0
  * 1.13c: Inline
  * 1.14c: Game.0x00514B24
+ * 1.14d: Game.0x00516E46
  */
 BOOL __fastcall ARCHIVE_OpenFile(HD2ARCHIVE hArchive, const char* szFilePath, HSFILE* phFile, BOOL bFileNotFoundLogSkipped);
 
@@ -71,6 +72,7 @@ BOOL __fastcall ARCHIVE_OpenFile(HD2ARCHIVE hArchive, const char* szFilePath, HS
  * 1.10: Inline OR D2Common.0x6FDC412C
  * 1.13c: Inline
  * 1.14c: Game.0x00514B60
+ * 1.14d: Game.0x00516E84
  */
 void __fastcall ARCHIVE_CloseFile(HD2ARCHIVE hArchive, HSFILE hFile);
 
@@ -84,6 +86,7 @@ void __fastcall ARCHIVE_CloseFile(HD2ARCHIVE hArchive, HSFILE hFile);
  * 1.10: D2Lang.0x6FC145F2 OR D2Common.0x6FDC4152
  * 1.13c: Inline
  * 1.14c: Game.0x00514B87
+ * 1.14d: Game.0x00516EAB
  * D2XBeta: D2Server.dll.0x10009C76
  */
 uint32_t __fastcall ARCHIVE_GetFileSize(HD2ARCHIVE hArchive, HSFILE hFile, uint32_t* pdwFileSizeHigh);
@@ -108,6 +111,7 @@ uint32_t __fastcall ARCHIVE_SetFilePointer(HD2ARCHIVE hArchive, HSFILE hFile, in
  * 1.10: D2Lang.0x6FC14661 OR D2Common.0x6FDC41C1
  * 1.13c: D2Lang.0x6FC07C00
  * 1.14c: Game.0x00514C61
+ * 1.14d: Game.0x00516F85
  */
 void __fastcall ARCHIVE_ReadFileToBuffer(HD2ARCHIVE hArchive, HSFILE hFile, void* pBuffer, size_t dwBytesToRead);
 
@@ -123,6 +127,7 @@ void __fastcall ARCHIVE_ReadFileToBuffer(HD2ARCHIVE hArchive, HSFILE hFile, void
  * 1.10: D2Lang.0x6FC14708 OR D2Common.0x6FDC4268 OR D2Win.0x6F8B22F8
  * 1.13c: D2Lang.0x6FC07EF0
  * 1.14c: Game.0x00514D55
+ * 1.14d: Game.0x00517079
  */
 void* __fastcall ARCHIVE_AllocateBufferAndReadFile(HD2ARCHIVE hArchive, const char* szFilePath, size_t* pdwBytesWritten, const char* szSrcPath, int nLine);
 

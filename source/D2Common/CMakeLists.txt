@@ -169,6 +169,7 @@ target_sources(${D2CommonImplName}
     src/D2Composit.cpp
     src/D2Dungeon.cpp
     src/D2Environment.cpp
+    src/D2IgnoreList.cpp
     src/D2Inventory.cpp
     src/D2Log.cpp
     src/D2QuestRecord.cpp
@@ -186,6 +187,7 @@ target_sources(${D2CommonImplName}
     include/D2DataTbls.h
     include/D2Dungeon.h
     include/D2Environment.h
+    include/D2IgnoreList.h
     include/D2Inventory.h
     include/D2ItemMods.h
     include/D2Items.h
