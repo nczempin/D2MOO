@@ -284,7 +284,7 @@ void GAMEAPI ParseCmdLine(D2ConfigStrc* pCfg, const char *argv)
 				switch ((char)gaCmdArguments[nCommandIndex].dwType)
 				{
 				case CMD_INTEGER:
-					*(int*)pCfgMember = atoi(szCommandValueBuf);
+					*(int*)pCfgMember = static_cast<int>(strtoul(szCommandValueBuf, nullptr, 0));
 					break;
 				case CMD_STRING:
 					strcpy((char*)pCfgMember, szCommandValueBuf); // NOLINT(clang-diagnostic-deprecated-declarations)
@@ -676,6 +676,20 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 
 	D2_FREE(lpArgvDupe);
 	ParseCmdLine(&tCfg, lpArgvCmd);
+	if (tCfg.dwSeed != 0)
+	{
+		char szSeedBuf[32] = {};
+		SStrPrintf(szSeedBuf, sizeof(szSeedBuf), "0x%08X", static_cast<unsigned int>(tCfg.dwSeed));
+		SetEnvironmentVariableA("D2MOO_FIXED_SEED", szSeedBuf);
+	}
+	else
+	{
+		char szFixedSeedEnv[64] = {};
+		if (GetEnvironmentVariableA("D2MOO_FIXED_SEED", szFixedSeedEnv, sizeof(szFixedSeedEnv)) > 0 && szFixedSeedEnv[0] != '\0')
+		{
+			tCfg.dwSeed = static_cast<DWORD>(strtoul(szFixedSeedEnv, nullptr, 0));
+		}
+	}
 #ifndef VERSION_100 // TODO: figure out when this was added. Probably in 1.10
 	tCfg.pAllowExpansionCallback = AllowExpansion;
 #endif

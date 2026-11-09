@@ -6509,6 +6509,84 @@ static void RunNativeClientAutotestStep()
 			}
 		}
 
+		// Gap 2: Fixed-Seed Multi-Act DRLG & Preset Unit Differential Oracle (Acts I-V)
+		uint32_t dwAct1To5RoomsGenerated = 0;
+		uint32_t dwAct1To5PresetUnits = 0;
+		uint32_t dwAct1To5DrlgParityHash = 2166136261u;
+		auto fnvMix32 = [&](uint32_t v) {
+			for (int b = 0; b < 4; ++b)
+			{
+				dwAct1To5DrlgParityHash ^= ((v >> (b * 8)) & 0xFFu);
+				dwAct1To5DrlgParityHash *= 16777619u;
+			}
+		};
+		static const int32_t kActTownLevels[5] = {
+			LEVEL_ROGUEENCAMPMENT,
+			LEVEL_LUTGHOLEIN,
+			LEVEL_KURASTDOCKTOWN,
+			LEVEL_THEPANDEMONIUMFORTRESS,
+			LEVEL_HARROGATH
+		};
+		static const int32_t kActWildLevels[5] = {
+			LEVEL_BLOODMOOR,
+			LEVEL_DRYHILLS,
+			LEVEL_SPIDERFOREST,
+			LEVEL_OUTERSTEPPES,
+			LEVEL_ID_ACT5_BARRICADE_1
+		};
+		for (uint8_t nActIdx = 0; nActIdx < 5; ++nActIdx)
+		{
+			D2DrlgActStrc* pOracleAct = DUNGEON_AllocAct(
+				nActIdx,
+				gdwServerMapSeed,
+				FALSE,
+				nullptr,
+				gnGameDifficulty,
+				nullptr,
+				kActTownLevels[nActIdx],
+				nullptr,
+				nullptr);
+			if (pOracleAct && pOracleAct->pDrlg)
+			{
+				const int32_t aLevelsToCheck[2] = { kActTownLevels[nActIdx], kActWildLevels[nActIdx] };
+				for (int32_t nLvlId : aLevelsToCheck)
+				{
+					D2DrlgLevelStrc* pLvl = DRLG_GetLevel(pOracleAct->pDrlg, nLvlId);
+					if (pLvl)
+					{
+						if (!pLvl->pFirstRoomEx)
+						{
+							DRLG_InitLevel(pLvl);
+						}
+						for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+						{
+							if ((nLvlId == kActTownLevels[nActIdx]) || pRoomEx == pLvl->pFirstRoomEx)
+							{
+								DUNGEON_StreamRoomAtCoords(pOracleAct, pRoomEx->nTileXPos, pRoomEx->nTileYPos);
+							}
+							++dwAct1To5RoomsGenerated;
+							fnvMix32(static_cast<uint32_t>(nLvlId));
+							fnvMix32(static_cast<uint32_t>(pRoomEx->nTileXPos));
+							fnvMix32(static_cast<uint32_t>(pRoomEx->nTileYPos));
+							fnvMix32(static_cast<uint32_t>(pRoomEx->nTileWidth));
+							fnvMix32(static_cast<uint32_t>(pRoomEx->nTileHeight));
+							fnvMix32(pRoomEx->dwInitSeed);
+							for (D2PresetUnitStrc* pPreset = pRoomEx->pPresetUnits; pPreset != nullptr; pPreset = pPreset->pNext)
+							{
+								++dwAct1To5PresetUnits;
+								fnvMix32(static_cast<uint32_t>(pPreset->nUnitType));
+								fnvMix32(static_cast<uint32_t>(pPreset->nIndex));
+								fnvMix32(static_cast<uint32_t>(pPreset->nMode));
+								fnvMix32(static_cast<uint32_t>(pPreset->nXpos));
+								fnvMix32(static_cast<uint32_t>(pPreset->nYpos));
+							}
+						}
+					}
+				}
+				DUNGEON_FreeAct(pOracleAct);
+			}
+		}
+
 		char szJsonPath[MAX_PATH * 2] = {};
 		std::snprintf(szJsonPath, sizeof(szJsonPath), "%s\\native_autotest_report.json", s_szOutDir);
 		if (FILE* pJson = std::fopen(szJsonPath, "wb"))
@@ -6555,6 +6633,9 @@ static void RunNativeClientAutotestStep()
 				"  \"automapRoomsPopulated\": %u,\n"
 				"  \"skillDescTooltipsBuilt\": %u,\n"
 				"  \"invPanelEvaluations\": %u,\n"
+				"  \"act1To5DrlgRoomsGenerated\": %u,\n"
+				"  \"act1To5PresetUnitsGenerated\": %u,\n"
+				"  \"act1To5DrlgParityHash\": \"0x%08X\",\n"
 				"  \"bridgeRetAliasesRemaining\": 0,\n"
 				"  \"zeroOriginalBlizzardDlls\": %s,\n"
 				"  \"d2mooCompiledModulesLoaded\": %d\n"
@@ -6598,6 +6679,9 @@ static void RunNativeClientAutotestStep()
 				gdwAutomapRoomsPopulated,
 				gdwSkillDescTooltipsBuilt,
 				gdwInvPanelEvaluations,
+				dwAct1To5RoomsGenerated,
+				dwAct1To5PresetUnits,
+				dwAct1To5DrlgParityHash,
 				bZeroOriginalDlls ? "true" : "false",
 				nD2MooModules);
 			std::fclose(pJson);
@@ -6736,6 +6820,14 @@ static int32_t __stdcall D2Client_State3_InitSession()
 		if (gpD2Config->bNoSave)
 		{
 			D2GAME_10036_PLRSAVE_EnableSaveFileWriting(0);
+		}
+		if (gpD2Config->dwSeed == 0)
+		{
+			char szSeedEnv[64] = {};
+			if (GetEnvironmentVariableA("D2MOO_FIXED_SEED", szSeedEnv, sizeof(szSeedEnv)) > 0 && szSeedEnv[0] != '\0')
+			{
+				gpD2Config->dwSeed = static_cast<uint32_t>(std::strtoul(szSeedEnv, nullptr, 0));
+			}
 		}
 		if (gpD2Config->dwSeed != 0)
 		{
@@ -7028,6 +7120,14 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 		if (pCfg && pCfg->dwAct > 0 && pCfg->dwAct < 6)
 		{
 			GAME_SetGlobalAct(static_cast<int32_t>(pCfg->dwAct - 1));
+		}
+		if (pCfg && pCfg->dwSeed == 0)
+		{
+			char szSeedEnv[64] = {};
+			if (GetEnvironmentVariableA("D2MOO_FIXED_SEED", szSeedEnv, sizeof(szSeedEnv)) > 0 && szSeedEnv[0] != '\0')
+			{
+				pCfg->dwSeed = static_cast<uint32_t>(std::strtoul(szSeedEnv, nullptr, 0));
+			}
 		}
 		if (pCfg && pCfg->dwSeed != 0)
 		{

@@ -204,6 +204,24 @@ void __stdcall GAME_SetInitSeed(int32_t nInitSeed)
     nInitSeed_6FDC2CA08 = nInitSeed;
 }
 
+static void GAME_ApplyEnvInitSeedOverride()
+{
+    if (nInitSeed_6FDC2CA08 != -1)
+    {
+        return;
+    }
+    char szSeedEnv[64] = {};
+    if (GetEnvironmentVariableA("D2MOO_FIXED_SEED", szSeedEnv, sizeof(szSeedEnv)) > 0 && szSeedEnv[0] != '\0')
+    {
+        char* pEnd = nullptr;
+        const unsigned long ulSeed = strtoul(szSeedEnv, &pEnd, 0);
+        if (pEnd != szSeedEnv && ulSeed != 0)
+        {
+            GAME_SetInitSeed(static_cast<int32_t>(ulSeed));
+        }
+    }
+}
+
 //D2Game.0x6FC35930
 uint32_t __fastcall D2Game_10011()
 {
@@ -478,6 +496,7 @@ BOOL __stdcall GAME_CreateNewEmptyGame(char* szGameName, const char* szPassword,
 
     pGame->nDifficulty = (nFlags & GAMEFLAG_DIFFICULTY_MASK) >> GAMEFLAG_DIFFICULTY_BIT;
 
+    GAME_ApplyEnvInitSeedOverride();
     if (nInitSeed_6FDC2CA08 == -1)
     {
         pGame->InitSeed = 0;
@@ -725,6 +744,7 @@ void __fastcall GAME_SendGameInit(int32_t nClientId, char* szGameName, uint8_t n
         pGame->dwGameType = 0;
     }
 
+    GAME_ApplyEnvInitSeedOverride();
     if (nInitSeed_6FDC2CA08 == -1)
     {
         pGame->InitSeed = 0;
