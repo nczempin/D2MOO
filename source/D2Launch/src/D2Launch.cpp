@@ -2055,7 +2055,18 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 	SyncClientModeEnv();
 
 	char szAutoChar[32] = {};
-	const DWORD nAutoCharLen = GetEnvironmentVariableA("D2MOO_AUTO_CHAR", szAutoChar, sizeof(szAutoChar));
+	DWORD nAutoCharLen = GetEnvironmentVariableA("D2MOO_AUTO_CHAR", szAutoChar, sizeof(szAutoChar));
+	if (nAutoCharLen == 0 || szAutoChar[0] == '\0')
+	{
+		char szAutotest[16] = {};
+		const char* szCmdLine = GetCommandLineA();
+		if ((GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szAutotest, sizeof(szAutotest)) > 0 && szAutotest[0] == '1') ||
+		    (szCmdLine && strstr(szCmdLine, "--autotest-native") != nullptr))
+		{
+			strcpy_s(szAutoChar, "ExpansionHero");
+			nAutoCharLen = static_cast<DWORD>(strlen(szAutoChar));
+		}
+	}
 	if (nAutoCharLen > 0 && szAutoChar[0] != '\0')
 	{
 		if (pCfg->bShownLogo)

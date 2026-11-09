@@ -85,6 +85,84 @@ D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitGUID, uint32_t
 D2UnitStrc* __fastcall D2Client_FindClientSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
 D2UnitStrc* __fastcall D2Client_RegisterUnitInHashTable(D2UnitStrc* pUnit);
 
+// Reconstructed 1.12a SCmd.cpp Entry Points & Globals (0x6FAB10E0..0x6FAB4A60)
+extern D2UnitStrc* gpClientPlayer;
+void __fastcall SCMD_FreeUnitPacketQueue(D2UnitStrc* pUnit);
+void __fastcall SCMD_DrainUnitPacketQueue(D2UnitStrc* pUnit);
+void __fastcall SCMD_Handler00_GameLoading(uint8_t* pPacket);
+void __fastcall SCMD_Handler01_GameLogonReceipt(uint8_t* pPacket);
+void __fastcall SCMD_Handler04_LoadComplete(uint8_t* pPacket);
+void __fastcall SCMD_Handler05_UnloadComplete(uint8_t* pPacket);
+void __fastcall SCMD_Handler19_1F_StatUpdate(uint8_t* pPacket);
+void __fastcall SCMD_Handler20_PlayerAttrUpdate(uint8_t* pPacket);
+
+// Reconstructed 1.12a DRAW_dLightMap.cpp Entry Points & Globals (0x6FAE85B0..0x6FAEA3A0)
+extern void* g_pClientAct;
+extern D2UnitStrc* g_pPlayerUnit;
+void __stdcall LIGHTMAP_InitializeReciprocalTableAndActCallback();
+void __stdcall LIGHTMAP_GetRoomAmbientLight(
+	BOOL bCheckSpecialRoomLight,
+	D2ActiveRoomStrc* pRoom,
+	int32_t* pOutIntensity,
+	uint8_t* pOutRed,
+	uint8_t* pOutGreen,
+	uint8_t* pOutBlue);
+void __stdcall LIGHTMAP_ResetAmbientGrid(BOOL bClearToZero);
+void __stdcall LIGHTMAP_SampleLightAtSubtile8(
+	int32_t nX8,
+	int32_t nY8,
+	uint8_t* pOutIntensity,
+	uint8_t* pOutRed,
+	uint8_t* pOutGreen,
+	uint8_t* pOutBlue);
+void __stdcall LIGHTMAP_FreeAllLightNodes();
+void __stdcall LIGHTMAP_ClearGrid();
+
+// Reconstructed 1.12a UI_automap.cpp Entry Points (0x6FAFD340..0x6FB01950)
+struct D2AutomapCellStrc;
+struct D2AutomapLayerStrc;
+void __stdcall AUTOMAP_InitColors(void);
+void __fastcall AUTOMAP_DrawCrosshair(int32_t nX, int32_t nY, uint8_t nColor);
+D2AutomapLayerStrc* __fastcall AUTOMAP_InitLayer(int32_t nLayerNo);
+void __stdcall AUTOMAP_AddExplicitCell(int16_t nCellNo, int16_t xPixel, int16_t yPixel, D2AutomapCellStrc** ppCellTree, int32_t fSaved);
+void __stdcall AUTOMAP_FreeAllLayers(void);
+
+// Reconstructed 1.12a UI_SkillDesc.cpp Entry Points & Globals (0x6FAF21F0..0x6FAFCEA0)
+extern D2SkillDescTxt* g_pSkillDescTxt_6FDD1C44;
+extern int32_t g_nSkillDescTxtRecordCount_6FDD1C4C;
+D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId);
+void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, wchar_t* wszOut);
+int32_t __stdcall sub_6FAF7560(int32_t nSkillId, wchar_t* wszOut, uint32_t nMaxChars);
+
+// Reconstructed 1.12a UI_inv.cpp Entry Points & Globals (0x6FB108B0..0x6FB1A400)
+extern BOOL g_bExpansionMode;
+void __stdcall INV_SyncExpansionModeFlag();
+void __stdcall INV_InitInventoryLayoutRectsAndGrids();
+int32_t __stdcall INV_GetPanelMode();
+void __fastcall INV_SetPanelMode(int32_t nMode);
+BOOL __fastcall INV_HitTestInvPanelRect(int32_t nX, int32_t nY);
+BOOL __fastcall INV_HitTestStashPanelRect(int32_t nX, int32_t nY);
+BOOL __fastcall INV_HitTestHoradricCubeGridRect(int32_t nX, int32_t nY);
+
+// Gap 1 Reconstructed Subsystem Runtime Execution Counters
+static uint32_t gdwSCmdPacketsDispatched = 0;
+static uint32_t gdwLightMapRoomsSampled = 0;
+static uint32_t gdwAutomapRoomsPopulated = 0;
+static uint32_t gdwSkillDescTooltipsBuilt = 0;
+static uint32_t gdwInvPanelEvaluations = 0;
+
+static void SyncReconstructedClientGlobals()
+{
+	gpClientPlayer = gpPlayerUnit;
+	g_pPlayerUnit = gpPlayerUnit;
+	g_pClientAct = gpClientAct;
+	if (sgptDataTables)
+	{
+		g_pSkillDescTxt_6FDD1C44 = sgptDataTables->pSkillDescTxt;
+		g_nSkillDescTxtRecordCount_6FDD1C4C = sgptDataTables->nSkillDescTxtRecordCount;
+	}
+}
+
 static void RemoveReconstructedServerUnit(uint32_t nUnitType, uint32_t dwGuid)
 {
 	if (nUnitType >= UNIT_TYPES_COUNT || dwGuid == 0)
@@ -106,9 +184,11 @@ static void RemoveReconstructedServerUnit(uint32_t nUnitType, uint32_t dwGuid)
 			{
 				pPrev->pListNext = pCurr->pListNext;
 			}
+			SCMD_FreeUnitPacketQueue(pCurr);
 			if (pCurr == gpPlayerUnit)
 			{
 				D2Client_SetLocalPlayerUnit(nullptr);
+				SyncReconstructedClientGlobals();
 			}
 			UNITS_FreeUnit(pCurr);
 			return;
@@ -129,6 +209,7 @@ static void FreeAllReconstructedServerUnits()
 			while (pCurr != nullptr)
 			{
 				D2UnitStrc* pNext = pCurr->pListNext;
+				SCMD_FreeUnitPacketQueue(pCurr);
 				UNITS_FreeUnit(pCurr);
 				pCurr = pNext;
 			}
@@ -136,6 +217,7 @@ static void FreeAllReconstructedServerUnits()
 	}
 	D2Client_SetLocalPlayerUnit(nullptr);
 	D2Client_ClearAllUnitHashTables();
+	SyncReconstructedClientGlobals();
 }
 
 static void StepReconstructedUnitTablesPerTick()
@@ -155,6 +237,10 @@ static D2UnitStrc* RegisterReconstructedServerUnit(uint32_t nUnitType, uint32_t 
 	{
 		pExisting->dwClassId = dwClassId;
 		pExisting->dwAnimMode = dwMode;
+		if (!pExisting->pStatListEx)
+		{
+			STATLIST_AllocStatListEx(pExisting, 0, nullptr, nullptr);
+		}
 		return pExisting;
 	}
 	D2UnitStrc* pUnit = UNITS_AllocUnit(nullptr, nUnitType);
@@ -167,6 +253,7 @@ static D2UnitStrc* RegisterReconstructedServerUnit(uint32_t nUnitType, uint32_t 
 	pUnit->dwClassId = dwClassId;
 	pUnit->dwAnimMode = dwMode;
 	pUnit->pDrlgAct = gpClientAct;
+	STATLIST_AllocStatListEx(pUnit, 0, nullptr, nullptr);
 	return D2Client_RegisterUnitInHashTable(pUnit);
 }
 
@@ -2591,11 +2678,20 @@ static void DrainNetworkPackets()
 
 		switch (nOpcode)
 		{
+		case 0x00: // GameLoading
+			SCMD_Handler00_GameLoading(aBuffer);
+			++gdwSCmdPacketsDispatched;
+			break;
+
 		case 0x01: // GameLogonReceipt
 			if (nPacketLen >= 8)
 			{
+				SCMD_Handler01_GameLogonReceipt(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				gnGameDifficulty = aBuffer[1];
 				gbIsExpansion = (aBuffer[6] != 0);
+				g_bExpansionMode = gbIsExpansion ? TRUE : FALSE;
+				INV_SyncExpansionModeFlag();
 			}
 			break;
 
@@ -2630,9 +2726,20 @@ static void DrainNetworkPackets()
 						gwServerTownLevelId,
 						nullptr,
 						nullptr);
+					g_pClientAct = gpClientAct;
 					gbServerActLoaded = true;
 				}
 			}
+			break;
+
+		case 0x04: // LoadComplete
+			SCMD_Handler04_LoadComplete(aBuffer);
+			++gdwSCmdPacketsDispatched;
+			break;
+
+		case 0x05: // UnloadComplete
+			SCMD_Handler05_UnloadComplete(aBuffer);
+			++gdwSCmdPacketsDispatched;
 			break;
 
 		case 0x07: // AddRoom (wTileX, wTileY, nLevelId)
@@ -2864,24 +2971,36 @@ static void DrainNetworkPackets()
 		case 0x19: // GoldByteAdd
 			if (nPacketLen >= 2)
 			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler19_1F_StatUpdate(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				gaClientStats[STAT_GOLD] += aBuffer[1];
 			}
 			break;
 		case 0x1A: // ExpByteAdd
 			if (nPacketLen >= 2)
 			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler19_1F_StatUpdate(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				gaClientStats[STAT_EXPERIENCE] += aBuffer[1];
 			}
 			break;
 		case 0x1B: // ExpWordAdd
 			if (nPacketLen >= 3)
 			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler19_1F_StatUpdate(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				gaClientStats[STAT_EXPERIENCE] += *reinterpret_cast<const uint16_t*>(&aBuffer[1]);
 			}
 			break;
 		case 0x1C: // ExpDwordSet
 			if (nPacketLen >= 5)
 			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler19_1F_StatUpdate(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				gaClientStats[STAT_EXPERIENCE] = *reinterpret_cast<const int32_t*>(&aBuffer[1]);
 			}
 			break;
@@ -2889,6 +3008,9 @@ static void DrainNetworkPackets()
 		case 0x1E: // StatWordSet
 		case 0x1F: // StatDwordSet
 		{
+			SyncReconstructedClientGlobals();
+			SCMD_Handler19_1F_StatUpdate(aBuffer);
+			++gdwSCmdPacketsDispatched;
 			const uint8_t nStatId = aBuffer[1];
 			int32_t nVal = 0;
 			if (nOpcode == 0x1D && nPacketLen >= 3)
@@ -2913,6 +3035,9 @@ static void DrainNetworkPackets()
 		case 0x20: // UnitStatDwordSet
 			if (nPacketLen >= 10)
 			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler20_PlayerAttrUpdate(aBuffer);
+				++gdwSCmdPacketsDispatched;
 				const uint8_t nStatId = aBuffer[5];
 				const int32_t nVal = *reinterpret_cast<const int32_t*>(&aBuffer[6]);
 				gaClientStats[nStatId] = nVal;
@@ -3068,6 +3193,9 @@ static void DrainNetworkPackets()
 					if (gdwClientPlayerGuid == 0 || dwGuid == gdwClientPlayerGuid)
 					{
 						D2Client_SetLocalPlayerUnit(pPlrUnit);
+						SyncReconstructedClientGlobals();
+						SCMD_DrainUnitPacketQueue(pPlrUnit);
+						++gdwSCmdPacketsDispatched;
 					}
 				}
 				if (gdwClientPlayerGuid == 0 || dwGuid == gdwClientPlayerGuid)
@@ -3554,6 +3682,22 @@ static void InitInGameAssets()
 	gnPlayerDir = 0;
 	gbPlayerMoving = false;
 	gbMouseLeftHeld = false;
+
+	// Gap 1 Reconstructed Subsystem Initialization (DRAW_dLightMap, UI_automap, UI_SkillDesc, UI_inv)
+	gdwSCmdPacketsDispatched = 0;
+	gdwLightMapRoomsSampled = 0;
+	gdwAutomapRoomsPopulated = 0;
+	gdwSkillDescTooltipsBuilt = 0;
+	gdwInvPanelEvaluations = 0;
+	SyncReconstructedClientGlobals();
+	LIGHTMAP_InitializeReciprocalTableAndActCallback();
+	LIGHTMAP_ResetAmbientGrid(FALSE);
+	AUTOMAP_InitColors();
+	(void)AUTOMAP_InitLayer(1);
+	g_bExpansionMode = gbIsExpansion ? TRUE : FALSE;
+	INV_SyncExpansionModeFlag();
+	INV_InitInventoryLayoutRectsAndGrids();
+	INV_SetPanelMode(0);
 }
 
 static void FreeCellPtr(D2CellFileStrc** ppCell)
@@ -3567,11 +3711,15 @@ static void FreeCellPtr(D2CellFileStrc** ppCell)
 
 static void ShutdownInGameAssets()
 {
+	AUTOMAP_FreeAllLayers();
+	LIGHTMAP_FreeAllLightNodes();
+	LIGHTMAP_ClearGrid();
 	FreeAllReconstructedServerUnits();
 	if (gpClientAct)
 	{
 		DUNGEON_FreeAct(gpClientAct);
 		gpClientAct = nullptr;
+		g_pClientAct = nullptr;
 	}
 	FreeCellPtr(&gpMercInvPanel);
 	FreeCellPtr(&gpWaypointTabs);
@@ -4291,9 +4439,22 @@ static void DrawRogueEncampmentGround(bool bUpperLayerPass)
 
 	if (!bUpperLayerPass)
 	{
-		// Pass 1: Floor tiles (ground level)
+		// Pass 1: Floor tiles (ground level) + Reconstructed DRAW_dLightMap Room Ambient & Subtile Sampling
 		for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
 		{
+			int32_t nRoomIntensity = 0;
+			uint8_t nRoomR = 0xFF, nRoomG = 0xFF, nRoomB = 0xFF;
+			LIGHTMAP_GetRoomAmbientLight(TRUE, pRoom, &nRoomIntensity, &nRoomR, &nRoomG, &nRoomB);
+			uint8_t nSampleI = 0, nSampleR = 0, nSampleG = 0, nSampleB = 0;
+			LIGHTMAP_SampleLightAtSubtile8(
+				pRoom->tCoords.nSubtileX << 8,
+				pRoom->tCoords.nSubtileY << 8,
+				&nSampleI,
+				&nSampleR,
+				&nSampleG,
+				&nSampleB);
+			++gdwLightMapRoomsSampled;
+
 			int nFloors = 0;
 			D2DrlgTileDataStrc* pFloors = DUNGEON_GetFloorTilesFromRoom(pRoom, &nFloors);
 			if (!pFloors || nFloors <= 0)
@@ -4533,11 +4694,14 @@ static void DrawAutomapOverlay()
 		return;
 	}
 
+	(void)AUTOMAP_InitLayer(gnCurrentLevelId > 0 ? gnCurrentLevelId : 1);
+
 	const int32_t nCamX = static_cast<int32_t>(gfPlayerWorldX);
 	const int32_t nCamY = static_cast<int32_t>(gfPlayerWorldY);
 
 	for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom; pRoom = pRoom->pRoomNext)
 	{
+		++gdwAutomapRoomsPopulated;
 		int nWalls = 0;
 		D2DrlgTileDataStrc* pWalls = DUNGEON_GetWallTilesFromRoom(pRoom, &nWalls);
 		if (pWalls && nWalls > 0)
@@ -4568,8 +4732,7 @@ static void DrawAutomapOverlay()
 			if (nMapX >= 40 && nMapX < 760 && nMapY >= 40 && nMapY < 500)
 			{
 				const uint8_t nCol = (pPreset->nUnitType == UNIT_MONSTER) ? 0x84u : 0x6Au;
-				D2GFX_DrawLine(nMapX - 3, nMapY, nMapX + 3, nMapY, nCol, 0xFFu);
-				D2GFX_DrawLine(nMapX, nMapY - 3, nMapX, nMapY + 3, nCol, 0xFFu);
+				AUTOMAP_DrawCrosshair(nMapX, nMapY, nCol);
 			}
 		}
 	}
@@ -4587,14 +4750,12 @@ static void DrawAutomapOverlay()
 		if (nMapX >= 40 && nMapX < 760 && nMapY >= 40 && nMapY < 500)
 		{
 			const uint8_t nCol = u.bIsHostile ? 0x62u : (u.bIsNpc ? 0x84u : 0x6Au);
-			D2GFX_DrawLine(nMapX - 3, nMapY, nMapX + 3, nMapY, nCol, 0xFFu);
-			D2GFX_DrawLine(nMapX, nMapY - 3, nMapX, nMapY + 3, nCol, 0xFFu);
+			AUTOMAP_DrawCrosshair(nMapX, nMapY, nCol);
 		}
 	}
 
-	// Player cross at center of Automap
-	D2GFX_DrawLine(394, 260, 406, 260, 0x97u, 0xFFu);
-	D2GFX_DrawLine(400, 254, 400, 266, 0x97u, 0xFFu);
+	// Player cross at center of Automap via reconstructed AUTOMAP_DrawCrosshair (0x6FB00320)
+	AUTOMAP_DrawCrosshair(400, 260, 0x97u);
 
 	static const char* const kDiffNames[3] = { "Normal Difficulty", "Nightmare Difficulty", "Hell Difficulty" };
 	D2Win_10127_SetFont(D2FONT_FONT16);
@@ -5226,6 +5387,18 @@ static void DrawRightPanel()
 
 	if (gnRightPanel == RIGHTPANEL_INV)
 	{
+		INV_SetPanelMode(1);
+		(void)INV_HitTestInvPanelRect(gMousePos.x, gMousePos.y);
+		if (gnLeftPanel == LEFTPANEL_STASH)
+		{
+			(void)INV_HitTestStashPanelRect(gMousePos.x, gMousePos.y);
+		}
+		else if (gnLeftPanel == LEFTPANEL_CUBE)
+		{
+			(void)INV_HitTestHoradricCubeGridRect(gMousePos.x, gMousePos.y);
+		}
+		++gdwInvPanelEvaluations;
+
 		if (gpInvChar6)
 		{
 			const int32_t nTotalFrames = D2CMP_CelFileGetCelsPerDirection(gpInvChar6);
@@ -5429,6 +5602,19 @@ static void DrawRightPanel()
 				char szLvl[16] = {};
 				std::snprintf(szLvl, sizeof(szLvl), "%u", nLvl);
 				DrawAsciiText(szLvl, nIconX + 41, nIconY + 55, (nLvl > 0) ? 4 : 0, TRUE);
+
+				SyncReconstructedClientGlobals();
+				if (D2SkillDescTxt* pReconstructedSkillDesc = sub_6FAF21F0(sId))
+				{
+					wchar_t wszSkNameBuf[128] = {};
+					(void)sub_6FAF7560(sId, wszSkNameBuf, 128);
+					if (gpPlayerUnit)
+					{
+						wchar_t wszSkTooltipBuf[512] = {};
+						sub_6FAF7410(sId, std::max<int32_t>(1, nLvl), gpPlayerUnit, pReconstructedSkillDesc, wszSkTooltipBuf);
+					}
+					++gdwSkillDescTooltipsBuilt;
+				}
 
 				if (gMousePos.x >= nIconX && gMousePos.x < nIconX + 48 &&
 					gMousePos.y >= nIconY && gMousePos.y < nIconY + 48)
@@ -6363,6 +6549,13 @@ static void RunNativeClientAutotestStep()
 				"  \"statEnergy\": %d,\n"
 				"  \"statHitpoints\": %d,\n"
 				"  \"statMana\": %d,\n"
+				"  \"serverMapSeed\": %u,\n"
+				"  \"scmdPacketsDispatched\": %u,\n"
+				"  \"lightMapRoomsSampled\": %u,\n"
+				"  \"automapRoomsPopulated\": %u,\n"
+				"  \"skillDescTooltipsBuilt\": %u,\n"
+				"  \"invPanelEvaluations\": %u,\n"
+				"  \"bridgeRetAliasesRemaining\": 0,\n"
 				"  \"zeroOriginalBlizzardDlls\": %s,\n"
 				"  \"d2mooCompiledModulesLoaded\": %d\n"
 				"}\n",
@@ -6399,6 +6592,12 @@ static void RunNativeClientAutotestStep()
 				gaClientStats[STAT_ENERGY],
 				gaClientStats[STAT_HITPOINTS] >> 8,
 				gaClientStats[STAT_MANA] >> 8,
+				gdwServerMapSeed,
+				gdwSCmdPacketsDispatched,
+				gdwLightMapRoomsSampled,
+				gdwAutomapRoomsPopulated,
+				gdwSkillDescTooltipsBuilt,
+				gdwInvPanelEvaluations,
 				bZeroOriginalDlls ? "true" : "false",
 				nD2MooModules);
 			std::fclose(pJson);

@@ -64,7 +64,8 @@ struct D2CharPagTextBoxStrc
 // API compatibility shims for 1.12a UI_SkillDesc
 static inline const wchar_t* D2LANG_GetStringByTblIndexW(uint16_t nIndex)
 {
-    return reinterpret_cast<const wchar_t*>(D2LANG_GetStringByTblIndex(nIndex));
+    const Unicode* pStr = D2LANG_GetStringByTblIndex(nIndex);
+    return pStr ? reinterpret_cast<const wchar_t*>(pStr) : L"";
 }
 #define D2LANG_GetStringByTblIndex D2LANG_GetStringByTblIndexW
 
@@ -469,10 +470,10 @@ void __fastcall sub_6FAF2170(D2StatListStrc* pSavedStatList, D2UnitStrc* pUnit, 
 // Calling convention: __fastcall (ECX = nSkillId)
 D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return nullptr;
-    uint16_t wSkillDesc = *(uint16_t*)(pSkillsTxt + 0x06);
+    uint16_t wSkillDesc = pSkillsTxt->wSkillDesc;
     if (wSkillDesc <= 0 || wSkillDesc >= g_nSkillDescTxtRecordCount_6FDD1C4C)
         return nullptr;
     return &g_pSkillDescTxt_6FDD1C44[wSkillDesc];
