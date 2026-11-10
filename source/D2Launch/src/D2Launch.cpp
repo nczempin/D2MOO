@@ -2068,6 +2068,7 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 		if ((GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szAutotest, sizeof(szAutotest)) > 0 && szAutotest[0] == '1') ||
 		    (szCmdLine && strstr(szCmdLine, "--autotest-native") != nullptr))
 		{
+			SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 			SetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", "1");
 			SetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", "1");
 			SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", "0");

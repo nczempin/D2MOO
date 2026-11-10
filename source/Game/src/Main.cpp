@@ -712,10 +712,60 @@ int GAMEAPI GameInit(DWORD dwNumServicesArgs, const char* lpServiceArgVectors[])
 #endif
 }
 
+static DWORD WINAPI AutotestWatchdogThreadProc(LPVOID lpParam)
+{
+	const DWORD dwTimeoutMs = static_cast<DWORD>(reinterpret_cast<uintptr_t>(lpParam));
+	Sleep(dwTimeoutMs);
+	TerminateProcess(GetCurrentProcess(), 124);
+	return 124;
+}
+
+static void StartAutotestWatchdogIfNeeded(const char* szCmdLine)
+{
+	char szTimeoutEnv[32] = {};
+	char szNativeAuto[16] = {};
+	char szMenuAuto[16] = {};
+	const bool bHasTimeoutEnv =
+		(GetEnvironmentVariableA("D2MOO_AUTOTEST_TIMEOUT_SEC", szTimeoutEnv, sizeof(szTimeoutEnv)) > 0 && szTimeoutEnv[0] != '\0');
+	const bool bIsAutotest =
+		bHasTimeoutEnv ||
+		(szCmdLine && strstr(szCmdLine, "--autotest") != nullptr) ||
+		(GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szNativeAuto, sizeof(szNativeAuto)) > 0 && szNativeAuto[0] == '1') ||
+		(GetEnvironmentVariableA("D2MOO_MENU_AUTOTEST", szMenuAuto, sizeof(szMenuAuto)) > 0 && szMenuAuto[0] == '1');
+	if (!bIsAutotest)
+	{
+		return;
+	}
+
+	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+
+	DWORD dwTimeoutSec = 25;
+	if (bHasTimeoutEnv)
+	{
+		const unsigned long ulParsed = strtoul(szTimeoutEnv, nullptr, 10);
+		if (ulParsed > 0 && ulParsed <= 3600)
+		{
+			dwTimeoutSec = static_cast<DWORD>(ulParsed);
+		}
+	}
+	HANDLE hThread = CreateThread(
+		nullptr,
+		0,
+		AutotestWatchdogThreadProc,
+		reinterpret_cast<LPVOID>(static_cast<uintptr_t>(dwTimeoutSec * 1000u)),
+		0,
+		nullptr);
+	if (hThread)
+	{
+		CloseHandle(hThread);
+	}
+}
+
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, INT nShowCmd)
 {
 	ghCurrentProcess = hInstance;
 	gnCmdShow = nShowCmd;
+	StartAutotestWatchdogIfNeeded(lpCmdLine);
 
 	const bool bHasBuildVersion = GetVersion() & 0x80000000; // NOLINT(clang-diagnostic-deprecated-declarations)
 

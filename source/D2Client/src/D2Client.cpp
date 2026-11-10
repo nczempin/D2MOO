@@ -7689,8 +7689,8 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 				TranslateMessage(&msg);
 				DispatchMessageA(&msg);
 			}
-			if (bUseOriginalClient && tWebProcInfo.hProcess &&
-				WaitForSingleObject(tWebProcInfo.hProcess, 0) == WAIT_OBJECT_0)
+			if ((bUseOriginalClient || bUseTsClient) &&
+				(!tWebProcInfo.hProcess || WaitForSingleObject(tWebProcInfo.hProcess, 0) == WAIT_OBJECT_0))
 			{
 				gbWindowClosed = 1;
 			}
