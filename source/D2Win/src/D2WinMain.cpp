@@ -857,6 +857,25 @@ void __stdcall D2Win_10019()
 
 		if (gpCursorCellFile && dword_6F8BDE18)
 		{
+			if (HWND hMenuWnd = WINDOW_GetWindow())
+			{
+				if (GetForegroundWindow() == hMenuWnd)
+				{
+					POINT pt = {};
+					RECT rcCli = {};
+					if (GetCursorPos(&pt) && ScreenToClient(hMenuWnd, &pt) && GetClientRect(hMenuWnd, &rcCli))
+					{
+						const int nCliW = (rcCli.right - rcCli.left) > 0 ? (rcCli.right - rcCli.left) : 1;
+						const int nCliH = (rcCli.bottom - rcCli.top) > 0 ? (rcCli.bottom - rcCli.top) : 1;
+						if (pt.x >= 0 && pt.x < nCliW && pt.y >= 0 && pt.y < nCliH)
+						{
+							gMousePosition_6F8FE234.x = (pt.x * nScreenWidth) / nCliW;
+							gMousePosition_6F8FE234.y = (pt.y * nScreenHeight) / nCliH;
+						}
+					}
+				}
+			}
+
 			int nX = gMousePosition_6F8FE234.x;
 			int nY = gMousePosition_6F8FE234.y;
 			dword_6F8FE228 = gMousePosition_6F8FE234.x;
@@ -894,6 +913,12 @@ LRESULT __stdcall D2Win_MAINWINDOW_WndProc_6F8AD9B0(HWND hWnd, UINT Msg, WPARAM 
 	if (!dword_6F8FE26C)
 	{
 		return 0;
+	}
+
+	if (Msg == WM_SETCURSOR && LOWORD(lParam) == HTCLIENT)
+	{
+		SetCursor(nullptr);
+		return TRUE;
 	}
 
 	if (Msg == WM_MOUSEMOVE || Msg == WM_LBUTTONDOWN || Msg == WM_LBUTTONUP ||

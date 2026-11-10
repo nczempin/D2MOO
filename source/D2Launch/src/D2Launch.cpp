@@ -174,7 +174,7 @@ static D2WinButtonStrc* gpBtnDeleteChar = nullptr;
 static D2WinButtonStrc* gpBtnCharSelectOk = nullptr;
 static D2WinButtonStrc* gpBtnClientModeToggle = nullptr;
 // 0 = TS Web Client, 1 = Original 1.12a Binary Client, 2 = Native C++ Client
-static int32_t gnClientMode = 0;
+static int32_t gnClientMode = 2;
 static bool gbClientModeInitialized = false;
 static int32_t gnSelectedSlotIndex = -1;
 static DWORD gdwLastSlotClickTick = 0;
@@ -186,7 +186,11 @@ static void SyncClientModeEnv()
 		char szNativeEnv[16] = {};
 		char szOrigEnv[16] = {};
 		char szTsEnv[16] = {};
-		if (GetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", szNativeEnv, sizeof(szNativeEnv)) > 0 && szNativeEnv[0] != '0')
+		char szAutotestEnv[16] = {};
+		const char* szCmdLine = GetCommandLineA();
+		if ((GetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", szNativeEnv, sizeof(szNativeEnv)) > 0 && szNativeEnv[0] != '0') ||
+			(GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szAutotestEnv, sizeof(szAutotestEnv)) > 0 && szAutotestEnv[0] != '0') ||
+			(szCmdLine && std::strstr(szCmdLine, "--autotest-native") != nullptr))
 		{
 			gnClientMode = 2;
 		}
@@ -194,13 +198,13 @@ static void SyncClientModeEnv()
 		{
 			gnClientMode = 1;
 		}
-		else if (GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szTsEnv, sizeof(szTsEnv)) > 0)
+		else if (GetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", szTsEnv, sizeof(szTsEnv)) > 0 && szTsEnv[0] != '0')
 		{
-			gnClientMode = (szTsEnv[0] != '0') ? 0 : 2;
+			gnClientMode = 0;
 		}
 		else
 		{
-			gnClientMode = 0;
+			gnClientMode = 2;
 		}
 		gbClientModeInitialized = true;
 	}
@@ -2054,6 +2058,7 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 	D2Win_10005(D2GAMERES_800x600);
 	SyncClientModeEnv();
 
+	bool bAutoExitSession = false;
 	char szAutoChar[32] = {};
 	DWORD nAutoCharLen = GetEnvironmentVariableA("D2MOO_AUTO_CHAR", szAutoChar, sizeof(szAutoChar));
 	if (nAutoCharLen == 0 || szAutoChar[0] == '\0')
@@ -2063,6 +2068,9 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 		if ((GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szAutotest, sizeof(szAutotest)) > 0 && szAutotest[0] == '1') ||
 		    (szCmdLine && strstr(szCmdLine, "--autotest-native") != nullptr))
 		{
+			SetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", "1");
+			SetEnvironmentVariableA("D2MOO_USE_NATIVE_CLIENT", "1");
+			SetEnvironmentVariableA("D2MOO_USE_TS_CLIENT", "0");
 			strcpy_s(szAutoChar, "ExpansionHero");
 			nAutoCharLen = static_cast<DWORD>(strlen(szAutoChar));
 		}
@@ -2073,6 +2081,7 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 		{
 			// Returned from D2Client after an auto-entered session: exit cleanly
 			gdwNextModule = D2LAUNCH_MODULE_NONE;
+			bAutoExitSession = true;
 		}
 		else
 		{
@@ -2152,7 +2161,7 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 		D2LAUNCH_EnterMainMenu(0);
 	}
 
-	if (gdwNextModule == D2LAUNCH_MODULE_NONE)
+	if (gdwNextModule == D2LAUNCH_MODULE_NONE && !bAutoExitSession)
 	{
 		D2Win_10010(D2LAUNCH_OnCloseWindow);
 		D2Win_10008(D2LAUNCH_IdleCallback);

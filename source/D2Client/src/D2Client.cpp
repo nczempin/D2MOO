@@ -361,7 +361,7 @@ static int32_t gnStashGold = 2500;
 static int32_t gnWaypointActTab = 0;   // 0..4 (Acts I..V)
 static uint32_t gdwWaypointUnlockMask[5] = { 0x1FFu, 0x1FFu, 0x1FFu, 0x007u, 0x1FFu };
 static uint32_t gdwActiveWaypointGuid = 0;
-static bool gbMercHired = true;
+static bool gbMercHired = false;
 static uint32_t gdwMercUnitGuid = 0;
 static uint16_t gwMercClassId = 271;   // Rogue Scout (Act 1)
 static int32_t gnMercLevel = 5;
@@ -369,6 +369,7 @@ static int32_t gnMercLifePct = 128;
 static char gszMercName[32] = "Kyoko";
 static bool gbBeltExpanded = false;
 static int32_t gnCursorItemIdx = -1;
+static int32_t gnActiveWeaponSet = 0;  // 0 = Weapon Set I, 1 = Weapon Set II
 static bool gbChatInputOpen = false;
 static char gszChatInputBuf[96] = {};
 static int32_t gnChatInputLen = 0;
@@ -879,9 +880,238 @@ static void SendDropCursorItem_17(uint32_t dwItemGuid)
 	MSG_SendByteDword(0x17u, dwItemGuid);
 }
 
+// C2S 0x1A: EquipItem (dwItemGUID, wBodyLoc)
+static void SendEquipItem_1A(uint32_t dwItemGuid, uint16_t wBodyLoc)
+{
+	uint8_t aPkt[9] = {};
+	aPkt[0] = 0x1Au;
+	*reinterpret_cast<uint32_t*>(&aPkt[1]) = dwItemGuid;
+	*reinterpret_cast<uint16_t*>(&aPkt[5]) = wBodyLoc;
+	MSG_SendPacket(aPkt, sizeof(aPkt));
+}
+
+// C2S 0x1C: RemoveBodyItem (wBodyLoc)
+static void SendRemoveBodyItem_1C(uint16_t wBodyLoc)
+{
+	MSG_SendByteWord(0x1Cu, wBodyLoc);
+}
+
+// C2S 0x1D: SwapCursorWithBodyItem (dwItemGUID, wBodyLoc)
+static void SendSwapBodyItem_1D(uint32_t dwItemGuid, uint16_t wBodyLoc)
+{
+	uint8_t aPkt[9] = {};
+	aPkt[0] = 0x1Du;
+	*reinterpret_cast<uint32_t*>(&aPkt[1]) = dwItemGuid;
+	*reinterpret_cast<uint16_t*>(&aPkt[5]) = wBodyLoc;
+	MSG_SendPacket(aPkt, sizeof(aPkt));
+}
+
+static void SwapClientWeaponSetItems()
+{
+	gnActiveWeaponSet = 1 - gnActiveWeaponSet;
+	for (int32_t i = 0; i < kMaxClientItems; ++i)
+	{
+		ClientItemEntry& it = gClientItems[i];
+		if (!it.bActive || it.nLocation != CLI_ITEMLOC_EQUIPPED)
+		{
+			continue;
+		}
+		if (it.nBodyLoc == BODYLOC_RARM)
+		{
+			it.nBodyLoc = BODYLOC_SWRARM;
+		}
+		else if (it.nBodyLoc == BODYLOC_SWRARM)
+		{
+			it.nBodyLoc = BODYLOC_RARM;
+		}
+		else if (it.nBodyLoc == BODYLOC_LARM)
+		{
+			it.nBodyLoc = BODYLOC_SWLARM;
+		}
+		else if (it.nBodyLoc == BODYLOC_SWLARM)
+		{
+			it.nBodyLoc = BODYLOC_LARM;
+		}
+	}
+}
+
+static void GetBodySlotRect800x600(int32_t nBodyLoc, int32_t* pX, int32_t* pY, int32_t* pW, int32_t* pH)
+{
+	static const int32_t kFallbackRects[11][4] = {
+		{ 0,   0,   0,  0 },   // 0: None
+		{ 533, 63,  56, 56 },  // 1: HEAD
+		{ 605, 92,  29, 29 },  // 2: NECK
+		{ 533, 132, 56, 85 },  // 3: TORSO
+		{ 419, 108, 56, 112 }, // 4: RARM
+		{ 647, 108, 56, 112 }, // 5: LARM
+		{ 492, 240, 29, 29 },  // 6: RRIN
+		{ 605, 240, 29, 29 },  // 7: LRIN
+		{ 533, 240, 56, 29 },  // 8: BELT
+		{ 647, 240, 56, 56 },  // 9: FEET
+		{ 419, 240, 56, 56 },  // 10: GLOVES
+	};
+	static const int32_t kBodyLocToInvComp[11] = {
+		-1,
+		INV_COMP_HEAD,
+		INV_COMP_NECK,
+		INV_COMP_TORSO,
+		INV_COMP_RARM,
+		INV_COMP_LARM,
+		INV_COMP_RHAND,
+		INV_COMP_LHAND,
+		INV_COMP_BELT,
+		INV_COMP_FEET,
+		INV_COMP_GLOVES,
+	};
+	if (nBodyLoc < 1 || nBodyLoc > 10)
+	{
+		*pX = *pY = *pW = *pH = 0;
+		return;
+	}
+	if (sgptDataTables && sgptDataTables->pInventoryTxt && sgptDataTables->nInventoryTxtRecordCount > 16)
+	{
+		D2InvCompGridStrc tComp = {};
+		DATATBLS_GetInventoryComponentGrid(0, 1, &tComp, kBodyLocToInvComp[nBodyLoc]);
+		if (tComp.rect.nRight > tComp.rect.nLeft && tComp.rect.nBottom > tComp.rect.nTop)
+		{
+			*pX = tComp.rect.nLeft;
+			*pY = tComp.rect.nTop;
+			*pW = tComp.rect.nRight - tComp.rect.nLeft;
+			*pH = tComp.rect.nBottom - tComp.rect.nTop;
+			return;
+		}
+	}
+	*pX = kFallbackRects[nBodyLoc][0];
+	*pY = kFallbackRects[nBodyLoc][1];
+	*pW = kFallbackRects[nBodyLoc][2];
+	*pH = kFallbackRects[nBodyLoc][3];
+}
+
+static void GetInvGridLayout800x600(int32_t* pLeft, int32_t* pTop, int32_t* pBoxW, int32_t* pBoxH)
+{
+	if (sgptDataTables && sgptDataTables->pInventoryTxt && sgptDataTables->nInventoryTxtRecordCount > 16)
+	{
+		D2InventoryGridInfoStrc tGrid = {};
+		DATATBLS_GetInventoryGridInfo(0, 1, &tGrid);
+		if (tGrid.nGridBoxWidth > 0 && tGrid.nGridBoxHeight > 0)
+		{
+			*pLeft = tGrid.nGridLeft;
+			*pTop = tGrid.nGridTop;
+			*pBoxW = tGrid.nGridBoxWidth;
+			*pBoxH = tGrid.nGridBoxHeight;
+			return;
+		}
+	}
+	*pLeft = 419;
+	*pTop = 315;
+	*pBoxW = 29;
+	*pBoxH = 29;
+}
+
+static int32_t GetVendorItemCategoryTab(uint16_t wItemClassId)
+{
+	if (!sgptDataTables)
+	{
+		return 3;
+	}
+	const int32_t nWeapons = sgptDataTables->pItemDataTables.nWeaponsTxtRecordCount;
+	const int32_t nArmor = sgptDataTables->pItemDataTables.nArmorTxtRecordCount;
+	if (static_cast<int32_t>(wItemClassId) < nWeapons)
+	{
+		return 2; // Weapons
+	}
+	if (static_cast<int32_t>(wItemClassId) < nWeapons + nArmor)
+	{
+		return 1; // Armor
+	}
+	return 3; // Misc
+}
+
+static int32_t BuildVendorTabItemList(int32_t nTab, int32_t* pOutIndices, int32_t nMaxOut)
+{
+	int32_t nCount = 0;
+	auto isItemAlreadyAddedOrSameClass = [&](int32_t idx, bool bDedupeByClass) -> bool {
+		for (int32_t k = 0; k < nCount; ++k)
+		{
+			if (pOutIndices[k] == idx)
+			{
+				return true;
+			}
+			if (bDedupeByClass && gClientItems[pOutIndices[k]].wItemClassId == gClientItems[idx].wItemClassId)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	// Pass 1: On "All" tab (0), prioritize distinct Misc consumables (Scrolls, Tomes, Potions, Keys) first, then distinct Weapons/Armor
+	if (nTab == 0)
+	{
+		for (int32_t pass = 0; pass < 2 && nCount < nMaxOut; ++pass)
+		{
+			for (int32_t i = 0; i < kMaxClientItems && nCount < nMaxOut; ++i)
+			{
+				const ClientItemEntry& it = gClientItems[i];
+				if (!it.bActive || (it.nLocation != CLI_ITEMLOC_VENDOR && it.nAction != 0x0B))
+				{
+					continue;
+				}
+				const int32_t nCat = GetVendorItemCategoryTab(it.wItemClassId);
+				if ((pass == 0 && nCat != 3) || (pass == 1 && nCat == 3))
+				{
+					continue;
+				}
+				if (!isItemAlreadyAddedOrSameClass(i, true))
+				{
+					pOutIndices[nCount++] = i;
+				}
+			}
+		}
+	}
+	else
+	{
+		// Specific tab (1=Armor, 2=Weapons, 3=Misc): first distinct base types, then remaining items in that category
+		for (int32_t bDedupe = 1; bDedupe >= 0 && nCount < nMaxOut; --bDedupe)
+		{
+			for (int32_t i = 0; i < kMaxClientItems && nCount < nMaxOut; ++i)
+			{
+				const ClientItemEntry& it = gClientItems[i];
+				if (!it.bActive || (it.nLocation != CLI_ITEMLOC_VENDOR && it.nAction != 0x0B))
+				{
+					continue;
+				}
+				if (GetVendorItemCategoryTab(it.wItemClassId) != nTab)
+				{
+					continue;
+				}
+				if (!isItemAlreadyAddedOrSameClass(i, bDedupe != 0))
+				{
+					pOutIndices[nCount++] = i;
+				}
+			}
+		}
+	}
+
+	// Fallback if a tab had fewer than nMaxOut items on "All"
+	if (nTab == 0 && nCount < nMaxOut)
+	{
+		for (int32_t i = 0; i < kMaxClientItems && nCount < nMaxOut; ++i)
+		{
+			const ClientItemEntry& it = gClientItems[i];
+			if (it.bActive && (it.nLocation == CLI_ITEMLOC_VENDOR || it.nAction == 0x0B) && !isItemAlreadyAddedOrSameClass(i, false))
+			{
+				pOutIndices[nCount++] = i;
+			}
+		}
+	}
+	return nCount;
+}
+
 // C2S 0x49: WaypointTeleport (dwWaypointGUID, nDestinationLevelId)
 static void SendWaypointTeleport_49(uint32_t dwWaypointGuid, uint8_t nDestLevelId, uint8_t nTargetAct)
 {
+	(void)nTargetAct;
 	uint8_t aPkt[9] = {};
 	aPkt[0] = 0x49u;
 	*reinterpret_cast<uint32_t*>(&aPkt[1]) = dwWaypointGuid;
@@ -890,13 +1120,6 @@ static void SendWaypointTeleport_49(uint32_t dwWaypointGuid, uint8_t nDestLevelI
 	++gdwWaypointsUsed;
 	if (nDestLevelId > 0)
 	{
-		if (nTargetAct != gnCurrentAct)
-		{
-			gnTransitionTargetAct = nTargetAct;
-			gdwActTransitionEndTick = GetTickCount() + 2200u;
-			gnCurrentAct = nTargetAct;
-		}
-		gnCurrentLevelId = nDestLevelId;
 		gnLeftPanel = LEFTPANEL_NONE;
 		SpawnClientOverlay(UNIT_PLAYER, gdwClientPlayerGuid, 120u, 0x97u, 28);
 		D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\waygate.wav");
@@ -1305,6 +1528,24 @@ static void HandleRightClickCast(int32_t nScreenX, int32_t nScreenY)
 		return;
 	}
 
+	// Right-click inside open Vendor Trade Panel (x=92..388, y=114..394): buy item immediately (0x32)
+	if (gnLeftPanel == LEFTPANEL_VENDOR && gnActiveNpcGuid != 0 &&
+		nScreenX >= 92 && nScreenX < 388 && nScreenY >= 114 && nScreenY < 394)
+	{
+		int32_t aVendorItemIndices[10] = {};
+		const int32_t nVendorCount = BuildVendorTabItemList(gnVendorActiveTab, aVendorItemIndices, 10);
+		const int32_t nClickedRow = (nScreenY - 114) / 28;
+		if (nClickedRow >= 0 && nClickedRow < nVendorCount)
+		{
+			const int32_t nItemIdx = aVendorItemIndices[nClickedRow];
+			gnSelectedVendorItemIdx = nItemIdx;
+			const ClientItemEntry& it = gClientItems[nItemIdx];
+			SendTownFolkBuy(gnActiveNpcGuid, it.dwItemGuid, 0u, it.dwCost);
+			D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
+		}
+		return;
+	}
+
 	// Right-click inside open Inventory Panel (x=418..708, y=315..431): use item (0x20) or sell to vendor (0x33)
 	if (gnRightPanel == RIGHTPANEL_INV && nScreenX >= 418 && nScreenX < 708 && nScreenY >= 315 && nScreenY < 431)
 	{
@@ -1399,18 +1640,15 @@ static void ActivateNpcMenuOption(int32_t nOption)
 	}
 	else if (nOption == 1) // Trade / Gamble / Hire / Travel
 	{
-		if (gwActiveNpcClassId == 155) // Warriv -> Travel East to Act II Lut Gholein
+		if (gwActiveNpcClassId == 155) // Warriv -> Travel East to Act II Lut Gholein (only if unlocked on server)
 		{
 			SendTownFolkMenuSelect(2u, gnActiveNpcGuid, 0u);
-			SendWaypointTeleport_49(gnActiveNpcGuid, LEVEL_LUTGHOLEIN, 1);
-			AppendClientChatLog("Warriv: Travelling East to Act II - Lut Gholein.");
 			CloseNpcDialogAndVendor();
 			return;
 		}
 		if (gwActiveNpcClassId == 150 || gwActiveNpcClassId == 198 || gwActiveNpcClassId == 252 || gwActiveNpcClassId == 515) // Mercenary Captains
 		{
 			SendHireMerc_36(gnActiveNpcGuid, 0u);
-			SendResurrectMerc_62(gnActiveNpcGuid);
 			CloseNpcDialogAndVendor();
 			gnLeftPanel = LEFTPANEL_MERC;
 			gnRightPanel = RIGHTPANEL_INV;
@@ -1668,48 +1906,35 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 		// NPC Vendor Trade Panel interactions (tabs, item list, Buy button, Repair All button)
 		if (gnLeftPanel == LEFTPANEL_VENDOR)
 		{
-			// 4 Category Tabs (All, Armor, Weapons, Misc at y=86..112)
-			if (nY >= 86 && nY <= 112 && nX >= 92 && nX < 388)
+			// 4 Category Tabs (All, Armor, Weapons, Misc at y=80..110)
+			if (nY >= 80 && nY <= 110 && nX >= 88 && nX < 392)
 			{
-				gnVendorActiveTab = std::max<int32_t>(0, std::min<int32_t>((nX - 92) / 74, 3));
+				gnVendorActiveTab = std::max<int32_t>(0, std::min<int32_t>((nX - 88) / 76, 3));
 				gnSelectedVendorItemIdx = -1;
 				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 				return true;
 			}
-			// Item rows (y=120..400, 10 rows of 28px each)
-			if (nY >= 120 && nY < 400 && nX >= 92 && nX < 388)
+			// Item rows (y=114..394, 10 rows of 28px each)
+			if (nY >= 114 && nY < 394 && nX >= 92 && nX < 388)
 			{
-				const int32_t nClickedRow = (nY - 120) / 28;
-				int32_t nVisibleRow = 0;
-				for (int32_t i = 0; i < kMaxClientItems; ++i)
+				int32_t aVendorItemIndices[10] = {};
+				const int32_t nVendorCount = BuildVendorTabItemList(gnVendorActiveTab, aVendorItemIndices, 10);
+				const int32_t nClickedRow = (nY - 114) / 28;
+				if (nClickedRow >= 0 && nClickedRow < nVendorCount)
 				{
-					const ClientItemEntry& it = gClientItems[i];
-					if (!it.bActive || it.nLocation != CLI_ITEMLOC_VENDOR)
+					const int32_t nItemIdx = aVendorItemIndices[nClickedRow];
+					const ClientItemEntry& it = gClientItems[nItemIdx];
+					if (gnSelectedVendorItemIdx == nItemIdx && gnActiveNpcGuid != 0)
 					{
-						continue;
+						SendTownFolkBuy(gnActiveNpcGuid, it.dwItemGuid, 0u, it.dwCost);
+						D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
 					}
-					if (gnVendorActiveTab != 0 && (it.nStorePage + 1) != gnVendorActiveTab)
+					else
 					{
-						continue;
+						gnSelectedVendorItemIdx = nItemIdx;
+						D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 					}
-					if (nVisibleRow == nClickedRow)
-					{
-						if (gnSelectedVendorItemIdx == i && gnActiveNpcGuid != 0)
-						{
-							SendTownFolkBuy(gnActiveNpcGuid, it.dwItemGuid, 0u, it.dwCost);
-							D2SOUND_FastPlaySound("data\\global\\sfx\\items\\gold.wav");
-						}
-						else
-						{
-							gnSelectedVendorItemIdx = i;
-							D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
-						}
-						return true;
-					}
-					if (++nVisibleRow >= 10)
-					{
-						break;
-					}
+					return true;
 				}
 			}
 			// [BUY ITEM] Button (x=96..210, y=408..438)
@@ -1717,7 +1942,7 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 			{
 				if (gnSelectedVendorItemIdx >= 0 && gnSelectedVendorItemIdx < kMaxClientItems &&
 					gClientItems[gnSelectedVendorItemIdx].bActive &&
-					gClientItems[gnSelectedVendorItemIdx].nLocation == CLI_ITEMLOC_VENDOR &&
+					(gClientItems[gnSelectedVendorItemIdx].nLocation == CLI_ITEMLOC_VENDOR || gClientItems[gnSelectedVendorItemIdx].nAction == 0x0B) &&
 					gnActiveNpcGuid != 0)
 				{
 					const ClientItemEntry& it = gClientItems[gnSelectedVendorItemIdx];
@@ -1915,35 +2140,123 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 			D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 			return true;
 		}
-		// Inventory 10x4 grid left-click item pickup/drop onto cursor (C2S 0x18 / 0x19)
-		if (gnRightPanel == RIGHTPANEL_INV && nX >= 418 && nX < 418 + 10 * 29 && nY >= 315 && nY < 315 + 4 * 29)
+		if (gnRightPanel == RIGHTPANEL_INV)
 		{
-			const int32_t gX = (nX - 418) / 29;
-			const int32_t gY = (nY - 315) / 29;
-			if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+			// Weapon Switch I / II tabs above left & right weapon slots (C2S 0x60 SwapWeapons)
+			if ((nX >= 414 && nX <= 478 && nY >= 80 && nY <= 108) ||
+				(nX >= 642 && nX <= 706 && nY >= 80 && nY <= 108))
 			{
-				ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
-				cur.nLocation = CLI_ITEMLOC_CONTAINER;
-				cur.nStorePage = 0;
-				cur.nGridX = gX;
-				cur.nGridY = gY;
-				SendInsertItemToBuffer_18(cur.dwItemGuid, static_cast<uint32_t>(gX), static_cast<uint32_t>(gY), 0u);
-				gnCursorItemIdx = -1;
+				MSG_SendByte(0x60u);
 				D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 				return true;
 			}
-			for (int32_t i = 0; i < kMaxClientItems; ++i)
+
+			// Paperdoll equipment slots 1..10 (C2S 0x1C RemoveBodyItem / 0x1A EquipItem / 0x1D SwapBodyItem)
+			for (int32_t nBodyLoc = 1; nBodyLoc <= 10; ++nBodyLoc)
 			{
-				ClientItemEntry& it = gClientItems[i];
-				if (it.bActive && it.nLocation == CLI_ITEMLOC_CONTAINER &&
-					gX >= it.nGridX && gX < it.nGridX + it.nInvW &&
-					gY >= it.nGridY && gY < it.nGridY + it.nInvH)
+				int32_t nSlotX = 0, nSlotY = 0, nSlotW = 0, nSlotH = 0;
+				GetBodySlotRect800x600(nBodyLoc, &nSlotX, &nSlotY, &nSlotW, &nSlotH);
+				if (nX < nSlotX || nX >= nSlotX + nSlotW || nY < nSlotY || nY >= nSlotY + nSlotH)
 				{
-					it.nLocation = CLI_ITEMLOC_CURSOR;
-					gnCursorItemIdx = i;
-					SendRemoveItemFromBuffer_19(it.dwItemGuid);
+					continue;
+				}
+				int32_t nEquippedIdx = -1;
+				for (int32_t i = 0; i < kMaxClientItems; ++i)
+				{
+					if (gClientItems[i].bActive && gClientItems[i].nLocation == CLI_ITEMLOC_EQUIPPED &&
+						gClientItems[i].nBodyLoc == static_cast<uint8_t>(nBodyLoc))
+					{
+						nEquippedIdx = i;
+						break;
+					}
+				}
+				if (nEquippedIdx < 0 && (nBodyLoc == BODYLOC_RARM || nBodyLoc == BODYLOC_LARM))
+				{
+					const uint8_t nOtherArm = (nBodyLoc == BODYLOC_RARM) ? BODYLOC_LARM : BODYLOC_RARM;
+					for (int32_t i = 0; i < kMaxClientItems; ++i)
+					{
+						if (gClientItems[i].bActive && gClientItems[i].nLocation == CLI_ITEMLOC_EQUIPPED &&
+							gClientItems[i].nBodyLoc == nOtherArm)
+						{
+							if (D2ItemsTxt* pTxt = DATATBLS_GetItemsTxtRecord(gClientItems[i].wItemClassId))
+							{
+								if (pTxt->n2Handed)
+								{
+									nEquippedIdx = i;
+									break;
+								}
+							}
+						}
+					}
+				}
+
+				if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+				{
+					ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
+					if (nEquippedIdx >= 0)
+					{
+						ClientItemEntry& eq = gClientItems[nEquippedIdx];
+						const uint16_t wTargetLoc = static_cast<uint16_t>(eq.nBodyLoc ? eq.nBodyLoc : nBodyLoc);
+						SendSwapBodyItem_1D(cur.dwItemGuid, wTargetLoc);
+						cur.nLocation = CLI_ITEMLOC_EQUIPPED;
+						cur.nBodyLoc = static_cast<uint8_t>(wTargetLoc);
+						eq.nLocation = CLI_ITEMLOC_CURSOR;
+						gnCursorItemIdx = nEquippedIdx;
+					}
+					else
+					{
+						SendEquipItem_1A(cur.dwItemGuid, static_cast<uint16_t>(nBodyLoc));
+						cur.nLocation = CLI_ITEMLOC_EQUIPPED;
+						cur.nBodyLoc = static_cast<uint8_t>(nBodyLoc);
+						gnCursorItemIdx = -1;
+					}
 					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
 					return true;
+				}
+				else if (nEquippedIdx >= 0)
+				{
+					ClientItemEntry& eq = gClientItems[nEquippedIdx];
+					SendRemoveBodyItem_1C(static_cast<uint16_t>(eq.nBodyLoc));
+					eq.nLocation = CLI_ITEMLOC_CURSOR;
+					gnCursorItemIdx = nEquippedIdx;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+					return true;
+				}
+				return true;
+			}
+
+			// Inventory 10x4 grid left-click item pickup/drop onto cursor (C2S 0x18 / 0x19)
+			int32_t nGridLeft = 419, nGridTop = 315, nBoxW = 29, nBoxH = 29;
+			GetInvGridLayout800x600(&nGridLeft, &nGridTop, &nBoxW, &nBoxH);
+			if (nX >= nGridLeft && nX < nGridLeft + 10 * nBoxW && nY >= nGridTop && nY < nGridTop + 4 * nBoxH)
+			{
+				const int32_t gX = (nX - nGridLeft) / nBoxW;
+				const int32_t gY = (nY - nGridTop) / nBoxH;
+				if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+				{
+					ClientItemEntry& cur = gClientItems[gnCursorItemIdx];
+					cur.nLocation = CLI_ITEMLOC_CONTAINER;
+					cur.nStorePage = 0;
+					cur.nGridX = gX;
+					cur.nGridY = gY;
+					SendInsertItemToBuffer_18(cur.dwItemGuid, static_cast<uint32_t>(gX), static_cast<uint32_t>(gY), 0u);
+					gnCursorItemIdx = -1;
+					D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+					return true;
+				}
+				for (int32_t i = 0; i < kMaxClientItems; ++i)
+				{
+					ClientItemEntry& it = gClientItems[i];
+					if (it.bActive && it.nLocation == CLI_ITEMLOC_CONTAINER &&
+						gX >= it.nGridX && gX < it.nGridX + it.nInvW &&
+						gY >= it.nGridY && gY < it.nGridY + it.nInvH)
+					{
+						it.nLocation = CLI_ITEMLOC_CURSOR;
+						gnCursorItemIdx = i;
+						SendRemoveItemFromBuffer_19(it.dwItemGuid);
+						D2SOUND_FastPlaySound("data\\global\\sfx\\cursor\\button.wav");
+						return true;
+					}
 				}
 			}
 		}
@@ -2005,6 +2318,19 @@ static bool HandleInGameUiClick(int32_t nX, int32_t nY)
 		return true;
 	}
 
+	// Clicking in the game world while holding an item on the cursor drops it to the ground (C2S 0x17)
+	if (gnCursorItemIdx >= 0 && gnCursorItemIdx < kMaxClientItems && gClientItems[gnCursorItemIdx].bActive)
+	{
+		ClientItemEntry& curIt = gClientItems[gnCursorItemIdx];
+		SendDropCursorItem_17(curIt.dwItemGuid);
+		curIt.nLocation = CLI_ITEMLOC_GROUND;
+		curIt.nWorldSubX = gnServerSubX > 0 ? gnServerSubX : static_cast<int32_t>(gfPlayerWorldX);
+		curIt.nWorldSubY = gnServerSubY > 0 ? gnServerSubY : static_cast<int32_t>(gfPlayerWorldY);
+		gnCursorItemIdx = -1;
+		D2SOUND_FastPlaySound("data\\global\\sfx\\items\\flippy.wav");
+		return true;
+	}
+
 	return false;
 }
 
@@ -2013,6 +2339,13 @@ static LRESULT __stdcall D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 {
 	switch (uMsg)
 	{
+	case WM_SETCURSOR:
+		if (LOWORD(lParam) == HTCLIENT)
+		{
+			SetCursor(nullptr);
+			return TRUE;
+		}
+		break;
 	case WM_CLOSE:
 		SendLeaveGamePacket();
 		gbWindowClosed = 1;
@@ -2553,12 +2886,18 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 		}
 	}
 
-	// Actions that remove an item from a container/belt/body/vendor
-	if (nAction == 0x01 || nAction == 0x05 || nAction == 0x08 || nAction == 0x0C || nAction == 0x0F || nAction == 0x12)
+	// Actions that permanently delete/consume an item from vendor/container/belt/body
+	if (nAction == 0x0C ||
+		((nAction == 0x01 || nAction == 0x05 || nAction == 0x08 || nAction == 0x0F) &&
+		 (tSave.dwFlags & (IFLAG_DELETED | IFLAG_QUANTITY)) != 0))
 	{
 		if (nIdx >= 0)
 		{
 			gClientItems[nIdx].bActive = false;
+			if (gnCursorItemIdx == nIdx)
+			{
+				gnCursorItemIdx = -1;
+			}
 		}
 		return;
 	}
@@ -2593,7 +2932,7 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 		it.nLocation = CLI_ITEMLOC_VENDOR;
 		++gdwVendorItemsReceived;
 	}
-	else if (nAction == 0x04 || tSave.nAnimMode == IMODE_ONCURSOR)
+	else if (nAction == 0x01 || nAction == 0x05 || nAction == 0x08 || nAction == 0x0F || nAction == 0x12 || tSave.nAnimMode == IMODE_ONCURSOR)
 	{
 		it.nLocation = CLI_ITEMLOC_CURSOR;
 		gnCursorItemIdx = nIdx;
@@ -2602,7 +2941,7 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 	{
 		it.nLocation = CLI_ITEMLOC_GROUND;
 	}
-	else if (nAction == 0x06 || nAction == 0x07 || nAction == 0x09 || tSave.nAnimMode == IMODE_EQUIP)
+	else if (nAction == 0x06 || nAction == 0x07 || nAction == 0x09 || nAction == 0x11 || tSave.nAnimMode == IMODE_EQUIP)
 	{
 		it.nLocation = CLI_ITEMLOC_EQUIPPED;
 	}
@@ -2621,6 +2960,11 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 	else
 	{
 		it.nLocation = CLI_ITEMLOC_CONTAINER;
+	}
+
+	if (it.nLocation != CLI_ITEMLOC_CURSOR && gnCursorItemIdx == nIdx)
+	{
+		gnCursorItemIdx = -1;
 	}
 
 	D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(tSave.nClassId);
@@ -2964,6 +3308,20 @@ static void DrainNetworkPackets()
 				{
 					gnServerSubX = nSubX;
 					gnServerSubY = nSubY;
+					int nCurSubX = static_cast<int>(gfPlayerWorldX);
+					int nCurSubY = static_cast<int>(gfPlayerWorldY);
+					DUNGEON_ClientToGameSubtileCoords(&nCurSubX, &nCurSubY);
+					if (std::abs(nCurSubX - nSubX) > 8 || std::abs(nCurSubY - nSubY) > 8)
+					{
+						int nIsoX = nSubX;
+						int nIsoY = nSubY;
+						DUNGEON_GameSubtileToClientCoords(&nIsoX, &nIsoY);
+						gfPlayerWorldX = static_cast<float>(nIsoX);
+						gfPlayerWorldY = static_cast<float>(nIsoY);
+						gfTargetWorldX = gfPlayerWorldX;
+						gfTargetWorldY = gfPlayerWorldY;
+						gbPlayerMoving = false;
+					}
 				}
 			}
 			break;
@@ -3323,7 +3681,10 @@ static void DrainNetworkPackets()
 			break;
 
 		case 0x4E: // MercForHireList
-			gbMercHired = true;
+			break;
+
+		case 0x97: // WeaponSwitch
+			gnActiveWeaponSet = 1 - gnActiveWeaponSet;
 			break;
 
 		case 0x63: // OpenWaypoint (dwWaypointGUID, ...)
@@ -3380,9 +3741,14 @@ static void DrainNetworkPackets()
 		case 0x81: // AssignMerc (nUnk, wClassId, dwOwnerGUID, dwMercGUID, ...)
 			if (nPacketLen >= 12)
 			{
-				gwMercClassId = *reinterpret_cast<const uint16_t*>(&aBuffer[2]);
-				gdwMercUnitGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[8]);
-				gbMercHired = true;
+				const uint32_t dwOwnerGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[4]);
+				const uint32_t dwMercGuid = *reinterpret_cast<const uint32_t*>(&aBuffer[8]);
+				if (gdwClientPlayerGuid != 0 && dwOwnerGuid == gdwClientPlayerGuid && dwMercGuid != 0)
+				{
+					gwMercClassId = *reinterpret_cast<const uint16_t*>(&aBuffer[2]);
+					gdwMercUnitGuid = dwMercGuid;
+					gbMercHired = true;
+				}
 			}
 			break;
 
@@ -3506,6 +3872,10 @@ static void InitInGameAssets()
 	gnPendingNpcGuid = 0;
 	gdwNpcIntrosReceived = 0;
 	gdwVendorItemsReceived = 0;
+	gbMercHired = false;
+	gdwMercUnitGuid = 0;
+	gnCursorItemIdx = -1;
+	gnActiveWeaponSet = 0;
 	std::memset(gaQuestFilterStates, 0, sizeof(gaQuestFilterStates));
 	std::memset(gaClientStats, 0, sizeof(gaClientStats));
 	std::memset(gaClientSkillLevels, 0, sizeof(gaClientSkillLevels));
@@ -3846,7 +4216,7 @@ static void DrawCompositeCharacter(D2CompositeUnitStrc* pComp, int32_t nScreenX,
 	}
 	const uint8_t nMappedDir = kDirRemapTable[dwDirRow < 7 ? dwDirRow : 3][nClampedDir];
 
-	const uint32_t nFrame = (pComp->unk0x08 >> 8) % static_cast<uint32_t>(nFramesPerDir);
+	const uint32_t nFrame = (nFramesPerDir > 0) ? ((GetTickCount() / 55u) % static_cast<uint32_t>(nFramesPerDir)) : 0;
 	const uint8_t* pOrderTable = reinterpret_cast<const uint8_t*>(pCofData) + 28 + nFramesPerDir +
 		nLayers * (nClampedDir * nFramesPerDir + nFrame + 9);
 
@@ -3880,7 +4250,7 @@ static void DrawCompositeCharacter(D2CompositeUnitStrc* pComp, int32_t nScreenX,
 		if (D2CMP_SpriteValidate(&gfxData, 0, TRUE))
 		{
 			bDrewAnyLayer = true;
-			TEXTURE_CelDraw(&gfxData, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+			TEXTURE_CelDraw(&gfxData, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
 		}
 	}
 
@@ -3899,9 +4269,35 @@ static void DrawCompositeCharacter(D2CompositeUnitStrc* pComp, int32_t nScreenX,
 		}
 	}
 
-	const uint32_t nStep = pComp->unk0x10 ? pComp->unk0x10 : 128u;
-	const uint32_t nNextFrame = pComp->unk0x08 + nStep;
-	pComp->unk0x08 = ((nNextFrame >> 8) >= static_cast<uint32_t>(nFramesPerDir - 1)) ? 0 : nNextFrame;
+	pComp->unk0x08 = nFrame << 8;
+}
+
+static bool IsSubtileWalkableForPlayer(float fCandWorldX, float fCandWorldY)
+{
+	if (!gpClientAct)
+	{
+		return true;
+	}
+	int nSubX = static_cast<int>(fCandWorldX);
+	int nSubY = static_cast<int>(fCandWorldY);
+	DUNGEON_ClientToGameSubtileCoords(&nSubX, &nSubY);
+	if (nSubX <= 0 || nSubY <= 0)
+	{
+		return false;
+	}
+	DUNGEON_StreamRoomAtCoords(gpClientAct, nSubX / 5, nSubY / 5);
+	D2ActiveRoomStrc* pRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nSubX, nSubY);
+	if (!pRoom)
+	{
+		return false;
+	}
+	const uint16_t wMask = COLLISION_CheckMaskWithSize(
+		pRoom,
+		nSubX,
+		nSubY,
+		COLLISION_UNIT_SIZE_SMALL,
+		COLLIDE_MASK_PLAYER_PATH | COLLIDE_BLANK);
+	return (wMask == 0);
 }
 
 static void UpdatePlayerMovement()
@@ -3962,8 +4358,11 @@ static void UpdatePlayerMovement()
 	const float fDist = std::sqrt(fDx * fDx + fDy * fDy);
 	if (fDist < 6.0f)
 	{
-		gfPlayerWorldX = gfTargetWorldX;
-		gfPlayerWorldY = gfTargetWorldY;
+		if (IsSubtileWalkableForPlayer(gfTargetWorldX, gfTargetWorldY))
+		{
+			gfPlayerWorldX = gfTargetWorldX;
+			gfPlayerWorldY = gfTargetWorldY;
+		}
 		gbPlayerMoving = false;
 		if (gnPendingNpcGuid != 0)
 		{
@@ -3974,8 +4373,27 @@ static void UpdatePlayerMovement()
 	}
 
 	const float fStep = gbRunEnabled ? 11.0f : 7.0f;
-	gfPlayerWorldX += (fDx / fDist) * fStep;
-	gfPlayerWorldY += (fDy / fDist) * fStep;
+	const float fCandX = gfPlayerWorldX + (fDx / fDist) * fStep;
+	const float fCandY = gfPlayerWorldY + (fDy / fDist) * fStep;
+	if (IsSubtileWalkableForPlayer(fCandX, fCandY))
+	{
+		gfPlayerWorldX = fCandX;
+		gfPlayerWorldY = fCandY;
+	}
+	else if (IsSubtileWalkableForPlayer(fCandX, gfPlayerWorldY))
+	{
+		gfPlayerWorldX = fCandX;
+	}
+	else if (IsSubtileWalkableForPlayer(gfPlayerWorldX, fCandY))
+	{
+		gfPlayerWorldY = fCandY;
+	}
+	else
+	{
+		// Blocked by river, wall, or obstacle
+		gbPlayerMoving = false;
+		return;
+	}
 
 	// Stream adjacent DRLG rooms around player's current subtile & update current level ID
 	if (gpClientAct)
@@ -4085,7 +4503,7 @@ static void DrawObjectByClassAndMode(int32_t nObjId, int32_t nMode, int32_t nScr
 		if (D2CMP_SpriteValidate(&tObjGfx, 0, TRUE))
 		{
 			TEXTURE_CelDrawShadow(&tObjGfx, nScreenX - 2, nScreenY);
-			TEXTURE_CelDraw(&tObjGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+			TEXTURE_CelDraw(&tObjGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
 		}
 	}
 
@@ -4172,7 +4590,7 @@ static void DrawMonsterByClassAndMode(int32_t nMonId, uint8_t nAnimMode, int32_t
 					}
 					else
 					{
-						TEXTURE_CelDraw(&tMonGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+						TEXTURE_CelDraw(&tMonGfx, nScreenX, nScreenY, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
 					}
 				}
 			}
@@ -4189,7 +4607,13 @@ static bool HasServerUnitNearSubtile(uint8_t nUnitType, uint16_t wClassId, int32
 		{
 			continue;
 		}
-		if (std::abs(u.nSubX - nSubX) <= 3 && std::abs(u.nSubY - nSubY) <= 3)
+		// Monsters and Town NPCs roam away from their DS1 preset spawn coordinates;
+		// if any active server monster of this class exists, suppress the static DS1 preset copy so no ghost remains behind.
+		if (nUnitType == UNIT_MONSTER)
+		{
+			return true;
+		}
+		if (std::abs(u.nSubX - nSubX) <= 5 && std::abs(u.nSubY - nSubY) <= 5)
 		{
 			return true;
 		}
@@ -4357,65 +4781,6 @@ static void DrawServerUnitsAndGroundItems(int32_t nCamX, int32_t nCamY)
 		RECT rcRing = { ovScreenX - nRingRadius, ovScreenY - nRingRadius / 2, ovScreenX + nRingRadius, ovScreenY + nRingRadius / 2 };
 		D2GFX_UtilRect(&rcRing, ov.nColor);
 		D2GFX_DrawBox(ovScreenX - 3, ovScreenY - 42, ovScreenX + 3, ovScreenY, ov.nColor, DRAWMODE_TRANS50);
-	}
-
-	// 5. Update & Draw Per-Act Procedural Weather Particles (Act 1/3 Rain, Act 2 Sand, Act 4 Embers, Act 5 Snow — Milestone 3.4)
-	if (!gbWeatherInitialized)
-	{
-		gbWeatherInitialized = true;
-		for (int32_t i = 0; i < kMaxWeatherParticles; ++i)
-		{
-			gWeatherParticles[i].fScreenX = static_cast<float>((i * 73) % 800);
-			gWeatherParticles[i].fScreenY = static_cast<float>((i * 47) % 540);
-			gWeatherParticles[i].fVelX = -2.0f;
-			gWeatherParticles[i].fVelY = 9.0f;
-			gWeatherParticles[i].nLength = static_cast<uint8_t>(6 + (i % 6));
-		}
-	}
-	for (int32_t i = 0; i < kMaxWeatherParticles; ++i)
-	{
-		WeatherParticle& wp = gWeatherParticles[i];
-		uint8_t nWeatherColor = 0x97u; // Act 1/3 Rain (slate blue/white)
-		if (gnCurrentAct == 1) // Act 2 Sandstorm motes
-		{
-			wp.fVelX = 7.5f;
-			wp.fVelY = 1.5f;
-			nWeatherColor = 0x6Au;
-		}
-		else if (gnCurrentAct == 3) // Act 4 Rising Hell Embers
-		{
-			wp.fVelX = (i & 1) ? 1.0f : -1.0f;
-			wp.fVelY = -3.5f;
-			nWeatherColor = 0x62u;
-		}
-		else if (gnCurrentAct == 4) // Act 5 Harrogath Snowflakes
-		{
-			wp.fVelX = (i & 1) ? 1.2f : -1.2f;
-			wp.fVelY = 3.2f;
-			nWeatherColor = 0xFFu;
-		}
-		else // Act 1 & Act 3 Rain
-		{
-			wp.fVelX = -2.5f;
-			wp.fVelY = 11.0f;
-			nWeatherColor = 0x97u;
-		}
-		wp.fScreenX += wp.fVelX;
-		wp.fScreenY += wp.fVelY;
-		if (wp.fScreenX < 0.0f) wp.fScreenX += 800.0f;
-		if (wp.fScreenX >= 800.0f) wp.fScreenX -= 800.0f;
-		if (wp.fScreenY < 0.0f) wp.fScreenY += 540.0f;
-		if (wp.fScreenY >= 540.0f) wp.fScreenY -= 540.0f;
-		const int32_t px = static_cast<int32_t>(wp.fScreenX);
-		const int32_t py = static_cast<int32_t>(wp.fScreenY);
-		if (gnCurrentAct == 0 || gnCurrentAct == 2)
-		{
-			D2GFX_DrawLine(px, py, px - 2, py + wp.nLength, nWeatherColor, 0xA0u);
-		}
-		else
-		{
-			D2GFX_DrawBox(px, py, px + 2, py + 2, nWeatherColor, DRAWMODE_TRANS75);
-		}
 	}
 }
 
@@ -5098,24 +5463,7 @@ static void DrawLeftPanel()
 		}
 
 		int32_t aVendorItemIndices[10] = {};
-		int32_t nVendorCount = 0;
-		for (int32_t i = 0; i < kMaxClientItems && nVendorCount < 10; ++i)
-		{
-			if (gClientItems[i].bActive && gClientItems[i].nLocation == CLI_ITEMLOC_VENDOR)
-			{
-				aVendorItemIndices[nVendorCount++] = i;
-			}
-		}
-		if (nVendorCount == 0)
-		{
-			for (int32_t i = 0; i < kMaxClientItems && nVendorCount < 10; ++i)
-			{
-				if (gClientItems[i].bActive && gClientItems[i].nAction == 0x0B)
-				{
-					aVendorItemIndices[nVendorCount++] = i;
-				}
-			}
-		}
+		const int32_t nVendorCount = BuildVendorTabItemList(gnVendorActiveTab, aVendorItemIndices, 10);
 		if (gnSelectedVendorItemIdx < 0 && nVendorCount > 0)
 		{
 			gnSelectedVendorItemIdx = aVendorItemIndices[0];
@@ -5410,56 +5758,64 @@ static void DrawRightPanel()
 			D2GFX_DrawBox(400, 60, 720, 492, 0x00u, DRAWMODE_TRANS75);
 		}
 
-		// Equipment slot silhouettes
-		if (gpInvWeapons)
+		// Highlight active Weapon Set tab ("I" vs "II") above left and right weapon slots
+		if (gnActiveWeaponSet == 0)
 		{
-			DrawSingleCelTopLeft(gpInvWeapons, 418, 108, 0);
-			DrawSingleCelTopLeft(gpInvWeapons, 646, 108, 0);
+			RECT rcSet1L = { 416, 82, 444, 102 };
+			RECT rcSet1R = { 642, 82, 670, 102 };
+			D2GFX_UtilRect(&rcSet1L, 0x6Au);
+			D2GFX_UtilRect(&rcSet1R, 0x6Au);
 		}
-		if (gpInvArmor)
+		else
 		{
-			DrawSingleCelTopLeft(gpInvArmor, 532, 134, 0);
+			RECT rcSet2L = { 450, 82, 478, 102 };
+			RECT rcSet2R = { 676, 82, 704, 102 };
+			D2GFX_UtilRect(&rcSet2L, 0x6Au);
+			D2GFX_UtilRect(&rcSet2R, 0x6Au);
 		}
-		if (gpInvHelmGlove)
-		{
-			DrawSingleCelTopLeft(gpInvHelmGlove, 532, 66, 1);
-			DrawSingleCelTopLeft(gpInvHelmGlove, 418, 230, 0);
-		}
-		if (gpInvBoots)
-		{
-			DrawSingleCelTopLeft(gpInvBoots, 646, 230, 0);
-		}
-		if (gpInvBelt)
-		{
-			DrawSingleCelTopLeft(gpInvBelt, 532, 258, 0);
-		}
-		if (gpInvRingAmulet)
-		{
-			DrawSingleCelTopLeft(gpInvRingAmulet, 604, 96, 0);
-			DrawSingleCelTopLeft(gpInvRingAmulet, 492, 258, 1);
-			DrawSingleCelTopLeft(gpInvRingAmulet, 604, 258, 1);
-		}
-
-		// Draw live server-synced items (0x9C / 0x9D) in Paperdoll Equipment Slots & 10x4 Inventory Grid
-		static const int32_t kBodySlotRects[13][4] = {
-			{ 0,   0,   0,  0 },  // 0: None
-			{ 532, 66,  56, 56 }, // 1: HEAD
-			{ 604, 96,  28, 28 }, // 2: NECK
-			{ 532, 134, 56, 84 }, // 3: TORSO
-			{ 418, 108, 56, 112 },// 4: RARM
-			{ 646, 108, 56, 112 },// 5: LARM
-			{ 492, 258, 28, 28 }, // 6: RRING
-			{ 604, 258, 28, 28 }, // 7: LRING
-			{ 532, 258, 56, 28 }, // 8: BELT
-			{ 646, 230, 56, 56 }, // 9: FEET
-			{ 418, 230, 56, 56 }, // 10: GLOVES
-			{ 418, 108, 56, 112 },// 11: SWRARM
-			{ 646, 108, 56, 112 },// 12: SWLARM
-		};
 
 		const ClientItemEntry* pHoveredItem = nullptr;
 		int32_t nHoverTipX = 560;
 		int32_t nHoverTipY = 300;
+		int32_t nInvLeft = 419;
+		int32_t nInvTop = 315;
+		int32_t nInvCellW = 29;
+		int32_t nInvCellH = 29;
+		GetInvGridLayout800x600(&nInvLeft, &nInvTop, &nInvCellW, &nInvCellH);
+
+		bool bSlotOccupied[11] = {};
+		for (int32_t i = 0; i < kMaxClientItems; ++i)
+		{
+			const ClientItemEntry& it = gClientItems[i];
+			if (it.bActive && it.nLocation == CLI_ITEMLOC_EQUIPPED && it.nBodyLoc >= 1 && it.nBodyLoc <= 10)
+			{
+				bSlotOccupied[it.nBodyLoc] = true;
+			}
+		}
+
+		// Draw empty-slot background silhouettes only on unoccupied paperdoll slots using Inventory.txt coordinates
+		auto drawSlotSilhouette = [&](uint8_t nBodyLoc, D2CellFileStrc* pCell, int32_t nFrame) {
+			if (!pCell || nBodyLoc < 1 || nBodyLoc > 10 || bSlotOccupied[nBodyLoc])
+			{
+				return;
+			}
+			int32_t sx = 0, sy = 0, sw = 0, sh = 0;
+			GetBodySlotRect800x600(nBodyLoc, &sx, &sy, &sw, &sh);
+			if (sw > 0 && sh > 0)
+			{
+				DrawSingleCelTopLeft(pCell, sx, sy, nFrame);
+			}
+		};
+		drawSlotSilhouette(1, gpInvHelmGlove, 1);
+		drawSlotSilhouette(2, gpInvRingAmulet, 0);
+		drawSlotSilhouette(3, gpInvArmor, 0);
+		drawSlotSilhouette(4, gpInvWeapons, 0);
+		drawSlotSilhouette(5, gpInvWeapons, 0);
+		drawSlotSilhouette(6, gpInvRingAmulet, 1);
+		drawSlotSilhouette(7, gpInvRingAmulet, 1);
+		drawSlotSilhouette(8, gpInvBelt, 0);
+		drawSlotSilhouette(9, gpInvBoots, 0);
+		drawSlotSilhouette(10, gpInvHelmGlove, 0);
 
 		for (int32_t i = 0; i < kMaxClientItems; ++i)
 		{
@@ -5468,13 +5824,19 @@ static void DrawRightPanel()
 			{
 				continue;
 			}
-			if (it.nLocation == CLI_ITEMLOC_EQUIPPED && it.nBodyLoc >= 1 && it.nBodyLoc <= 12)
+			// Only draw active weapon set & armor slots (1..10); swap weapon slots (11..12) are hidden until W / tab switch
+			if (it.nLocation == CLI_ITEMLOC_EQUIPPED && it.nBodyLoc >= 1 && it.nBodyLoc <= 10)
 			{
-				const int32_t nSlotX = kBodySlotRects[it.nBodyLoc][0];
-				const int32_t nSlotY = kBodySlotRects[it.nBodyLoc][1];
-				const int32_t nSlotW = kBodySlotRects[it.nBodyLoc][2];
-				const int32_t nSlotH = kBodySlotRects[it.nBodyLoc][3];
-				D2GFX_DrawBox(nSlotX, nSlotY, nSlotX + nSlotW, nSlotY + nSlotH, 0x00u, DRAWMODE_TRANS75);
+				int32_t nSlotX = 0;
+				int32_t nSlotY = 0;
+				int32_t nSlotW = 0;
+				int32_t nSlotH = 0;
+				GetBodySlotRect800x600(it.nBodyLoc, &nSlotX, &nSlotY, &nSlotW, &nSlotH);
+				if (nSlotW <= 0 || nSlotH <= 0)
+				{
+					continue;
+				}
+				D2GFX_DrawBox(nSlotX, nSlotY, nSlotX + nSlotW, nSlotY + nSlotH, 0x16u, DRAWMODE_TRANS50);
 				if (it.pInvCell)
 				{
 					const int32_t nItemW = it.nInvW * 28;
@@ -5493,10 +5855,10 @@ static void DrawRightPanel()
 			}
 			else if (it.nLocation == CLI_ITEMLOC_CONTAINER && it.nGridX >= 0 && it.nGridX < 10 && it.nGridY >= 0 && it.nGridY < 4)
 			{
-				const int32_t nCellX = 418 + it.nGridX * 29;
-				const int32_t nCellY = 315 + it.nGridY * 29;
-				const int32_t nCellW = it.nInvW * 29;
-				const int32_t nCellH = it.nInvH * 29;
+				const int32_t nCellX = nInvLeft + it.nGridX * nInvCellW;
+				const int32_t nCellY = nInvTop + it.nGridY * nInvCellH;
+				const int32_t nCellW = it.nInvW * nInvCellW;
+				const int32_t nCellH = it.nInvH * nInvCellH;
 				D2GFX_DrawBox(nCellX, nCellY, nCellX + nCellW - 1, nCellY + nCellH - 1, 0x97u, DRAWMODE_TRANS25);
 				if (it.pInvCell)
 				{
@@ -6015,9 +6377,30 @@ static void DrawNpcDialogMenu()
 	}
 }
 
+static void PollLiveHardwareCursorPosition()
+{
+	HWND hWnd = WINDOW_GetWindow();
+	if (!hWnd || GetForegroundWindow() != hWnd)
+	{
+		return;
+	}
+	POINT pt = {};
+	RECT rcClient = {};
+	if (GetCursorPos(&pt) && ScreenToClient(hWnd, &pt) && GetClientRect(hWnd, &rcClient))
+	{
+		const int32_t nClientW = std::max<int32_t>(1, rcClient.right - rcClient.left);
+		const int32_t nClientH = std::max<int32_t>(1, rcClient.bottom - rcClient.top);
+		if (pt.x >= 0 && pt.x < nClientW && pt.y >= 0 && pt.y < nClientH)
+		{
+			gMousePos.x = static_cast<int32_t>((static_cast<int64_t>(pt.x) * 800) / nClientW);
+			gMousePos.y = static_cast<int32_t>((static_cast<int64_t>(pt.y) * 600) / nClientH);
+		}
+	}
+}
+
 static void RenderInGameFrame()
 {
-	UpdatePlayerMovement();
+	PollLiveHardwareCursorPosition();
 
 	if (!D2GFX_StartDraw(0, 0, 0, 0))
 	{
@@ -6268,21 +6651,22 @@ static void RunNativeClientAutotestStep()
 	{
 		return;
 	}
+	if (gpD2Config)
+	{
+		gpD2Config->bNoSave = 1;
+	}
+	D2GAME_10036_PLRSAVE_EnableSaveFileWriting(0);
 
 	const uint32_t dwTick = gdwServerTicks;
 	HWND hWnd = WINDOW_GetWindow();
 	char szBmpPath[MAX_PATH * 2] = {};
 
-	if (dwTick == 15)
-	{
-		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step1_hud.bmp", s_szOutDir);
-		CaptureWindowBmpToFile(hWnd, szBmpPath);
-	}
-	else if (dwTick == 16)
-	{
-		// Find closest Rogue Encampment NPC to player's authoritative subtile position and walk to them
-		int32_t nBestNpc = -1;
-		int32_t nBestDistSq = 0x7FFFFFFF;
+	auto findPreferredTradeNpc = [&]() -> int32_t {
+		int32_t nAkara = -1;
+		int32_t nBestVendor = -1;
+		int32_t nBestVendorDistSq = 0x7FFFFFFF;
+		int32_t nBestAny = -1;
+		int32_t nBestAnyDistSq = 0x7FFFFFFF;
 		for (int32_t i = 0; i < kMaxClientUnits; ++i)
 		{
 			if (gClientUnits[i].bActive && gClientUnits[i].nUnitType == UNIT_MONSTER && gClientUnits[i].bIsNpc)
@@ -6290,41 +6674,54 @@ static void RunNativeClientAutotestStep()
 				const int32_t dx = gClientUnits[i].nSubX - gnServerSubX;
 				const int32_t dy = gClientUnits[i].nSubY - gnServerSubY;
 				const int32_t dSq = dx * dx + dy * dy;
-				if (dSq < nBestDistSq)
+				const uint16_t wCid = gClientUnits[i].wClassId;
+				if (wCid == 148)
 				{
-					nBestDistSq = dSq;
-					nBestNpc = i;
+					nAkara = i;
+				}
+				if (wCid == 148 || wCid == 154 || wCid == 147)
+				{
+					if (dSq < nBestVendorDistSq)
+					{
+						nBestVendorDistSq = dSq;
+						nBestVendor = i;
+					}
+				}
+				if (dSq < nBestAnyDistSq)
+				{
+					nBestAnyDistSq = dSq;
+					nBestAny = i;
 				}
 			}
 		}
+		return (nBestVendor >= 0 && nBestVendorDistSq <= 324) ? nBestVendor : nBestAny;
+	};
+
+	if (dwTick == 6)
+	{
+		std::snprintf(szBmpPath, sizeof(szBmpPath), "%s\\native_step1_hud.bmp", s_szOutDir);
+		CaptureWindowBmpToFile(hWnd, szBmpPath);
+	}
+	else if (dwTick == 12)
+	{
+		// Walk to nearest reachable NPC in town
+		const int32_t nBestNpc = findPreferredTradeNpc();
 		if (nBestNpc >= 0)
 		{
 			const ClientWorldUnit& npc = gClientUnits[nBestNpc];
 			SendTownFolkInvite(UNIT_MONSTER, npc.dwUnitGuid, npc.nSubX, npc.nSubY);
 			SendWalkOrRunToLocation(static_cast<uint16_t>(npc.nSubX), static_cast<uint16_t>(npc.nSubY), true);
 			SendWalkOrRunToUnit(UNIT_MONSTER, npc.dwUnitGuid, true);
+			gfTargetWorldX = npc.fWorldX;
+			gfTargetWorldY = npc.fWorldY;
+			gbPlayerMoving = true;
 			gnPendingNpcGuid = npc.dwUnitGuid;
 		}
 	}
 	else if (dwTick == 24)
 	{
 		// Interact with nearest NPC once arrived
-		int32_t nBestNpc = -1;
-		int32_t nBestDistSq = 0x7FFFFFFF;
-		for (int32_t i = 0; i < kMaxClientUnits; ++i)
-		{
-			if (gClientUnits[i].bActive && gClientUnits[i].nUnitType == UNIT_MONSTER && gClientUnits[i].bIsNpc)
-			{
-				const int32_t dx = gClientUnits[i].nSubX - gnServerSubX;
-				const int32_t dy = gClientUnits[i].nSubY - gnServerSubY;
-				const int32_t dSq = dx * dx + dy * dy;
-				if (dSq < nBestDistSq)
-				{
-					nBestDistSq = dSq;
-					nBestNpc = i;
-				}
-			}
-		}
+		const int32_t nBestNpc = findPreferredTradeNpc();
 		if (nBestNpc >= 0)
 		{
 			const ClientWorldUnit& npc = gClientUnits[nBestNpc];
@@ -6739,6 +7136,8 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	}
 
 	// Single-player / local / TCP frame loop (0x6FB2CFF0)
+	// Pace authoritative D2Game simulation at 25 Hz (40ms) while rendering & polling input at ~100 FPS (8ms)
+	DWORD dwLastSimTickMs = GetTickCount() - 40u;
 	while (gnClientState == D2CLIENT_STATE_GAME_LOOP && !gbWindowClosed && !gbSaveAndExitRequested)
 	{
 		MSG msg = {};
@@ -6759,19 +7158,29 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 			break;
 		}
 
-		if (!bRemoteTcpMode && (gnGameType == 0 || gnGameType == 1))
+		const DWORD dwNowMs = GetTickCount();
+		if (dwNowMs - dwLastSimTickMs >= 40u)
 		{
-			GAME_ProcessNetworkMessages();
-			GAME_UpdateGamesProgress(1);
-			GAME_UpdateClients(0, 0);
-			++gdwServerTicks;
+			dwLastSimTickMs = dwNowMs;
+			if (!bRemoteTcpMode && (gnGameType == 0 || gnGameType == 1))
+			{
+				GAME_ProcessNetworkMessages();
+				GAME_UpdateGamesProgress(1);
+				GAME_UpdateClients(0, 0);
+				++gdwServerTicks;
+			}
+			DrainNetworkPackets();
+			StepReconstructedUnitTablesPerTick();
+			UpdatePlayerMovement();
+			RunNativeClientAutotestStep();
+		}
+		else
+		{
+			DrainNetworkPackets();
 		}
 
-		DrainNetworkPackets();
-		StepReconstructedUnitTablesPerTick();
 		RenderInGameFrame();
-		RunNativeClientAutotestStep();
-		Sleep(40);
+		Sleep(8);
 	}
 
 	SendLeaveGamePacket();

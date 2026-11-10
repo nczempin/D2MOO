@@ -516,9 +516,9 @@ void __fastcall D2GAME_STORES_CreateVendorCache_6FCC74F0(D2GameStrc* pGame, D2Un
     case MONSTER_KASHYA:
     case MONSTER_GREIZ:
     case MONSTER_QUAL_KEHK:
-        break;
-    default:
         return;
+    default:
+        break;
     }
 
     if (a4 && !a5 && pNpcRecord->npcTrade.bRefreshInventory)
