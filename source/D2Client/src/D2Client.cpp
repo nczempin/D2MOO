@@ -93,6 +93,8 @@ void __fastcall SCMD_Handler00_GameLoading(uint8_t* pPacket);
 void __fastcall SCMD_Handler01_GameLogonReceipt(uint8_t* pPacket);
 void __fastcall SCMD_Handler04_LoadComplete(uint8_t* pPacket);
 void __fastcall SCMD_Handler05_UnloadComplete(uint8_t* pPacket);
+void __fastcall SCMD_Handler07_AddRoom(uint8_t* pPacket);
+void __fastcall SCMD_Handler08_RemoveRoom(uint8_t* pPacket);
 void __fastcall SCMD_Handler19_1F_StatUpdate(uint8_t* pPacket);
 void __fastcall SCMD_Handler20_PlayerAttrUpdate(uint8_t* pPacket);
 
@@ -2998,6 +3000,117 @@ static void HandleServerItemActionPacket(const uint8_t* pBuf, int32_t nLen, bool
 	}
 }
 
+static bool IsTileInAnyDrlgLevel(D2DrlgStrc* pDrlg, int32_t tx, int32_t ty)
+{
+	if (!pDrlg || tx <= 0 || ty <= 0)
+	{
+		return false;
+	}
+	for (D2DrlgLevelStrc* pLvl = pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
+	{
+		if (pLvl->nLevelId > 0 &&
+			tx >= pLvl->nPosX && tx < pLvl->nPosX + pLvl->nWidth &&
+			ty >= pLvl->nPosY && ty < pLvl->nPosY + pLvl->nHeight)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static D2ActiveRoomStrc* SafeStreamClientRoomAtTile(D2DrlgActStrc* pAct, int32_t tx, int32_t ty)
+{
+	if (!pAct || tx <= 0 || ty <= 0)
+	{
+		return nullptr;
+	}
+	D2DrlgStrc* pDrlg = DUNGEON_GetDrlgFromAct(pAct);
+	if (!IsTileInAnyDrlgLevel(pDrlg, tx, ty))
+	{
+		return nullptr;
+	}
+	return DUNGEON_StreamRoomAtCoords(pAct, tx, ty);
+}
+
+static void StreamClientNeighborhoodAroundTile(int32_t nCenterTileX, int32_t nCenterTileY, int32_t nRadiusTiles = 16)
+{
+	if (!gpClientAct || nCenterTileX <= 0 || nCenterTileY <= 0)
+	{
+		return;
+	}
+	for (int32_t dy = -nRadiusTiles; dy <= nRadiusTiles; dy += 8)
+	{
+		for (int32_t dx = -nRadiusTiles; dx <= nRadiusTiles; dx += 8)
+		{
+			SafeStreamClientRoomAtTile(gpClientAct, nCenterTileX + dx, nCenterTileY + dy);
+		}
+	}
+}
+
+static void PrestreamTownAndAdjacentWilderness(D2DrlgActStrc* pAct, uint8_t nActIdx, int32_t nTownLevelId)
+{
+	if (!pAct)
+	{
+		return;
+	}
+	D2DrlgStrc* pDrlg = DUNGEON_GetDrlgFromAct(pAct);
+	if (!pDrlg)
+	{
+		return;
+	}
+	static const int32_t kAdjacentWildLevels[5] = {
+		LEVEL_BLOODMOOR,
+		LEVEL_ROCKYWASTE,
+		LEVEL_SPIDERFOREST,
+		LEVEL_OUTERSTEPPES,
+		LEVEL_BLOODYFOOTHILLS
+	};
+	const int32_t nWildLevelId = (nActIdx < 5) ? kAdjacentWildLevels[nActIdx] : 0;
+	if (nWildLevelId > 0)
+	{
+		if (D2DrlgLevelStrc* pWildLvl = DRLG_GetLevel(pDrlg, nWildLevelId))
+		{
+			if (!pWildLvl->pFirstRoomEx)
+			{
+				DRLG_InitLevel(pWildLvl);
+			}
+		}
+	}
+	if (D2DrlgLevelStrc* pTownLvl = DRLG_GetLevel(pDrlg, nTownLevelId))
+	{
+		if (!pTownLvl->pFirstRoomEx)
+		{
+			DRLG_InitLevel(pTownLvl);
+		}
+		for (D2DrlgRoomStrc* pDrlgRoom = pTownLvl->pFirstRoomEx; pDrlgRoom; pDrlgRoom = pDrlgRoom->pDrlgRoomNext)
+		{
+			SafeStreamClientRoomAtTile(pAct, pDrlgRoom->nTileXPos, pDrlgRoom->nTileYPos);
+			// Also stream 1-room ring around each town room so the town->wilderness bridge/gate has zero black border
+			for (int32_t i = 0; i < pDrlgRoom->nRoomsNear; ++i)
+			{
+				if (D2DrlgRoomStrc* pNear = pDrlgRoom->ppRoomsNear[i])
+				{
+					SafeStreamClientRoomAtTile(pAct, pNear->nTileXPos, pNear->nTileYPos);
+				}
+			}
+		}
+		// Stream a 2-room skirt just outside town bounds to cover outdoor connection seams across the full 800x600 viewport
+		for (int32_t offset = 4; offset <= 16; offset += 8)
+		{
+			for (int32_t tx = pTownLvl->nPosX - 8; tx <= pTownLvl->nPosX + pTownLvl->nWidth + 8; tx += 8)
+			{
+				SafeStreamClientRoomAtTile(pAct, tx, pTownLvl->nPosY - offset);
+				SafeStreamClientRoomAtTile(pAct, tx, pTownLvl->nPosY + pTownLvl->nHeight + offset);
+			}
+			for (int32_t ty = pTownLvl->nPosY - 8; ty <= pTownLvl->nPosY + pTownLvl->nHeight + 8; ty += 8)
+			{
+				SafeStreamClientRoomAtTile(pAct, pTownLvl->nPosX - offset, ty);
+				SafeStreamClientRoomAtTile(pAct, pTownLvl->nPosX + pTownLvl->nWidth + offset, ty);
+			}
+		}
+	}
+}
+
 // Authoritative S2C Packet Dispatcher (1.12a SCmd: 0x6FAB10E0)
 static void DrainNetworkPackets()
 {
@@ -3072,6 +3185,7 @@ static void DrainNetworkPackets()
 						nullptr);
 					g_pClientAct = gpClientAct;
 					gbServerActLoaded = true;
+					PrestreamTownAndAdjacentWilderness(gpClientAct, nAct, gwServerTownLevelId);
 				}
 			}
 			break;
@@ -3089,14 +3203,35 @@ static void DrainNetworkPackets()
 		case 0x07: // AddRoom (wTileX, wTileY, nLevelId)
 			if (nPacketLen >= 6 && gpClientAct)
 			{
-				const int16_t nTileX = *reinterpret_cast<const int16_t*>(&aBuffer[1]);
-				const int16_t nTileY = *reinterpret_cast<const int16_t*>(&aBuffer[3]);
+				const uint16_t wTileX = *reinterpret_cast<const uint16_t*>(&aBuffer[1]);
+				const uint16_t wTileY = *reinterpret_cast<const uint16_t*>(&aBuffer[3]);
 				const uint8_t nLvlId = aBuffer[5];
 				if (nLvlId > 0)
 				{
-					gnCurrentLevelId = nLvlId;
+					if (D2DrlgStrc* pDrlg = DUNGEON_GetDrlgFromAct(gpClientAct))
+					{
+						if (D2DrlgLevelStrc* pLvl = DRLG_GetLevel(pDrlg, nLvlId))
+						{
+							if (!pLvl->pFirstRoomEx)
+							{
+								DRLG_InitLevel(pLvl);
+							}
+						}
+					}
 				}
-				DUNGEON_StreamRoomAtCoords(gpClientAct, nTileX, nTileY);
+				SyncReconstructedClientGlobals();
+				SCMD_Handler07_AddRoom(aBuffer);
+				++gdwSCmdPacketsDispatched;
+				DUNGEON_StreamRoomAtCoords(gpClientAct, static_cast<int>(wTileX), static_cast<int>(wTileY));
+			}
+			break;
+
+		case 0x08: // RemoveRoom (wTileX, wTileY, nLevelId)
+			if (nPacketLen >= 6 && gpClientAct)
+			{
+				SyncReconstructedClientGlobals();
+				SCMD_Handler08_RemoveRoom(aBuffer);
+				++gdwSCmdPacketsDispatched;
 			}
 			break;
 
@@ -3216,6 +3351,7 @@ static void DrainNetworkPackets()
 						gfTargetWorldY = gfPlayerWorldY;
 						gbPlayerMoving = false;
 					}
+					StreamClientNeighborhoodAroundTile(wSubX / 5, wSubY / 5, 16);
 				}
 				else if (ClientWorldUnit* pUnit = FindOrAllocClientUnit(nUnitType, dwGuid))
 				{
@@ -3322,6 +3458,7 @@ static void DrainNetworkPackets()
 						gfTargetWorldY = gfPlayerWorldY;
 						gbPlayerMoving = false;
 					}
+					StreamClientNeighborhoodAroundTile(nSubX / 5, nSubY / 5, 16);
 				}
 			}
 			break;
@@ -3580,6 +3717,7 @@ static void DrainNetworkPackets()
 						gfTargetWorldY = gfPlayerWorldY;
 						gbPlayerMoving = false;
 					}
+					StreamClientNeighborhoodAroundTile(wSubX / 5, wSubY / 5, 16);
 				}
 			}
 			break;
@@ -4285,7 +4423,7 @@ static bool IsSubtileWalkableForPlayer(float fCandWorldX, float fCandWorldY)
 	{
 		return false;
 	}
-	DUNGEON_StreamRoomAtCoords(gpClientAct, nSubX / 5, nSubY / 5);
+	SafeStreamClientRoomAtTile(gpClientAct, nSubX / 5, nSubY / 5);
 	D2ActiveRoomStrc* pRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nSubX, nSubY);
 	if (!pRoom)
 	{
@@ -4395,7 +4533,7 @@ static void UpdatePlayerMovement()
 		return;
 	}
 
-	// Stream adjacent DRLG rooms around player's current subtile & update current level ID
+	// Stream 3x3 neighborhood of DRLG rooms around player's viewport (including cross-level transitions like Blood Moor)
 	if (gpClientAct)
 	{
 		int nCurSubX = static_cast<int>(gfPlayerWorldX);
@@ -4403,7 +4541,7 @@ static void UpdatePlayerMovement()
 		DUNGEON_ClientToGameSubtileCoords(&nCurSubX, &nCurSubY);
 		if (nCurSubX > 0 && nCurSubY > 0)
 		{
-			DUNGEON_StreamRoomAtCoords(gpClientAct, nCurSubX / 5, nCurSubY / 5);
+			StreamClientNeighborhoodAroundTile(nCurSubX / 5, nCurSubY / 5, 16);
 			if (D2ActiveRoomStrc* pCurRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nCurSubX, nCurSubY))
 			{
 				const int32_t nRoomLvl = DUNGEON_GetLevelIdFromRoom(pCurRoom);
@@ -6906,6 +7044,30 @@ static void RunNativeClientAutotestStep()
 			}
 		}
 
+		int32_t nClientTownRoomsLoaded = 0;
+		int32_t nClientBloodMoorRoomsLoaded = 0;
+		if (gpClientAct)
+		{
+			for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom != nullptr; pRoom = pRoom->pRoomNext)
+			{
+				int nFloors = 0;
+				D2DrlgTileDataStrc* pFloors = DUNGEON_GetFloorTilesFromRoom(pRoom, &nFloors);
+				if (!pFloors || nFloors <= 0)
+				{
+					continue;
+				}
+				const int32_t nRoomLvl = DUNGEON_GetLevelIdFromRoom(pRoom);
+				if (nRoomLvl == LEVEL_ROGUEENCAMPMENT)
+				{
+					++nClientTownRoomsLoaded;
+				}
+				else if (nRoomLvl == LEVEL_BLOODMOOR)
+				{
+					++nClientBloodMoorRoomsLoaded;
+				}
+			}
+		}
+
 		// Gap 2: Fixed-Seed Multi-Act DRLG & Preset Unit Differential Oracle (Acts I-V)
 		uint32_t dwAct1To5RoomsGenerated = 0;
 		uint32_t dwAct1To5PresetUnits = 0;
@@ -7004,6 +7166,8 @@ static void RunNativeClientAutotestStep()
 				"  \"serverSubX\": %d,\n"
 				"  \"serverSubY\": %d,\n"
 				"  \"currentLevelId\": %d,\n"
+				"  \"clientTownRoomsLoaded\": %d,\n"
+				"  \"clientBloodMoorRoomsLoaded\": %d,\n"
 				"  \"activeWorldUnits\": %d,\n"
 				"  \"activeNpcs\": %d,\n"
 				"  \"activeMonsters\": %d,\n"
@@ -7050,6 +7214,8 @@ static void RunNativeClientAutotestStep()
 				gnServerSubX,
 				gnServerSubY,
 				gnCurrentLevelId,
+				nClientTownRoomsLoaded,
+				nClientBloodMoorRoomsLoaded,
 				nActiveUnits,
 				nActiveNpcs,
 				nActiveMonsters,
