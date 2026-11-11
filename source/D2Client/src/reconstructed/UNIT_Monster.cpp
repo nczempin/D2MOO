@@ -16,6 +16,7 @@
 #include "D2Structs.h"
 #include "D2DataTbls.h"
 #include "Units/Units.h"
+#include "Units/UnitRoom.h"
 #include "Units/Monster.h"
 #include "D2StatList.h"
 #include "D2Skills.h"
@@ -97,6 +98,7 @@ struct D2MonUModHandlerStrc
 // ============================================================================
 
 extern D2UnitStrc* gpPlayerUnit_6FBCC3D0;               // 0x6FBCC3D0
+extern D2DrlgActStrc* gpClientAct;                      // 0x6FBCC3C0
 extern D2UnitStrc* gpQuestMonster_6FBC57D0;             // 0x6FBC57D0
 extern D2ClientSoundChannelStrc* gpActiveSoundList_6FBCC36C; // 0x6FBCC36C
 extern uint32_t gdwSoundDuckStartTick_6FBCC370;         // 0x6FBCC370
@@ -872,6 +874,11 @@ void __fastcall D2Client_FreeMonsterUnitClientSide(D2UnitStrc* pUnit)
         pUnit->pInventory = nullptr;
     }
 
+    if (gpClientAct && UNITS_GetRoom(pUnit))
+    {
+        UNITROOM_RemoveUnitFromRoom(pUnit);
+    }
+
     if (pUnit->pDynamicPath)
     {
         PATH_FreeDynamicPath(pUnit->pMemoryPool, pUnit->pDynamicPath);
@@ -1116,6 +1123,10 @@ void __fastcall D2Client_StepMonsterAnimationMode(D2UnitStrc* pUnit)
     if (pCb && pCb->pfStepMode)
     {
         pCb->pfStepMode(pUnit);
+    }
+    else
+    {
+        UNITS_UpdateFrame(pUnit);
     }
 }
 

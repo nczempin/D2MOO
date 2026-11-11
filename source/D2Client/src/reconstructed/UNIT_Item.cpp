@@ -17,6 +17,8 @@
 #include <Units/UnitRoom.h>
 #include <Fog.h>
 
+void __fastcall GFX_FreeUnitGfxData(D2UnitStrc* pUnit);
+
 inline void D2Common_10474(D2StatListStrc* pStatList)
 {
     STATLIST_FreeStatList(pStatList);
@@ -775,13 +777,14 @@ void __fastcall D2Client_FreeItemUnitClientSide(D2UnitStrc* pItem)
     if (pItem->pInventory)
     {
         for (D2UnitStrc* pSubItem = INVENTORY_GetFirstItem(pItem->pInventory);
-             pSubItem != nullptr;
-             pSubItem = INVENTORY_GetNextItem(pSubItem))
+             pSubItem != nullptr; )
         {
+            D2UnitStrc* pNextSub = INVENTORY_GetNextItem(pSubItem);
             D2UnitStrc* pChecked = INVENTORY_UnitIsItem(pSubItem);
             INVENTORY_RemoveItem(pChecked);
             D2Client_RemoveUnitFromServerHashTable(pChecked);
             D2Client_FreeClientUnit(pChecked);
+            pSubItem = pNextSub;
         }
         INVENTORY_FreeInventory(pItem->pInventory);
         pItem->pInventory = nullptr;
@@ -790,8 +793,13 @@ void __fastcall D2Client_FreeItemUnitClientSide(D2UnitStrc* pItem)
     if (pItem->pStaticPath)
     {
         UNITS_FreeCollisionPath(pItem);
-        UNITROOM_RemoveUnitFromRoom(pItem);
+        if (gpClientAct && UNITS_GetRoom(pItem))
+        {
+            UNITROOM_RemoveUnitFromRoom(pItem);
+        }
     }
+
+    GFX_FreeUnitGfxData(pItem);
 }
 
 // 1.12a: 0x6FB45F80
@@ -913,10 +921,28 @@ void __fastcall D2Client_PlayItemDropFlippyAndLandSound(D2UnitStrc* pItem)
 {
     int32_t nDropSoundFrame = 0;
     int32_t nDropSound = D2Client_GetItemDropSoundIdAndDelay(pItem, &nDropSoundFrame);
-    int32_t nDelayTicks = (nDropSoundFrame << 8) / (pItem->nActionFrame != 0 ? pItem->nActionFrame : 256);
+    int32_t nDelayTicks = (nDropSoundFrame << 8) / (pItem->wAnimSpeed != 0 ? pItem->wAnimSpeed : 256);
 
     D2Client_PlayUnitSound(pItem, 0xD8); // Flippy sound
     D2Client_PlayDelayedSound(nDropSound, nDelayTicks);
+}
+
+static void D2Client_InitItemUnitStatListAndSockets(D2UnitStrc* pItem)
+{
+    if (!pItem || pItem->pStatListEx)
+    {
+        return;
+    }
+
+    ITEMS_SetItemFlag(pItem, IFLAG_IDENTIFIED, TRUE);
+    STATLIST_AllocStatListEx(pItem, 0, nullptr, nullptr);
+    D2StatListStrc* pBaseStatList = STATLIST_AllocStatList(pItem->pMemoryPool, 0x40, 0, UNIT_ITEM, pItem->dwUnitId);
+    D2Common_10475_PostStatToStatList(pItem, pBaseStatList, TRUE);
+
+    if (ITEMS_CheckIfSocketable(pItem) && !pItem->pInventory)
+    {
+        pItem->pInventory = INVENTORY_AllocInventory(pItem->pMemoryPool, pItem);
+    }
 }
 
 // 1.12a: 0x6FB46270
@@ -966,20 +992,7 @@ BOOL __fastcall D2Client_SetupItemUnitAnimModeAndPath(
         return FALSE;
     }
 
-    int32_t nStorePage = ITEMS_GetStorePage(pItem);
-    if (nStorePage < 0)
-    {
-        if (nStorePage == -2 && !STATLIST_GetStatListFromUnitAndFlag(pItem, 0))
-        {
-            D2StatListStrc* pStatList = STATLIST_AllocStatList(pItem->pMemoryPool, 0, 0, pItem->dwUnitType, pItem->dwUnitId);
-            D2Common_10475_PostStatToStatList(pItem, pStatList, TRUE);
-        }
-    }
-    else if (!pItem->pInventory)
-    {
-        pItem->pInventory = INVENTORY_AllocInventory(pItem->pMemoryPool, pItem);
-    }
-
+    D2Client_InitItemUnitStatListAndSockets(pItem);
     return TRUE;
 }
 
@@ -1342,11 +1355,20 @@ D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket13(const uint8_t* pPacke
     {
         pItem->dwFlagEx |= UNITFLAGEX_ISEXPANSION;
     }
+    SEED_InitSeed(&pItem->pSeed);
     ITEMS_AllocItemData(pItem->pMemoryPool, pItem);
+    ITEMS_GetUniqueColumnFromItemsTxt(pItem);
     UNITS_AllocStaticPath(pItem);
+    D2Client_InitItemUnitStatListAndSockets(pItem);
 
     if (!D2Client_DecodeFullItemPacket(pPacket, pItem))
     {
+        if (pItem->pInventory)
+        {
+            INVENTORY_FreeInventory(pItem->pInventory);
+            pItem->pInventory = nullptr;
+        }
+        STATLIST_FreeStatListEx(pItem);
         ITEMS_FreeItemData(pItem->pMemoryPool, pItem);
         UNITS_FreeStaticPath(pItem);
         UNITS_FreeUnit(pItem);

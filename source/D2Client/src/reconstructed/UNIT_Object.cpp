@@ -154,8 +154,8 @@ extern void __fastcall D2Client_FreeLightMap_6FB0E500(void* pLightMap);
 // 1.12a: 0x6FB0EAB0 (custom: ecx = pLightMap, eax = nRadius)
 extern void __fastcall D2Client_SetLightMapRadius_6FB0EAB0(void* pLightMap, int32_t nRadius);
 
-// 1.12a: 0x6FB0EAF0 (custom: ebx = nType)
-extern void* __stdcall D2Client_AllocLightMap_6FB0EAF0(int32_t nRadius, int32_t nIntensity, int32_t nRed, int32_t nGreen, int32_t nBlue);
+// 1.12a: 0x6FB0EAF0 (custom: edi = pUnit, ebx = nType)
+extern void* __stdcall D2Client_AllocLightMap_6FB0EAF0(D2UnitStrc* pUnit, int32_t nLightType, int32_t nRadius, int32_t nIntensity, int32_t nRed, int32_t nGreen, int32_t nBlue);
 
 // 1.12a: 0x6FB40ED0 (custom: eax = pUnit)
 extern void __fastcall D2Client_FreeUnitOverlays_6FB40ED0(D2UnitStrc* pUnit);
@@ -217,7 +217,7 @@ uint8_t __fastcall D2Client_ExecuteObjectClientFn(D2UnitStrc* pObject)
         exit(-1);
     }
 
-    if (nClientFn != 0)
+    if (nClientFn != 0 && gapfnObjectClientFunctions[nClientFn] != nullptr)
     {
         return gapfnObjectClientFunctions[nClientFn](pObject);
     }
@@ -406,7 +406,7 @@ void __fastcall D2Client_UpdateObjectLightRadius(D2UnitStrc* pObject, uint16_t w
 
     if (!pLight)
     {
-        pLight = D2Client_AllocLightMap_6FB0EAF0(wLightRadius >> 1, 0xFF, nRed, nGreen, nBlue);
+        pLight = D2Client_AllocLightMap_6FB0EAF0(pObject, 2, wLightRadius >> 1, 0xFF, nRed, nGreen, nBlue);
         pObject->pLight = (D2GfxLightStrc*)pLight;
         if (!pLight)
         {
@@ -562,10 +562,10 @@ uint8_t __fastcall D2Client_ObjClientFn16_AdvanceOperatingToOpened(D2UnitStrc* p
     {
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
         int32_t nTargetFrame = (int32_t)pObjectsTxt->nStart[OBJMODE_OPERATING] << 8;
-        if (pObject->nActionFrame == nTargetFrame)
+        if (pObject->nSeqCurrentFramePrecise == nTargetFrame)
         {
             pObject->dwAnimMode = OBJMODE_OPENED;
-            pObject->nActionFrame = 0;
+            pObject->nSeqCurrentFramePrecise = 0;
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
             UNITS_SetAnimStartFrame(pObject);
         }
@@ -610,7 +610,7 @@ uint8_t __fastcall D2Client_ObjClientFn10_TimedToggleOperatingShort(D2UnitStrc* 
         {
             pObject->dwClientInteracted = dwTick + 3000;
             D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_OPERATING];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_OPERATING] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_OPERATING);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
@@ -636,7 +636,7 @@ uint8_t __fastcall D2Client_ObjClientFn07_TimedToggleOperatingLong(D2UnitStrc* p
         {
             pObject->dwClientInteracted = dwTick + 10000;
             D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_OPERATING];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_OPERATING] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_OPERATING);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
@@ -661,7 +661,7 @@ uint8_t __fastcall D2Client_ObjClientFn06_TimedSpecial1Slow(D2UnitStrc* pObject)
         int32_t nRandomDelay = D2Client_RollRandomRange_6FAB2E60(&pObject->pSeed, 20000, 30000);
         pObject->dwClientInteracted = dwTick + nRandomDelay;
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_SPECIAL3];
+        pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_SPECIAL3] << 8;
         UNITS_ChangeAnimMode(pObject, OBJMODE_SPECIAL1);
         D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
     }
@@ -670,9 +670,9 @@ uint8_t __fastcall D2Client_ObjClientFn06_TimedSpecial1Slow(D2UnitStrc* pObject)
     if (dwMode >= OBJMODE_SPECIAL1)
     {
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        if ((uint32_t)pObject->nActionFrame == pObjectsTxt->dwFrameCnt[dwMode] - 0x100)
+        if ((uint32_t)pObject->nSeqCurrentFramePrecise >= pObjectsTxt->dwFrameCnt[dwMode] - 0x100)
         {
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_NEUTRAL];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_NEUTRAL] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_NEUTRAL);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
@@ -692,7 +692,7 @@ uint8_t __fastcall D2Client_ObjClientFn05_TimedSpecial1Or2(D2UnitStrc* pObject)
         int32_t nRandomDelay = D2Client_RollRandomRange_6FAB2E60(&pObject->pSeed, 23000, 33000);
         pObject->dwClientInteracted = dwTick + nRandomDelay;
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_SPECIAL3];
+        pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_SPECIAL3] << 8;
 
         uint64_t ullSeed = (uint64_t)pObject->pSeed.nLowSeed * 0x6AC690C5ULL + pObject->pSeed.nHighSeed;
         pObject->pSeed.nLowSeed = (uint32_t)ullSeed;
@@ -707,9 +707,9 @@ uint8_t __fastcall D2Client_ObjClientFn05_TimedSpecial1Or2(D2UnitStrc* pObject)
     if (dwMode == OBJMODE_SPECIAL1 || dwMode == OBJMODE_SPECIAL2)
     {
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        if (pObject->nActionFrame >= (int32_t)(pObjectsTxt->dwFrameCnt[dwMode] - 0x100))
+        if (pObject->nSeqCurrentFramePrecise >= (int32_t)(pObjectsTxt->dwFrameCnt[dwMode] - 0x100))
         {
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_NEUTRAL];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_NEUTRAL] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_NEUTRAL);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
@@ -729,7 +729,7 @@ uint8_t __fastcall D2Client_ObjClientFn04_TimedSpecial1Fast(D2UnitStrc* pObject)
         int32_t nRandomDelay = D2Client_RollRandomRange_6FAB2E60(&pObject->pSeed, 7000, 12000);
         pObject->dwClientInteracted = dwTick + nRandomDelay;
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_SPECIAL3];
+        pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_SPECIAL3] << 8;
         UNITS_ChangeAnimMode(pObject, OBJMODE_SPECIAL1);
         D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
     }
@@ -737,9 +737,9 @@ uint8_t __fastcall D2Client_ObjClientFn04_TimedSpecial1Fast(D2UnitStrc* pObject)
     if (pObject->dwAnimMode == OBJMODE_SPECIAL1)
     {
         D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-        if (pObject->nActionFrame >= (int32_t)(pObjectsTxt->dwFrameCnt[OBJMODE_SPECIAL1] - 0x100))
+        if (pObject->nSeqCurrentFramePrecise >= (int32_t)(pObjectsTxt->dwFrameCnt[OBJMODE_SPECIAL1] - 0x100))
         {
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_NEUTRAL];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_NEUTRAL] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_NEUTRAL);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
@@ -754,10 +754,9 @@ uint8_t __fastcall D2Client_ObjClientFn04_TimedSpecial1Fast(D2UnitStrc* pObject)
 void __stdcall D2Client_ChangeDoorMode(D2UnitStrc* pObject, int32_t nNewMode, BOOL bTargetable)
 {
     D2ObjectsTxt* pObjectsTxt = pObject->pObjectData->pObjectTxt;
-    if (nNewMode >= 8)
+    if (nNewMode < 0 || nNewMode >= 8)
     {
-        FOG_DisplayHalt("nMode < NUM_OBJ_MODES", "..\\Source\\D2Client\\UNIT\\Object.cpp", 0x210);
-        exit(-1);
+        return;
     }
 
     uint32_t dwOperatingFrames = pObjectsTxt->dwFrameCnt[OBJMODE_OPERATING];
@@ -765,7 +764,7 @@ void __stdcall D2Client_ChangeDoorMode(D2UnitStrc* pObject, int32_t nNewMode, BO
     {
         if (pObject->dwAnimMode == OBJMODE_OPENED && pObjectsTxt->dwFrameCnt[OBJMODE_SPECIAL1] != 0x100)
         {
-            pObject->nActionFrame = pObjectsTxt->nStart[OBJMODE_NEUTRAL];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_NEUTRAL] << 8;
             UNITS_ChangeAnimMode(pObject, OBJMODE_SPECIAL1);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
             pObject->dwFlags &= ~UNITFLAG_TARGETABLE;
@@ -783,7 +782,7 @@ void __stdcall D2Client_ChangeDoorMode(D2UnitStrc* pObject, int32_t nNewMode, BO
             UNITS_ChangeAnimMode(pObject, OBJMODE_OPERATING);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
             pObject->dwFlags &= ~UNITFLAG_TARGETABLE;
-            pObject->nActionFrame = pObject->pObjectData->pObjectTxt->nStart[OBJMODE_OPENED];
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObject->pObjectData->pObjectTxt->nStart[OBJMODE_OPENED] << 8;
             goto UPDATE_BLOCKS_LIGHT;
         }
     }
@@ -819,7 +818,7 @@ void __stdcall D2Client_ChangeDoorMode(D2UnitStrc* pObject, int32_t nNewMode, BO
             UNITS_ChangeAnimMode(pObject, nNewMode);
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
         }
-        pObject->nActionFrame = pObject->pObjectData->pObjectTxt->nStart[nNewMode];
+        pObject->nSeqCurrentFramePrecise = (int32_t)pObject->pObjectData->pObjectTxt->nStart[nNewMode] << 8;
     }
 
 UPDATE_BLOCKS_LIGHT:
@@ -838,26 +837,25 @@ UPDATE_BLOCKS_LIGHT:
 void __fastcall D2Client_FinishDoorModeTransition(D2UnitStrc* pObject)
 {
     uint32_t dwMode = pObject->dwAnimMode;
-    int32_t nNextActionFrame = 0;
+    int32_t nNextStartFrame = 0;
 
     if (dwMode == OBJMODE_SPECIAL1)
     {
         pObject->dwAnimMode = OBJMODE_NEUTRAL;
-        nNextActionFrame = pObject->pObjectData->pObjectTxt->nStart[OBJMODE_NEUTRAL];
+        nNextStartFrame = pObject->pObjectData->pObjectTxt->nStart[OBJMODE_NEUTRAL];
     }
     else if (dwMode == OBJMODE_OPERATING)
     {
         UNITS_FreeCollisionPath(pObject);
         pObject->dwAnimMode = OBJMODE_OPENED;
-        nNextActionFrame = pObject->pObjectData->pObjectTxt->nStart[OBJMODE_OPENED];
+        nNextStartFrame = pObject->pObjectData->pObjectTxt->nStart[OBJMODE_OPENED];
     }
     else
     {
-        FOG_DisplayHalt("Invalid door mode transition", "..\\Source\\D2Client\\UNIT\\Object.cpp", 0x11F);
-        exit(-1);
+        return;
     }
 
-    pObject->nActionFrame = nNextActionFrame;
+    pObject->nSeqCurrentFramePrecise = nNextStartFrame << 8;
     D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
     UNITS_SetAnimStartFrame(pObject);
 
@@ -964,8 +962,8 @@ void __fastcall D2Client_StepDoorAnimation(D2UnitStrc* pObject)
     if (dwMode == OBJMODE_OPERATING)
     {
         int32_t nMaxFrame = nFrameCnt - 0x100;
-        int32_t nCurFrame = pObject->nActionFrame;
-        if (nCurFrame == nMaxFrame)
+        int32_t nCurFrame = pObject->nSeqCurrentFramePrecise;
+        if (nCurFrame >= nMaxFrame)
         {
             D2Client_FinishDoorModeTransition(pObject);
             return;
@@ -976,13 +974,13 @@ void __fastcall D2Client_StepDoorAnimation(D2UnitStrc* pObject)
         {
             nCurFrame = nMaxFrame;
         }
-        pObject->nActionFrame = nCurFrame;
+        pObject->nSeqCurrentFramePrecise = nCurFrame;
         return;
     }
 
     if (dwMode == OBJMODE_SPECIAL1)
     {
-        int32_t nCurFrame = pObject->nActionFrame;
+        int32_t nCurFrame = pObject->nSeqCurrentFramePrecise;
         if (nCurFrame <= 0)
         {
             D2Client_FinishDoorModeTransition(pObject);
@@ -992,17 +990,14 @@ void __fastcall D2Client_StepDoorAnimation(D2UnitStrc* pObject)
         int32_t nDelta = pObject->wFrameRate;
         if (nDelta > nCurFrame)
         {
-            pObject->nActionFrame = 0;
+            pObject->nSeqCurrentFramePrecise = 0;
         }
         else
         {
-            pObject->nActionFrame = nCurFrame - nDelta;
+            pObject->nSeqCurrentFramePrecise = nCurFrame - nDelta;
         }
         return;
     }
-
-    FOG_DisplayHalt("Invalid door animation mode", "..\\Source\\D2Client\\UNIT\\Object.cpp", 0x155);
-    exit(-1);
 }
 
 // 1.12a: 0x6FAEAB70
@@ -1123,13 +1118,13 @@ void __fastcall D2Client_StepObjectAnimation(D2UnitStrc* pObject)
             return;
         }
 
-        if (pObject->nActionFrame >= nFrameCnt - 0x100)
+        if (pObject->nSeqCurrentFramePrecise >= nFrameCnt - 0x100)
         {
             if (pObject->dwClassId == OBJECT_CAINPORTAL && (dwMode == OBJMODE_OPENED || dwMode == OBJMODE_SPECIAL1))
             {
                 uint32_t dwNextMode = dwMode + 1;
                 pObject->dwAnimMode = dwNextMode;
-                pObject->nActionFrame = (int32_t)pObjectsTxt->nStart[dwNextMode] << 8;
+                pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[dwNextMode] << 8;
                 D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
                 UNITS_SetAnimStartFrame(pObject);
                 return;
@@ -1149,7 +1144,7 @@ void __fastcall D2Client_StepObjectAnimation(D2UnitStrc* pObject)
                     D2Client_ShakeScreen_6FAC5E60((dwShakeParam == 0xFF) ? 0x153 : 0x97, 4);
                 }
 
-                pObject->nActionFrame = (int32_t)pObjectsTxt->nStart[OBJMODE_OPENED] << 8;
+                pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_OPENED] << 8;
                 D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
                 UNITS_SetAnimStartFrame(pObject);
 
@@ -1190,38 +1185,38 @@ void __fastcall D2Client_StepObjectAnimation(D2UnitStrc* pObject)
 
     if (pObject->dwClassId == OBJECT_ROGUEFOUNTAIN)
     {
-        pObject->nActionFrame -= pObject->wFrameRate;
-        if (pObject->nActionFrame < 0)
+        pObject->nSeqCurrentFramePrecise -= pObject->wFrameRate;
+        if (pObject->nSeqCurrentFramePrecise < 0)
         {
-            pObject->nActionFrame += nFrameCnt;
+            pObject->nSeqCurrentFramePrecise += nFrameCnt;
         }
         return;
     }
 
     if (pObject->dwClassId == OBJECT_CAINPORTAL && dwMode == OBJMODE_SPECIAL1)
     {
-        pObject->nActionFrame -= pObject->wFrameRate;
-        if (pObject->nActionFrame < 0)
+        pObject->nSeqCurrentFramePrecise -= pObject->wFrameRate;
+        if (pObject->nSeqCurrentFramePrecise < 0)
         {
             pObject->dwAnimMode = OBJMODE_SPECIAL2;
-            pObject->nActionFrame = (int32_t)pObjectsTxt->nStart[OBJMODE_SPECIAL2] << 8;
+            pObject->nSeqCurrentFramePrecise = (int32_t)pObjectsTxt->nStart[OBJMODE_SPECIAL2] << 8;
             D2Client_UpdateUnitAnimGraphics_6FB42000(pObject, 0);
             UNITS_SetAnimStartFrame(pObject);
         }
         return;
     }
 
-    pObject->nActionFrame += pObject->wFrameRate;
-    if (pObject->nActionFrame >= nFrameCnt)
+    pObject->nSeqCurrentFramePrecise += pObject->wFrameRate;
+    if (pObject->nSeqCurrentFramePrecise >= nFrameCnt)
     {
         if (!bCycleAnim)
         {
-            pObject->nActionFrame = nFrameCnt - 0x100;
+            pObject->nSeqCurrentFramePrecise = nFrameCnt - 0x100;
         }
         else
         {
             int32_t nStartFrame = (int32_t)pObjectsTxt->nStart[dwMode] << 8;
-            pObject->nActionFrame = nStartFrame - nFrameCnt + pObject->nActionFrame;
+            pObject->nSeqCurrentFramePrecise = nStartFrame - nFrameCnt + pObject->nSeqCurrentFramePrecise;
         }
     }
 }

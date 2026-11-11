@@ -761,7 +761,10 @@ D2SkillStrc* __stdcall SKILLS_GetFirstSkillFromSkillList(D2SkillListStrc* pSkill
 //D2Common.0x6FDAFEC0
 D2SkillStrc* __fastcall SKILLS_GetLeftSkillFromSkillList(D2SkillListStrc* pSkillList)
 {
-	D2_ASSERT(pSkillList);
+	if (!pSkillList)
+	{
+		return nullptr;
+	}
 
 	return pSkillList->pLeftSkill;
 }
@@ -769,7 +772,10 @@ D2SkillStrc* __fastcall SKILLS_GetLeftSkillFromSkillList(D2SkillListStrc* pSkill
 //D2Common.0x6FDAFEF0
 D2SkillStrc* __fastcall SKILLS_GetRightSkillFromSkillList(D2SkillListStrc* pSkillList)
 {
-	D2_ASSERT(pSkillList);
+	if (!pSkillList)
+	{
+		return nullptr;
+	}
 
 	return pSkillList->pRightSkill;
 }

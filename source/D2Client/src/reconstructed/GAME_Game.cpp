@@ -803,32 +803,8 @@ void __stdcall GAME_FreeClientState()
 
 // 1.12a: 0x6FB2CA10 (__fastcall)
 // Main In-Game Frame Renderer (registered at g_pfnRenderFrame = 0x6FBB329C)
-void __fastcall GAME_RenderFrame(int32_t skipPresent)
-{
-    (void)skipPresent;
-    if (!g_pClientAct || !g_pPlayerUnit)
-    {
-        return;
-    }
-
-    // 1. Compute camera target in client coordinates from player precision position + screen shake
-    int32_t nCameraX = 0; // UNITS_GetPrecisionY(g_pPlayerUnit) >> 11
-    int32_t nCameraY = 0; // UNITS_GetClientCoordY(g_pPlayerUnit) >> 11
-    VIEW_UpdateScreenShake(&nCameraX, &nCameraY);
-
-    // 2. Update ambient lighting color from act environment
-    // ENVIRONMENT_GetLightColorFromAct(g_pClientAct, &r, &g, &b);
-    // D2GFX_SetAmbientColor(r, g, b);
-
-    // 3. Begin scene draw
-    // if (D2GFX_StartDraw(bClear, r, g, b))
-    {
-        // VIEW_RenderViewport(g_pClientView); // 0x6FB6B630 (draws floor, shadows, walls, units, roofs, weather)
-        // UI_RenderAllPanels();               // 0x6FB40150 (draws orbs, belt, open panels, chat, automap, text)
-        // UI_RenderCursor();                  // 0x6FB4F5B0
-        // D2GFX_EndScene();
-    }
-}
+// 1.12a: 0x6FB6AE30 (__fastcall, defined in View.cpp)
+void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender);
 
 // 1.12a: 0x6FB2CBB0 (__stdcall)
 // Full In-Game State Initialization

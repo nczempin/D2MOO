@@ -920,7 +920,7 @@ void __fastcall D2Common_STATLIST_FreeStatListImpl_6FDB7050(D2StatListStrc* pSta
 //D2Common.0x6FDB7110 (#10527)
 void __stdcall STATLIST_FreeStatListEx(D2UnitStrc* pUnit)
 {
-	if (pUnit->pStatListEx)
+	if (pUnit && pUnit->pStatListEx)
 	{
 		if (STATLIST_IsExtended(pUnit->pStatListEx))
 		{
@@ -1058,6 +1058,10 @@ int __stdcall STATLIST_GetExpireFrame(D2StatListStrc* pStatList)
 //D2Common.0x6FDB7340 (#10475)
 void __stdcall D2COMMON_10475_PostStatToStatList(D2UnitStrc* pUnit, D2StatListStrc* pStatList, BOOL bResetFlag)
 {
+	if (!pUnit || !pStatList)
+	{
+		return;
+	}
 	if (D2StatListExStrc* pUnitStatListEx = STATLIST_StatListExCast(pUnit->pStatListEx))
 	{
 		D2Common_ExpireStatList_6FDB6E30((D2StatListExStrc*)pStatList);
@@ -1302,6 +1306,10 @@ void __stdcall STATLIST_SetBaseStat2(D2StatListStrc* pStatList, int nStatId, int
 //D2Common.0x6FDB7AB0 (#10517)
 void __stdcall STATLIST_SetUnitStat(D2UnitStrc* pUnit, int nStatId, int nValue, uint16_t nLayer)
 {
+	if (!pUnit)
+	{
+		return;
+	}
 	if (STATLIST_SetStat(pUnit->pStatListEx, nStatId, nValue, nLayer))
 	{
 		if (pUnit->dwUnitType == UNIT_PLAYER)
@@ -1314,7 +1322,7 @@ void __stdcall STATLIST_SetUnitStat(D2UnitStrc* pUnit, int nStatId, int nValue, 
 //D2Common.0x6FDB7B00 (#10518)
 void __stdcall STATLIST_AddUnitStat(D2UnitStrc* pUnit, int nStatId, int nValue, uint16_t nLayer)
 {
-	if (nValue)
+	if (pUnit && nValue)
 	{
 		STATLIST_AddStat(pUnit->pStatListEx, nStatId, nValue, nLayer);
 	}
@@ -1358,7 +1366,7 @@ static int32_t __stdcall STATLIST_GetTotalStatValue(D2StatListStrc* pStatList, i
 //D2Common.0x6FDB7C30 (#10519)
 int32_t __stdcall STATLIST_UnitGetStatValue(const D2UnitStrc* pUnit, int nStatId, uint16_t nLayer)
 {
-	return STATLIST_GetTotalStatValue(pUnit->pStatListEx, nStatId, nLayer);
+	return pUnit ? STATLIST_GetTotalStatValue(pUnit->pStatListEx, nStatId, nLayer) : 0;
 }
 
 //D2Common.0x6FDB7E30 (#10520)

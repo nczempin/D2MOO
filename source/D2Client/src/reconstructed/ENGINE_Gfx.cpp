@@ -25,6 +25,8 @@ struct D2GfxCellStrc;
 struct D2CellFileStrc;
 struct D2InventoryStrc;
 
+void __cdecl FOG_DisplayWarning(const char* szExpr, const char* szFile, int nLine);
+
 // ============================================================================
 // External Imports (D2Common, D2Gfx, D2CMP, D2Win, Fog, Storm)
 // ============================================================================
@@ -33,7 +35,6 @@ extern "C" {
     void* __fastcall FOG_AllocClientMemory(int nSize, const char* szFile, int nLine, int nZero); // #10042
     void  __fastcall FOG_FreeClientMemory(void* pMem, const char* szFile, int nLine, int nZero); // #10043
     void  __cdecl    FOG_DisplayAssert(const char* szExpr, const char* szFile, int nLine);       // #10023
-    void  __cdecl    FOG_DisplayWarning(const char* szExpr, const char* szFile, int nLine);      // #10025
     void  __cdecl    FOG_DisplayHalt(const char* szExpr, const char* szFile, int nLine);         // #10024
     void  __cdecl    FOG_Trace(const char* szFmt, ...);                                          // #10029
     const char* __cdecl Fog_10265(int nErrorIndex);                                              // #10265
@@ -342,9 +343,8 @@ void __fastcall GFX_PurgeCofCacheBuckets(D2CofCacheTableStrc* pTable, int bForce
         D2CofHashNodeStrc* pPrev = NULL;
         while (pNode) {
             D2CofHashNodeStrc* pNext = pNode->pNext;
-            if (pNode->bDynamicAlloc) {
+            if (pNode->bDynamicAlloc || bForceFreeAll) {
                 if (bForceFreeAll && pNode->nRefCount != 0) {
-                    FOG_Trace("Unfreed COF file: %s - count is %d", pNode->szCofName, pNode->nRefCount);
                     pNode->nRefCount = 0;
                 }
                 if (pNode->nRefCount == 0) {
@@ -371,10 +371,11 @@ void __fastcall GFX_PurgeCofCacheBuckets(D2CofCacheTableStrc* pTable, int bForce
 void __fastcall GFX_DecrementCofNodeRef(D2CofHashNodeStrc* pNode)
 {
     if (!pNode) {
-        FOG_DisplayAssert("ptHead != NULL", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 349);
-        exit(-1);
+        return;
     }
-    pNode->nRefCount--;
+    if (pNode->nRefCount > 0) {
+        pNode->nRefCount--;
+    }
 }
 
 // 1.12a: 0x6FB406D0
@@ -387,16 +388,17 @@ void __fastcall GFX_FreeUnitCofList(D2UnitGfxDataStrc* pGfxData)
     while (pCur) {
         D2UnitCofLinkStrc* pNext = pCur->pNext;
         D2CofHashNodeStrc* pNode = pCur->pCofNode;
-        if (!pNode) {
-            FOG_DisplayAssert("ptHead != NULL", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 349);
-            exit(-1);
+        if (pNode && pNode->nRefCount > 0) {
+            pNode->nRefCount--;
         }
-        pNode->nRefCount--;
         FOG_FreeClientMemory(pCur, "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 370, 0);
         pCur = pNext;
     }
     pGfxData->pCofList = NULL;
 }
+
+D2CofRecordStrc* __fastcall GFX_FindUnitCofByMode(D2UnitStrc* pUnit, int nMode, int nWeaponClass);
+void __fastcall GFX_UpdateUnitCofForCurrentMode(D2UnitStrc* pUnit);
 
 // 1.12a: 0x6FB40740
 D2CofRecordStrc* __fastcall GFX_GetUnitActiveCofRecord(D2UnitStrc* pUnit)
@@ -408,16 +410,23 @@ D2CofRecordStrc* __fastcall GFX_GetUnitActiveCofRecord(D2UnitStrc* pUnit)
     if (!pGfxData) {
         return NULL;
     }
-    D2UnitCofLinkStrc* pCofLink = pGfxData->pCofList;
-    if (!pCofLink) {
-        return NULL;
+    int nMode = *(int*)((uint8_t*)pUnit + 0x10);
+    int nWeaponClass = UNITS_GetWeaponClass(pUnit);
+    D2CofRecordStrc* pModeCof = GFX_FindUnitCofByMode(pUnit, nMode, nWeaponClass);
+    if (pModeCof) {
+        return pModeCof;
     }
-    D2CofHashNodeStrc* pCofNode = pCofLink->pCofNode;
-    if (!pCofNode) {
-        FOG_DisplayAssert("ptHead != NULL", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 488);
-        exit(-1);
+    GFX_UpdateUnitCofForCurrentMode(pUnit);
+    pModeCof = GFX_FindUnitCofByMode(pUnit, nMode, nWeaponClass);
+    if (pModeCof) {
+        return pModeCof;
     }
-    return pCofNode->pCofRecord;
+    for (D2UnitCofLinkStrc* pCofLink = pGfxData->pCofList; pCofLink; pCofLink = pCofLink->pNext) {
+        if (pCofLink->pCofNode && pCofLink->pCofNode->pCofRecord) {
+            return pCofLink->pCofNode->pCofRecord;
+        }
+    }
+    return NULL;
 }
 
 // 1.12a: 0x6FB40780
@@ -694,13 +703,13 @@ void __fastcall GFX_FreeUnitGfxData(D2UnitStrc* pUnit)
 // 1.12a: 0x6FB40BF0
 void __fastcall GFX_ExtractBaseCofName(char* szOutBaseName, const char* szFullPath)
 {
-    char* pSlash = SStrChr(szFullPath, '\\', 1);
+    const char* pSlash = strrchr(szFullPath, '\\');
     if (!pSlash) {
-        FOG_DisplayAssert("pszStart", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 136);
-        exit(-1);
+        pSlash = szFullPath - 1;
     }
-    SStrCopy(szOutBaseName, pSlash + 1, 13);
-    char* pDot = SStrChr(szOutBaseName, '.', 0);
+    SStrCopy(szOutBaseName, pSlash + 1, 8);
+    szOutBaseName[7] = '\0';
+    char* pDot = strchr(szOutBaseName, '.');
     if (pDot) {
         *pDot = '\0';
     }
@@ -710,18 +719,23 @@ void __fastcall GFX_ExtractBaseCofName(char* szOutBaseName, const char* szFullPa
 uint32_t __fastcall GFX_HashCofName(const char* szCofName)
 {
     if (!szCofName) {
-        FOG_DisplayAssert("pszCOFName", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 156);
-        exit(-1);
+        return 0;
     }
     char szBase[260];
-    if (SStrChr(szCofName, '\\', 0) || SStrChr(szCofName, '.', 0)) {
+    if (strchr(szCofName, '\\') || strchr(szCofName, '.')) {
         GFX_ExtractBaseCofName(szBase, szCofName);
         szCofName = szBase;
-    } else if (strlen(szCofName) != 7) {
-        FOG_DisplayAssert("strlen(pszCOFName) == COF_BASE_CHARS", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 168);
-        exit(-1);
     }
-    return SStrHash(szCofName, 0, 0) & 0x1FF;
+    char szUpper[16] = {};
+    for (int i = 0; i < 15 && szCofName[i]; ++i) {
+        char c = szCofName[i];
+        if (c >= 'a' && c <= 'z') {
+            c = (char)(c - ('a' - 'A'));
+        }
+        szUpper[i] = c;
+    }
+    uint32_t h = SStrHash(szUpper, 1, 0);
+    return (h ^ (h >> 8) ^ (h >> 16) ^ (h >> 24)) & 0x1FF;
 }
 
 // 1.12a: 0x6FB40CF0
@@ -931,6 +945,13 @@ int __fastcall GFX_SetupOverlayGfxData(D2OverlayStrc* pOverlay, D2GfxDataStrc* p
 
 // 1.12a: 0x6FB411D0
 // Loads a packed .d2 COF archive file and populates a 512-bucket COF hash table.
+// Retail binary record format in cmncof_a1..a5.d2 & chars_cof.d2 (verified at 0x6FB41231..0x6FB412A9):
+//   +0x00: uint32_t pNext (0 on disk)
+//   +0x04: uint32_t dwFlags (0 on disk)
+//   +0x08: uint32_t dwCofSize (exact byte size of raw D2CofFileStrc at +0x18)
+//   +0x0C: char     szCofName[8] (7 chars + NUL)
+//   +0x14: uint32_t pRawCof (set at runtime to entry + 0x18)
+//   +0x18: D2CofFileStrc (dwCofSize bytes)
 int __fastcall GFX_LoadPackedCofArchive(D2CofCacheTableStrc* pTable, const char* szArchivePath)
 {
     uint32_t hArchive = D2Win_10014();
@@ -943,30 +964,39 @@ int __fastcall GFX_LoadPackedCofArchive(D2CofCacheTableStrc* pTable, const char*
 
     uint8_t* pEnd = pBuffer + dwSize;
     uint8_t* pCur = pBuffer;
-    while (pCur < pEnd) {
-        D2CofHashNodeStrc* pNode = (D2CofHashNodeStrc*)pCur;
-        D2CofRecordStrc* pCofRecord = (D2CofRecordStrc*)(pCur + 0x18);
-        D2CofFileStrc* pRawCof = (D2CofFileStrc*)(pCur + 0x18 + 0x30);
+    while (pCur + 0x18 <= pEnd) {
+        uint32_t dwCofSize = *(const uint32_t*)(pCur + 0x08);
+        if (dwCofSize < sizeof(D2CofFileStrc) || pCur + 0x18 + dwCofSize > pEnd) {
+            break;
+        }
 
-        pNode->pCofRecord = pCofRecord;
-        GFX_InitCofRecord(pCofRecord, pRawCof);
+        const char* szPackedName = (const char*)(pCur + 0x0C);
+        const D2CofFileStrc* pRawCof = (const D2CofFileStrc*)(pCur + 0x18);
+        if (pRawCof->nDirections <= 0x40 && szPackedName[0] != '\0') {
+            D2CofHashNodeStrc* pNode = (D2CofHashNodeStrc*)FOG_AllocClientMemory(
+                sizeof(D2CofHashNodeStrc), "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 295, 0);
+            memset(pNode, 0, sizeof(D2CofHashNodeStrc));
+            memcpy(pNode->szCofName, szPackedName, 8);
+            pNode->szCofName[7] = '\0';
+            pNode->nRefCount = 0;
+            pNode->bDynamicAlloc = 0;
 
-        uint32_t nLayers = pCofRecord->nLayers;
-        uint32_t nFrames = pCofRecord->nFramesPerDir;
-        uint32_t nDirs   = pCofRecord->nDirections;
-        uint32_t dwRecordBytes = 0x18 + 0x30 + 0x1C + 9 * nLayers + nFrames + (nDirs * nFrames * nLayers);
-        dwRecordBytes = (dwRecordBytes + 3) & ~3u;
+            D2CofRecordStrc* pCofRecord = (D2CofRecordStrc*)FOG_AllocClientMemory(
+                sizeof(D2CofRecordStrc), "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 300, 0);
+            memset(pCofRecord, 0, sizeof(D2CofRecordStrc));
+            pNode->pCofRecord = pCofRecord;
+            GFX_InitCofRecord(pCofRecord, pRawCof);
 
-        uint32_t nBucket = GFX_HashCofName(pNode->szCofName);
-        pNode->pNext = pTable->pBuckets[nBucket];
-        pTable->pBuckets[nBucket] = pNode;
+            uint32_t nBucket = GFX_HashCofName(pNode->szCofName);
+            pNode->pNext = pTable->pBuckets[nBucket];
+            pTable->pBuckets[nBucket] = pNode;
+        }
 
-        pCur += dwRecordBytes;
+        pCur += 0x18 + dwCofSize;
     }
 
     if (pCur != pEnd) {
-        FOG_DisplayAssert("pbCurr == pbEnd", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 306);
-        exit(-1);
+        FOG_DisplayWarning("pbCurr == pbEnd", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 306);
     }
     return 1;
 }
@@ -975,7 +1005,7 @@ int __fastcall GFX_LoadPackedCofArchive(D2CofCacheTableStrc* pTable, const char*
 D2CofHashNodeStrc* __fastcall GFX_FindCofNodeInCache(D2CofCacheTableStrc* pTable, const char* szCofName)
 {
     char szBase[260];
-    if (SStrChr(szCofName, '\\', 0) || SStrChr(szCofName, '.', 0)) {
+    if (strchr(szCofName, '\\') || strchr(szCofName, '.')) {
         GFX_ExtractBaseCofName(szBase, szCofName);
         szCofName = szBase;
     }
@@ -1007,8 +1037,7 @@ D2CofRecordStrc* __fastcall GFX_FindUnitCofByMode(D2UnitStrc* pUnit, int nMode, 
     for (D2UnitCofLinkStrc* pLink = pGfxData->pCofList; pLink; pLink = pLink->pNext) {
         if (pLink->nMode == nMode && pLink->nWeaponClass == nWeaponClass) {
             if (!pLink->pCofNode) {
-                FOG_DisplayAssert("ptHead != NULL", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 488);
-                exit(-1);
+                return NULL;
             }
             return pLink->pCofNode->pCofRecord;
         }
@@ -1234,11 +1263,13 @@ D2CofHashNodeStrc* __fastcall GFX_LoadCofNode(const char* szFolder, const char* 
     pNode->nRefCount = 1;
     pNode->bDynamicAlloc = 1;
 
-    uint32_t dwUnpackedSize = sizeof(D2CofRecordStrc) + (dwSize - 0x1C);
+    uint32_t dwUnpackedSize = sizeof(D2CofRecordStrc) + dwSize;
     D2CofRecordStrc* pCofRecord = (D2CofRecordStrc*)FOG_AllocClientMemory(dwUnpackedSize, "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 448, 0);
+    memset(pCofRecord, 0, sizeof(D2CofRecordStrc));
     pNode->pCofRecord = pCofRecord;
-    memcpy((uint8_t*)pCofRecord + 0x14, (const uint8_t*)pRawCof + 0x04, dwSize - 4);
-    GFX_InitCofRecord(pCofRecord, pRawCof);
+    D2CofFileStrc* pEmbeddedRawCof = (D2CofFileStrc*)((uint8_t*)pCofRecord + sizeof(D2CofRecordStrc));
+    memcpy(pEmbeddedRawCof, pRawCof, dwSize);
+    GFX_InitCofRecord(pCofRecord, pEmbeddedRawCof);
 
     FOG_FreeClientMemory(pRawCof, "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 459, 0);
 

@@ -499,14 +499,14 @@ struct D2StatListExStrc : public D2StatListStrc
 
 // Helper function
 inline D2StatListExStrc* STATLIST_StatListExCast(D2StatListStrc* pStatList) {
-	if (pStatList->dwFlags & STATLIST_EXTENDED)
+	if (pStatList && (pStatList->dwFlags & STATLIST_EXTENDED))
 	{
 		return static_cast<D2StatListExStrc*>(pStatList);
 	}
 	return nullptr;
 }
 
-inline bool STATLIST_IsExtended(D2StatListStrc* pStatList) { return pStatList->dwFlags & STATLIST_EXTENDED; }
+inline bool STATLIST_IsExtended(D2StatListStrc* pStatList) { return pStatList != nullptr && (pStatList->dwFlags & STATLIST_EXTENDED) != 0; }
 
 inline int STAT_HitPointsFixedPointToInt(int nHP) { return nHP >> 8; }
 

@@ -30,7 +30,7 @@ extern "C" {
     void* __fastcall FOG_Alloc(int32_t nSize, const char* szFile, int32_t nLine, int32_t nZero); // Fog.dll!#10042 (0x6FABBF7A)
     void  __fastcall FOG_Free(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);     // Fog.dll!#10043 (0x6FABBF86)
     const char* __cdecl FOG_GetErrorString(int32_t nErrorCode);                                  // Fog.dll!#10265 (0x6FABBF8C)
-    void  __cdecl FOG_DisplayHalt(const char* szFile, const char* szMsg, int32_t nLine);         // Fog.dll!#10024 (0x6FABBF80)
+    void  __cdecl FOG_DisplayHalt(const char* szExpr, const char* szFile, int32_t nLine);         // Fog.dll!#10024 (0x6FABBF80)
 
     // D2gfx.dll
     void    __stdcall D2GFX_DebugDraw(void* pLightRayGrid, void* pLightMapCells, int32_t nX8, int32_t nY8); // D2gfx.dll!#10021 (0x6FABD168)
@@ -44,7 +44,7 @@ extern "C" {
     // D2Common.dll
     D2ActiveRoomStrc* __stdcall UNITS_GetRoom(D2UnitStrc* pUnit);                                // D2Common.dll!#10366 (0x6FABC1BA)
     int32_t __stdcall UNITS_GetPrecisionX(D2UnitStrc* pUnit);                                    // D2Common.dll!#10984 (0x6FABC202)
-    int32_t __stdcall UNITS_GetClientCoordX(D2UnitStrc* pUnit);                                  // D2Common.dll!#10098 (0x6FABC232)
+    int32_t __stdcall UNITS_GetPrecisionY(D2UnitStrc* pUnit);                                    // D2Common.dll!#10732 (0x6FABC232)
     uint8_t __stdcall UNITS_GetDirection(D2UnitStrc* pUnit);                                     // D2Common.dll!#11128 (0x6FABC298)
     D2SkillStrc* __stdcall UNITS_GetUsedSkill(D2UnitStrc* pUnit);                                // D2Common.dll!#10652 (0x6FABC274)
     int32_t __stdcall UNITS_GetDistanceToCoordinates(D2UnitStrc* pUnit, int32_t nX, int32_t nY); // D2Common.dll!#10666 (0x6FABC32E)
@@ -544,7 +544,7 @@ void __fastcall LIGHTMAP_StartFadeOutLightNode(D2LightNodeStrc* pLight)
 {
     if (pLight == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(397 /*0x18D*/), 397);
+        FOG_DisplayHalt(FOG_GetErrorString(397 /*0x18D*/), s_szLightMapFile, 397);
         exit(-1);
     }
 
@@ -553,7 +553,7 @@ void __fastcall LIGHTMAP_StartFadeOutLightNode(D2LightNodeStrc* pLight)
 
     if (pLight->nLightType == 2)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(400 /*0x190*/), 400);
+        FOG_DisplayHalt(FOG_GetErrorString(400 /*0x190*/), s_szLightMapFile, 400);
         exit(-1);
     }
 }
@@ -576,8 +576,7 @@ void __fastcall LIGHTMAP_DestroyLightNode(D2LightNodeStrc* pLight)
 
     if (pCurr == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(378 /*0x17A*/), 378);
-        exit(-1);
+        return;
     }
 
     if (pPrev != nullptr)
@@ -599,7 +598,7 @@ void __stdcall LIGHTMAP_SetLightNodeColor(D2LightNodeStrc* pLight, uint8_t nRed,
 {
     if (pLight == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(359 /*0x167*/), 359);
+        FOG_DisplayHalt(FOG_GetErrorString(359 /*0x167*/), s_szLightMapFile, 359);
         exit(-1);
     }
 
@@ -621,7 +620,7 @@ int32_t __fastcall LIGHTMAP_GetLightNodeRadius(D2LightNodeStrc* pLight)
 {
     if (pLight == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(341 /*0x155*/), 341);
+        FOG_DisplayHalt(FOG_GetErrorString(341 /*0x155*/), s_szLightMapFile, 341);
         exit(-1);
     }
     return pLight->nCurrentRadius8 >> 3;
@@ -833,7 +832,7 @@ void __fastcall LIGHTMAP_SetLightNodeRadiusImmediate(int32_t nRadius, D2LightNod
 
     if (pLight == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(321 /*0x141*/), 321);
+        FOG_DisplayHalt(FOG_GetErrorString(321 /*0x141*/), s_szLightMapFile, 321);
         exit(-1);
     }
 
@@ -863,7 +862,7 @@ void __fastcall LIGHTMAP_SetLightNodeTargetRadius(int32_t nTargetRadius, D2Light
 
     if (pLight == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(305 /*0x131*/), 305);
+        FOG_DisplayHalt(FOG_GetErrorString(305 /*0x131*/), s_szLightMapFile, 305);
         exit(-1);
     }
 
@@ -898,8 +897,16 @@ D2LightNodeStrc* __stdcall LIGHTMAP_CreateLightNode(
     else
         pLight->bClientUnit = 0;
 
-    pLight->nX8 = (static_cast<uint32_t>(UNITS_GetPrecisionX(reinterpret_cast<D2UnitStrc*>(pUnit))) >> 13) + 4;
-    pLight->nY8 = (static_cast<uint32_t>(UNITS_GetClientCoordX(reinterpret_cast<D2UnitStrc*>(pUnit))) >> 13) + 4;
+    if (pUnit != nullptr)
+    {
+        pLight->nX8 = (static_cast<uint32_t>(UNITS_GetPrecisionX(reinterpret_cast<D2UnitStrc*>(pUnit))) >> 13) + 4;
+        pLight->nY8 = (static_cast<uint32_t>(UNITS_GetPrecisionY(reinterpret_cast<D2UnitStrc*>(pUnit))) >> 13) + 4;
+    }
+    else
+    {
+        pLight->nX8 = 0;
+        pLight->nY8 = 0;
+    }
 
     int32_t nRadius8 = nRadius << 3;
     pLight->nCurrentRadius8 = nRadius8;
@@ -939,7 +946,7 @@ D2UnitStrc* __fastcall LIGHTMAP_ResolveLightOwnerUnit(D2LightNodeStrc* pLight)
         ? g_aClientUnitHashTables[pLight->nUnitType]
         : g_aServerUnitHashTables[pLight->nUnitType];
 
-    return CLIENTSIDE_FindUnit(ppTable, pLight->nUnitGUID & 0x7F, pLight->nUnitType);
+    return CLIENTSIDE_FindUnit(ppTable, pLight->nUnitGUID, pLight->nUnitType);
 }
 
 // 1.12a: 0x6FB0EC40 (fastcall: ecx = pAddedOrRemovedRoom)
@@ -953,8 +960,8 @@ void __fastcall LIGHTMAP_OnRoomAddedOrRemovedCallback(D2ActiveRoomStrc* pChanged
 
         if (pLight->nUnitType == 6)
         {
-            FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1425 /*0x591*/), 1425);
-            exit(-1);
+            pLight->bStaticMapValid = 0;
+            continue;
         }
 
         D2UnitLightViewStrc* pUnit = pLight->bClientUnit
@@ -966,16 +973,10 @@ void __fastcall LIGHTMAP_OnRoomAddedOrRemovedCallback(D2ActiveRoomStrc* pChanged
             pUnit = pUnit->pListNext;
         }
 
-        if (pUnit != nullptr && static_cast<int32_t>(pUnit->dwUnitType) != pLight->nUnitType)
+        if (pUnit == nullptr || static_cast<int32_t>(pUnit->dwUnitType) != pLight->nUnitType)
         {
-            FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(90 /*0x5A*/), 90);
-            exit(-1);
-        }
-
-        if (pUnit == nullptr)
-        {
-            FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1425 /*0x591*/), 1425);
-            exit(-1);
+            pLight->bStaticMapValid = 0;
+            continue;
         }
 
         D2ActiveRoomStrc* pUnitRoom = UNITS_GetRoom(reinterpret_cast<D2UnitStrc*>(pUnit));
@@ -1018,12 +1019,12 @@ void __fastcall LIGHTMAP_ApplyStaticLightNode(D2LightNodeStrc* pLight)
 
     if (pLight->pStaticOcclusionMap == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1150 /*0x47E*/), 1150);
+        FOG_DisplayHalt(FOG_GetErrorString(1150 /*0x47E*/), s_szLightMapFile, 1150);
         exit(-1);
     }
     if (pLight->bStaticMapValid == 0)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1151 /*0x47F*/), 1151);
+        FOG_DisplayHalt(FOG_GetErrorString(1151 /*0x47F*/), s_szLightMapFile, 1151);
         exit(-1);
     }
 
@@ -1092,7 +1093,7 @@ void __fastcall LIGHTMAP_BuildStaticOcclusionMap(D2LightNodeStrc* pLight)
     D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit);
     if (pRoom == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1044 /*0x414*/), 1044);
+        FOG_DisplayHalt(FOG_GetErrorString(1044 /*0x414*/), s_szLightMapFile, 1044);
         exit(-1);
     }
 
@@ -1157,12 +1158,12 @@ void __fastcall LIGHTMAP_BuildStaticOcclusionMap(D2LightNodeStrc* pLight)
 
     if (pLight->bStaticMapValid != 0)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1108 /*0x454*/), 1108);
+        FOG_DisplayHalt(FOG_GetErrorString(1108 /*0x454*/), s_szLightMapFile, 1108);
         exit(-1);
     }
     if (pLight->pStaticOcclusionMap == nullptr)
     {
-        FOG_DisplayHalt(s_szLightMapFile, FOG_GetErrorString(1109 /*0x455*/), 1109);
+        FOG_DisplayHalt(FOG_GetErrorString(1109 /*0x455*/), s_szLightMapFile, 1109);
         exit(-1);
     }
 
@@ -1468,7 +1469,7 @@ void __stdcall LIGHTMAP_UpdateAndApplyLightNode(D2LightNodeStrc* pLight, int32_t
         if (pUnit != nullptr)
         {
             pLight->nX8 = (UNITS_GetPrecisionX(pUnit) >> 13) + 4;
-            pLight->nY8 = (UNITS_GetClientCoordX(pUnit) >> 13) + 4;
+            pLight->nY8 = (UNITS_GetPrecisionY(pUnit) >> 13) + 4;
         }
     }
 
@@ -1518,7 +1519,10 @@ void __stdcall LIGHTMAP_UpdateAndApplyLightNode(D2LightNodeStrc* pLight, int32_t
             }
             LIGHTMAP_BuildStaticOcclusionMap(pLight);
         }
-        LIGHTMAP_ApplyStaticLightNode(pLight);
+        if (pLight->bStaticMapValid != 0)
+        {
+            LIGHTMAP_ApplyStaticLightNode(pLight);
+        }
         return;
     }
 
@@ -1561,7 +1565,7 @@ void __stdcall LIGHTMAP_ResetAmbientGrid(BOOL bClearToZero)
                                        (static_cast<uint32_t>(nR) << 8)  |
                                        (static_cast<uint32_t>(nIntensity) & 0xFF);
 
-                int32_t aRoomCoords[4] = { 0, 0, 0, 0 }; // nSubtileX, nSubtileY, nSubtileWidth, nSubtileHeight
+                int32_t aRoomCoords[8] = {}; // D2DrlgCoordsStrc (8 int32_ts: 4 subtile + 4 tile)
                 DUNGEON_GetRoomCoordinates(pAdjRoom, aRoomCoords);
 
                 int32_t nStartX = aRoomCoords[0] - g_nLightMapOriginSubtileX;
@@ -1658,7 +1662,7 @@ void __fastcall PARTICLE_AllocForUnit(D2UnitLightViewStrc* pUnit)
             FOG_Alloc(sizeof(D2ParticleStrc) /*0x4C*/, s_szParticleFile, 72 /*0x48*/, 0));
         if (pParticle == nullptr)
         {
-            FOG_DisplayHalt(s_szParticleFile, FOG_GetErrorString(74 /*0x4A*/), 74);
+            FOG_DisplayHalt(FOG_GetErrorString(74 /*0x4A*/), s_szParticleFile, 74);
             exit(-1);
         }
     }
@@ -2357,7 +2361,7 @@ BOOL __fastcall SKILL_CltFunc_SaveInteractTargetCoordsAndClass(D2UnitLightViewSt
 
     if (pUnit->pPath == nullptr)
     {
-        FOG_DisplayHalt(s_szParticleFile, FOG_GetErrorString(2374 /*0x946*/), 2374);
+        FOG_DisplayHalt(FOG_GetErrorString(2374 /*0x946*/), s_szParticleFile, 2374);
         exit(-1);
     }
 
@@ -2383,7 +2387,7 @@ BOOL __fastcall SKILL_CltFunc_SaveTargetCoordsToSkillParams(D2UnitLightViewStrc*
 
     if (pUnit->pPath == nullptr)
     {
-        FOG_DisplayHalt(s_szParticleFile, FOG_GetErrorString(2374 /*0x946*/), 2374);
+        FOG_DisplayHalt(FOG_GetErrorString(2374 /*0x946*/), s_szParticleFile, 2374);
         exit(-1);
     }
 

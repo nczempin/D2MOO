@@ -285,6 +285,7 @@ extern int32_t __fastcall MSG_SendPartyAction_5D(uint8_t nSubAction, uint8_t bFl
 extern void __fastcall LIGHTMAP_DestroyLightNode(D2LightNodeStrc* pLight);
 extern void __fastcall LIGHTMAP_SetLightNodeTargetRadius(int32_t nTargetRadius, D2LightNodeStrc* pLight);
 extern D2LightNodeStrc* __stdcall LIGHTMAP_CreateLightNode(D2UnitLightViewStrc* pUnit, int32_t nLightType, int32_t nRadius, uint8_t nIntensity, uint8_t nRed, uint8_t nGreen, uint8_t nBlue);
+extern void __stdcall LIGHTMAP_SampleLightAtSubtile8(int32_t nX8, int32_t nY8, uint8_t* pOutIntensity, uint8_t* pOutRed, uint8_t* pOutGreen, uint8_t* pOutBlue);
 
 extern D2ActiveRoomStrc* __fastcall ENGINE_FindRoomBySubtileCoords(D2ActiveRoomStrc* pStartRoom, int32_t nX, int32_t nY);
 extern void __cdecl GAME_LoadAct(uint8_t nAct, uint32_t dwTownLevelId, uint32_t dwInitSeed, uint32_t dwEndSeed);
@@ -328,9 +329,11 @@ extern void __fastcall D2Client_FreeObjectData(D2UnitStrc* pObject);
 extern BOOL __fastcall D2Client_UpdateObjectPeriodOfDay(D2UnitStrc* pObject, BOOL bSkipAnimGraphicsUpdate);
 extern void __stdcall D2Client_InitObjectUnit(D2UnitStrc* pObject, int32_t nY, uint8_t nMode, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nClassId);
 extern void __fastcall D2Client_ApplyInitialObjectOverlays(D2UnitStrc* pObject);
+extern void __fastcall D2Client_UpdateObjectUnitPerTick(D2UnitStrc* pObject);
 
 extern void __fastcall D2Client_DispatchUnitModeChange(D2UnitStrc* pUnit, int32_t nMode);
 extern BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit);
+extern int32_t __fastcall D2Client_InitMissileUnitDataAndPath(D2UnitStrc* pMissile, int32_t nX, int32_t nY, uint32_t dwPathFlags);
 
 // ----------------------------------------------------------------------------
 // Verified ABI-identical C and C++ symbol aliases
@@ -405,7 +408,7 @@ extern BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit);
 #pragma comment(linker, "/alternatename:_ENVIRONMENT_GetIntensityFromAct@4=?ENVIRONMENT_GetIntensityFromAct@@YGHPAUD2DrlgActStrc@@@Z")
 #pragma comment(linker, "/alternatename:_ENVIRONMENT_GetLightColorFromAct@16=?ENVIRONMENT_GetLightColorFromAct@@YGXPAUD2DrlgActStrc@@PAE11@Z")
 #pragma comment(linker, "/alternatename:_FOG_DisplayAssert=?FOG_DisplayAssert@@YAXPBD0H@Z")
-#pragma comment(linker, "/alternatename:_FOG_DisplayHalt=?FOG_DisplayHalt@@YAXPBDH@Z")
+#pragma comment(linker, "/alternatename:_FOG_DisplayHalt=?FOG_DisplayHalt@@YAXPBD0H@Z")
 #pragma comment(linker, "/alternatename:_FOG_Trace=?FOG_Trace@@YAXPBDZZ")
 #pragma comment(linker, "/alternatename:_GAME_SetInitSeed@4=?GAME_SetInitSeed@@YGXH@Z")
 #pragma comment(linker, "/alternatename:_INVENTORY_GetCursorItem@4=?INVENTORY_GetCursorItem@@YGPAUD2UnitStrc@@PAUD2InventoryStrc@@@Z")
@@ -556,7 +559,31 @@ extern BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit);
 #pragma comment(linker, "/alternatename:?gpLocalQuestFlags@@3PAUD2BitBufferStrc@@A=?g_pPlayerQuestRecord@@3PAUD2BitBufferStrc@@A")
 #pragma comment(linker, "/alternatename:?gpPlayerUnit_6FBCC3D0@@3PAUD2UnitStrc@@A=?gpPlayerUnit@@3PAUD2UnitStrc@@A")
 
-extern const D2ShrineClientTableStrc gShrineClientTable[23] = {};
+extern const D2ShrineClientTableStrc gShrineClientTable[23] = {
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+    { nullptr, nullptr, -1, -1, -1 },
+};
 uint8_t gDigitBitmap7x10_6FBA6351[700] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
     0x00, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
@@ -1098,6 +1125,25 @@ static void Bridge_Trim3CharCode(char* dst, uint32_t dwCode, const char* szFallb
     }
 }
 
+static void Bridge_TrimTokenStr(char* dst, const char* src, const char* szFallback)
+{
+    int outIdx = 0;
+    if (src)
+    {
+        for (int i = 0; i < 3 && src[i]; ++i)
+        {
+            if (src[i] != ' ')
+                dst[outIdx++] = src[i];
+        }
+    }
+    dst[outIdx] = 0;
+    if (outIdx == 0 && szFallback)
+    {
+        strncpy(dst, szFallback, 3);
+        dst[3] = 0;
+    }
+}
+
 static void Bridge_PopulateCompositTokens(
     D2UnitStrc* pUnit,
     char* szToken,
@@ -1126,13 +1172,13 @@ static void Bridge_PopulateCompositTokens(
     {
         D2PlrModeTypeTxt* pClsTxt = DATATBLS_GetPlrModeTypeTxtRecord(nClass, 0);
         D2PlrModeTypeTxt* pModTxt = DATATBLS_GetPlrModeTypeTxtRecord(nMode, 1);
-        if (szToken) strncpy(szToken, (pClsTxt && pClsTxt->szToken[0]) ? pClsTxt->szToken : "AM", 3);
+        if (szToken) Bridge_TrimTokenStr(szToken, pClsTxt ? pClsTxt->szToken : nullptr, "AM");
         if (szMode)
         {
             if (nMode == PLRMODE_SEQUENCE || nMode == PLRMODE_KNOCKBACK)
                 strncpy(szMode, "GH", 3);
             else
-                strncpy(szMode, (pModTxt && pModTxt->szToken[0]) ? pModTxt->szToken : "NU", 3);
+                Bridge_TrimTokenStr(szMode, pModTxt ? pModTxt->szToken : nullptr, "NU");
         }
         if (szWC && (nMode == PLRMODE_DEATH || nMode == PLRMODE_DEAD))
             strncpy(szWC, "HTH", 3);
@@ -1160,8 +1206,8 @@ static void Bridge_PopulateCompositTokens(
     {
         D2ObjectsTxt* pObj = DATATBLS_GetObjectsTxtRecord(nClass);
         D2ObjModeTypeTxt* pMod = DATATBLS_GetObjModeTypeTxtRecord(nMode, 1);
-        if (szToken) strncpy(szToken, (pObj && pObj->szToken[0]) ? pObj->szToken : "TO", 3);
-        if (szMode)  strncpy(szMode, (pMod && pMod->szToken[0]) ? pMod->szToken : "NU", 3);
+        if (szToken) Bridge_TrimTokenStr(szToken, pObj ? pObj->szToken : nullptr, "TO");
+        if (szMode)  Bridge_TrimTokenStr(szMode, pMod ? pMod->szToken : nullptr, "NU");
         if (szWC)    strncpy(szWC, "HTH", 3);
     }
 }
@@ -1294,306 +1340,306 @@ BOOL __fastcall sub_6FD91E80(D2UnitStrc* pUnit, D2UnitStrc* pItem1, D2UnitStrc* 
 }
 
 extern "C" {
-void __fastcall Bridge_D2GFX_SetViewportShift_92707(int32_t nShiftX) { gnViewportShiftOffsetX = nShiftX; D2GFX_SetViewMatrixAdjust(nShiftX); }
-#pragma comment(linker, "/alternatename:@D2GFX_SetViewportShift@4=@Bridge_D2GFX_SetViewportShift_92707@4")
-const wchar_t* __fastcall Bridge_D2LANG_GetStringByReferenceIndex_22068(int32_t id) { return (const wchar_t*)D2LANG_GetStringFromTblIndex((short)id); }
-#pragma comment(linker, "/alternatename:@D2LANG_GetStringByReferenceIndex@4=@Bridge_D2LANG_GetStringByReferenceIndex_22068@4")
-wchar_t* __fastcall Bridge_D2LANG_UnicodeStrCat_78437(wchar_t* d, const wchar_t* s) { return (d && s) ? wcscat(d, s) : d; }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrCat@8=@Bridge_D2LANG_UnicodeStrCat_78437@8")
-wchar_t* __fastcall Bridge_D2LANG_UnicodeStrCpy_24844(wchar_t* d, const wchar_t* s) { return (d && s) ? wcscpy(d, s) : d; }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrCpy@8=@Bridge_D2LANG_UnicodeStrCpy_24844@8")
-int32_t __fastcall Bridge_D2LANG_UnicodeStrLen_4517(const wchar_t* s) { return s ? (int32_t)wcslen(s) : 0; }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrLen@4=@Bridge_D2LANG_UnicodeStrLen_4517@4")
-wchar_t* __fastcall Bridge_D2LANG_UnicodeStrNCpy_15895(wchar_t* d, const wchar_t* s, int32_t n) { if (d && s && n > 0) { wcsncpy(d, s, (size_t)n); d[n - 1] = 0; } return d; }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrNCpy@12=@Bridge_D2LANG_UnicodeStrNCpy_15895@12")
-void __fastcall Bridge_D2LANG_UnicodeToAnsi_96531(char* d, const wchar_t* s, int32_t n) { if (d && n > 0) { if (s) Unicode::unicode2Win(d, (const Unicode*)s, n); else d[0] = 0; } }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeToAnsi@12=@Bridge_D2LANG_UnicodeToAnsi_96531@12")
-wchar_t __fastcall Bridge_D2LANG_UnicodeToUpper_52479(wchar_t wc) { return (wchar_t)towupper(wc); }
-#pragma comment(linker, "/alternatename:@D2LANG_UnicodeToUpper@4=@Bridge_D2LANG_UnicodeToUpper_52479@4")
-void __fastcall Bridge_D2WIN_DestroyEditBox_5905(D2WinEditBoxStrc* p) { if (p) D2Win_10071_EDITBOX_Destroy(p); }
-#pragma comment(linker, "/alternatename:@D2WIN_DestroyEditBox@4=@Bridge_D2WIN_DestroyEditBox_5905@4")
-void __fastcall Bridge_D2WIN_DrawFramedText_96437(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t a) { D2Win_10129_DrawFramedText(w, x, y, c, a); }
-#pragma comment(linker, "/alternatename:@D2WIN_DrawFramedText@20=@Bridge_D2WIN_DrawFramedText_96437@20")
-void __fastcall Bridge_D2WIN_DrawText_4068(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t b) { D2Win_10117_DrawText(w, x, y, c, b); }
-#pragma comment(linker, "/alternatename:@D2WIN_DrawText@20=@Bridge_D2WIN_DrawText_4068@20")
-const Unicode* __fastcall Bridge_D2WIN_GetEditBoxText_95906(D2WinEditBoxStrc* p) { return p ? p->wszText : (const Unicode*)L""; }
-#pragma comment(linker, "/alternatename:@D2WIN_GetEditBoxText@4=@Bridge_D2WIN_GetEditBoxText_95906@4")
-int32_t __fastcall Bridge_D2WIN_SetFont_40423(int32_t f) { return (int32_t)D2Win_10127_SetFont((Font)f); }
-#pragma comment(linker, "/alternatename:@D2WIN_SetFont@4=@Bridge_D2WIN_SetFont_40423@4")
-int32_t __fastcall Bridge_D2Win_10005_75760(int32_t a1, int32_t a2, int32_t a3, void* a4) { (void)a2; (void)a3; (void)a4; return D2Win_10005((D2GameResolutionMode)a1); }
-#pragma comment(linker, "/alternatename:@D2Win_10005@16=@Bridge_D2Win_10005_75760@16")
-HD2ARCHIVE __fastcall Bridge_D2Win_10014_17377() { return D2Win_GetArchive(); }
-#pragma comment(linker, "/alternatename:@D2Win_10014@0=@Bridge_D2Win_10014_17377@0")
-uint8_t __fastcall Bridge_D2Win_10034_MixRGB_7728(uint8_t r, uint8_t g, uint8_t b) { return D2Win_10034_MixRGB(r, g, b); }
-#pragma comment(linker, "/alternatename:@D2Win_10034_MixRGB@12=@Bridge_D2Win_10034_MixRGB_7728@12")
-void __fastcall Bridge_D2Win_10124_DrawHoverText_94689(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t b, int32_t t) { (void)t; D2Win_10129_DrawFramedText(w, x, y, c, b); }
-#pragma comment(linker, "/alternatename:@D2Win_10124_DrawHoverText@24=@Bridge_D2Win_10124_DrawHoverText_94689@24")
-void __fastcall Bridge_D2Win_10130_DrawFramedTextEx_11284(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t a) { D2Win_10129_DrawFramedText(w, x, y, c, a); }
-#pragma comment(linker, "/alternatename:@D2Win_10130_DrawFramedTextEx@20=@Bridge_D2Win_10130_DrawFramedTextEx_11284@20")
-void* __fastcall Bridge_D2Win_10199_WrapTextLines_31611(Unicode* pText, int32_t* pOutCnt, int32_t nMaxW) { (void)pText; (void)nMaxW; if (pOutCnt) *pOutCnt = 0; return nullptr; }
-#pragma comment(linker, "/alternatename:@D2Win_10199_WrapTextLines@12=@Bridge_D2Win_10199_WrapTextLines_31611@12")
-void __fastcall Bridge_FOG_SetMemoryPoolSystemMode_49082(int32_t nMode) { FOG_SetMemoryPoolSystemMode(nullptr, nMode); }
-#pragma comment(linker, "/alternatename:@FOG_SetMemoryPoolSystemMode@4=@Bridge_FOG_SetMemoryPoolSystemMode_49082@4")
-void* __fastcall Bridge_Fog_10042_AllocClientMemory_11911(int32_t sz, const char* f, int32_t l, int32_t z) { return FOG_AllocClientMemory(sz, f, l, z); }
-#pragma comment(linker, "/alternatename:@Fog_10042_AllocClientMemory@16=@Bridge_Fog_10042_AllocClientMemory_11911@16")
-void __fastcall Bridge_Fog_10043_FreeClientMemory_6124(void* p, const char* f, int32_t l, int32_t z) { if (p) FOG_FreeClientMemory(p, f, l, z); }
-#pragma comment(linker, "/alternatename:@Fog_10043_FreeClientMemory@16=@Bridge_Fog_10043_FreeClientMemory_6124@16")
-void __fastcall Bridge_Fog_10046_FreePool_71221(void* pool, void* p, const char* f, int32_t l) { if (p) FOG_FreePool(pool, p, f, l, 0); }
-#pragma comment(linker, "/alternatename:@Fog_10046_FreePool@16=@Bridge_Fog_10046_FreePool_71221@16")
-int32_t __fastcall Bridge_Fog_10101_OpenFile_42567(const char* sz, HANDLE* ph) { return SFileOpenFile((char*)sz, (int)(intptr_t)ph); }
-#pragma comment(linker, "/alternatename:@Fog_10101_OpenFile@8=@Bridge_Fog_10101_OpenFile_42567@8")
-void __fastcall Bridge_Fog_10103_CloseFile_54105(HANDLE h) { if (h) SFileCloseFile(h); }
-#pragma comment(linker, "/alternatename:@Fog_10103_CloseFile@4=@Bridge_Fog_10103_CloseFile_54105@4")
-int32_t __fastcall Bridge_Fog_10104_ReadFile_38381(HANDLE h, void* b, int32_t sz, DWORD* pRead, LPOVERLAPPED ov, void* a6, void* a7) { (void)ov; (void)a6; (void)a7; return SFileReadFile((int)(intptr_t)h, (int)(intptr_t)b, sz, (int)(intptr_t)pRead, 0); }
-#pragma comment(linker, "/alternatename:@Fog_10104_ReadFile@28=@Bridge_Fog_10104_ReadFile_38381@28")
-int32_t __fastcall Bridge_Fog_10105_GetFileSize_33253(HANDLE h, LPDWORD pHigh) { return SFileGetFileSize((int)(intptr_t)h, pHigh); }
-#pragma comment(linker, "/alternatename:@Fog_10105_GetFileSize@8=@Bridge_Fog_10105_GetFileSize_33253@8")
-void* __fastcall Bridge_Fog_10106_AsyncReadFile_44492(void* a1, const char* a2, int32_t a3, void* a4, void* a5, int32_t a6, void* a7) { (void)a1;(void)a2;(void)a3;(void)a4;(void)a5;(void)a6;(void)a7; return nullptr; }
-#pragma comment(linker, "/alternatename:@Fog_10106_AsyncReadFile@28=@Bridge_Fog_10106_AsyncReadFile_44492@28")
-int32_t __fastcall Bridge_Fog_10107_GetAsyncSearchResult_25449(void* h) { (void)h; return 0; }
-#pragma comment(linker, "/alternatename:@Fog_10107_GetAsyncSearchResult@4=@Bridge_Fog_10107_GetAsyncSearchResult_25449@4")
-int32_t __fastcall Bridge_Fog_10109_CancelAsyncOp_71344(void* h, int32_t w) { (void)h; (void)w; return 1; }
-#pragma comment(linker, "/alternatename:@Fog_10109_CancelAsyncOp@8=@Bridge_Fog_10109_CancelAsyncOp_71344@8")
-void __fastcall Bridge_Fog_10110_WaitAsyncOp_15145(void* h) { (void)h; }
-#pragma comment(linker, "/alternatename:@Fog_10110_WaitAsyncOp@4=@Bridge_Fog_10110_WaitAsyncOp_15145@4")
-int32_t __fastcall Bridge_STRTABLE_GetLanguage_26550() { return (int32_t)STRTABLE_GetLanguage(); }
-#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguage@0=@Bridge_STRTABLE_GetLanguage_26550@0")
-int32_t __fastcall Bridge_STRTABLE_GetLanguageInfo_71266(char* sz, int32_t bShort, int32_t a3) { (void)a3; STRTABLE_GetLanguageInfo(sz, bShort); return 1; }
-#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguageInfo@12=@Bridge_STRTABLE_GetLanguageInfo_71266@12")
-int32_t __fastcall Bridge_STRTABLE_GetLanguageInfo_92322(char* sz, int32_t bShort) { STRTABLE_GetLanguageInfo(sz, bShort); return 1; }
-#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguageInfo@8=@Bridge_STRTABLE_GetLanguageInfo_92322@8")
-Unicode* __fastcall Bridge_Unicode_strcat_55540(Unicode* d, const Unicode* s) { return (d && s) ? Unicode::strcat(d, s) : d; }
-#pragma comment(linker, "/alternatename:@Unicode_strcat@8=@Bridge_Unicode_strcat_55540@8")
-Unicode* __fastcall Bridge_Unicode_strcpy_15470(Unicode* d, const Unicode* s) { return (d && s) ? Unicode::strcpy(d, s) : d; }
-#pragma comment(linker, "/alternatename:@Unicode_strcpy@8=@Bridge_Unicode_strcpy_15470@8")
-Unicode* __fastcall Bridge_Unicode_strncpy_52266(Unicode* d, const Unicode* s, int32_t n) { return (d && s) ? Unicode::strncpy(d, s, n) : d; }
-#pragma comment(linker, "/alternatename:@Unicode_strncpy@12=@Bridge_Unicode_strncpy_52266@12")
-Unicode* __fastcall Bridge_Unicode_toUnicode_19336(Unicode* d, const char* s, int32_t n) { return (d && s) ? Unicode::win2Unicode(d, s, n) : d; }
-#pragma comment(linker, "/alternatename:@Unicode_toUnicode@12=@Bridge_Unicode_toUnicode_19336@12")
-int32_t __fastcall Bridge_Unicode_win2utf8_31898(char* d, const wchar_t* s, int32_t n) { return (d && s && n > 0) ? WideCharToMultiByte(CP_UTF8, 0, s, -1, d, n, nullptr, nullptr) : 0; }
-#pragma comment(linker, "/alternatename:@Unicode_win2utf8@12=@Bridge_Unicode_win2utf8_31898@12")
-void __fastcall Bridge_UnimplementedOrdinal_10144_72945(int32_t a1) { (void)a1; }
-#pragma comment(linker, "/alternatename:@UnimplementedOrdinal_10144@4=@Bridge_UnimplementedOrdinal_10144_72945@4")
-int32_t __fastcall Bridge_UnimplementedOrdinal_10191_71975(const char* s) { (void)s; return 0; }
-#pragma comment(linker, "/alternatename:@UnimplementedOrdinal_10191@4=@Bridge_UnimplementedOrdinal_10191_71975@4")
-int32_t __stdcall Bridge_D2COMMON_11018_CheckUnitInteractable_62579(D2UnitStrc* u) { return u ? D2COMMON_11018(u) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_11018_CheckUnitInteractable@4=_Bridge_D2COMMON_11018_CheckUnitInteractable_62579@4")
-int32_t __stdcall Bridge_D2COMMON_CheckItemFlag_79164(D2UnitStrc* p, uint32_t f, int32_t l, const char* sz) { return p ? ITEMS_CheckItemFlag(p, f, l, sz) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_CheckItemFlag@16=_Bridge_D2COMMON_CheckItemFlag_79164@16")
-int32_t __stdcall Bridge_D2COMMON_CheckItemType_27493(D2UnitStrc* p, int32_t t) { return p ? ITEMS_CheckItemTypeId(p, t) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_CheckItemType@8=_Bridge_D2COMMON_CheckItemType_27493@8")
-D2UnitStrc* __stdcall Bridge_D2COMMON_GetBeltItem_59751(D2InventoryStrc* inv, int32_t s) { return inv ? INVENTORY_GetItemFromBeltSlot(inv, s) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetBeltItem@8=_Bridge_D2COMMON_GetBeltItem_59751@8")
-int32_t __stdcall Bridge_D2COMMON_GetBeltTypeBoxes_66957(int32_t nBeltType) { D2BeltsTxt belt = {}; DATATBLS_GetBeltsTxtRecord(nBeltType, 0, &belt); return belt.nBoxes > 0 ? belt.nBoxes : 4; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetBeltTypeBoxes@4=_Bridge_D2COMMON_GetBeltTypeBoxes_66957@4")
-D2UnitStrc* __stdcall Bridge_D2COMMON_GetFirstInventoryItem_77244(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetFirstInventoryItem@4=_Bridge_D2COMMON_GetFirstInventoryItem_77244@4")
-D2GemsTxt* __stdcall Bridge_D2COMMON_GetGemsTxtRecord_76611(int32_t id) { return DATATBLS_GetGemsTxtRecord(id); }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetGemsTxtRecord@4=_Bridge_D2COMMON_GetGemsTxtRecord_76611@4")
-uint8_t __stdcall Bridge_D2COMMON_GetItemBodyLoc_97927(D2UnitStrc* p) { return p ? ITEMS_GetBodyLocation(p) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetItemBodyLoc@4=_Bridge_D2COMMON_GetItemBodyLoc_97927@4")
-int32_t __stdcall Bridge_D2COMMON_GetItemFileIndex_17654(D2UnitStrc* p) { return p ? ITEMS_GetFileIndex(p) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetItemFileIndex@4=_Bridge_D2COMMON_GetItemFileIndex_17654@4")
-int32_t __stdcall Bridge_D2COMMON_GetItemPage_74114(D2UnitStrc* p) { return p ? (int32_t)ITEMS_GetInvPage(p) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetItemPage@4=_Bridge_D2COMMON_GetItemPage_74114@4")
-D2ItemsTxt* __stdcall Bridge_D2COMMON_GetItemsTxtRecord_29663(int32_t id) { return DATATBLS_GetItemsTxtRecord(id); }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetItemsTxtRecord@4=_Bridge_D2COMMON_GetItemsTxtRecord_29663@4")
-D2SkillStrc* __stdcall Bridge_D2COMMON_GetLeftSkill_36049(D2UnitStrc* u) { return u ? UNITS_GetLeftSkill(u) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetLeftSkill@4=_Bridge_D2COMMON_GetLeftSkill_36049@4")
-D2UnitStrc* __stdcall Bridge_D2COMMON_GetNextInventoryItem_36010(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetNextInventoryItem@4=_Bridge_D2COMMON_GetNextInventoryItem_36010@4")
-D2SkillStrc* __stdcall Bridge_D2COMMON_GetRightSkill_99393(D2UnitStrc* u) { return u ? UNITS_GetRightSkill(u) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetRightSkill@4=_Bridge_D2COMMON_GetRightSkill_99393@4")
-int32_t __stdcall Bridge_D2COMMON_GetSkillId_68805(D2SkillStrc* s, const char* f, int32_t l) { return s ? SKILLS_GetSkillIdFromSkill(s, f, l) : -1; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetSkillId@12=_Bridge_D2COMMON_GetSkillId_68805@12")
-D2SkillsTxt* __stdcall Bridge_D2COMMON_GetSkillsTxtRecord_61772(int32_t id) { return DATATBLS_GetSkillsTxtRecord(id); }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetSkillsTxtRecord@4=_Bridge_D2COMMON_GetSkillsTxtRecord_61772@4")
-int32_t __stdcall Bridge_D2COMMON_GetStatFromStatList_15117(D2StatListStrc* sl, int32_t id, int32_t layer) { return sl ? STATLIST_GetStatValue(sl, id, (uint16_t)layer) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetStatFromStatList@12=_Bridge_D2COMMON_GetStatFromStatList_15117@12")
-int32_t __stdcall Bridge_D2COMMON_GetUnitStatUInt_61040(D2UnitStrc* u, int32_t id, int32_t layer) { return u ? STATLIST_UnitGetStatValue(u, id, (uint16_t)layer) : 0; }
-#pragma comment(linker, "/alternatename:_D2COMMON_GetUnitStatUInt@12=_Bridge_D2COMMON_GetUnitStatUInt_61040@12")
-D2UnitStrc* __stdcall Bridge_D2COMMON_VerifyUnitIsItem_25106(D2UnitStrc* p) { return p ? INVENTORY_UnitIsItem(p) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2COMMON_VerifyUnitIsItem@4=_Bridge_D2COMMON_VerifyUnitIsItem_25106@4")
-void* __stdcall Bridge_D2Common_10085_GetRoomTileGrid_57120(D2ActiveRoomStrc* r) { return r ? r->pRoomTiles : nullptr; }
-#pragma comment(linker, "/alternatename:_D2Common_10085_GetRoomTileGrid@4=_Bridge_D2Common_10085_GetRoomTileGrid_57120@4")
-int32_t __stdcall Bridge_D2Common_10269_COMPOSIT_55970(D2UnitStrc* u, int32_t* pOutWC, int32_t nMode, int32_t bForce, D2InventoryStrc* inv) { int wc = 0; if (u) COMPOSIT_GetWeaponClassId(u, inv ? inv : u->pInventory, &wc, nMode, bForce); if (pOutWC) *pOutWC = wc; return 1; }
-#pragma comment(linker, "/alternatename:_D2Common_10269_COMPOSIT@20=_Bridge_D2Common_10269_COMPOSIT_55970@20")
-int32_t __stdcall Bridge_D2Common_10519_GetUnitStatSigned_33421(D2UnitStrc* u, int32_t id, int32_t layer) { return u ? STATLIST_UnitGetStatValue(u, id, (uint16_t)layer) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10519_GetUnitStatSigned@12=_Bridge_D2Common_10519_GetUnitStatSigned_33421@12")
-int32_t __stdcall Bridge_D2Common_10550_GetUnitDefense_41890(D2UnitStrc* u) { return u ? UNITS_GetDefense(u) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10550_GetUnitDefense@4=_Bridge_D2Common_10550_GetUnitDefense_41890@4")
-int32_t __stdcall Bridge_D2Common_10552_GetUnitToHitFactor_34516(D2UnitStrc* u) { return u ? STATLIST_UnitGetStatValue(u, STAT_TOHIT, 0) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10552_GetUnitToHitFactor@4=_Bridge_D2Common_10552_GetUnitToHitFactor_34516@4")
-int32_t __stdcall Bridge_D2Common_10554_GetUnitBlockingPercent_6775(D2UnitStrc* u, int32_t bExp) { return u ? UNITS_GetBlockRate(u, bExp) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10554_GetUnitBlockingPercent@8=_Bridge_D2Common_10554_GetUnitBlockingPercent_6775@8")
-void* __stdcall Bridge_D2Common_10576_CompileTxtFile_5956(void* pool, const char* sz, D2BinFieldStrc* f, int32_t* cnt, int32_t rsz) { return DATATBLS_CompileTxt((HD2ARCHIVE)pool, sz, f, cnt, (size_t)rsz); }
-#pragma comment(linker, "/alternatename:_D2Common_10576_CompileTxtFile@20=_Bridge_D2Common_10576_CompileTxtFile_5956@20")
-int32_t __stdcall Bridge_D2Common_10611_4485(D2ActiveRoomStrc* r, int32_t x, int32_t y) { return r ? COLLISION_CheckMask(r, x, y, 1) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10611@12=_Bridge_D2Common_10611_4485@12")
-D2UnitStrc* __stdcall Bridge_D2Common_10776_GetNextInventoryItem_38915(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2Common_10776_GetNextInventoryItem@4=_Bridge_D2Common_10776_GetNextInventoryItem_38915@4")
-int32_t __stdcall Bridge_D2Common_10777_UnitIsItem_34817(D2UnitStrc* p) { return (p && INVENTORY_UnitIsItem(p)) ? 1 : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10777_UnitIsItem@4=_Bridge_D2Common_10777_UnitIsItem_34817@4")
-D2UnitStrc* __stdcall Bridge_D2Common_10795_GetFirstInventoryItem_4991(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
-#pragma comment(linker, "/alternatename:_D2Common_10795_GetFirstInventoryItem@4=_Bridge_D2Common_10795_GetFirstInventoryItem_4991@4")
-int32_t __stdcall Bridge_D2Common_10797_GetItemBodyLoc_60863(D2UnitStrc* p) { return p ? (int32_t)ITEMS_GetBodyLocation(p) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10797_GetItemBodyLoc@4=_Bridge_D2Common_10797_GetItemBodyLoc_60863@4")
-int32_t __stdcall Bridge_D2Common_10801_CheckItemType_82219(D2UnitStrc* p, int32_t t) { return p ? ITEMS_CheckItemTypeId(p, t) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10801_CheckItemType@8=_Bridge_D2Common_10801_CheckItemType_82219@8")
-int32_t __stdcall Bridge_D2Common_10844_CheckItemRequirements_37554(D2UnitStrc* item, D2UnitStrc* plr, int32_t bEq, int32_t* s, int32_t* d, int32_t* l) { return ITEMS_CheckRequirements(item, plr, bEq, s, d, l); }
-#pragma comment(linker, "/alternatename:_D2Common_10844_CheckItemRequirements@24=_Bridge_D2Common_10844_CheckItemRequirements_37554@24")
-int32_t __stdcall Bridge_D2Common_10862_GetMissileTrans_47368(int32_t id, uint8_t* dm, uint8_t* ti) { D2MissilesTxt* m = DATATBLS_GetMissilesTxtRecord(id); if (!m) return 0; if (dm) *dm = m->nTrans; if (ti) *ti = 0; return 1; }
-#pragma comment(linker, "/alternatename:_D2Common_10862_GetMissileTrans@12=_Bridge_D2Common_10862_GetMissileTrans_47368@12")
-void __stdcall Bridge_D2Common_10885_COMPOSIT_95683(D2UnitStrc* u, char* szToken, char* szMode, int32_t nType, int32_t nClass, int32_t nMode, int32_t nWC, char* szWC) { Bridge_PopulateCompositTokens(u, szToken, szMode, nType, nClass, nMode, nWC, szWC); }
-#pragma comment(linker, "/alternatename:_D2Common_10885_COMPOSIT@32=_Bridge_D2Common_10885_COMPOSIT_95683@32")
-int32_t __stdcall Bridge_D2Common_10899_COMPOSIT_IsArmorComponent_55629(int32_t c) { return COMPOSIT_IsArmorComponent(c); }
-#pragma comment(linker, "/alternatename:_D2Common_10899_COMPOSIT_IsArmorComponent@4=_Bridge_D2Common_10899_COMPOSIT_IsArmorComponent_55629@4")
-uint32_t __stdcall Bridge_D2Common_10920_10516(D2ActiveRoomStrc* r, int32_t x, int32_t y) { return r ? COLLISION_CheckMask(r, x, y, 1) : 0; }
-#pragma comment(linker, "/alternatename:_D2Common_10920@12=_Bridge_D2Common_10920_10516@12")
-int32_t __stdcall Bridge_D2Common_11026_GetAttackRate_64250(D2UnitStrc* u, int32_t wc, int32_t sk, int32_t bP, D2UnitStrc* w, int32_t* minD, int32_t* maxD, int32_t* ar) { (void)wc;(void)sk;(void)bP;(void)w; if (minD) *minD = u ? STATLIST_UnitGetStatValue(u, STAT_MINDAMAGE, 0) : 0; if (maxD) *maxD = u ? STATLIST_UnitGetStatValue(u, STAT_MAXDAMAGE, 0) : 0; if (ar) *ar = 0; return 1; }
-#pragma comment(linker, "/alternatename:_D2Common_11026_GetAttackRate@32=_Bridge_D2Common_11026_GetAttackRate_64250@32")
-int32_t __stdcall Bridge_D2Common_11037_GetStateColor_27605(D2UnitStrc* u, uint8_t* pIdx) { (void)u; if (pIdx) *pIdx = 0; return 0; }
-#pragma comment(linker, "/alternatename:_D2Common_11037_GetStateColor@8=_Bridge_D2Common_11037_GetStateColor_27605@8")
-void __stdcall Bridge_D2Common_11066_69027(D2UnitStrc* u, void* seq, int32_t* fc, int32_t* dc) { (void)seq; D2Common_11066(u, fc, dc); }
-#pragma comment(linker, "/alternatename:_D2Common_11066@16=_Bridge_D2Common_11066_69027@16")
-int32_t __stdcall Bridge_D2Common_11076_16256(D2UnitStrc* u, int32_t m) { (void)u; (void)m; return 0; }
-#pragma comment(linker, "/alternatename:_D2Common_11076@8=_Bridge_D2Common_11076_16256@8")
-int32_t __stdcall Bridge_D2GFX_CheckPerspectiveMode_0() { return D2GFX_CheckPerspective(); }
-#pragma comment(linker, "/alternatename:_D2GFX_CheckPerspectiveMode@0=_Bridge_D2GFX_CheckPerspectiveMode_0@0")
-void __stdcall Bridge_D2GFX_DrawBoxFrame_61549(RECT* r, uint8_t c) { if (r) D2GFX_UtilRect(r, c); }
-#pragma comment(linker, "/alternatename:_D2GFX_DrawBoxFrame@8=_Bridge_D2GFX_DrawBoxFrame_61549@8")
-void __stdcall Bridge_D2GFX_DrawCellContextEx_47145(D2GfxDataStrc* p, int32_t x, int32_t y, uint32_t g, int32_t m, uint8_t* pal) { TEXTURE_CelDraw(p, x, y, g, (DrawMode)m, pal); }
-#pragma comment(linker, "/alternatename:_D2GFX_DrawCellContextEx@24=_Bridge_D2GFX_DrawCellContextEx_47145@24")
-int32_t __stdcall Bridge_D2GFX_DrawFloorTile_33370(D2TileLibraryEntryStrc* t, int32_t x, int32_t y, D2GfxLightStrc* l, uint32_t c) { return TILE_TileDrawLit(t, x, y, l, (int32_t)c); }
-#pragma comment(linker, "/alternatename:_D2GFX_DrawFloorTile@20=_Bridge_D2GFX_DrawFloorTile_33370@20")
-void __stdcall Bridge_D2GFX_DrawRect_71539(int32_t l, int32_t t, int32_t r, int32_t b, uint8_t c, int32_t tr) { D2GFX_DrawBox(l, t, r, b, c, (DrawMode)tr); }
-#pragma comment(linker, "/alternatename:_D2GFX_DrawRect@24=_Bridge_D2GFX_DrawRect_71539@24")
-uint8_t __stdcall Bridge_D2GFX_FindBestPaletteIndex_28514(int32_t r, int32_t g, int32_t b) { return D2Win_10034_MixRGB((uint8_t)r, (uint8_t)g, (uint8_t)b); }
-#pragma comment(linker, "/alternatename:_D2GFX_FindBestPaletteIndex@12=_Bridge_D2GFX_FindBestPaletteIndex_28514@12")
-void __stdcall Bridge_D2GFX_ScalePerspectivePosition_37366(int32_t x, int32_t y, int32_t a, int32_t* ox, int32_t* oy, int32_t b) { SCALE_ScalePerspectivePosition(x, y, a, ox, oy, b); }
-#pragma comment(linker, "/alternatename:_D2GFX_ScalePerspectivePosition@24=_Bridge_D2GFX_ScalePerspectivePosition_37366@24")
-void __stdcall Bridge_D2Gfx_10012_CelDrawHilight_68112(D2GfxDataStrc* p, int32_t x, int32_t y, uint8_t c) { TEXTURE_CelDrawHilight(p, x, y, c); }
-#pragma comment(linker, "/alternatename:_D2Gfx_10012_CelDrawHilight@16=_Bridge_D2Gfx_10012_CelDrawHilight_68112@16")
-void __stdcall Bridge_D2Gfx_10024_CelDraw_25858(D2GfxDataStrc* p, int32_t x, int32_t y, uint32_t g, int32_t m, uint8_t* pal) { TEXTURE_CelDraw(p, x, y, g, (DrawMode)m, pal); }
-#pragma comment(linker, "/alternatename:_D2Gfx_10024_CelDraw@24=_Bridge_D2Gfx_10024_CelDraw_25858@24")
-void __stdcall Bridge_D2Gfx_10030_CelDrawShadow_89676(D2GfxDataStrc* p, int32_t x, int32_t y) { TEXTURE_CelDrawShadow(p, x, y); }
-#pragma comment(linker, "/alternatename:_D2Gfx_10030_CelDrawShadow@12=_Bridge_D2Gfx_10030_CelDrawShadow_89676@12")
-int32_t __stdcall Bridge_D2Gfx_10042_TransformPerspectiveCoords_47292(int32_t x, int32_t nY, int32_t z, int32_t* ox, int32_t* oy) { SCALE_AdjustPerspectivePosition(x, nY, z, ox, oy); return 1; }
-#pragma comment(linker, "/alternatename:_D2Gfx_10042_TransformPerspectiveCoords@20=_Bridge_D2Gfx_10042_TransformPerspectiveCoords_47292@20")
-int32_t __stdcall Bridge_D2Gfx_10043_IsPerspectiveEnabled_69061() { return D2GFX_CheckPerspective(); }
-#pragma comment(linker, "/alternatename:_D2Gfx_10043_IsPerspectiveEnabled@0=_Bridge_D2Gfx_10043_IsPerspectiveEnabled_69061@0")
-int32_t __stdcall Bridge_D2Gfx_10080_DrawFloorTile_62532(D2TileLibraryEntryStrc* t, void* v, int32_t lc, int32_t roof, uint32_t f) { (void)t; (void)v; (void)lc; (void)roof; (void)f; return 0; }
-#pragma comment(linker, "/alternatename:_D2Gfx_10080_DrawFloorTile@20=_Bridge_D2Gfx_10080_DrawFloorTile_62532@20")
-int32_t __cdecl Bridge_D2LANG_UnicodeSPrintf_77975(int32_t nMax, wchar_t* dst, const wchar_t* fmt, ...) { if (!dst || !fmt || nMax <= 0) return 0; va_list ap; va_start(ap, fmt); int r = _vsnwprintf(dst, (size_t)nMax, fmt, ap); dst[nMax - 1] = 0; va_end(ap); return r; }
-#pragma comment(linker, "/alternatename:_D2LANG_UnicodeSPrintf=_Bridge_D2LANG_UnicodeSPrintf_77975")
-int32_t __stdcall Bridge_D2NET_10023_GetSendQueueBacklog_92212() { return 0; }
-#pragma comment(linker, "/alternatename:_D2NET_10023_GetSendQueueBacklog@0=_Bridge_D2NET_10023_GetSendQueueBacklog_92212@0")
-int32_t __stdcall Bridge_D2SOUND_GetMasterVolume_11442() { return D2SOUND_GetMasterVolume(); }
-#pragma comment(linker, "/alternatename:_D2SOUND_GetMasterVolume@0=_Bridge_D2SOUND_GetMasterVolume_11442@0")
-int32_t __stdcall Bridge_D2SOUND_GetMusicVolume_17013() { return D2SOUND_GetMusicVolume(); }
-#pragma comment(linker, "/alternatename:_D2SOUND_GetMusicVolume@0=_Bridge_D2SOUND_GetMusicVolume_17013@0")
-int32_t __stdcall Bridge_D2WIN_SetEditBoxText_50475(D2WinEditBoxStrc* p, const Unicode* w) { if (!p || !w) return 0; Unicode::strncpy(p->wszText, w, 255); p->wszText[255] = 0; p->nTextLength = Unicode::strlen(p->wszText); return 1; }
-#pragma comment(linker, "/alternatename:_D2WIN_SetEditBoxText@8=_Bridge_D2WIN_SetEditBoxText_50475@8")
-void __stdcall Bridge_D2Win_TakeScreenshot_73825() {  }
-#pragma comment(linker, "/alternatename:_D2Win_TakeScreenshot@0=_Bridge_D2Win_TakeScreenshot_73825@0")
-D2MonStatsTxt* __stdcall Bridge_DATATBLS_GetMonsterTxtRecord_39478(int32_t id) { return DATATBLS_GetMonStatsTxtRecord(id); }
-#pragma comment(linker, "/alternatename:_DATATBLS_GetMonsterTxtRecord@4=_Bridge_DATATBLS_GetMonsterTxtRecord_39478@4")
-D2OverlayTxt* __stdcall Bridge_DATATBLS_GetOverlaysTxtRecord_20719(int32_t id) { return DATATBLS_GetOverlayTxtRecord(id); }
-#pragma comment(linker, "/alternatename:_DATATBLS_GetOverlaysTxtRecord@4=_Bridge_DATATBLS_GetOverlaysTxtRecord_20719@4")
-D2UnitStrc* __stdcall Bridge_DEBUG_GetUnitFromTypeAndGUID_31589(int32_t t, int32_t id) { return D2Client_FindServerSideUnit((uint32_t)id, (uint32_t)t); }
-#pragma comment(linker, "/alternatename:_DEBUG_GetUnitFromTypeAndGUID@8=_Bridge_DEBUG_GetUnitFromTypeAndGUID_31589@8")
-D2ActiveRoomStrc* __stdcall Bridge_DUNGEON_GetRoomFromAct_95227(D2DrlgActStrc* act, int32_t x, int32_t y) { return act ? DUNGEON_FindRoomBySubtileCoordinates(act, x, y) : nullptr; }
-#pragma comment(linker, "/alternatename:_DUNGEON_GetRoomFromAct@12=_Bridge_DUNGEON_GetRoomFromAct_95227@12")
-uint32_t __cdecl Bridge_FOG_10055_GetSyncTime_61346() { return (uint32_t)FOG_10055_GetSyncTime(); }
-#pragma comment(linker, "/alternatename:_FOG_10055_GetSyncTime=_Bridge_FOG_10055_GetSyncTime_61346")
-const char* __cdecl Bridge_FOG_GetErrorLocation_26195(int32_t n) { (void)n; return ""; }
-#pragma comment(linker, "/alternatename:_FOG_GetErrorLocation=_Bridge_FOG_GetErrorLocation_26195")
-const char* __stdcall Bridge_FOG_GetErrorLocation_30279(int32_t n) { (void)n; return ""; }
-#pragma comment(linker, "/alternatename:_FOG_GetErrorLocation@4=_Bridge_FOG_GetErrorLocation_30279@4")
-const char* __cdecl Bridge_FOG_GetErrorString_10231(int32_t n) { (void)n; return ""; }
-#pragma comment(linker, "/alternatename:_FOG_GetErrorString=_Bridge_FOG_GetErrorString_10231")
-uint32_t __stdcall Bridge_FOG_GetInstallPath_34231(char* sz, uint32_t n) { return (uint32_t)FOG_GetInstallPath(sz, n); }
-#pragma comment(linker, "/alternatename:_FOG_GetInstallPath@8=_Bridge_FOG_GetInstallPath_34231@8")
-int32_t __stdcall Bridge_FOG_IsExpansion_74150() { return FOG_IsExpansion(); }
-#pragma comment(linker, "/alternatename:_FOG_IsExpansion@0=_Bridge_FOG_IsExpansion_74150@0")
-void __cdecl Bridge_Fog_10023_Error_4298(const char* m, const char* f, int32_t l) { FOG_DisplayWarning(m ? m : "Error", f ? f : "D2Client", l); }
-#pragma comment(linker, "/alternatename:_Fog_10023_Error=_Bridge_Fog_10023_Error_4298")
-int32_t __stdcall Bridge_Fog_10227_IsExpansion_38778() { return FOG_IsExpansion(); }
-#pragma comment(linker, "/alternatename:_Fog_10227_IsExpansion@0=_Bridge_Fog_10227_IsExpansion_38778@0")
-const char* __cdecl Bridge_Fog_10265_6739(int32_t n) { (void)n; return ""; }
-#pragma comment(linker, "/alternatename:_Fog_10265=_Bridge_Fog_10265_6739")
-D2UnitStrc* __stdcall Bridge_INVENTORY_GetItemFromInventory_54006(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
-#pragma comment(linker, "/alternatename:_INVENTORY_GetItemFromInventory@4=_Bridge_INVENTORY_GetItemFromInventory_54006@4")
-D2UnitStrc* __stdcall Bridge_INV_GetFirstItem_95884(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
-#pragma comment(linker, "/alternatename:_INV_GetFirstItem@4=_Bridge_INV_GetFirstItem_95884@4")
-D2UnitStrc* __stdcall Bridge_INV_GetItemFromBodyLoc_35347(D2InventoryStrc* inv, int32_t loc) { return inv ? INVENTORY_GetItemFromBodyLoc(inv, loc) : nullptr; }
-#pragma comment(linker, "/alternatename:_INV_GetItemFromBodyLoc@8=_Bridge_INV_GetItemFromBodyLoc_35347@8")
-D2UnitStrc* __stdcall Bridge_INV_GetNextItem_9208(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
-#pragma comment(linker, "/alternatename:_INV_GetNextItem@4=_Bridge_INV_GetNextItem_9208@4")
-int32_t __stdcall Bridge_ITEMS_CheckNotSocketable_50462(D2UnitStrc* p) { return (p && ITEMS_GetMaxSockets(p) == 0) ? 1 : 0; }
-#pragma comment(linker, "/alternatename:_ITEMS_CheckNotSocketable@4=_Bridge_ITEMS_CheckNotSocketable_50462@4")
-void __stdcall Bridge_MONSTERAI_GetMonsterComponents_80980(D2UnitStrc* u, uint8_t* pComp) { if (!pComp) return; if (u && u->dwUnitType == UNIT_MONSTER && u->pMonsterData) memcpy(pComp, u->pMonsterData->nComponent, 16); else memset(pComp, 0, 16); }
-#pragma comment(linker, "/alternatename:_MONSTERAI_GetMonsterComponents@8=_Bridge_MONSTERAI_GetMonsterComponents_80980@8")
-void __stdcall Bridge_MONSTERAI_UpdateAiState_92343(D2UnitStrc* u, int32_t s) { (void)u; (void)s; }
-#pragma comment(linker, "/alternatename:_MONSTERAI_UpdateAiState@8=_Bridge_MONSTERAI_UpdateAiState_92343@8")
-void __stdcall Bridge_MONSTERS_GetCompInfo_38249(D2MonStatsTxt* m, int32_t c, uint8_t idx, uint8_t* dm, uint8_t* ti, uint8_t* col) { (void)m;(void)c;(void)idx; if (dm) *dm = 5; if (ti) *ti = 0; if (col) *col = 0; }
-#pragma comment(linker, "/alternatename:_MONSTERS_GetCompInfo@24=_Bridge_MONSTERS_GetCompInfo_38249@24")
-void __stdcall Bridge_MONSTERS_GetMinionSpawnInfo_24728(D2UnitStrc* u, int32_t* id, int32_t* cnt, int32_t* mode) { int dummy = 0; MONSTERS_GetMinionSpawnInfo(u, id, cnt, mode, &dummy, 0, nullptr); }
-#pragma comment(linker, "/alternatename:_MONSTERS_GetMinionSpawnInfo@16=_Bridge_MONSTERS_GetMinionSpawnInfo_24728@16")
-int32_t __stdcall Bridge_MONSTER_HasComponents_90077(D2UnitStrc* u) { if (!u) return 0; D2MonStats2Txt* m2 = UNITS_GetMonStats2TxtRecordFromMonsterId(u->dwClassId); return m2 ? (m2->nTotalPieces > 1) : 0; }
-#pragma comment(linker, "/alternatename:_MONSTER_HasComponents@4=_Bridge_MONSTER_HasComponents_90077@4")
-int32_t __stdcall Bridge_PATH_GetTargetType_87876(D2DynamicPathStrc* p) { int t = 0; D2UnitGUID uid = 0; if (p) PATH_GetTargetTypeAndGUID(p, &t, &uid); return t; }
-#pragma comment(linker, "/alternatename:_PATH_GetTargetType@4=_Bridge_PATH_GetTargetType_87876@4")
-void __stdcall Bridge_PATH_SetTargetPos_48278(D2DynamicPathStrc* p, int32_t x, int32_t y) { if (p) D2COMMON_10170_PathSetTargetPos(p, x, y); }
-#pragma comment(linker, "/alternatename:_PATH_SetTargetPos@12=_Bridge_PATH_SetTargetPos_48278@12")
-D2SkillStrc* __stdcall Bridge_SKILLS_GetHighestLevelSkillFromUnitAndId_98694(D2UnitStrc* u, int32_t id) { return u ? SKILLS_GetHighestLevelSkillFromUnitAndId(u, id) : nullptr; }
-#pragma comment(linker, "/alternatename:_SKILLS_GetHighestLevelSkillFromUnitAndId@8=_Bridge_SKILLS_GetHighestLevelSkillFromUnitAndId_98694@8")
-int32_t __stdcall Bridge_SKILLS_GetLevel_80514(D2UnitStrc* u, D2SkillStrc* s, int32_t b) { return (u && s) ? SKILLS_GetSkillLevel(u, s, b) : 0; }
-#pragma comment(linker, "/alternatename:_SKILLS_GetLevel@12=_Bridge_SKILLS_GetLevel_80514@12")
-D2SkillsTxt* __stdcall Bridge_SKILLS_GetSkillsTxtRecordFromSkill_56305(D2SkillStrc* s) { return s ? SKILLS_GetSkillsTxtRecordFromSkill(s) : nullptr; }
-#pragma comment(linker, "/alternatename:_SKILLS_GetSkillsTxtRecordFromSkill@4=_Bridge_SKILLS_GetSkillsTxtRecordFromSkill_56305@4")
-const char* __stdcall Bridge_SStrChr_50561(const char* s, char c, int32_t bRev) { if (!s) return nullptr; return bRev ? strrchr(s, c) : strchr(s, c); }
-#pragma comment(linker, "/alternatename:_SStrChr@12=_Bridge_SStrChr_50561@12")
-int32_t __stdcall Bridge_Storm_495_SMemCmp_6685(const void* a, const void* b, size_t n) { return (a && b) ? memcmp(a, b, n) : 0; }
-#pragma comment(linker, "/alternatename:_Storm_495_SMemCmp@12=_Bridge_Storm_495_SMemCmp_6685@12")
-char* __stdcall Bridge_Storm_501_SStrCopy_3385(char* d, const char* s, size_t n) { SStrCopy(d, s, (int)n); return d; }
-#pragma comment(linker, "/alternatename:_Storm_501_SStrCopy@12=_Bridge_Storm_501_SStrCopy_3385@12")
-int32_t __stdcall Bridge_Storm_508_SStrCmpI_82431(const char* a, const char* b, size_t n) { return SStrCmpI(a, b, n); }
-#pragma comment(linker, "/alternatename:_Storm_508_SStrCmpI@12=_Bridge_Storm_508_SStrCmpI_82431@12")
-void __stdcall Bridge_Storm_604_SBigDel_71767(void* h) { (void)h; }
-#pragma comment(linker, "/alternatename:_Storm_604_SBigDel@4=_Bridge_Storm_604_SBigDel_71767@4")
-void __stdcall Bridge_Storm_606_SBigFromBinary_57945(void** ph, const void* d, size_t n) { (void)d; (void)n; if (ph) *ph = nullptr; }
-#pragma comment(linker, "/alternatename:_Storm_606_SBigFromBinary@12=_Bridge_Storm_606_SBigFromBinary_57945@12")
-void __stdcall Bridge_Storm_624_SBigNew_93833(void** ph) { if (ph) *ph = nullptr; }
-#pragma comment(linker, "/alternatename:_Storm_624_SBigNew@4=_Bridge_Storm_624_SBigNew_93833@4")
-void __stdcall Bridge_Storm_628_SBigPowMod_63340(void* o, void* b, void* e, void* m) { (void)o;(void)b;(void)e;(void)m; }
-#pragma comment(linker, "/alternatename:_Storm_628_SBigPowMod@16=_Bridge_Storm_628_SBigPowMod_63340@16")
-void __stdcall Bridge_Storm_636_SBigToBinaryBuffer_37549(void* h, void* b, size_t sz, size_t* pw) { (void)h; if (b && sz) memset(b, 0, sz); if (pw) *pw = 0; }
-#pragma comment(linker, "/alternatename:_Storm_636_SBigToBinaryBuffer@16=_Bridge_Storm_636_SBigToBinaryBuffer_37549@16")
-int32_t __stdcall Bridge_UNITS_GetDir_86921(D2UnitStrc* u) { return (u && u->pDynamicPath && (u->dwUnitType <= UNIT_MONSTER || u->dwUnitType == UNIT_MISSILE)) ? PATH_GetDirection(u->pDynamicPath) : 0; }
-#pragma comment(linker, "/alternatename:_UNITS_GetDir@4=_Bridge_UNITS_GetDir_86921@4")
-int32_t __stdcall Bridge_UNITS_GetSubtileX_58238(D2UnitStrc* u) { return u ? UNITS_GetXPosition(u) : 0; }
-#pragma comment(linker, "/alternatename:_UNITS_GetSubtileX@4=_Bridge_UNITS_GetSubtileX_58238@4")
-int32_t __stdcall Bridge_UNITS_GetSubtileY_6180(D2UnitStrc* u) { return u ? UNITS_GetYPosition(u) : 0; }
-#pragma comment(linker, "/alternatename:_UNITS_GetSubtileY@4=_Bridge_UNITS_GetSubtileY_6180@4")
-int32_t __stdcall Bridge_UNITS_GetWeaponClass_11009(D2UnitStrc* u) { return u ? UNITS_GetWeaponClass(u) : 0; }
-#pragma comment(linker, "/alternatename:_UNITS_GetWeaponClass@4=_Bridge_UNITS_GetWeaponClass_11009@4")
-void __cdecl Bridge_Unicode_sprintf_20279(int32_t nMax, Unicode* dst, const Unicode* fmt, ...) { if (!dst || !fmt || nMax <= 0) return; va_list ap; va_start(ap, fmt); _vsnwprintf((wchar_t*)dst, (size_t)nMax, (const wchar_t*)fmt, ap); dst[nMax - 1] = 0; va_end(ap); }
-#pragma comment(linker, "/alternatename:_Unicode_sprintf=_Bridge_Unicode_sprintf_20279")
-void __stdcall Bridge_UnimplementedOrdinal_10060_50844(int32_t a1, int32_t a2) { (void)a1; (void)a2; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10060@8=_Bridge_UnimplementedOrdinal_10060_50844@8")
-void __stdcall Bridge_UnimplementedOrdinal_10061_75900(int32_t a1) { (void)a1; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10061@4=_Bridge_UnimplementedOrdinal_10061_75900@4")
-void __stdcall Bridge_UnimplementedOrdinal_10062_97880(int32_t a1, const char* a2, int32_t a3, int32_t a4) { (void)a1;(void)a2;(void)a3;(void)a4; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10062@16=_Bridge_UnimplementedOrdinal_10062_97880@16")
-int32_t __stdcall Bridge_UnimplementedOrdinal_10063_24972(int32_t a1) { (void)a1; return 0; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10063@4=_Bridge_UnimplementedOrdinal_10063_24972@4")
-int32_t __stdcall Bridge_UnimplementedOrdinal_10064_54489(int32_t a1, void* a2) { (void)a1; (void)a2; return 0; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10064@8=_Bridge_UnimplementedOrdinal_10064_54489@8")
-void __stdcall Bridge_UnimplementedOrdinal_10065_49370(int32_t a1, void* a2) { (void)a1; (void)a2; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10065@8=_Bridge_UnimplementedOrdinal_10065_49370@8")
-const char* __stdcall Bridge_UnimplementedOrdinal_10265_15702(int32_t a1) { (void)a1; return ""; }
-#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10265@4=_Bridge_UnimplementedOrdinal_10265_15702@4")
+void __fastcall Bridge_D2GFX_SetViewportShift_19214(int32_t nShiftX) { gnViewportShiftOffsetX = nShiftX; D2GFX_SetViewMatrixAdjust(nShiftX); }
+#pragma comment(linker, "/alternatename:@D2GFX_SetViewportShift@4=@Bridge_D2GFX_SetViewportShift_19214@4")
+const wchar_t* __fastcall Bridge_D2LANG_GetStringByReferenceIndex_72297(int32_t id) { return (const wchar_t*)D2LANG_GetStringFromTblIndex((short)id); }
+#pragma comment(linker, "/alternatename:@D2LANG_GetStringByReferenceIndex@4=@Bridge_D2LANG_GetStringByReferenceIndex_72297@4")
+wchar_t* __fastcall Bridge_D2LANG_UnicodeStrCat_58386(wchar_t* d, const wchar_t* s) { return (d && s) ? wcscat(d, s) : d; }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrCat@8=@Bridge_D2LANG_UnicodeStrCat_58386@8")
+wchar_t* __fastcall Bridge_D2LANG_UnicodeStrCpy_17760(wchar_t* d, const wchar_t* s) { return (d && s) ? wcscpy(d, s) : d; }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrCpy@8=@Bridge_D2LANG_UnicodeStrCpy_17760@8")
+int32_t __fastcall Bridge_D2LANG_UnicodeStrLen_64958(const wchar_t* s) { return s ? (int32_t)wcslen(s) : 0; }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrLen@4=@Bridge_D2LANG_UnicodeStrLen_64958@4")
+wchar_t* __fastcall Bridge_D2LANG_UnicodeStrNCpy_13819(wchar_t* d, const wchar_t* s, int32_t n) { if (d && s && n > 0) { wcsncpy(d, s, (size_t)n); d[n - 1] = 0; } return d; }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeStrNCpy@12=@Bridge_D2LANG_UnicodeStrNCpy_13819@12")
+void __fastcall Bridge_D2LANG_UnicodeToAnsi_68081(char* d, const wchar_t* s, int32_t n) { if (d && n > 0) { if (s) Unicode::unicode2Win(d, (const Unicode*)s, n); else d[0] = 0; } }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeToAnsi@12=@Bridge_D2LANG_UnicodeToAnsi_68081@12")
+wchar_t __fastcall Bridge_D2LANG_UnicodeToUpper_77850(wchar_t wc) { return (wchar_t)towupper(wc); }
+#pragma comment(linker, "/alternatename:@D2LANG_UnicodeToUpper@4=@Bridge_D2LANG_UnicodeToUpper_77850@4")
+void __fastcall Bridge_D2WIN_DestroyEditBox_15488(D2WinEditBoxStrc* p) { if (p) D2Win_10071_EDITBOX_Destroy(p); }
+#pragma comment(linker, "/alternatename:@D2WIN_DestroyEditBox@4=@Bridge_D2WIN_DestroyEditBox_15488@4")
+void __fastcall Bridge_D2WIN_DrawFramedText_31841(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t a) { D2Win_10129_DrawFramedText(w, x, y, c, a); }
+#pragma comment(linker, "/alternatename:@D2WIN_DrawFramedText@20=@Bridge_D2WIN_DrawFramedText_31841@20")
+void __fastcall Bridge_D2WIN_DrawText_72753(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t b) { D2Win_10117_DrawText(w, x, y, c, b); }
+#pragma comment(linker, "/alternatename:@D2WIN_DrawText@20=@Bridge_D2WIN_DrawText_72753@20")
+const Unicode* __fastcall Bridge_D2WIN_GetEditBoxText_63181(D2WinEditBoxStrc* p) { return p ? p->wszText : (const Unicode*)L""; }
+#pragma comment(linker, "/alternatename:@D2WIN_GetEditBoxText@4=@Bridge_D2WIN_GetEditBoxText_63181@4")
+int32_t __fastcall Bridge_D2WIN_SetFont_73138(int32_t f) { return (int32_t)D2Win_10127_SetFont((Font)f); }
+#pragma comment(linker, "/alternatename:@D2WIN_SetFont@4=@Bridge_D2WIN_SetFont_73138@4")
+int32_t __fastcall Bridge_D2Win_10005_81947(int32_t a1, int32_t a2, int32_t a3, void* a4) { (void)a2; (void)a3; (void)a4; return D2Win_10005((D2GameResolutionMode)a1); }
+#pragma comment(linker, "/alternatename:@D2Win_10005@16=@Bridge_D2Win_10005_81947@16")
+HD2ARCHIVE __fastcall Bridge_D2Win_10014_48371() { return D2Win_GetArchive(); }
+#pragma comment(linker, "/alternatename:@D2Win_10014@0=@Bridge_D2Win_10014_48371@0")
+uint8_t __fastcall Bridge_D2Win_10034_MixRGB_94170(uint8_t r, uint8_t g, uint8_t b) { return D2Win_10034_MixRGB(r, g, b); }
+#pragma comment(linker, "/alternatename:@D2Win_10034_MixRGB@12=@Bridge_D2Win_10034_MixRGB_94170@12")
+void __fastcall Bridge_D2Win_10124_DrawHoverText_95394(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t b, int32_t t) { (void)t; D2Win_10129_DrawFramedText(w, x, y, c, b); }
+#pragma comment(linker, "/alternatename:@D2Win_10124_DrawHoverText@24=@Bridge_D2Win_10124_DrawHoverText_95394@24")
+void __fastcall Bridge_D2Win_10130_DrawFramedTextEx_56376(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t a) { D2Win_10129_DrawFramedText(w, x, y, c, a); }
+#pragma comment(linker, "/alternatename:@D2Win_10130_DrawFramedTextEx@20=@Bridge_D2Win_10130_DrawFramedTextEx_56376@20")
+void* __fastcall Bridge_D2Win_10199_WrapTextLines_1697(Unicode* pText, int32_t* pOutCnt, int32_t nMaxW) { (void)pText; (void)nMaxW; if (pOutCnt) *pOutCnt = 0; return nullptr; }
+#pragma comment(linker, "/alternatename:@D2Win_10199_WrapTextLines@12=@Bridge_D2Win_10199_WrapTextLines_1697@12")
+void __fastcall Bridge_FOG_SetMemoryPoolSystemMode_41517(int32_t nMode) { FOG_SetMemoryPoolSystemMode(nullptr, nMode); }
+#pragma comment(linker, "/alternatename:@FOG_SetMemoryPoolSystemMode@4=@Bridge_FOG_SetMemoryPoolSystemMode_41517@4")
+void* __fastcall Bridge_Fog_10042_AllocClientMemory_16186(int32_t sz, const char* f, int32_t l, int32_t z) { return FOG_AllocClientMemory(sz, f, l, z); }
+#pragma comment(linker, "/alternatename:@Fog_10042_AllocClientMemory@16=@Bridge_Fog_10042_AllocClientMemory_16186@16")
+void __fastcall Bridge_Fog_10043_FreeClientMemory_38316(void* p, const char* f, int32_t l, int32_t z) { if (p) FOG_FreeClientMemory(p, f, l, z); }
+#pragma comment(linker, "/alternatename:@Fog_10043_FreeClientMemory@16=@Bridge_Fog_10043_FreeClientMemory_38316@16")
+void __fastcall Bridge_Fog_10046_FreePool_38198(void* pool, void* p, const char* f, int32_t l) { if (p) FOG_FreePool(pool, p, f, l, 0); }
+#pragma comment(linker, "/alternatename:@Fog_10046_FreePool@16=@Bridge_Fog_10046_FreePool_38198@16")
+int32_t __fastcall Bridge_Fog_10101_OpenFile_82186(const char* sz, HANDLE* ph) { return SFileOpenFile((char*)sz, (int)(intptr_t)ph); }
+#pragma comment(linker, "/alternatename:@Fog_10101_OpenFile@8=@Bridge_Fog_10101_OpenFile_82186@8")
+void __fastcall Bridge_Fog_10103_CloseFile_64433(HANDLE h) { if (h) SFileCloseFile(h); }
+#pragma comment(linker, "/alternatename:@Fog_10103_CloseFile@4=@Bridge_Fog_10103_CloseFile_64433@4")
+int32_t __fastcall Bridge_Fog_10104_ReadFile_54681(HANDLE h, void* b, int32_t sz, DWORD* pRead, LPOVERLAPPED ov, void* a6, void* a7) { (void)ov; (void)a6; (void)a7; return SFileReadFile((int)(intptr_t)h, (int)(intptr_t)b, sz, (int)(intptr_t)pRead, 0); }
+#pragma comment(linker, "/alternatename:@Fog_10104_ReadFile@28=@Bridge_Fog_10104_ReadFile_54681@28")
+int32_t __fastcall Bridge_Fog_10105_GetFileSize_14306(HANDLE h, LPDWORD pHigh) { return SFileGetFileSize((int)(intptr_t)h, pHigh); }
+#pragma comment(linker, "/alternatename:@Fog_10105_GetFileSize@8=@Bridge_Fog_10105_GetFileSize_14306@8")
+void* __fastcall Bridge_Fog_10106_AsyncReadFile_34146(void* a1, const char* a2, int32_t a3, void* a4, void* a5, int32_t a6, void* a7) { (void)a1;(void)a2;(void)a3;(void)a4;(void)a5;(void)a6;(void)a7; return nullptr; }
+#pragma comment(linker, "/alternatename:@Fog_10106_AsyncReadFile@28=@Bridge_Fog_10106_AsyncReadFile_34146@28")
+int32_t __fastcall Bridge_Fog_10107_GetAsyncSearchResult_21728(void* h) { (void)h; return 0; }
+#pragma comment(linker, "/alternatename:@Fog_10107_GetAsyncSearchResult@4=@Bridge_Fog_10107_GetAsyncSearchResult_21728@4")
+int32_t __fastcall Bridge_Fog_10109_CancelAsyncOp_31082(void* h, int32_t w) { (void)h; (void)w; return 1; }
+#pragma comment(linker, "/alternatename:@Fog_10109_CancelAsyncOp@8=@Bridge_Fog_10109_CancelAsyncOp_31082@8")
+void __fastcall Bridge_Fog_10110_WaitAsyncOp_43056(void* h) { (void)h; }
+#pragma comment(linker, "/alternatename:@Fog_10110_WaitAsyncOp@4=@Bridge_Fog_10110_WaitAsyncOp_43056@4")
+int32_t __fastcall Bridge_STRTABLE_GetLanguage_31710() { return (int32_t)STRTABLE_GetLanguage(); }
+#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguage@0=@Bridge_STRTABLE_GetLanguage_31710@0")
+int32_t __fastcall Bridge_STRTABLE_GetLanguageInfo_47287(char* sz, int32_t bShort, int32_t a3) { (void)a3; STRTABLE_GetLanguageInfo(sz, bShort); return 1; }
+#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguageInfo@12=@Bridge_STRTABLE_GetLanguageInfo_47287@12")
+int32_t __fastcall Bridge_STRTABLE_GetLanguageInfo_79483(char* sz, int32_t bShort) { STRTABLE_GetLanguageInfo(sz, bShort); return 1; }
+#pragma comment(linker, "/alternatename:@STRTABLE_GetLanguageInfo@8=@Bridge_STRTABLE_GetLanguageInfo_79483@8")
+Unicode* __fastcall Bridge_Unicode_strcat_40039(Unicode* d, const Unicode* s) { return (d && s) ? Unicode::strcat(d, s) : d; }
+#pragma comment(linker, "/alternatename:@Unicode_strcat@8=@Bridge_Unicode_strcat_40039@8")
+Unicode* __fastcall Bridge_Unicode_strcpy_74755(Unicode* d, const Unicode* s) { return (d && s) ? Unicode::strcpy(d, s) : d; }
+#pragma comment(linker, "/alternatename:@Unicode_strcpy@8=@Bridge_Unicode_strcpy_74755@8")
+Unicode* __fastcall Bridge_Unicode_strncpy_84161(Unicode* d, const Unicode* s, int32_t n) { return (d && s) ? Unicode::strncpy(d, s, n) : d; }
+#pragma comment(linker, "/alternatename:@Unicode_strncpy@12=@Bridge_Unicode_strncpy_84161@12")
+Unicode* __fastcall Bridge_Unicode_toUnicode_86458(Unicode* d, const char* s, int32_t n) { return (d && s) ? Unicode::win2Unicode(d, s, n) : d; }
+#pragma comment(linker, "/alternatename:@Unicode_toUnicode@12=@Bridge_Unicode_toUnicode_86458@12")
+int32_t __fastcall Bridge_Unicode_win2utf8_36600(char* d, const wchar_t* s, int32_t n) { return (d && s && n > 0) ? WideCharToMultiByte(CP_UTF8, 0, s, -1, d, n, nullptr, nullptr) : 0; }
+#pragma comment(linker, "/alternatename:@Unicode_win2utf8@12=@Bridge_Unicode_win2utf8_36600@12")
+void __fastcall Bridge_UnimplementedOrdinal_10144_68591(int32_t a1) { (void)a1; }
+#pragma comment(linker, "/alternatename:@UnimplementedOrdinal_10144@4=@Bridge_UnimplementedOrdinal_10144_68591@4")
+int32_t __fastcall Bridge_UnimplementedOrdinal_10191_26759(const char* s) { (void)s; return 0; }
+#pragma comment(linker, "/alternatename:@UnimplementedOrdinal_10191@4=@Bridge_UnimplementedOrdinal_10191_26759@4")
+int32_t __stdcall Bridge_D2COMMON_11018_CheckUnitInteractable_7172(D2UnitStrc* u) { return u ? D2COMMON_11018(u) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_11018_CheckUnitInteractable@4=_Bridge_D2COMMON_11018_CheckUnitInteractable_7172@4")
+int32_t __stdcall Bridge_D2COMMON_CheckItemFlag_15801(D2UnitStrc* p, uint32_t f, int32_t l, const char* sz) { return p ? ITEMS_CheckItemFlag(p, f, l, sz) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_CheckItemFlag@16=_Bridge_D2COMMON_CheckItemFlag_15801@16")
+int32_t __stdcall Bridge_D2COMMON_CheckItemType_60503(D2UnitStrc* p, int32_t t) { return p ? ITEMS_CheckItemTypeId(p, t) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_CheckItemType@8=_Bridge_D2COMMON_CheckItemType_60503@8")
+D2UnitStrc* __stdcall Bridge_D2COMMON_GetBeltItem_32222(D2InventoryStrc* inv, int32_t s) { return inv ? INVENTORY_GetItemFromBeltSlot(inv, s) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetBeltItem@8=_Bridge_D2COMMON_GetBeltItem_32222@8")
+int32_t __stdcall Bridge_D2COMMON_GetBeltTypeBoxes_21964(int32_t nBeltType) { D2BeltsTxt belt = {}; DATATBLS_GetBeltsTxtRecord(nBeltType, 0, &belt); return belt.nBoxes > 0 ? belt.nBoxes : 4; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetBeltTypeBoxes@4=_Bridge_D2COMMON_GetBeltTypeBoxes_21964@4")
+D2UnitStrc* __stdcall Bridge_D2COMMON_GetFirstInventoryItem_53923(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetFirstInventoryItem@4=_Bridge_D2COMMON_GetFirstInventoryItem_53923@4")
+D2GemsTxt* __stdcall Bridge_D2COMMON_GetGemsTxtRecord_94445(int32_t id) { return DATATBLS_GetGemsTxtRecord(id); }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetGemsTxtRecord@4=_Bridge_D2COMMON_GetGemsTxtRecord_94445@4")
+uint8_t __stdcall Bridge_D2COMMON_GetItemBodyLoc_72972(D2UnitStrc* p) { return p ? ITEMS_GetBodyLocation(p) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetItemBodyLoc@4=_Bridge_D2COMMON_GetItemBodyLoc_72972@4")
+int32_t __stdcall Bridge_D2COMMON_GetItemFileIndex_85201(D2UnitStrc* p) { return p ? ITEMS_GetFileIndex(p) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetItemFileIndex@4=_Bridge_D2COMMON_GetItemFileIndex_85201@4")
+int32_t __stdcall Bridge_D2COMMON_GetItemPage_97358(D2UnitStrc* p) { return p ? (int32_t)ITEMS_GetInvPage(p) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetItemPage@4=_Bridge_D2COMMON_GetItemPage_97358@4")
+D2ItemsTxt* __stdcall Bridge_D2COMMON_GetItemsTxtRecord_81373(int32_t id) { return DATATBLS_GetItemsTxtRecord(id); }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetItemsTxtRecord@4=_Bridge_D2COMMON_GetItemsTxtRecord_81373@4")
+D2SkillStrc* __stdcall Bridge_D2COMMON_GetLeftSkill_12091(D2UnitStrc* u) { return u ? UNITS_GetLeftSkill(u) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetLeftSkill@4=_Bridge_D2COMMON_GetLeftSkill_12091@4")
+D2UnitStrc* __stdcall Bridge_D2COMMON_GetNextInventoryItem_74346(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetNextInventoryItem@4=_Bridge_D2COMMON_GetNextInventoryItem_74346@4")
+D2SkillStrc* __stdcall Bridge_D2COMMON_GetRightSkill_73435(D2UnitStrc* u) { return u ? UNITS_GetRightSkill(u) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetRightSkill@4=_Bridge_D2COMMON_GetRightSkill_73435@4")
+int32_t __stdcall Bridge_D2COMMON_GetSkillId_17187(D2SkillStrc* s, const char* f, int32_t l) { return s ? SKILLS_GetSkillIdFromSkill(s, f, l) : -1; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetSkillId@12=_Bridge_D2COMMON_GetSkillId_17187@12")
+D2SkillsTxt* __stdcall Bridge_D2COMMON_GetSkillsTxtRecord_32095(int32_t id) { return DATATBLS_GetSkillsTxtRecord(id); }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetSkillsTxtRecord@4=_Bridge_D2COMMON_GetSkillsTxtRecord_32095@4")
+int32_t __stdcall Bridge_D2COMMON_GetStatFromStatList_1468(D2StatListStrc* sl, int32_t id, int32_t layer) { return sl ? STATLIST_GetStatValue(sl, id, (uint16_t)layer) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetStatFromStatList@12=_Bridge_D2COMMON_GetStatFromStatList_1468@12")
+int32_t __stdcall Bridge_D2COMMON_GetUnitStatUInt_60016(D2UnitStrc* u, int32_t id, int32_t layer) { return u ? STATLIST_UnitGetStatValue(u, id, (uint16_t)layer) : 0; }
+#pragma comment(linker, "/alternatename:_D2COMMON_GetUnitStatUInt@12=_Bridge_D2COMMON_GetUnitStatUInt_60016@12")
+D2UnitStrc* __stdcall Bridge_D2COMMON_VerifyUnitIsItem_73027(D2UnitStrc* p) { return p ? INVENTORY_UnitIsItem(p) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2COMMON_VerifyUnitIsItem@4=_Bridge_D2COMMON_VerifyUnitIsItem_73027@4")
+void* __stdcall Bridge_D2Common_10085_GetRoomTileGrid_50535(D2ActiveRoomStrc* r) { return r ? r->pRoomTiles : nullptr; }
+#pragma comment(linker, "/alternatename:_D2Common_10085_GetRoomTileGrid@4=_Bridge_D2Common_10085_GetRoomTileGrid_50535@4")
+int32_t __stdcall Bridge_D2Common_10269_COMPOSIT_36305(D2UnitStrc* u, int32_t* pOutWC, int32_t nMode, int32_t bForce, D2InventoryStrc* inv) { int wc = 0; if (u) COMPOSIT_GetWeaponClassId(u, inv ? inv : u->pInventory, &wc, nMode, bForce); if (pOutWC) *pOutWC = wc; return 1; }
+#pragma comment(linker, "/alternatename:_D2Common_10269_COMPOSIT@20=_Bridge_D2Common_10269_COMPOSIT_36305@20")
+int32_t __stdcall Bridge_D2Common_10519_GetUnitStatSigned_46914(D2UnitStrc* u, int32_t id, int32_t layer) { return u ? STATLIST_UnitGetStatValue(u, id, (uint16_t)layer) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10519_GetUnitStatSigned@12=_Bridge_D2Common_10519_GetUnitStatSigned_46914@12")
+int32_t __stdcall Bridge_D2Common_10550_GetUnitDefense_20741(D2UnitStrc* u) { return u ? UNITS_GetDefense(u) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10550_GetUnitDefense@4=_Bridge_D2Common_10550_GetUnitDefense_20741@4")
+int32_t __stdcall Bridge_D2Common_10552_GetUnitToHitFactor_12922(D2UnitStrc* u) { return u ? STATLIST_UnitGetStatValue(u, STAT_TOHIT, 0) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10552_GetUnitToHitFactor@4=_Bridge_D2Common_10552_GetUnitToHitFactor_12922@4")
+int32_t __stdcall Bridge_D2Common_10554_GetUnitBlockingPercent_56774(D2UnitStrc* u, int32_t bExp) { return u ? UNITS_GetBlockRate(u, bExp) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10554_GetUnitBlockingPercent@8=_Bridge_D2Common_10554_GetUnitBlockingPercent_56774@8")
+void* __stdcall Bridge_D2Common_10576_CompileTxtFile_95015(void* pool, const char* sz, D2BinFieldStrc* f, int32_t* cnt, int32_t rsz) { return DATATBLS_CompileTxt((HD2ARCHIVE)pool, sz, f, cnt, (size_t)rsz); }
+#pragma comment(linker, "/alternatename:_D2Common_10576_CompileTxtFile@20=_Bridge_D2Common_10576_CompileTxtFile_95015@20")
+int32_t __stdcall Bridge_D2Common_10611_38978(D2ActiveRoomStrc* r, int32_t x, int32_t y) { return r ? COLLISION_CheckMask(r, x, y, 1) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10611@12=_Bridge_D2Common_10611_38978@12")
+D2UnitStrc* __stdcall Bridge_D2Common_10776_GetNextInventoryItem_60394(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2Common_10776_GetNextInventoryItem@4=_Bridge_D2Common_10776_GetNextInventoryItem_60394@4")
+int32_t __stdcall Bridge_D2Common_10777_UnitIsItem_16289(D2UnitStrc* p) { return (p && INVENTORY_UnitIsItem(p)) ? 1 : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10777_UnitIsItem@4=_Bridge_D2Common_10777_UnitIsItem_16289@4")
+D2UnitStrc* __stdcall Bridge_D2Common_10795_GetFirstInventoryItem_32460(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2Common_10795_GetFirstInventoryItem@4=_Bridge_D2Common_10795_GetFirstInventoryItem_32460@4")
+int32_t __stdcall Bridge_D2Common_10797_GetItemBodyLoc_87685(D2UnitStrc* p) { return p ? (int32_t)ITEMS_GetBodyLocation(p) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10797_GetItemBodyLoc@4=_Bridge_D2Common_10797_GetItemBodyLoc_87685@4")
+int32_t __stdcall Bridge_D2Common_10801_CheckItemType_85273(D2UnitStrc* p, int32_t t) { return p ? ITEMS_CheckItemTypeId(p, t) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10801_CheckItemType@8=_Bridge_D2Common_10801_CheckItemType_85273@8")
+int32_t __stdcall Bridge_D2Common_10844_CheckItemRequirements_29274(D2UnitStrc* item, D2UnitStrc* plr, int32_t bEq, int32_t* s, int32_t* d, int32_t* l) { return ITEMS_CheckRequirements(item, plr, bEq, s, d, l); }
+#pragma comment(linker, "/alternatename:_D2Common_10844_CheckItemRequirements@24=_Bridge_D2Common_10844_CheckItemRequirements_29274@24")
+int32_t __stdcall Bridge_D2Common_10862_GetMissileTrans_83975(int32_t id, uint8_t* dm, uint8_t* ti) { D2MissilesTxt* m = DATATBLS_GetMissilesTxtRecord(id); if (!m) return 0; if (dm) *dm = m->nTrans; if (ti) *ti = 0; return 1; }
+#pragma comment(linker, "/alternatename:_D2Common_10862_GetMissileTrans@12=_Bridge_D2Common_10862_GetMissileTrans_83975@12")
+void __stdcall Bridge_D2Common_10885_COMPOSIT_75206(D2UnitStrc* u, char* szToken, char* szMode, int32_t nType, int32_t nClass, int32_t nMode, int32_t nWC, char* szWC) { Bridge_PopulateCompositTokens(u, szToken, szMode, nType, nClass, nMode, nWC, szWC); }
+#pragma comment(linker, "/alternatename:_D2Common_10885_COMPOSIT@32=_Bridge_D2Common_10885_COMPOSIT_75206@32")
+int32_t __stdcall Bridge_D2Common_10899_COMPOSIT_IsArmorComponent_56796(int32_t c) { return COMPOSIT_IsArmorComponent(c); }
+#pragma comment(linker, "/alternatename:_D2Common_10899_COMPOSIT_IsArmorComponent@4=_Bridge_D2Common_10899_COMPOSIT_IsArmorComponent_56796@4")
+uint32_t __stdcall Bridge_D2Common_10920_9355(D2ActiveRoomStrc* r, int32_t x, int32_t y) { return r ? COLLISION_CheckMask(r, x, y, 1) : 0; }
+#pragma comment(linker, "/alternatename:_D2Common_10920@12=_Bridge_D2Common_10920_9355@12")
+int32_t __stdcall Bridge_D2Common_11026_GetAttackRate_55204(D2UnitStrc* u, int32_t wc, int32_t sk, int32_t bP, D2UnitStrc* w, int32_t* minD, int32_t* maxD, int32_t* ar) { (void)wc;(void)sk;(void)bP;(void)w; if (minD) *minD = u ? STATLIST_UnitGetStatValue(u, STAT_MINDAMAGE, 0) : 0; if (maxD) *maxD = u ? STATLIST_UnitGetStatValue(u, STAT_MAXDAMAGE, 0) : 0; if (ar) *ar = 0; return 1; }
+#pragma comment(linker, "/alternatename:_D2Common_11026_GetAttackRate@32=_Bridge_D2Common_11026_GetAttackRate_55204@32")
+int32_t __stdcall Bridge_D2Common_11037_GetStateColor_81212(D2UnitStrc* u, uint8_t* pIdx) { (void)u; if (pIdx) *pIdx = 0; return 0; }
+#pragma comment(linker, "/alternatename:_D2Common_11037_GetStateColor@8=_Bridge_D2Common_11037_GetStateColor_81212@8")
+void __stdcall Bridge_D2Common_11066_52466(D2UnitStrc* u, void* seq, int32_t* fc, int32_t* dc) { (void)seq; D2Common_11066(u, fc, dc); }
+#pragma comment(linker, "/alternatename:_D2Common_11066@16=_Bridge_D2Common_11066_52466@16")
+int32_t __stdcall Bridge_D2Common_11076_11825(D2UnitStrc* u, int32_t m) { (void)u; (void)m; return 0; }
+#pragma comment(linker, "/alternatename:_D2Common_11076@8=_Bridge_D2Common_11076_11825@8")
+int32_t __stdcall Bridge_D2GFX_CheckPerspectiveMode_28014() { return D2GFX_CheckPerspective(); }
+#pragma comment(linker, "/alternatename:_D2GFX_CheckPerspectiveMode@0=_Bridge_D2GFX_CheckPerspectiveMode_28014@0")
+void __stdcall Bridge_D2GFX_DrawBoxFrame_34121(RECT* r, uint8_t c) { if (r) D2GFX_UtilRect(r, c); }
+#pragma comment(linker, "/alternatename:_D2GFX_DrawBoxFrame@8=_Bridge_D2GFX_DrawBoxFrame_34121@8")
+void __stdcall Bridge_D2GFX_DrawCellContextEx_18858(D2GfxDataStrc* p, int32_t x, int32_t y, uint32_t g, int32_t m, uint8_t* pal) { TEXTURE_CelDraw(p, x, y, g, (DrawMode)m, pal); }
+#pragma comment(linker, "/alternatename:_D2GFX_DrawCellContextEx@24=_Bridge_D2GFX_DrawCellContextEx_18858@24")
+int32_t __stdcall Bridge_D2GFX_DrawFloorTile_34385(D2TileLibraryEntryStrc* t, int32_t x, int32_t y, D2GfxLightStrc* l, uint32_t c) { (void)l; (void)c; D2GfxLightExStrc aLightEx[64]; memset(aLightEx, 0xFF, sizeof(aLightEx)); return D2GFX_FloorTileDraw(t, aLightEx, x, y, 0, 0, 0xFF, 0, nullptr); }
+#pragma comment(linker, "/alternatename:_D2GFX_DrawFloorTile@20=_Bridge_D2GFX_DrawFloorTile_34385@20")
+void __stdcall Bridge_D2GFX_DrawRect_36031(int32_t l, int32_t t, int32_t r, int32_t b, uint8_t c, int32_t tr) { D2GFX_DrawBox(l, t, r, b, c, (DrawMode)tr); }
+#pragma comment(linker, "/alternatename:_D2GFX_DrawRect@24=_Bridge_D2GFX_DrawRect_36031@24")
+uint8_t __stdcall Bridge_D2GFX_FindBestPaletteIndex_44608(int32_t r, int32_t g, int32_t b) { return D2Win_10034_MixRGB((uint8_t)r, (uint8_t)g, (uint8_t)b); }
+#pragma comment(linker, "/alternatename:_D2GFX_FindBestPaletteIndex@12=_Bridge_D2GFX_FindBestPaletteIndex_44608@12")
+void __stdcall Bridge_D2GFX_ScalePerspectivePosition_37625(int32_t x, int32_t y, int32_t a, int32_t* ox, int32_t* oy, int32_t b) { SCALE_ScalePerspectivePosition(x, y, a, ox, oy, b); }
+#pragma comment(linker, "/alternatename:_D2GFX_ScalePerspectivePosition@24=_Bridge_D2GFX_ScalePerspectivePosition_37625@24")
+void __stdcall Bridge_D2Gfx_10012_CelDrawHilight_56988(D2GfxDataStrc* p, int32_t x, int32_t y, uint8_t c) { TEXTURE_CelDrawHilight(p, x, y, c); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10012_CelDrawHilight@16=_Bridge_D2Gfx_10012_CelDrawHilight_56988@16")
+void __stdcall Bridge_D2Gfx_10024_CelDraw_15815(D2GfxDataStrc* p, int32_t x, int32_t y, uint32_t g, int32_t m, uint8_t* pal) { TEXTURE_CelDraw(p, x, y, g, (DrawMode)m, pal); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10024_CelDraw@24=_Bridge_D2Gfx_10024_CelDraw_15815@24")
+void __stdcall Bridge_D2Gfx_10030_CelDrawShadow_11966(D2GfxDataStrc* p, int32_t x, int32_t y) { TEXTURE_CelDrawShadow(p, x, y); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10030_CelDrawShadow@12=_Bridge_D2Gfx_10030_CelDrawShadow_11966@12")
+int32_t __stdcall Bridge_D2Gfx_10042_TransformPerspectiveCoords_9183(int32_t x, int32_t nY, int32_t z, int32_t* ox, int32_t* oy) { SCALE_AdjustPerspectivePosition(x, nY, z, ox, oy); return 1; }
+#pragma comment(linker, "/alternatename:_D2Gfx_10042_TransformPerspectiveCoords@20=_Bridge_D2Gfx_10042_TransformPerspectiveCoords_9183@20")
+int32_t __stdcall Bridge_D2Gfx_10043_IsPerspectiveEnabled_48918() { return D2GFX_CheckPerspective(); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10043_IsPerspectiveEnabled@0=_Bridge_D2Gfx_10043_IsPerspectiveEnabled_48918@0")
+int32_t __stdcall Bridge_D2Gfx_10080_DrawFloorTile_98528(D2TileLibraryEntryStrc* t, void* v, int32_t lc, int32_t roof, uint32_t f) { (void)lc; (void)roof; (void)f; if (!t || !v) return 0; const int16_t* pVert = (const int16_t*)v; D2GfxLightExStrc aLightEx[64]; memset(aLightEx, 0xFF, sizeof(aLightEx)); return D2GFX_FloorTileDraw(t, aLightEx, pVert[0], pVert[1], 0, 0, 0xFF, 0, nullptr); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10080_DrawFloorTile@20=_Bridge_D2Gfx_10080_DrawFloorTile_98528@20")
+int32_t __cdecl Bridge_D2LANG_UnicodeSPrintf_58829(int32_t nMax, wchar_t* dst, const wchar_t* fmt, ...) { if (!dst || !fmt || nMax <= 0) return 0; va_list ap; va_start(ap, fmt); int r = _vsnwprintf(dst, (size_t)nMax, fmt, ap); dst[nMax - 1] = 0; va_end(ap); return r; }
+#pragma comment(linker, "/alternatename:_D2LANG_UnicodeSPrintf=_Bridge_D2LANG_UnicodeSPrintf_58829")
+int32_t __stdcall Bridge_D2NET_10023_GetSendQueueBacklog_75358() { return 0; }
+#pragma comment(linker, "/alternatename:_D2NET_10023_GetSendQueueBacklog@0=_Bridge_D2NET_10023_GetSendQueueBacklog_75358@0")
+int32_t __stdcall Bridge_D2SOUND_GetMasterVolume_47359() { return D2SOUND_GetMasterVolume(); }
+#pragma comment(linker, "/alternatename:_D2SOUND_GetMasterVolume@0=_Bridge_D2SOUND_GetMasterVolume_47359@0")
+int32_t __stdcall Bridge_D2SOUND_GetMusicVolume_84475() { return D2SOUND_GetMusicVolume(); }
+#pragma comment(linker, "/alternatename:_D2SOUND_GetMusicVolume@0=_Bridge_D2SOUND_GetMusicVolume_84475@0")
+int32_t __stdcall Bridge_D2WIN_SetEditBoxText_74631(D2WinEditBoxStrc* p, const Unicode* w) { if (!p || !w) return 0; Unicode::strncpy(p->wszText, w, 255); p->wszText[255] = 0; p->nTextLength = Unicode::strlen(p->wszText); return 1; }
+#pragma comment(linker, "/alternatename:_D2WIN_SetEditBoxText@8=_Bridge_D2WIN_SetEditBoxText_74631@8")
+void __stdcall Bridge_D2Win_TakeScreenshot_80137() {  }
+#pragma comment(linker, "/alternatename:_D2Win_TakeScreenshot@0=_Bridge_D2Win_TakeScreenshot_80137@0")
+D2MonStatsTxt* __stdcall Bridge_DATATBLS_GetMonsterTxtRecord_44850(int32_t id) { return DATATBLS_GetMonStatsTxtRecord(id); }
+#pragma comment(linker, "/alternatename:_DATATBLS_GetMonsterTxtRecord@4=_Bridge_DATATBLS_GetMonsterTxtRecord_44850@4")
+D2OverlayTxt* __stdcall Bridge_DATATBLS_GetOverlaysTxtRecord_33389(int32_t id) { return DATATBLS_GetOverlayTxtRecord(id); }
+#pragma comment(linker, "/alternatename:_DATATBLS_GetOverlaysTxtRecord@4=_Bridge_DATATBLS_GetOverlaysTxtRecord_33389@4")
+D2UnitStrc* __stdcall Bridge_DEBUG_GetUnitFromTypeAndGUID_91539(int32_t t, int32_t id) { return D2Client_FindServerSideUnit((uint32_t)id, (uint32_t)t); }
+#pragma comment(linker, "/alternatename:_DEBUG_GetUnitFromTypeAndGUID@8=_Bridge_DEBUG_GetUnitFromTypeAndGUID_91539@8")
+D2ActiveRoomStrc* __stdcall Bridge_DUNGEON_GetRoomFromAct_51441(D2DrlgActStrc* act, int32_t x, int32_t y) { return act ? DUNGEON_FindRoomBySubtileCoordinates(act, x, y) : nullptr; }
+#pragma comment(linker, "/alternatename:_DUNGEON_GetRoomFromAct@12=_Bridge_DUNGEON_GetRoomFromAct_51441@12")
+uint32_t __cdecl Bridge_FOG_10055_GetSyncTime_92054() { return (uint32_t)FOG_10055_GetSyncTime(); }
+#pragma comment(linker, "/alternatename:_FOG_10055_GetSyncTime=_Bridge_FOG_10055_GetSyncTime_92054")
+const char* __cdecl Bridge_FOG_GetErrorLocation_89650(int32_t n) { (void)n; return ""; }
+#pragma comment(linker, "/alternatename:_FOG_GetErrorLocation=_Bridge_FOG_GetErrorLocation_89650")
+const char* __stdcall Bridge_FOG_GetErrorLocation_20844(int32_t n) { (void)n; return ""; }
+#pragma comment(linker, "/alternatename:_FOG_GetErrorLocation@4=_Bridge_FOG_GetErrorLocation_20844@4")
+const char* __cdecl Bridge_FOG_GetErrorString_13936(int32_t n) { (void)n; return ""; }
+#pragma comment(linker, "/alternatename:_FOG_GetErrorString=_Bridge_FOG_GetErrorString_13936")
+uint32_t __stdcall Bridge_FOG_GetInstallPath_14975(char* sz, uint32_t n) { return (uint32_t)FOG_GetInstallPath(sz, n); }
+#pragma comment(linker, "/alternatename:_FOG_GetInstallPath@8=_Bridge_FOG_GetInstallPath_14975@8")
+int32_t __stdcall Bridge_FOG_IsExpansion_90854() { return FOG_IsExpansion(); }
+#pragma comment(linker, "/alternatename:_FOG_IsExpansion@0=_Bridge_FOG_IsExpansion_90854@0")
+void __cdecl Bridge_Fog_10023_Error_18773(const char* m, const char* f, int32_t l) { FOG_DisplayWarning(m ? m : "Error", f ? f : "D2Client", l); }
+#pragma comment(linker, "/alternatename:_Fog_10023_Error=_Bridge_Fog_10023_Error_18773")
+int32_t __stdcall Bridge_Fog_10227_IsExpansion_25627() { return FOG_IsExpansion(); }
+#pragma comment(linker, "/alternatename:_Fog_10227_IsExpansion@0=_Bridge_Fog_10227_IsExpansion_25627@0")
+const char* __cdecl Bridge_Fog_10265_92278(int32_t n) { (void)n; return ""; }
+#pragma comment(linker, "/alternatename:_Fog_10265=_Bridge_Fog_10265_92278")
+D2UnitStrc* __stdcall Bridge_INVENTORY_GetItemFromInventory_13762(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
+#pragma comment(linker, "/alternatename:_INVENTORY_GetItemFromInventory@4=_Bridge_INVENTORY_GetItemFromInventory_13762@4")
+D2UnitStrc* __stdcall Bridge_INV_GetFirstItem_95375(D2InventoryStrc* inv) { return inv ? INVENTORY_GetFirstItem(inv) : nullptr; }
+#pragma comment(linker, "/alternatename:_INV_GetFirstItem@4=_Bridge_INV_GetFirstItem_95375@4")
+D2UnitStrc* __stdcall Bridge_INV_GetItemFromBodyLoc_11641(D2InventoryStrc* inv, int32_t loc) { return inv ? INVENTORY_GetItemFromBodyLoc(inv, loc) : nullptr; }
+#pragma comment(linker, "/alternatename:_INV_GetItemFromBodyLoc@8=_Bridge_INV_GetItemFromBodyLoc_11641@8")
+D2UnitStrc* __stdcall Bridge_INV_GetNextItem_6641(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
+#pragma comment(linker, "/alternatename:_INV_GetNextItem@4=_Bridge_INV_GetNextItem_6641@4")
+int32_t __stdcall Bridge_ITEMS_CheckNotSocketable_8531(D2UnitStrc* p) { return (p && ITEMS_GetMaxSockets(p) == 0) ? 1 : 0; }
+#pragma comment(linker, "/alternatename:_ITEMS_CheckNotSocketable@4=_Bridge_ITEMS_CheckNotSocketable_8531@4")
+void __stdcall Bridge_MONSTERAI_GetMonsterComponents_41421(D2UnitStrc* u, uint8_t* pComp) { if (!pComp) return; if (u && u->dwUnitType == UNIT_MONSTER && u->pMonsterData) memcpy(pComp, u->pMonsterData->nComponent, 16); else memset(pComp, 0, 16); }
+#pragma comment(linker, "/alternatename:_MONSTERAI_GetMonsterComponents@8=_Bridge_MONSTERAI_GetMonsterComponents_41421@8")
+void __stdcall Bridge_MONSTERAI_UpdateAiState_55225(D2UnitStrc* u, int32_t s) { (void)u; (void)s; }
+#pragma comment(linker, "/alternatename:_MONSTERAI_UpdateAiState@8=_Bridge_MONSTERAI_UpdateAiState_55225@8")
+void __stdcall Bridge_MONSTERS_GetCompInfo_95812(D2MonStatsTxt* m, int32_t c, uint8_t idx, uint8_t* dm, uint8_t* ti, uint8_t* col) { (void)m;(void)c;(void)idx; if (dm) *dm = 5; if (ti) *ti = 0; if (col) *col = 0; }
+#pragma comment(linker, "/alternatename:_MONSTERS_GetCompInfo@24=_Bridge_MONSTERS_GetCompInfo_95812@24")
+void __stdcall Bridge_MONSTERS_GetMinionSpawnInfo_25931(D2UnitStrc* u, int32_t* id, int32_t* cnt, int32_t* mode) { int dummy = 0; MONSTERS_GetMinionSpawnInfo(u, id, cnt, mode, &dummy, 0, nullptr); }
+#pragma comment(linker, "/alternatename:_MONSTERS_GetMinionSpawnInfo@16=_Bridge_MONSTERS_GetMinionSpawnInfo_25931@16")
+int32_t __stdcall Bridge_MONSTER_HasComponents_17220(D2UnitStrc* u) { if (!u) return 0; D2MonStats2Txt* m2 = UNITS_GetMonStats2TxtRecordFromMonsterId(u->dwClassId); return m2 ? (m2->nTotalPieces > 1) : 0; }
+#pragma comment(linker, "/alternatename:_MONSTER_HasComponents@4=_Bridge_MONSTER_HasComponents_17220@4")
+int32_t __stdcall Bridge_PATH_GetTargetType_68180(D2DynamicPathStrc* p) { int t = 0; D2UnitGUID uid = 0; if (p) PATH_GetTargetTypeAndGUID(p, &t, &uid); return t; }
+#pragma comment(linker, "/alternatename:_PATH_GetTargetType@4=_Bridge_PATH_GetTargetType_68180@4")
+void __stdcall Bridge_PATH_SetTargetPos_9605(D2DynamicPathStrc* p, int32_t x, int32_t y) { if (p) D2COMMON_10170_PathSetTargetPos(p, x, y); }
+#pragma comment(linker, "/alternatename:_PATH_SetTargetPos@12=_Bridge_PATH_SetTargetPos_9605@12")
+D2SkillStrc* __stdcall Bridge_SKILLS_GetHighestLevelSkillFromUnitAndId_32635(D2UnitStrc* u, int32_t id) { return u ? SKILLS_GetHighestLevelSkillFromUnitAndId(u, id) : nullptr; }
+#pragma comment(linker, "/alternatename:_SKILLS_GetHighestLevelSkillFromUnitAndId@8=_Bridge_SKILLS_GetHighestLevelSkillFromUnitAndId_32635@8")
+int32_t __stdcall Bridge_SKILLS_GetLevel_47006(D2UnitStrc* u, D2SkillStrc* s, int32_t b) { return (u && s) ? SKILLS_GetSkillLevel(u, s, b) : 0; }
+#pragma comment(linker, "/alternatename:_SKILLS_GetLevel@12=_Bridge_SKILLS_GetLevel_47006@12")
+D2SkillsTxt* __stdcall Bridge_SKILLS_GetSkillsTxtRecordFromSkill_10797(D2SkillStrc* s) { return s ? SKILLS_GetSkillsTxtRecordFromSkill(s) : nullptr; }
+#pragma comment(linker, "/alternatename:_SKILLS_GetSkillsTxtRecordFromSkill@4=_Bridge_SKILLS_GetSkillsTxtRecordFromSkill_10797@4")
+const char* __stdcall Bridge_SStrChr_10580(const char* s, char c, int32_t bRev) { if (!s) return nullptr; return bRev ? strrchr(s, c) : strchr(s, c); }
+#pragma comment(linker, "/alternatename:_SStrChr@12=_Bridge_SStrChr_10580@12")
+int32_t __stdcall Bridge_Storm_495_SMemCmp_12803(const void* a, const void* b, size_t n) { return (a && b) ? memcmp(a, b, n) : 0; }
+#pragma comment(linker, "/alternatename:_Storm_495_SMemCmp@12=_Bridge_Storm_495_SMemCmp_12803@12")
+char* __stdcall Bridge_Storm_501_SStrCopy_35282(char* d, const char* s, size_t n) { SStrCopy(d, s, (int)n); return d; }
+#pragma comment(linker, "/alternatename:_Storm_501_SStrCopy@12=_Bridge_Storm_501_SStrCopy_35282@12")
+int32_t __stdcall Bridge_Storm_508_SStrCmpI_45168(const char* a, const char* b, size_t n) { return SStrCmpI(a, b, n); }
+#pragma comment(linker, "/alternatename:_Storm_508_SStrCmpI@12=_Bridge_Storm_508_SStrCmpI_45168@12")
+void __stdcall Bridge_Storm_604_SBigDel_10968(void* h) { (void)h; }
+#pragma comment(linker, "/alternatename:_Storm_604_SBigDel@4=_Bridge_Storm_604_SBigDel_10968@4")
+void __stdcall Bridge_Storm_606_SBigFromBinary_99016(void** ph, const void* d, size_t n) { (void)d; (void)n; if (ph) *ph = nullptr; }
+#pragma comment(linker, "/alternatename:_Storm_606_SBigFromBinary@12=_Bridge_Storm_606_SBigFromBinary_99016@12")
+void __stdcall Bridge_Storm_624_SBigNew_98964(void** ph) { if (ph) *ph = nullptr; }
+#pragma comment(linker, "/alternatename:_Storm_624_SBigNew@4=_Bridge_Storm_624_SBigNew_98964@4")
+void __stdcall Bridge_Storm_628_SBigPowMod_8155(void* o, void* b, void* e, void* m) { (void)o;(void)b;(void)e;(void)m; }
+#pragma comment(linker, "/alternatename:_Storm_628_SBigPowMod@16=_Bridge_Storm_628_SBigPowMod_8155@16")
+void __stdcall Bridge_Storm_636_SBigToBinaryBuffer_88379(void* h, void* b, size_t sz, size_t* pw) { (void)h; if (b && sz) memset(b, 0, sz); if (pw) *pw = 0; }
+#pragma comment(linker, "/alternatename:_Storm_636_SBigToBinaryBuffer@16=_Bridge_Storm_636_SBigToBinaryBuffer_88379@16")
+int32_t __stdcall Bridge_UNITS_GetDir_55707(D2UnitStrc* u) { return (u && u->pDynamicPath && (u->dwUnitType <= UNIT_MONSTER || u->dwUnitType == UNIT_MISSILE)) ? PATH_GetDirection(u->pDynamicPath) : 0; }
+#pragma comment(linker, "/alternatename:_UNITS_GetDir@4=_Bridge_UNITS_GetDir_55707@4")
+int32_t __stdcall Bridge_UNITS_GetSubtileX_17561(D2UnitStrc* u) { return u ? UNITS_GetXPosition(u) : 0; }
+#pragma comment(linker, "/alternatename:_UNITS_GetSubtileX@4=_Bridge_UNITS_GetSubtileX_17561@4")
+int32_t __stdcall Bridge_UNITS_GetSubtileY_33171(D2UnitStrc* u) { return u ? UNITS_GetYPosition(u) : 0; }
+#pragma comment(linker, "/alternatename:_UNITS_GetSubtileY@4=_Bridge_UNITS_GetSubtileY_33171@4")
+int32_t __stdcall Bridge_UNITS_GetWeaponClass_21969(D2UnitStrc* u) { return u ? UNITS_GetWeaponClass(u) : 0; }
+#pragma comment(linker, "/alternatename:_UNITS_GetWeaponClass@4=_Bridge_UNITS_GetWeaponClass_21969@4")
+void __cdecl Bridge_Unicode_sprintf_15112(int32_t nMax, Unicode* dst, const Unicode* fmt, ...) { if (!dst || !fmt || nMax <= 0) return; va_list ap; va_start(ap, fmt); _vsnwprintf((wchar_t*)dst, (size_t)nMax, (const wchar_t*)fmt, ap); dst[nMax - 1] = 0; va_end(ap); }
+#pragma comment(linker, "/alternatename:_Unicode_sprintf=_Bridge_Unicode_sprintf_15112")
+void __stdcall Bridge_UnimplementedOrdinal_10060_59059(int32_t a1, int32_t a2) { (void)a1; (void)a2; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10060@8=_Bridge_UnimplementedOrdinal_10060_59059@8")
+void __stdcall Bridge_UnimplementedOrdinal_10061_53621(int32_t a1) { (void)a1; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10061@4=_Bridge_UnimplementedOrdinal_10061_53621@4")
+void __stdcall Bridge_UnimplementedOrdinal_10062_88162(int32_t a1, const char* a2, int32_t a3, int32_t a4) { (void)a1;(void)a2;(void)a3;(void)a4; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10062@16=_Bridge_UnimplementedOrdinal_10062_88162@16")
+int32_t __stdcall Bridge_UnimplementedOrdinal_10063_76155(int32_t a1) { (void)a1; return 0; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10063@4=_Bridge_UnimplementedOrdinal_10063_76155@4")
+int32_t __stdcall Bridge_UnimplementedOrdinal_10064_9086(int32_t a1, void* a2) { (void)a1; (void)a2; return 0; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10064@8=_Bridge_UnimplementedOrdinal_10064_9086@8")
+void __stdcall Bridge_UnimplementedOrdinal_10065_4699(int32_t a1, void* a2) { (void)a1; (void)a2; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10065@8=_Bridge_UnimplementedOrdinal_10065_4699@8")
+const char* __stdcall Bridge_UnimplementedOrdinal_10265_67876(int32_t a1) { (void)a1; return ""; }
+#pragma comment(linker, "/alternatename:_UnimplementedOrdinal_10265@4=_Bridge_UnimplementedOrdinal_10265_67876@4")
 } // extern "C"
 
 // ----------------------------------------------------------------------------
@@ -1675,7 +1721,7 @@ int __fastcall D2Client_PopulateUnitComponentGfxNames(struct D2UnitStrc * pUnit,
 
     memset(pOutGfxData->dwName, 0, sizeof(pOutGfxData->dwName));
     strncpy(pOutGfxData->szComponent, s_aszCompCodes[nComponent], 3);
-    strncpy(pOutGfxData->szHitClass, (szWeaponClass && szWeaponClass[0]) ? szWeaponClass : "HTH", 3);
+    Bridge_TrimTokenStr(pOutGfxData->szHitClass, szWeaponClass, "HTH");
 
     if (pUnit->dwUnitType == UNIT_PLAYER)
     {
@@ -1687,7 +1733,7 @@ int __fastcall D2Client_PopulateUnitComponentGfxNames(struct D2UnitStrc * pUnit,
         if (pUnit->dwAnimMode == PLRMODE_SEQUENCE || pUnit->dwAnimMode == PLRMODE_KNOCKBACK)
             strncpy(pOutGfxData->szMode, "GH", 3);
         else
-            strncpy(pOutGfxData->szMode, (pModeTxt && pModeTxt->szToken[0]) ? pModeTxt->szToken : "NU", 3);
+            Bridge_TrimTokenStr(pOutGfxData->szMode, pModeTxt ? pModeTxt->szToken : nullptr, "NU");
         strncpy(pOutGfxData->szArmorType, "LIT", 3);
         if (pUnit->pInventory)
         {
@@ -1754,17 +1800,25 @@ int __fastcall D2Client_PopulateUnitComponentGfxNames(struct D2UnitStrc * pUnit,
         D2MonModeTxt* pModeTxt = DATATBLS_GetMonModeTxtRecord(pUnit->dwAnimMode, 1);
         Bridge_Trim3CharCode(pOutGfxData->szMode, pModeTxt ? pModeTxt->dwToken : 0, "NU");
         strncpy(pOutGfxData->szArmorType, "LIT", 3);
-        if (pUnit->pMonsterData && pMon2)
+        if (pMon2 && pMon2->nComponentChoiceCounts[nComponent] > 0)
         {
-            uint8_t compIdx = pUnit->pMonsterData->nComponent[nComponent];
+            uint8_t compIdx = pUnit->pMonsterData ? pUnit->pMonsterData->nComponent[nComponent] : 0;
+            if (compIdx >= pMon2->nComponentChoiceCounts[nComponent])
+                compIdx = 0;
             if (compIdx < 12)
             {
                 int8_t nCompCode = pMon2->unk0x26[nComponent].nComposit[compIdx];
-                if (nCompCode >= 0)
+                if (nCompCode == 0)
+                    return 0;
+                if (nCompCode > 0)
                 {
                     uint32_t dwPiece = DATATBLS_GetCodeFromCompCodeTxt(nCompCode);
                     if (dwPiece)
+                    {
                         Bridge_Trim3CharCode(pOutGfxData->szArmorType, dwPiece, "LIT");
+                        if (_stricmp(pOutGfxData->szArmorType, "NIL") == 0)
+                            return 0;
+                    }
                 }
             }
         }
@@ -1775,9 +1829,9 @@ int __fastcall D2Client_PopulateUnitComponentGfxNames(struct D2UnitStrc * pUnit,
         D2ObjectsTxt* pObj = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
         if (!pObj || !pObj->szToken[0] || !(&pObj->nHD)[nComponent])
             return 0;
-        strncpy(pOutGfxData->szToken, pObj->szToken, 3);
+        Bridge_TrimTokenStr(pOutGfxData->szToken, pObj->szToken, "TO");
         D2ObjModeTypeTxt* pModeTxt = DATATBLS_GetObjModeTypeTxtRecord(pUnit->dwAnimMode, 1);
-        strncpy(pOutGfxData->szMode, (pModeTxt && pModeTxt->szToken[0]) ? pModeTxt->szToken : "NU", 3);
+        Bridge_TrimTokenStr(pOutGfxData->szMode, pModeTxt ? pModeTxt->szToken : nullptr, "NU");
         strncpy(pOutGfxData->szArmorType, "LIT", 3);
         return 1;
     }
@@ -1839,9 +1893,9 @@ void __fastcall CUNIT_IterateClientUnitsOfType(int a0, void (__fastcall* a1)(str
 {
     if (a0 < 0 || a0 >= 6 || !a1) return; for (int i = 0; i < 128; ++i) { for (D2UnitStrc* u = gapServerSideUnitHashTables[a0][i]; u; u = u->pListNext) a1(u); }
 }
-void * __stdcall D2Client_AllocLightMap_6FB0EAF0(int a0, int a1, int a2, int a3, int a4)
+void * __stdcall D2Client_AllocLightMap_6FB0EAF0(struct D2UnitStrc * pUnit, int nLightType, int a0, int a1, int a2, int a3, int a4)
 {
-    return LIGHTMAP_CreateLightNode(nullptr, a0, a1, 255, (uint8_t)a2, (uint8_t)a3, (uint8_t)a4);
+    return LIGHTMAP_CreateLightNode((D2UnitLightViewStrc*)pUnit, nLightType, a0, (uint8_t)a1, (uint8_t)a2, (uint8_t)a3, (uint8_t)a4);
 }
 struct D2UnitStrc * __fastcall D2Client_AllocateClientUnit(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7)
 {
@@ -2325,11 +2379,11 @@ void __fastcall D2Client_UpdateMonsterUnitPerTick_6FAE6100(struct D2UnitStrc * a
 }
 void __fastcall D2Client_UpdateObjectPerTick(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) D2Client_UpdateObjectUnitPerTick(a0);
 }
 void __fastcall D2Client_UpdatePlayerUnitPerTick_6FB0D140(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) UNITS_UpdateFrame(a0);
 }
 void __stdcall D2Client_UpdateUnitAnimGraphics_6FB42000(struct D2UnitStrc * a0, int a1)
 {
@@ -2517,7 +2571,10 @@ int __fastcall LIGHTMAP_AttachOverlayLight(struct D2UnitStrc * a0, int a1)
 }
 unsigned int __fastcall LIGHTMAP_GetSubTilePackedRGB(struct D2ActiveRoomStrc * a0, int a1, int a2)
 {
-    (void)a0; (void)a1; (void)a2; return 0;
+    (void)a0;
+    uint8_t nInt = 0xFF, nR = 0xFF, nG = 0xFF, nB = 0xFF;
+    LIGHTMAP_SampleLightAtSubtile8(a1 << 3, a2 << 3, &nInt, &nR, &nG, &nB);
+    return ((uint32_t)nInt << 24) | ((uint32_t)nR << 16) | ((uint32_t)nG << 8) | (uint32_t)nB;
 }
 int __stdcall LIGHTMAP_GetViewportShiftX(void)
 {
@@ -2529,7 +2586,12 @@ int __stdcall LIGHTMAP_GetViewportShiftY(void)
 }
 void __fastcall LIGHTMAP_SampleSubTileRGB(struct D2ActiveRoomStrc * a0, unsigned char * a1, unsigned char * a2, unsigned char * a3, int a4, int a5)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5;
+    (void)a0;
+    uint8_t nInt = 0xFF, nR = 0xFF, nG = 0xFF, nB = 0xFF;
+    LIGHTMAP_SampleLightAtSubtile8(a4 << 3, a5 << 3, &nInt, &nR, &nG, &nB);
+    if (a1) *a1 = nR;
+    if (a2) *a2 = nG;
+    if (a3) *a3 = nB;
 }
 struct D2UnitStrc * __stdcall MISSILE_CreateClientMissile(int a0, struct D2UnitStrc * a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8)
 {
@@ -2541,11 +2603,19 @@ int __fastcall MISSILE_DrawSpecial(struct D2UnitStrc * a0)
 }
 void __fastcall MISSILE_FreeClientMissile(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (!a0) return;
+    if (gpClientAct && UNITS_GetRoom(a0)) UNITROOM_RemoveUnitFromRoom(a0);
+    if (a0->pDynamicPath) { PATH_FreeDynamicPath(a0->pMemoryPool, a0->pDynamicPath); a0->pDynamicPath = nullptr; }
+    MISSILE_FreeMissileData(a0);
+    GFX_FreeUnitGfxData(a0);
 }
 void __fastcall MISSILE_InitClientMissile(struct D2UnitStrc * a0, struct D2ActiveRoomStrc * a1, int a2, int a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3;
+    if (!a0) return;
+    if (!a0->pStatListEx) STATLIST_AllocStatListEx(a0, 0, nullptr, nullptr);
+    D2Client_InitMissileUnitDataAndPath(a0, a2, a3, 0);
+    if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1);
+    GFX_InitUnitCompositeGfx(a0);
 }
 int __fastcall MONSTER_CanBeConsumed(struct D2UnitStrc * a0)
 {
@@ -2673,7 +2743,7 @@ void __fastcall OBJECT_FreeClientObject(struct D2UnitStrc * a0)
 }
 void __fastcall OBJECT_InitClientObject(int a0, struct D2UnitStrc * a1, struct D2ActiveRoomStrc * a2, int a3, int a4, unsigned char a5)
 {
-    if (a1) { D2Client_InitObjectUnit(a1, a4, a5, a2, a3, a0); GFX_InitUnitCompositeGfx(a1); }
+    if (a1) { D2Client_InitObjectUnit(a1, a0, a5, a2, a3, a4); GFX_InitUnitCompositeGfx(a1); }
 }
 void __fastcall OBJECT_InitShrineVisual(struct D2UnitStrc * a0)
 {
@@ -2769,7 +2839,7 @@ struct D2UnitStrc * __stdcall PLAYER_GetLocalPlayer(void)
 }
 void __fastcall PLAYER_InitClientPlayer(struct D2UnitStrc * a0, struct D2ActiveRoomStrc * a1, int a2, int a3)
 {
-    if (!a0) return; UNITS_AllocPlayerData(a0); if (!a0->pInventory) a0->pInventory = INVENTORY_AllocInventory(nullptr, a0); SKILLS_InitSkillList(a0); if (!STATLIST_GetStatListFromUnitAndFlag(a0, 1)) { STATLIST_AllocStatListEx(a0, 6, nullptr, nullptr); STATLIST_SetUnitStat(a0, STAT_VELOCITYPERCENT, 100, 0); STATLIST_SetUnitStat(a0, STAT_ATTACKRATE, 100, 0); STATLIST_SetUnitStat(a0, STAT_OTHER_ANIMRATE, 100, 0); } if (!a0->pDynamicPath) PATH_AllocDynamicPath(nullptr, a1, a2, a3, a0, FALSE); if (a1) UNITROOM_AddUnitToRoom(a0, a1); a0->dwFlags |= (UNITFLAG_TARGETABLE | UNITFLAG_CANBEATTACKED | UNITFLAG_ISVALIDTARGET); UNITS_ChangeAnimMode(a0, (a1 && DUNGEON_IsRoomInTown(a1)) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL); GFX_InitUnitCompositeGfx(a0);
+    if (!a0) return; UNITS_AllocPlayerData(a0); if (!a0->pInventory) a0->pInventory = INVENTORY_AllocInventory(nullptr, a0); if (!a0->pSkills) a0->pSkills = SKILLS_AllocSkillList(a0->pMemoryPool); SKILLS_InitSkillList(a0); if (!STATLIST_GetStatListFromUnitAndFlag(a0, 1)) { STATLIST_AllocStatListEx(a0, 6, nullptr, nullptr); STATLIST_SetUnitStat(a0, STAT_VELOCITYPERCENT, 100, 0); STATLIST_SetUnitStat(a0, STAT_ATTACKRATE, 100, 0); STATLIST_SetUnitStat(a0, STAT_OTHER_ANIMRATE, 100, 0); } if (!a0->pDynamicPath) PATH_AllocDynamicPath(nullptr, a1, a2, a3, a0, FALSE); if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1); a0->dwFlags |= (UNITFLAG_TARGETABLE | UNITFLAG_CANBEATTACKED | UNITFLAG_ISVALIDTARGET); UNITS_ChangeAnimMode(a0, (a1 && DUNGEON_IsRoomInTown(a1)) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL); GFX_InitUnitCompositeGfx(a0);
 }
 void __fastcall PLAYER_ResetSkillState(struct D2UnitStrc * a0, int a1)
 {

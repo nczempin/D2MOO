@@ -534,6 +534,73 @@ void __fastcall FLOOR_SetFloorLightGridDisabled(int32_t bDisabled)
     g_bDisableFloorLightGrid = bDisabled;
 }
 
+struct D2DrlgActStrc;
+struct D2GfxLightStrc;
+struct D2GfxLightExStrc
+{
+    uint8_t nIntensity;
+    uint8_t nRed;
+    uint8_t nGreen;
+    uint8_t nBlue;
+    int32_t nX;
+    int32_t nY;
+};
+
+struct D2DrlgTileDataStrc // 0x30 bytes
+{
+    int32_t  nIsoDrawX;         // +0x00
+    int32_t  nIsoDrawY;         // +0x04
+    int32_t  nLocalTileX;       // +0x08
+    int32_t  nLocalTileY;       // +0x0C
+    void*    pRoofData;         // +0x10
+    uint32_t dwTileFlags;       // +0x14
+    D2TileLibraryEntryStrc* pTile; // +0x18
+    int32_t  nTileType;         // +0x1C
+    int32_t  nTileSubType;      // +0x20
+    uint32_t dwFadeStateFlags;  // +0x24
+    uint8_t  nCurrentAlpha;     // +0x28
+    uint8_t  nStartAlpha;       // +0x29
+    uint8_t  nTargetAlpha;      // +0x2A
+    uint8_t  nPad2B;            // +0x2B
+    uint32_t dwFadeEndTick;     // +0x2C
+};
+
+using D2FloorGfxLightExStrc = D2GfxLightExStrc;
+using D2DrlgFloorTileEntryStrc = D2DrlgTileDataStrc;
+
+void __stdcall DUNGEON_GetAdjacentRoomsListFromRoom(D2ActiveRoomStrc* pRoom, D2ActiveRoomStrc*** pppRoomList, int* pNumRooms);
+D2DrlgTileDataStrc* __stdcall DUNGEON_GetFloorTilesFromRoom(D2ActiveRoomStrc* pRoom, int* pnFloorCount);
+D2ActiveRoomStrc* __stdcall DUNGEON_GetRoomFromAct(D2DrlgActStrc* pAct);
+int __stdcall D2GFX_FloorTileDraw(
+    D2TileLibraryEntryStrc* pTile,
+    D2GfxLightExStrc* pLight,
+    int32_t nXPos,
+    int32_t nYPos,
+    int32_t nWorldXpos,
+    int32_t nWorldYpos,
+    uint8_t nAlpha,
+    int32_t nScreenPanels,
+    void* pTileData);
+int32_t __stdcall TILE_TileDrawTrans(
+    D2TileLibraryEntryStrc* pTile,
+    int32_t nXPos,
+    int32_t nYPos,
+    D2GfxLightStrc* pLight,
+    int32_t nScreenPanels,
+    uint8_t nAlpha);
+uint16_t __stdcall D2CMP_TileGetRoofHeight(D2TileLibraryEntryStrc* pTile);
+
+extern D2DrlgActStrc* gpClientAct;
+extern void* gpClientViewport;
+extern int32_t g_nPlayerRoofGroupId;
+extern void __stdcall LIGHTMAP_GetRoomAmbientLight(
+    int32_t bIncludeRoomAmbient,
+    D2ActiveRoomStrc* pRoom,
+    int32_t* pnIntensity,
+    uint8_t* pR,
+    uint8_t* pG,
+    uint8_t* pB);
+
 // 1.12a: 0x6FB18680 (__fastcall)
 void __fastcall FLOOR_DrawViewportFloorTiles(D2ActiveRoomStrc* pCenterRoom, int32_t nViewportLeft, int32_t nViewportTop, int32_t nViewportRight, int32_t nViewportBottom)
 {
@@ -541,7 +608,201 @@ void __fastcall FLOOR_DrawViewportFloorTiles(D2ActiveRoomStrc* pCenterRoom, int3
     g_rcViewportTileBounds.top    = nViewportTop;
     g_rcViewportTileBounds.right  = nViewportRight;
     g_rcViewportTileBounds.bottom = nViewportBottom;
-    // Iterates visible rooms around pCenterRoom and dispatches FLOOR_DrawRoomFloorPass / FLOOR_DrawPerspectiveRoomFloorPass
+
+    const int32_t* pView = static_cast<const int32_t*>(gpClientViewport);
+    if (pView == nullptr)
+    {
+        return;
+    }
+
+    const int32_t nScreenLeft   = pView[1];
+    const int32_t nScreenTop    = pView[2];
+    const int32_t nScreenRight  = pView[3];
+    const int32_t nScreenBottom = pView[4];
+    const int32_t nCamIsoX      = pView[9];
+    const int32_t nCamIsoY      = pView[10];
+
+    D2ActiveRoomStrc* aRooms[256] = {};
+    int32_t nRoomCount = 0;
+    auto fnAddRoom = [&](D2ActiveRoomStrc* pRoom) {
+        if (pRoom == nullptr || nRoomCount >= 256)
+        {
+            return;
+        }
+        for (int32_t k = 0; k < nRoomCount; ++k)
+        {
+            if (aRooms[k] == pRoom)
+            {
+                return;
+            }
+        }
+        aRooms[nRoomCount++] = pRoom;
+    };
+
+    if (pCenterRoom != nullptr)
+    {
+        D2ActiveRoomStrc** ppSiblings = nullptr;
+        int nSiblings = 0;
+        DUNGEON_GetAdjacentRoomsListFromRoom(pCenterRoom, &ppSiblings, &nSiblings);
+        if (ppSiblings != nullptr && nSiblings > 0)
+        {
+            for (int32_t i = 0; i < nSiblings; ++i)
+            {
+                fnAddRoom(ppSiblings[i]);
+            }
+        }
+        fnAddRoom(pCenterRoom);
+    }
+
+    if (gpClientAct != nullptr)
+    {
+        for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct);
+             pRoom != nullptr;
+             pRoom = *reinterpret_cast<D2ActiveRoomStrc**>(reinterpret_cast<uint8_t*>(pRoom) + 0x38))
+        {
+            fnAddRoom(pRoom);
+        }
+    }
+
+    for (int32_t r = 0; r < nRoomCount; ++r)
+    {
+        D2ActiveRoomStrc* pRoom = aRooms[r];
+        int32_t nFloors = 0;
+        D2DrlgFloorTileEntryStrc* pFloors = DUNGEON_GetFloorTilesFromRoom(pRoom, &nFloors);
+        if (pFloors == nullptr || nFloors <= 0)
+        {
+            continue;
+        }
+
+        int32_t nRoomInt = 0;
+        uint8_t nRoomR = 0, nRoomG = 0, nRoomB = 0;
+        LIGHTMAP_GetRoomAmbientLight(1, pRoom, &nRoomInt, &nRoomR, &nRoomG, &nRoomB);
+        uint8_t nIntensity = 0xFF;
+        if (nRoomInt > 0 || nRoomR != 0 || nRoomG != 0 || nRoomB != 0)
+        {
+            const int32_t nClamped = (nRoomInt < 0xB0) ? 0xD8 : ((nRoomInt > 0xFF) ? 0xFF : nRoomInt);
+            nIntensity = static_cast<uint8_t>(nClamped);
+            if (nRoomR == 0 && nRoomG == 0 && nRoomB == 0)
+            {
+                nRoomR = 0xFF;
+                nRoomG = 0xFF;
+                nRoomB = 0xFF;
+            }
+        }
+        else
+        {
+            nRoomR = 0xFF;
+            nRoomG = 0xFF;
+            nRoomB = 0xFF;
+        }
+
+        D2FloorGfxLightExStrc aFloorLightEx[64];
+        for (int32_t k = 0; k < 64; ++k)
+        {
+            aFloorLightEx[k].nIntensity = nIntensity;
+            aFloorLightEx[k].nRed       = nRoomR;
+            aFloorLightEx[k].nGreen     = nRoomG;
+            aFloorLightEx[k].nBlue      = nRoomB;
+            aFloorLightEx[k].nX         = 0;
+            aFloorLightEx[k].nY         = 0;
+        }
+
+        for (int32_t i = 0; i < nFloors; ++i)
+        {
+            const D2DrlgFloorTileEntryStrc& td = pFloors[i];
+            if (td.pTile == nullptr || (td.dwTileFlags & 0x200u) != 0)
+            {
+                continue;
+            }
+            const int32_t nScreenX = td.nIsoDrawX + 80 + nScreenLeft - nCamIsoX;
+            const int32_t nScreenY = td.nIsoDrawY - 80 + nScreenTop - nCamIsoY;
+            if (nScreenX < nScreenLeft - 160 || nScreenX > nScreenRight + 160 ||
+                nScreenY < nScreenTop - 160 || nScreenY > nScreenBottom + 160)
+            {
+                continue;
+            }
+            D2GFX_FloorTileDraw(td.pTile, aFloorLightEx, nScreenX, nScreenY, td.nIsoDrawX, td.nIsoDrawY, 0xFF, 0, nullptr);
+        }
+    }
+}
+
+// 1.12a: 0x6FB186A0 (Roof tile pass over pCell->pSpecialWallList at +0x1C)
+void __fastcall FLOOR_DrawRoofTilesInCells(uint8_t* pViewport)
+{
+    if (pViewport == nullptr)
+    {
+        return;
+    }
+
+    const int32_t* pView = reinterpret_cast<const int32_t*>(pViewport);
+    const int32_t nScreenLeft   = pView[1];
+    const int32_t nScreenTop    = pView[2];
+    const int32_t nScreenRight  = pView[3];
+    const int32_t nScreenBottom = pView[4];
+    const int32_t nCamIsoX      = pView[9];
+    const int32_t nCamIsoY      = pView[10];
+
+    const int32_t nGridDim = *reinterpret_cast<const int32_t*>(pViewport + 0xEAB0);
+    const int32_t nTotalCells = nGridDim * nGridDim;
+    uint8_t* pCell = *reinterpret_cast<uint8_t**>(pViewport + 0xEAA8);
+    if (pCell == nullptr || nTotalCells <= 0)
+    {
+        return;
+    }
+
+    D2FloorGfxLightExStrc aRoofLightEx[64];
+    memset(aRoofLightEx, 0xFF, sizeof(aRoofLightEx));
+    uint8_t aTransLight[32];
+    memset(aTransLight, 0xFF, sizeof(aTransLight));
+
+    for (int32_t i = 0; i < nTotalCells; ++i, pCell += 0x24)
+    {
+        uint8_t* pNode = *reinterpret_cast<uint8_t**>(pCell + 0x1C);
+        while (pNode != nullptr)
+        {
+            D2DrlgFloorTileEntryStrc* pTile = *reinterpret_cast<D2DrlgFloorTileEntryStrc**>(pNode + 0x0C);
+            pNode = *reinterpret_cast<uint8_t**>(pNode + 0x10);
+            if (pTile == nullptr || pTile->pTile == nullptr)
+            {
+                continue;
+            }
+
+            // Cutaway roof check when player is inside matching roof group
+            if (g_nPlayerRoofGroupId != 0 && pTile->pRoofData != nullptr)
+            {
+                const int32_t nRoofGroup = *reinterpret_cast<const int32_t*>(reinterpret_cast<const uint8_t*>(pTile->pRoofData) + 0x28);
+                if (nRoofGroup == g_nPlayerRoofGroupId)
+                {
+                    pTile->nCurrentAlpha = 0;
+                    continue;
+                }
+            }
+
+            const uint8_t nAlpha = pTile->nCurrentAlpha;
+            if (nAlpha == 0)
+            {
+                continue;
+            }
+
+            const int32_t nRoofH = D2CMP_TileGetRoofHeight(pTile->pTile);
+            const int32_t nScreenX = pTile->nIsoDrawX + 80 + nScreenLeft - nCamIsoX;
+            const int32_t nScreenY = pTile->nIsoDrawY - nRoofH - 80 + nScreenTop - nCamIsoY;
+            if (nScreenX < nScreenLeft - 160 || nScreenX > nScreenRight + 160 ||
+                nScreenY < nScreenTop - 160 || nScreenY > nScreenBottom + 200)
+            {
+                continue;
+            }
+
+            if (nAlpha >= 0xE0)
+            {
+                D2GFX_FloorTileDraw(pTile->pTile, aRoofLightEx, nScreenX, nScreenY, pTile->nIsoDrawX, pTile->nIsoDrawY, 0xFF, 0, nullptr);
+            }
+            else
+            {
+                TILE_TileDrawTrans(pTile->pTile, nScreenX - 80, nScreenY, reinterpret_cast<D2GfxLightStrc*>(aTransLight), 0, nAlpha);
+            }
+        }
+    }
 }
 
 // 1.12a: 0x6FB18940 (__stdcall)

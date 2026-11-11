@@ -134,21 +134,24 @@ struct D2WallViewportStrc // Full viewport header + embedded sort grid
     int32_t           nScreenTop;          // +0x0008
     int32_t           nScreenRight;        // +0x000C
     int32_t           nScreenBottom;       // +0x0010
-    int32_t           nScreenWidth;        // +0x0014
-    int32_t           nScreenHeight;       // +0x0018
-    int32_t           nViewOffsetX;        // +0x001C
-    int32_t           nViewOffsetY;        // +0x0020
+    int32_t           nClipLeft;           // +0x0014
+    int32_t           nClipTop;            // +0x0018
+    int32_t           nClipRight;          // +0x001C
+    int32_t           nClipBottom;         // +0x0020
     int32_t           nCameraIsoX;         // +0x0024
     int32_t           nCameraIsoY;         // +0x0028
     int32_t           nReserved2C[3];      // +0x002C .. +0x0037
     D2IsoSortGridStrc tSortGrid;           // +0x0038 .. +0xEABB
 };
+static_assert(sizeof(D2WallViewportStrc) == 0xEABC, "D2WallViewportStrc must match retail 0xEABC-byte layout");
 
-struct D2WallRoomCallbackContextStrc // 0x1C bytes on stack in WALL2_BuildViewportRoomGrid
+struct D2WallRoomCallbackContextStrc // Stack context in WALL2_BuildViewportRoomGrid
 {
     D2WallViewportStrc* pViewport;         // +0x00
     RECT                rcScreenBounds;    // +0x04 (left, top, right, bottom)
-    int32_t             bSkipUnits;        // +0x14 (+0x18 in room callback arg frame)
+    int32_t             bSkipUnits;        // +0x14
+    D2ActiveRoomStrc*   aVisited[256];     // Deduplication set so cross-level rooms are visited once
+    int32_t             nVisitedCount;
 };
 
 struct D2RoomWallTileEntryStrc // 0x30 (48) bytes per room wall/roof tile
@@ -194,7 +197,7 @@ struct D2MonPalShiftIndexEntryStrc // 0x08 bytes
 static int32_t                     g_bRoofCutawayMode       = 1;        // 0x6FB93A7C
 static int32_t                     g_bAppActiveState        = 1;        // 0x6FB93A80
 static int32_t                     g_nPlayerTileX           = 0;        // 0x6FBB5558
-static int32_t                     g_nPlayerRoofGroupId     = 0;        // 0x6FBB555C
+int32_t                            g_nPlayerRoofGroupId     = 0;        // 0x6FBB555C
 static int32_t                     g_nPlayerTileY           = 0;        // 0x6FBB5560
 static RECT                        g_rcViewportClipRect     = { 0 };    // 0x6FBB5564 .. 0x6FBB5570
 
@@ -526,7 +529,7 @@ void __fastcall WALL2_InsertSpecialWallTileNode(
     D2IsoSortNodeStrc* pPrev = nullptr;
     D2IsoSortNodeStrc* pCurr = pCell->pSpecialWallList;
 
-    while (pCurr->pNext != nullptr)
+    while (pCurr != nullptr)
     {
         const D2RoomWallTileEntryStrc* pCurrTile = static_cast<const D2RoomWallTileEntryStrc*>(pCurr->pOwner);
         const int32_t nCurrLayer = (pCurrTile->dwTileFlags >> 14) & 7;
@@ -541,15 +544,15 @@ void __fastcall WALL2_InsertSpecialWallTileNode(
             {
                 pCell->pSpecialWallList = pNode;
             }
-            break;
+            return;
         }
         pPrev = pCurr;
         pCurr = pCurr->pNext;
     }
 
-    if (pCurr->pNext == nullptr)
+    if (pPrev != nullptr)
     {
-        pCurr->pNext = pNode;
+        pPrev->pNext = pNode;
     }
 }
 
@@ -595,7 +598,7 @@ void __fastcall WALL2_InsertUpperWallTileNode(
     D2IsoSortNodeStrc* pPrev = nullptr;
     D2IsoSortNodeStrc* pCurr = pCell->pUpperWallList;
 
-    while (pCurr->pNext != nullptr)
+    while (pCurr != nullptr)
     {
         const D2RoomWallTileEntryStrc* pCurrTile = static_cast<const D2RoomWallTileEntryStrc*>(pCurr->pOwner);
         const int32_t nCurrLayer = (pCurrTile->dwTileFlags >> 14) & 7;
@@ -610,15 +613,15 @@ void __fastcall WALL2_InsertUpperWallTileNode(
             {
                 pCell->pUpperWallList = pNode;
             }
-            break;
+            return;
         }
         pPrev = pCurr;
         pCurr = pCurr->pNext;
     }
 
-    if (pCurr->pNext == nullptr)
+    if (pPrev != nullptr)
     {
-        pCurr->pNext = pNode;
+        pPrev->pNext = pNode;
     }
 }
 
@@ -916,7 +919,7 @@ void __fastcall WALL2_InsertLowerWallTileNode(
     D2IsoSortNodeStrc* pPrev = nullptr;
     D2IsoSortNodeStrc* pCurr = pCell->pLowerWallList;
 
-    while (pCurr->pNext != nullptr)
+    while (pCurr != nullptr)
     {
         const D2RoomWallTileEntryStrc* pCurrTile = static_cast<const D2RoomWallTileEntryStrc*>(pCurr->pOwner);
         const int32_t nCurrLayer = (pCurrTile->dwTileFlags >> 14) & 7;
@@ -931,15 +934,15 @@ void __fastcall WALL2_InsertLowerWallTileNode(
             {
                 pCell->pLowerWallList = pNode;
             }
-            break;
+            return;
         }
         pPrev = pCurr;
         pCurr = pCurr->pNext;
     }
 
-    if (pCurr->pNext == nullptr)
+    if (pPrev != nullptr)
     {
-        pCurr->pNext = pNode;
+        pPrev->pNext = pNode;
     }
 }
 
@@ -979,7 +982,24 @@ void __fastcall WALL2_InsertNormalUnitNode(D2IsoSortGridStrc* pSortGrid, D2UnitS
 // and units of `pRoom` into the viewport's isometric sort grid cells.
 BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void* pVoidContext)
 {
+    if (pRoom == nullptr)
+    {
+        return TRUE;
+    }
+
     D2WallRoomCallbackContextStrc* pCtx = static_cast<D2WallRoomCallbackContextStrc*>(pVoidContext);
+    for (int32_t v = 0; v < pCtx->nVisitedCount; ++v)
+    {
+        if (pCtx->aVisited[v] == pRoom)
+        {
+            return TRUE;
+        }
+    }
+    if (pCtx->nVisitedCount < 256)
+    {
+        pCtx->aVisited[pCtx->nVisitedCount++] = pRoom;
+    }
+
     D2IsoSortGridStrc* pSortGrid = &pCtx->pViewport->tSortGrid;
 
     RECT rcRoom = { 0 };
@@ -1001,6 +1021,15 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
     for (uint32_t i = 0; i < nWallTileCount; ++i)
     {
         D2RoomWallTileEntryStrc* pTile = &pWallTiles[i];
+        if (pTile->pTileLibraryEntry == nullptr || (pTile->dwTileFlags & 0x201) != 0)
+        {
+            continue;
+        }
+        if ((pTile->dwFadeStateFlags & 3) == 0 && pTile->nCurrentAlpha == 0)
+        {
+            pTile->nCurrentAlpha = 0xFF;
+        }
+
         const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(static_cast<D2TileLibraryEntryStrc*>(pTile->pTileLibraryEntry));
 
         int32_t nGameTileX = 0;
@@ -1015,26 +1044,25 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
                 static_cast<const uint8_t*>(pTile->pTileLibraryEntry) + 4);
             const int32_t nBaseY = pTile->nIsoDrawY - wRoofOffset;
 
-            if ((nBaseY + nTotalHeight) <= pCtx->rcScreenBounds.bottom &&
-                (nBaseY - nTotalHeight) >= pCtx->rcScreenBounds.top &&
+            if ((nBaseY + nTotalHeight) >= pCtx->rcScreenBounds.top &&
+                (nBaseY - nTotalHeight) <= pCtx->rcScreenBounds.bottom &&
                 WALL2_IsTileInsideSortGrid(nGameTileX, nGameTileY, pSortGrid))
             {
                 const int32_t nRelX = nGameTileX - pSortGrid->nOriginTileX;
                 const int32_t nRelY = nGameTileY - pSortGrid->nOriginTileY;
                 D2IsoSortCellStrc* pCell = &pSortGrid->pCells[nRelY * pSortGrid->nGridDimension + nRelX];
-                pCell->dwFlags = 0;
 
-                if (!(pTile->dwTileFlags & 0x1C000))
-                {
-                    WALL2_InsertFloorOrRoofTileNode(pSortGrid, pTile, pCell, pRoom);
-                }
-                else if (pTile->nOrientation == 15)
+                if (pTile->nOrientation == 15)
                 {
                     WALL2_InsertSpecialWallTileNode(pSortGrid, pTile, pCell, pRoom);
                 }
                 else if (pTile->nOrientation > 15 && pTile->nOrientation <= 19)
                 {
                     WALL2_InsertUpperWallTileNode(pSortGrid, pTile, pCell, pRoom);
+                }
+                else if (!(pTile->dwTileFlags & 0x1C000))
+                {
+                    WALL2_InsertLowerWallTileNode(pSortGrid, pTile, pCell, pRoom);
                 }
                 else
                 {
@@ -1044,7 +1072,7 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
         }
     }
 
-    // 2. Bin Roof Tiles
+    // 2. Bin Roof / Shadow Tiles
     uint32_t nRoofTileCount = 0;
     D2RoomWallTileEntryStrc* pRoofTiles = reinterpret_cast<D2RoomWallTileEntryStrc*>(
         DUNGEON_GetRoofTilesFromRoom(pRoom, reinterpret_cast<int*>(&nRoofTileCount)));
@@ -1052,6 +1080,15 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
     for (uint32_t i = 0; i < nRoofTileCount; ++i)
     {
         D2RoomWallTileEntryStrc* pTile = &pRoofTiles[i];
+        if (pTile->pTileLibraryEntry == nullptr || (pTile->dwTileFlags & 0x201) != 0)
+        {
+            continue;
+        }
+        if ((pTile->dwFadeStateFlags & 3) == 0 && pTile->nCurrentAlpha == 0)
+        {
+            pTile->nCurrentAlpha = 0xFF;
+        }
+
         const int32_t nTotalHeight = D2CMP_TileGetTotalHeight(static_cast<D2TileLibraryEntryStrc*>(pTile->pTileLibraryEntry));
 
         int32_t nGameTileX = 0;
@@ -1061,8 +1098,8 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
 
         if (pTile->nIsoDrawX <= pCtx->rcScreenBounds.right &&
             (pTile->nIsoDrawX + 160) >= pCtx->rcScreenBounds.left &&
-            (pTile->nIsoDrawY + nTotalHeight) <= pCtx->rcScreenBounds.bottom &&
-            (pTile->nIsoDrawY - nTotalHeight) >= pCtx->rcScreenBounds.top &&
+            (pTile->nIsoDrawY + nTotalHeight) >= pCtx->rcScreenBounds.top &&
+            (pTile->nIsoDrawY - nTotalHeight) <= pCtx->rcScreenBounds.bottom &&
             WALL2_IsTileInsideSortGrid(nGameTileX, nGameTileY, pSortGrid))
         {
             const int32_t nRelX = nGameTileX - pSortGrid->nOriginTileX;
@@ -1077,7 +1114,7 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
     {
         for (D2UnitStrc* pUnit = DUNGEON_GetFirstUnitInRoom(pRoom); pUnit != nullptr; pUnit = pUnit->pRoomNext)
         {
-            const int32_t nIsoX = UNITS_GetPrecisionY(pUnit);
+            const int32_t nIsoX = UNITS_GetClientCoordX(pUnit);
             const int32_t nIsoY = UNITS_GetClientCoordY(pUnit);
 
             int32_t nGameTileX = 0;
@@ -1117,9 +1154,14 @@ BOOL __stdcall WALL2_PopulateSortGridRoomCallback(D2ActiveRoomStrc* pRoom, void*
 // Rebuilds the viewport's isometric sort grid for the current camera position and local player room.
 void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32_t bSkipUnits)
 {
+    if (pViewport == nullptr)
+    {
+        return;
+    }
+
     WALL2_EnsureSortGridAllocated(pViewport);
 
-    D2WallRoomCallbackContextStrc tCtx = { 0 };
+    D2WallRoomCallbackContextStrc tCtx = {};
     tCtx.pViewport = pViewport;
     tCtx.bSkipUnits = bSkipUnits;
 
@@ -1145,8 +1187,7 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32
 
     if (pViewport->tSortGrid.pCells == nullptr)
     {
-        FOG_DisplayHalt("pViewport->tSortGrid.pCells != NULL", "..\\Source\\D2Client\\GAME\\Wall2.cpp", 828);
-        exit(-1);
+        return;
     }
 
     memset(
@@ -1179,21 +1220,37 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32
         }
     }
 
-    if (gpClientPlayer == nullptr)
+    extern D2DrlgActStrc* gpClientAct;
+    extern D2UnitStrc* gpPlayerUnit;
+    D2UnitStrc* pPlayer = gpClientPlayer ? gpClientPlayer : gpPlayerUnit;
+    if (pPlayer != nullptr)
     {
-        FOG_DisplayHalt("gpClientPlayer != NULL", "..\\Source\\D2Client\\GAME\\Wall2.cpp", 849);
-        exit(-1);
+        const int32_t nPlayerSubtileX = WALL2_GetUnitSubtileX(pPlayer);
+        const int32_t nPlayerSubtileY = WALL2_GetUnitSubtileY(pPlayer);
+        D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(pPlayer);
+        if (pPlayerRoom == nullptr && gpClientAct != nullptr && (nPlayerSubtileX != 0 || nPlayerSubtileY != 0))
+        {
+            pPlayerRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nPlayerSubtileX, nPlayerSubtileY);
+        }
+
+        g_nPlayerTileX = nPlayerSubtileX / 5;
+        g_nPlayerTileY = nPlayerSubtileY / 5;
+        g_nPlayerRoofGroupId = pPlayerRoom ? D2Common_10095(pPlayerRoom, nPlayerSubtileX, nPlayerSubtileY) : 0;
+
+        if (pPlayerRoom != nullptr)
+        {
+            DUNGEON_CallRoomCallback(pPlayerRoom, WALL2_PopulateSortGridRoomCallback, &tCtx);
+        }
     }
 
-    D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(gpClientPlayer);
-    const int32_t nPlayerSubtileX = WALL2_GetUnitSubtileX(gpClientPlayer);
-    const int32_t nPlayerSubtileY = WALL2_GetUnitSubtileY(gpClientPlayer);
-
-    g_nPlayerTileX = nPlayerSubtileX / 5;
-    g_nPlayerTileY = nPlayerSubtileY / 5;
-    g_nPlayerRoofGroupId = D2Common_10095(UNITS_GetRoom(gpClientPlayer), nPlayerSubtileX, nPlayerSubtileY);
-
-    DUNGEON_CallRoomCallback(pPlayerRoom, WALL2_PopulateSortGridRoomCallback, &tCtx);
+    // Also inspect any streamed active rooms in gpClientAct (e.g. across town/wilderness level seams)
+    if (gpClientAct != nullptr)
+    {
+        for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom != nullptr; pRoom = pRoom->pRoomNext)
+        {
+            WALL2_PopulateSortGridRoomCallback(pRoom, &tCtx);
+        }
+    }
 }
 
 // =============================================================================

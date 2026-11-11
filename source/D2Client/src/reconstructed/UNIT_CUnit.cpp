@@ -44,6 +44,7 @@
 #include <D2StatList.h>
 #include <D2DataTbls.h>
 #include <D2Gfx.h>
+#include <D2CMP.h>
 #include <D2Lang.h>
 #include <Fog.h>
 #include <Storm.h>
@@ -1924,12 +1925,35 @@ int32_t __stdcall D2Client_GetUnitComponentBoundingBox(
         return 0;
     }
 
-    const int32_t nCoordX = UNITS_GetPrecisionY(pUnit);
-    const int32_t nCoordY = UNITS_GetClientCoordY(pUnit);
-    pOutRect->left   = nCoordX - 16;
-    pOutRect->top    = nCoordY + 16;
-    pOutRect->right  = nCoordX + 16;
-    pOutRect->bottom = nCoordY - 16;
+    int32_t nCoordX = UNITS_GetClientCoordX(pUnit);
+    int32_t nCoordY = UNITS_GetClientCoordY(pUnit);
+    D2CellFileStrc* pCel = nullptr;
+    if (pUnit->pGfxData != nullptr && nComponentIdx >= 0 && nComponentIdx < 16)
+    {
+        D2GfxDataStrc* pCompGfx = &pUnit->pGfxData[pUnit->dwUnitType == UNIT_ITEM ? 0 : nComponentIdx];
+        if (pCompGfx->pCellFile != nullptr || pCompGfx->pCurrentCell != nullptr)
+        {
+            pCel = D2CMP_CelGetHandle(pCompGfx);
+        }
+    }
+    if (pCel != nullptr)
+    {
+        const int32_t nOffX = D2CMP_CelGetOffsetX(pCel);
+        const int32_t nOffY = D2CMP_CelGetOffsetY(pCel);
+        const int32_t nW    = D2CMP_CelGetWidth(pCel);
+        const int32_t nH    = D2CMP_CelGetHeight(pCel);
+        pOutRect->left   = nCoordX + nOffX;
+        pOutRect->right  = nCoordX + nOffX + nW;
+        pOutRect->bottom = nCoordY + nOffY - nH;
+        pOutRect->top    = nCoordY + nOffY;
+    }
+    else
+    {
+        pOutRect->left   = nCoordX - 24;
+        pOutRect->right  = nCoordX + 24;
+        pOutRect->bottom = nCoordY - 64;
+        pOutRect->top    = nCoordY + 12;
+    }
     return 1;
 }
 
@@ -2349,7 +2373,7 @@ D2UnitStrc* __stdcall D2Client_InitializeUnitInstance(
 
     case UNIT_OBJECT:
         UNITS_AllocStaticPath(pUnit);
-        OBJECT_InitClientObject(nMode, pUnit, pRoom, nX, nClassId, nObjMode);
+        OBJECT_InitClientObject(nY, pUnit, pRoom, nX, nClassId, static_cast<uint8_t>(nMode));
         break;
 
     case UNIT_MISSILE:
@@ -2822,7 +2846,10 @@ void __stdcall D2Client_UpdateClientSideHashTable(D2UnitStrc** ppClientHashTable
                     if (pObjectsTxt->nClientFn != 0)
                     {
                         extern void (__fastcall* g_apfnObjectClientFns[19])(D2UnitStrc*); // 0x6FBA3C58
-                        g_apfnObjectClientFns[pObjectsTxt->nClientFn](pStillAlive);
+                        if (g_apfnObjectClientFns[pObjectsTxt->nClientFn] != nullptr)
+                        {
+                            g_apfnObjectClientFns[pObjectsTxt->nClientFn](pStillAlive);
+                        }
                     }
                 }
             }

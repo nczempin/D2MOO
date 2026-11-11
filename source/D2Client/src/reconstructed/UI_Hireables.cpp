@@ -30,7 +30,9 @@
 // Forward Declarations & External Imports
 // ----------------------------------------------------------------------------
 struct D2UnitStrc;
-struct D2RoomStrc;
+struct D2ActiveRoomStrc;
+typedef D2ActiveRoomStrc D2RoomStrc;
+struct D2GfxLightStrc;
 struct D2CellFileStrc;
 struct D2GfxDataStrc;
 struct D2TileLibraryEntryStrc;
@@ -67,9 +69,11 @@ extern "C" {
     void __fastcall SEED_InitSeed(D2SeedStrc* pSeed);                                  // D2Common.#11156
 }
 
+int32_t __stdcall TILE_TileDrawLit(D2TileLibraryEntryStrc* pTile, int32_t nX, int32_t nY, D2GfxLightStrc* pLight, int32_t nScreenPanels); // D2Gfx.#10014
+int32_t __stdcall TILE_TileDrawTrans(D2TileLibraryEntryStrc* pTile, int32_t nX, int32_t nY, D2GfxLightStrc* pLight, int32_t nScreenPanels, uint8_t nAlpha); // D2Gfx.#10075
+
 // D2Gfx.dll
 extern "C" {
-    int32_t __stdcall TILE_TileDrawLit(D2TileLibraryEntryStrc* pTile, int32_t nX, int32_t nY, uint32_t* pLight, int32_t nScreenPanels); // D2Gfx.#10014
     int32_t __stdcall SCALE_SetPerspectiveScale(int32_t nX, int32_t nY);               // D2Gfx.#10015
     void __stdcall D2GFX_DebugDraw(void* pData1, void* pData2, int32_t nX, int32_t nY);// D2Gfx.#10021
     void __stdcall TEXTURE_CelDraw(void* pData, int32_t nX, int32_t nY, uint32_t dwGamma, int32_t nDrawMode, uint8_t* pPalette); // D2Gfx.#10024
@@ -86,7 +90,6 @@ extern "C" {
     void __stdcall SCALE_CheckPerspectivePosition(int32_t nX, int32_t nY);             // D2Gfx.#10064
     int32_t __stdcall D2GFX_CheckPerspective();                                        // D2Gfx.#10071
     void __fastcall D2GFX_SetViewMatrixAdjust(int32_t nAdjust);                        // D2Gfx.#10072
-    int32_t __stdcall TILE_TileDrawTrans(D2TileLibraryEntryStrc* pTile, int32_t nX, int32_t nY, uint32_t* pLight, int32_t nScreenPanels, uint8_t nAlpha); // D2Gfx.#10075
     HWND __stdcall WINDOW_GetWindow();                                                 // D2Gfx.#10078
     int32_t __stdcall SCALE_GetFactor();                                               // D2Gfx.#10081
 }
@@ -1366,11 +1369,33 @@ void __stdcall ENV_RenderViewportComplete(uint32_t* pViewport, int32_t bClearBac
     pViewport[0] &= ~1u;
 }
 
+extern void __fastcall FLOOR_DrawViewportFloorTiles(
+    D2RoomStrc* pCenterRoom,
+    int32_t nViewportLeft,
+    int32_t nViewportTop,
+    int32_t nViewportRight,
+    int32_t nViewportBottom);
+extern void __fastcall FLOOR_DrawRoofTilesInCells(uint8_t* pViewport);
+extern void __fastcall GFX_DrawUnit(D2UnitStrc* pUnit, uint32_t dwGamma, int nXPos, int nYPos, int bDrawHighlight, int nScreenMode);
+extern void __fastcall GFX_DrawCompositeUnitShadow(D2UnitStrc* pUnit, int nXPos, int nYPos);
+extern void __fastcall GFX_DrawSingleLayerUnitShadow(D2UnitStrc* pUnit, int nXPos, int nYPos);
+extern D2UnitStrc* __fastcall SELECT_GetSelectedUnit(void);
+extern int32_t gnOpenPanelMode;
+
+void __stdcall ENV_UpdateActEnvironmentLighting();
+void __stdcall ENV_DrawUnitInViewport(int32_t bForceDraw, D2UnitStrc* pUnit, uint32_t dwColor);
+void __stdcall ENV_DrawWallTileList(void* pTileNode, int32_t bUpperWalls, void* pViewport);
+void __stdcall ENV_DrawFloorTileList(void* pCellNode, void* pViewport);
+void __fastcall ENV_DrawAllFloorTiles(uint8_t* pViewport);
+void __stdcall ENV_DrawWallsAndUnitsInCells(uint8_t* pViewport);
+void __fastcall ENV_DrawShadowTileNode(int32_t nScreenPanels, uint32_t* pShadowNode, uint32_t* pViewport);
+void __fastcall ENV_DrawShadowsAndUpperWalls(uint8_t* pViewport);
+
 // 1.12a: 0x6FB6B630
 // Calling convention: __fastcall (eax = pViewport)
 void __fastcall ENV_RenderGameViewport(uint32_t* pViewport)
 {
-    if (!pViewport[3] && !pViewport[4])
+    if (!pViewport || (!pViewport[3] && !pViewport[4]))
     {
         return;
     }
@@ -1379,24 +1404,63 @@ void __fastcall ENV_RenderGameViewport(uint32_t* pViewport)
     if (D2GFX_CheckPerspective())
     {
         D2UnitStrc* pPlayer = gpPlayerUnit;
-        int32_t nX = UNITS_GetPrecisionX(pPlayer);
-        int32_t nY = UNITS_GetClientCoordX(pPlayer);
-        SCALE_CheckPerspectivePosition(nX, nY);
+        if (pPlayer)
+        {
+            int32_t nX = UNITS_GetPrecisionX(pPlayer);
+            int32_t nY = UNITS_GetClientCoordX(pPlayer);
+            SCALE_CheckPerspectivePosition(nX, nY);
+        }
     }
+
+    ENV_UpdateActEnvironmentLighting();
+
     D2UnitStrc* pPlayer = gpPlayerUnit;
-    D2RoomStrc* pRoom = UNITS_GetRoom(pPlayer);
-    if (DUNGEON_GetLevelIdFromRoom(pRoom) == 74)
+    D2RoomStrc* pRoom = pPlayer ? UNITS_GetRoom(pPlayer) : nullptr;
+    if (pRoom)
     {
-        ENV_DrawArcaneSanctuaryStars();
+        const int32_t nLevelId = DUNGEON_GetLevelIdFromRoom(pRoom);
+        if (nLevelId == 74)
+        {
+            ENV_DrawArcaneSanctuaryStars();
+        }
+        if (nLevelId == 120)
+        {
+            ENV_DrawArreatSummitBackground(pPlayer);
+        }
+        else
+        {
+            ENV_FreeSummitCloudCellFiles();
+        }
     }
-    if (DUNGEON_GetLevelIdFromRoom(pRoom) == 120)
+
+    const uint32_t dwGridFlags = pViewport[14]; // +0x38 = tSortGrid.dwGridFlags
+
+    // Pass 1: Cliff / river lower walls extending below floor level (orientations 16..19)
+    if (dwGridFlags & 0x01u)
     {
-        ENV_DrawArreatSummitBackground(pPlayer);
+        ENV_DrawAllFloorTiles(reinterpret_cast<uint8_t*>(pViewport));
     }
-    else
+
+    // Pass 2: Isometric floor tiles across visible DRLG rooms
+    FLOOR_DrawViewportFloorTiles(
+        pRoom,
+        static_cast<int32_t>(pViewport[5]),
+        static_cast<int32_t>(pViewport[6]),
+        static_cast<int32_t>(pViewport[7]),
+        static_cast<int32_t>(pViewport[8]));
+
+    // Pass 3: Floor overlays, corpses, terrain/unit shadows, and non-priority walls
+    ENV_DrawShadowsAndUpperWalls(reinterpret_cast<uint8_t*>(pViewport));
+
+    // Pass 4: Depth-sorted priority walls and live/preset world units
+    ENV_DrawWallsAndUnitsInCells(reinterpret_cast<uint8_t*>(pViewport));
+
+    // Pass 5: Overhead roof tiles (orientation 15) with cutaway fade
+    if (dwGridFlags & 0x02u)
     {
-        ENV_FreeSummitCloudCellFiles();
+        FLOOR_DrawRoofTilesInCells(reinterpret_cast<uint8_t*>(pViewport));
     }
+
     SCALE_SetDefaultFactor();
 }
 
@@ -1457,17 +1521,45 @@ void __stdcall ENV_DrawUnitInViewport(int32_t bForceDraw, D2UnitStrc* pUnit, uin
     {
         return;
     }
+    const int32_t* pViewport = static_cast<const int32_t*>(gpClientViewport);
+    if (!pViewport)
+    {
+        return;
+    }
+
     int32_t bPerspective = D2GFX_CheckPerspective();
     int32_t nPrecX = UNITS_GetPrecisionX(pUnit);
     int32_t nClientX = UNITS_GetClientCoordX(pUnit);
+    int32_t nClientY = UNITS_GetClientCoordY(pUnit);
     if (bPerspective && !SCALE_SetPerspectiveScale(nPrecX, nClientX))
     {
         return;
     }
-    if (ENV_CheckUnitLineOfSight(pUnit))
+
+    if (ENV_CheckUnitLineOfSight(pUnit) || bForceDraw)
     {
         *(uint32_t*)((uint8_t*)pUnit + 0xC4) |= 0x10000000;
+
+        const int32_t nScreenX = pViewport[1] - pViewport[9] + nClientX;
+        const int32_t nScreenY = pViewport[2] - pViewport[10] + nClientY;
+
+        const int32_t nUnitType = *reinterpret_cast<const int32_t*>(pUnit);
+        if (!bForceDraw)
+        {
+            if (nUnitType == 0 || nUnitType == 1 || nUnitType == 2)
+            {
+                GFX_DrawCompositeUnitShadow(pUnit, nScreenX - 2, nScreenY);
+            }
+            else if (nUnitType == 4)
+            {
+                GFX_DrawSingleLayerUnitShadow(pUnit, nScreenX - 2, nScreenY);
+            }
+        }
+
+        const int bHighlight = (pUnit == SELECT_GetSelectedUnit()) ? 1 : 0;
+        GFX_DrawUnit(pUnit, dwColor, nScreenX, nScreenY, bHighlight, 0);
     }
+
     if (bPerspective)
     {
         SCALE_SetDefaultFactorPerspectiveFactor();
@@ -1505,8 +1597,11 @@ const int32_t* __stdcall ENV_GetTileLightOffsets(int32_t* pTileOrientation, uint
 void __stdcall ENV_UpdateActEnvironmentLighting()
 {
     void* pAct = gpClientAct;
-    ENVIRONMENT_GetLightColorFromAct(pAct, &g_nEnvLightR, &g_nEnvLightG, &g_nEnvLightB);
-    g_nEnvLightIntensity = ENVIRONMENT_GetIntensityFromAct(pAct);
+    if (pAct)
+    {
+        ENVIRONMENT_GetLightColorFromAct(pAct, &g_nEnvLightR, &g_nEnvLightG, &g_nEnvLightB);
+        g_nEnvLightIntensity = ENVIRONMENT_GetIntensityFromAct(pAct);
+    }
 
     D2UnitStrc* pPlayer = gpPlayerUnit;
     if (pPlayer)
@@ -1525,6 +1620,18 @@ void __stdcall ENV_UpdateActEnvironmentLighting()
             }
         }
     }
+
+    if (g_nEnvLightIntensity == 0 && g_nEnvLightR == 0 && g_nEnvLightG == 0 && g_nEnvLightB == 0)
+    {
+        g_nEnvLightIntensity = 0xFF;
+        g_nEnvLightR = 0xFF;
+        g_nEnvLightG = 0xFF;
+        g_nEnvLightB = 0xFF;
+    }
+    else if (g_nEnvLightIntensity < 0xB0)
+    {
+        g_nEnvLightIntensity = 0xD8;
+    }
 }
 
 // 1.12a: 0x6FB6BDF0
@@ -1536,12 +1643,133 @@ void __stdcall ENV_DrawWallTileList(void* pTileNode, int32_t bUpperWalls, void* 
         FOG_DisplayHalt(FOG_GetErrorLocation(243), "..\\Source\\D2Client\\UI\\Hireables.cpp", 243);
         exit(-1);
     }
+    if (!pTileNode || !pViewport)
+    {
+        return;
+    }
+
+    const int32_t* pView = static_cast<const int32_t*>(pViewport);
+    const int32_t nScreenLeft = pView[1];
+    const int32_t nScreenTop  = pView[2];
+    const int32_t nCamIsoX    = pView[9];
+    const int32_t nCamIsoY    = pView[10];
+
+    uint32_t aWallLight[8];
+    const uint32_t dwPackedLight =
+        static_cast<uint32_t>(g_nEnvLightIntensity ? g_nEnvLightIntensity : 0xFFu) |
+        (static_cast<uint32_t>(g_nEnvLightR ? g_nEnvLightR : 0xFFu) << 8) |
+        (static_cast<uint32_t>(g_nEnvLightG ? g_nEnvLightG : 0xFFu) << 16) |
+        (static_cast<uint32_t>(g_nEnvLightB ? g_nEnvLightB : 0xFFu) << 24);
+    for (int k = 0; k < 8; ++k)
+    {
+        aWallLight[k] = dwPackedLight;
+    }
+
+    uint8_t* pCell = static_cast<uint8_t*>(pTileNode);
+    uint8_t* pNode = *reinterpret_cast<uint8_t**>(pCell + 0x14);
+    while (pNode != nullptr)
+    {
+        uint8_t* pWallTile = *reinterpret_cast<uint8_t**>(pNode + 0x0C);
+        pNode = *reinterpret_cast<uint8_t**>(pNode + 0x10);
+        if (!pWallTile)
+        {
+            continue;
+        }
+
+        const uint32_t dwTileFlags = *reinterpret_cast<const uint32_t*>(pWallTile + 0x14);
+        const bool bPriorityGroup = (dwTileFlags & 0x1C000u) != 0;
+        if ((bUpperWalls == 1 && bPriorityGroup) || (bUpperWalls == 0 && !bPriorityGroup))
+        {
+            continue;
+        }
+
+        D2TileLibraryEntryStrc* pTileLib = *reinterpret_cast<D2TileLibraryEntryStrc**>(pWallTile + 0x18);
+        if (!pTileLib)
+        {
+            continue;
+        }
+
+        const uint8_t nAlpha = *(pWallTile + 0x28);
+        if (nAlpha == 0)
+        {
+            continue;
+        }
+
+        const int32_t nIsoX = *reinterpret_cast<const int32_t*>(pWallTile + 0x00);
+        const int32_t nIsoY = *reinterpret_cast<const int32_t*>(pWallTile + 0x04);
+        const int32_t nScreenX = nIsoX + nScreenLeft - nCamIsoX;
+        const int32_t nScreenY = nIsoY + nScreenTop - nCamIsoY;
+
+        if (nAlpha == 0xFF)
+        {
+            TILE_TileDrawLit(pTileLib, nScreenX, nScreenY, reinterpret_cast<D2GfxLightStrc*>(aWallLight), 0);
+        }
+        else
+        {
+            TILE_TileDrawTrans(pTileLib, nScreenX, nScreenY, reinterpret_cast<D2GfxLightStrc*>(aWallLight), 0, nAlpha);
+        }
+    }
 }
 
 // 1.12a: 0x6FB6C090
 // Calling convention: __userpurge (eax = pCellNode, [esp+4] = pViewport)
 void __stdcall ENV_DrawFloorTileList(void* pCellNode, void* pViewport)
 {
+    if (!pCellNode || !pViewport)
+    {
+        return;
+    }
+
+    const int32_t* pView = static_cast<const int32_t*>(pViewport);
+    const int32_t nScreenLeft = pView[1];
+    const int32_t nScreenTop  = pView[2];
+    const int32_t nCamIsoX    = pView[9];
+    const int32_t nCamIsoY    = pView[10];
+
+    uint32_t aWallLight[8];
+    const uint32_t dwPackedLight =
+        static_cast<uint32_t>(g_nEnvLightIntensity ? g_nEnvLightIntensity : 0xFFu) |
+        (static_cast<uint32_t>(g_nEnvLightR ? g_nEnvLightR : 0xFFu) << 8) |
+        (static_cast<uint32_t>(g_nEnvLightG ? g_nEnvLightG : 0xFFu) << 16) |
+        (static_cast<uint32_t>(g_nEnvLightB ? g_nEnvLightB : 0xFFu) << 24);
+    for (int k = 0; k < 8; ++k)
+    {
+        aWallLight[k] = dwPackedLight;
+    }
+
+    uint8_t* pCell = static_cast<uint8_t*>(pCellNode);
+    uint8_t* pNode = *reinterpret_cast<uint8_t**>(pCell + 0x20); // pUpperWallList (orientations 16..19: lower cliff/river walls)
+    while (pNode != nullptr)
+    {
+        uint8_t* pWallTile = *reinterpret_cast<uint8_t**>(pNode + 0x0C);
+        pNode = *reinterpret_cast<uint8_t**>(pNode + 0x10);
+        if (!pWallTile)
+        {
+            continue;
+        }
+        D2TileLibraryEntryStrc* pTileLib = *reinterpret_cast<D2TileLibraryEntryStrc**>(pWallTile + 0x18);
+        if (!pTileLib)
+        {
+            continue;
+        }
+        const uint8_t nAlpha = *(pWallTile + 0x28);
+        if (nAlpha == 0)
+        {
+            continue;
+        }
+        const int32_t nIsoX = *reinterpret_cast<const int32_t*>(pWallTile + 0x00);
+        const int32_t nIsoY = *reinterpret_cast<const int32_t*>(pWallTile + 0x04);
+        const int32_t nScreenX = nIsoX + nScreenLeft - nCamIsoX;
+        const int32_t nScreenY = nIsoY + nScreenTop - nCamIsoY;
+        if (nAlpha == 0xFF)
+        {
+            TILE_TileDrawLit(pTileLib, nScreenX, nScreenY, reinterpret_cast<D2GfxLightStrc*>(aWallLight), 0);
+        }
+        else
+        {
+            TILE_TileDrawTrans(pTileLib, nScreenX, nScreenY, reinterpret_cast<D2GfxLightStrc*>(aWallLight), 0, nAlpha);
+        }
+    }
 }
 
 // 1.12a: 0x6FB6C250
@@ -1551,9 +1779,16 @@ void __fastcall ENV_DrawAllFloorTiles(uint8_t* pViewport)
     int32_t nGridDim = *(int32_t*)(pViewport + 0xEAB0);
     int32_t nTotalCells = nGridDim * nGridDim;
     uint8_t* pCell = *(uint8_t**)(pViewport + 0xEAA8);
+    if (!pCell)
+    {
+        return;
+    }
     for (int32_t i = 0; i < nTotalCells; ++i, pCell += 0x24)
     {
-        ENV_DrawFloorTileList(pCell, pViewport);
+        if (*(void**)(pCell + 0x20))
+        {
+            ENV_DrawFloorTileList(pCell, pViewport);
+        }
     }
 }
 
@@ -1564,9 +1799,27 @@ void __stdcall ENV_DrawWallsAndUnitsInCells(uint8_t* pViewport)
     int32_t nGridDim = *(int32_t*)(pViewport + 0xEAB0);
     int32_t nTotalCells = nGridDim * nGridDim;
     uint8_t* pCell = *(uint8_t**)(pViewport + 0xEAA8);
+    if (!pCell)
+    {
+        return;
+    }
     for (int32_t i = 0; i < nTotalCells; ++i, pCell += 0x24)
     {
-        // Renders lower walls (+0x14) and units (+0x18) in each cell.
+        if (*(void**)(pCell + 0x14))
+        {
+            ENV_DrawWallTileList(pCell, 0, pViewport);
+        }
+
+        uint8_t* pNode = *reinterpret_cast<uint8_t**>(pCell + 0x18); // pNormalUnitList
+        while (pNode != nullptr)
+        {
+            D2UnitStrc* pUnit = *reinterpret_cast<D2UnitStrc**>(pNode + 0x0C);
+            pNode = *reinterpret_cast<uint8_t**>(pNode + 0x10);
+            if (pUnit != nullptr)
+            {
+                ENV_DrawUnitInViewport(0, pUnit, 0xFFFFFFFFu);
+            }
+        }
     }
 }
 
@@ -1577,15 +1830,19 @@ void __fastcall ENV_DrawShadowTileNode(int32_t nScreenPanels, uint32_t* pShadowN
     if (pShadowNode[0] & 1)
     {
         uint32_t* pTileData = (uint32_t*)pShadowNode[3];
+        if (!pTileData || !pTileData[6])
+        {
+            return;
+        }
         if (D2GFX_CheckPerspective())
         {
             TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], pShadowNode[1], pShadowNode[2], 4, nScreenPanels);
         }
         else
         {
-            int32_t nX = pViewport[1] - pViewport[9] + pTileData[0];
-            int32_t nY = pTileData[1] - pViewport[10] + pViewport[2];
-            TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], nX, nY, 4, nScreenPanels);
+            int32_t nX = static_cast<int32_t>(pViewport[1]) - static_cast<int32_t>(pViewport[9]) + static_cast<int32_t>(pTileData[0]);
+            int32_t nY = static_cast<int32_t>(pTileData[1]) - static_cast<int32_t>(pViewport[10]) + static_cast<int32_t>(pViewport[2]);
+            TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], nX, nY, 4, 0);
         }
     }
 }
@@ -1597,8 +1854,41 @@ void __fastcall ENV_DrawShadowsAndUpperWalls(uint8_t* pViewport)
     int32_t nGridDim = *(int32_t*)(pViewport + 0xEAB0);
     int32_t nTotalCells = nGridDim * nGridDim;
     uint8_t* pCell = *(uint8_t**)(pViewport + 0xEAA8);
+    if (!pCell)
+    {
+        return;
+    }
+    const int32_t* pView = reinterpret_cast<const int32_t*>(pViewport);
     for (int32_t i = 0; i < nTotalCells; ++i, pCell += 0x24)
     {
+        uint8_t* pNode = *reinterpret_cast<uint8_t**>(pCell + 0x10); // pFloorAndRoofList
+        while (pNode != nullptr)
+        {
+            const int32_t nNodeType = *reinterpret_cast<const int32_t*>(pNode + 0x00);
+            void* pOwner = *reinterpret_cast<void**>(pNode + 0x0C);
+            uint8_t* pCurNode = pNode;
+            pNode = *reinterpret_cast<uint8_t**>(pNode + 0x10);
+            if (!pOwner)
+            {
+                continue;
+            }
+            if (nNodeType == 0)
+            {
+                ENV_DrawUnitInViewport(1, static_cast<D2UnitStrc*>(pOwner), 0xFFFFFFFFu);
+            }
+            else if (nNodeType & 1)
+            {
+                ENV_DrawShadowTileNode(0, reinterpret_cast<uint32_t*>(pCurNode), reinterpret_cast<uint32_t*>(pViewport));
+            }
+            else if (nNodeType & 2)
+            {
+                D2UnitStrc* pUnit = static_cast<D2UnitStrc*>(pOwner);
+                const int32_t nScreenX = pView[1] - pView[9] + UNITS_GetClientCoordX(pUnit);
+                const int32_t nScreenY = pView[2] - pView[10] + UNITS_GetClientCoordY(pUnit);
+                GFX_DrawCompositeUnitShadow(pUnit, nScreenX - 2, nScreenY);
+            }
+        }
+
         if (*(void**)(pCell + 0x14))
         {
             ENV_DrawWallTileList(pCell, 1, pViewport);

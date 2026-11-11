@@ -97,6 +97,42 @@ struct D2UnitDrawNodeStrc // 0x0C (12) bytes
     int32_t     nScreenY;        // +0x08
 };
 
+struct D2IsoSortNodeStrc // 0x14 (20) bytes
+{
+    int32_t            nNodeType;          // +0x00
+    int32_t            nPrecisionSubtileX; // +0x04
+    int32_t            nPrecisionSubtileY; // +0x08
+    void*              pOwner;             // +0x0C
+    D2IsoSortNodeStrc* pNext;              // +0x10
+};
+
+struct D2IsoSortCellStrc // 0x24 (36) bytes
+{
+    uint32_t           dwFlags;            // +0x00
+    uint32_t           dwReserved04;       // +0x04
+    int32_t            nTileX;             // +0x08
+    int32_t            nTileY;             // +0x0C
+    D2IsoSortNodeStrc* pFloorAndRoofList;  // +0x10
+    D2IsoSortNodeStrc* pLowerWallList;     // +0x14
+    D2IsoSortNodeStrc* pNormalUnitList;    // +0x18
+    D2IsoSortNodeStrc* pSpecialWallList;   // +0x1C
+    D2IsoSortNodeStrc* pUpperWallList;     // +0x20
+};
+
+struct D2IsoSortGridStrc // Embedded at D2ViewportStrc + 0x38 (size = 0xEA84)
+{
+    uint32_t           dwGridFlags;        // +0x0000 (Viewport +0x0038)
+    D2IsoSortNodeStrc  aNodes[3000];       // +0x0004 (Viewport +0x003C .. +0xEA9B)
+    int32_t            nNodeCount;         // +0xEA64 (Viewport +0xEA9C)
+    int32_t            nOriginTileX;       // +0xEA68 (Viewport +0xEAA0)
+    int32_t            nOriginTileY;       // +0xEA6C (Viewport +0xEAA4)
+    D2IsoSortCellStrc* pCells;             // +0xEA70 (Viewport +0xEAA8)
+    int32_t            nTotalCellCount;    // +0xEA74 (Viewport +0xEAAC)
+    int32_t            nGridDimension;     // +0xEA78 (Viewport +0xEAB0)
+    int32_t            nWidthTiles;        // +0xEA7C (Viewport +0xEAB4)
+    int32_t            nHeightTiles;       // +0xEA80 (Viewport +0xEAB8)
+};
+
 struct D2ViewportStrc // Total size: 0xEABC bytes (60,092 bytes)
 {
     uint32_t              dwFlags;                    // +0x0000 (D2ViewportFlags)
@@ -104,47 +140,23 @@ struct D2ViewportStrc // Total size: 0xEABC bytes (60,092 bytes)
     int32_t               nScreenTop;                 // +0x0008
     int32_t               nScreenRight;               // +0x000C
     int32_t               nScreenBottom;              // +0x0010
-    int32_t               nScreenWidth;               // +0x0014
-    int32_t               nScreenHeight;              // +0x0018
-    int32_t               nViewOffsetX;               // +0x001C (Isometric screen-space camera origin X)
-    int32_t               nViewOffsetY;               // +0x0020 (Isometric screen-space camera origin Y)
-    int32_t               nHalfWidth;                 // +0x0024
-    int32_t               nHalfHeight;                // +0x0028
+    int32_t               nClipLeft;                  // +0x0014 (nScreenLeft - 160)
+    int32_t               nClipTop;                   // +0x0018 (nScreenTop - 160)
+    int32_t               nClipRight;                 // +0x001C (nScreenRight + 160)
+    int32_t               nClipBottom;                // +0x0020 (nScreenBottom + 160)
+    int32_t               nViewOffsetX;               // +0x0024 (nCameraIsoX: top-left camera world iso X)
+    int32_t               nViewOffsetY;               // +0x0028 (nCameraIsoY: top-left camera world iso Y)
     int32_t               nCameraTargetIsoX;          // +0x002C
     int32_t               nCameraTargetIsoY;          // +0x0030
-    int32_t               nCameraPrecisionX;          // +0x0034 (Fixed-point 16.16 world X)
-    int32_t               nCameraPrecisionY;          // +0x0038 (Fixed-point 16.16 world Y)
-    int32_t               nShakeFramesRemaining;      // +0x003C
-    int32_t               nShakeIntensityType;        // +0x0040
-    int32_t               nShakeOffsetX;              // +0x0044
-    int32_t               nShakeOffsetY;              // +0x0048
-    int32_t               nVisibleRoomCount;          // +0x004C
-    int32_t               nGridWidthRooms;            // +0x0050
-    int32_t               nGridHeightRooms;           // +0x0054
-    D2VisibleRoomCellStrc aVisibleRooms[64];          // +0x0058 .. +0x0857
-    uint8_t               abDrawBuffers[0xE224];      // +0x0858 .. +0xEA7B (Floor, Shadow, Wall, Roof, Unit draw lists)
-    int32_t               nFloorTileCount;            // +0xEA7C
-    int32_t               nShadowTileCount;           // +0xEA80
-    int32_t               nWallTileCount;             // +0xEA84
-    int32_t               nRoofTileCount;             // +0xEA88
-    int32_t               nUnitDrawCount;             // +0xEA8C
-    int32_t               nUpperWallCount;            // +0xEA90
-    int32_t               nLowerWallCount;            // +0xEA94
-    int32_t               nOverlayCount;              // +0xEA98
-    void*                 pPerspectiveTableA;         // +0xEA9C (0x5408 bytes via VirtualAlloc)
-    void*                 pPerspectiveTableB;         // +0xEAA0 (0x6008 bytes via VirtualAlloc)
-    void*                 pPerspectiveTableC;         // +0xEAA4 (0x6008 bytes via VirtualAlloc)
-    int32_t               nStarSkipCounter;           // +0xEAA8
-    int32_t               nStarAngleIndex;            // +0xEAAC
-    int32_t               nArreatCloudOffsetX;        // +0xEAB0
-    int32_t               nReservedEAB4;              // +0xEAB4
-    int32_t               nReservedEAB8;              // +0xEAB8
+    int32_t               nShakePacked;               // +0x0034
+    D2IsoSortGridStrc     tSortGrid;                  // +0x0038 .. +0xEABB
 };
+static_assert(sizeof(D2ViewportStrc) == 0xEABC, "D2ViewportStrc must match retail 0xEABC-byte layout");
 
 // =============================================================================
 // Viewport & Camera Globals in D2Client.dll
 // =============================================================================
-extern D2ViewportStrc* gpClientViewport;    // 0x6FBCC1E0
+extern void*           gpClientViewport;    // 0x6FBCC1E0 (D2ViewportStrc*)
 extern D2UnitStrc*     gpClientPlayer;      // 0x6FBCC3D0
 extern D2DrlgActStrc*  gpClientAct;         // 0x6FBCC02C
 extern uint32_t        gdwClientGameTick;   // 0x6FBB32B0
@@ -153,8 +165,10 @@ extern int32_t         gnCameraShakeOffsetY;// 0x6FBCC3C0
 extern int32_t         gnCameraScreenSkewX; // 0x6FBC21D0
 extern int32_t         gnCameraScreenSkewY; // 0x6FBC21CC
 
-// Forward declaration for Wall2 room grid builder (0x6FB1DFF0)
-void __fastcall WALL2_BuildViewportRoomGrid(D2ViewportStrc* pViewport);
+struct D2WallViewportStrc;
+extern void __fastcall WALL2_FreeSortGridCells(D2WallViewportStrc* pViewport);
+extern void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32_t bSkipUnits);
+extern void __fastcall ENV_RenderGameViewport(uint32_t* pViewport);
 
 // =============================================================================
 // SECTION 1: Viewport Lifecycle & Coordinate Transforms (GAME/View.cpp)
@@ -163,19 +177,26 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2ViewportStrc* pViewport);
 // 0x6FB6A3D0
 void __fastcall VIEW_SetShakeOffsets(D2ViewportStrc* pViewport, int32_t nShakeX, int32_t nShakeY)
 {
-    pViewport->nShakeOffsetX = nShakeX;
-    pViewport->nShakeOffsetY = nShakeY;
-    pViewport->dwFlags |= VIEWFLAG_DIRTY;
+    gnCameraShakeOffsetX = nShakeX;
+    gnCameraShakeOffsetY = nShakeY;
+    if (pViewport != nullptr)
+    {
+        pViewport->dwFlags |= VIEWFLAG_DIRTY;
+    }
 }
 
 // 0x6FB6A3F0
 void __fastcall VIEW_StartCameraShake(D2ViewportStrc* pViewport, int32_t nDurationFrames, int32_t nIntensityType)
 {
-    if (!(pViewport->dwFlags & VIEWFLAG_SHAKING) || nIntensityType >= pViewport->nShakeIntensityType)
+    if (pViewport == nullptr)
+    {
+        return;
+    }
+    const int32_t nCurType = (pViewport->nShakePacked >> 16) & 0xFFFF;
+    if (!(pViewport->dwFlags & VIEWFLAG_SHAKING) || nIntensityType >= nCurType)
     {
         pViewport->dwFlags |= VIEWFLAG_SHAKING;
-        pViewport->nShakeFramesRemaining = nDurationFrames;
-        pViewport->nShakeIntensityType = nIntensityType;
+        pViewport->nShakePacked = (nDurationFrames & 0xFFFF) | ((nIntensityType & 0xFFFF) << 16);
     }
 }
 
@@ -191,16 +212,11 @@ void __fastcall VIEW_GetScreenBounds(D2ViewportStrc* pViewport, int32_t* pLeft, 
 // 0x6FB6A460
 void __fastcall VIEW_GetDimensions(D2ViewportStrc* pViewport, int32_t* pWidth, int32_t* pHeight)
 {
-    *pWidth = pViewport->nScreenWidth;
-    *pHeight = pViewport->nScreenHeight;
+    *pWidth = pViewport->nScreenRight - pViewport->nScreenLeft;
+    *pHeight = pViewport->nScreenBottom - pViewport->nScreenTop;
 }
 
 // 0x6FB6A480
-// Converts screen pixel coordinates (e.g., mouse cursor X/Y) into world game subtile coordinates.
-// Calls:
-//   - D2Gfx.#10042 (D2GFX_CheckPerspectiveMode)
-//   - D2Gfx.#10011 (D2GFX_ScalePerspectivePosition)
-//   - D2Common.#10512 (DUNGEON_ClientSubileDrawPositionToGameCoords)
 void __fastcall VIEW_ScreenToWorldCoords(D2ViewportStrc* pViewport, int32_t nScreenX, int32_t nScreenY, int32_t* pWorldX, int32_t* pWorldY)
 {
     int32_t nIsoX = nScreenX;
@@ -210,13 +226,12 @@ void __fastcall VIEW_ScreenToWorldCoords(D2ViewportStrc* pViewport, int32_t nScr
     {
         D2GFX_ScalePerspectivePosition(nScreenX, nScreenY, 0, &nIsoX, &nIsoY, 1);
     }
-    else
+    else if (pViewport != nullptr)
     {
-        nIsoX += pViewport->nViewOffsetX;
-        nIsoY += pViewport->nViewOffsetY;
+        nIsoX += pViewport->nViewOffsetX - pViewport->nScreenLeft;
+        nIsoY += pViewport->nViewOffsetY - pViewport->nScreenTop;
     }
 
-    // D2Common.#10512: Isometric draw position -> subtile (X, Y)
     DUNGEON_ClientSubileDrawPositionToGameCoords(nIsoX, nIsoY, pWorldX, pWorldY);
 }
 
@@ -248,7 +263,6 @@ void __fastcall VIEW_MarkRoofUpdateRequired(D2ViewportStrc* pViewport)
 }
 
 // 0x6FB6A990
-// Configures the viewport screen rectangle and recalculates the isometric view offsets.
 void __fastcall VIEW_SetViewportRect(D2ViewportStrc* pViewport, int32_t nLeft, int32_t nTop, int32_t nRight, int32_t nBottom)
 {
     if (nLeft >= nRight || nTop >= nBottom)
@@ -261,26 +275,30 @@ void __fastcall VIEW_SetViewportRect(D2ViewportStrc* pViewport, int32_t nLeft, i
     pViewport->nScreenTop = nTop;
     pViewport->nScreenRight = nRight;
     pViewport->nScreenBottom = nBottom;
-    pViewport->nScreenWidth = nRight - nLeft;
-    pViewport->nScreenHeight = nBottom - nTop;
-    pViewport->nHalfWidth = (nRight - nLeft) / 2;
-    pViewport->nHalfHeight = (nBottom - nTop) / 2;
-    pViewport->nViewOffsetX = pViewport->nCameraTargetIsoX + pViewport->nShakeOffsetX - pViewport->nHalfWidth;
-    pViewport->nViewOffsetY = pViewport->nCameraTargetIsoY + pViewport->nShakeOffsetY - pViewport->nHalfHeight;
+    pViewport->nClipLeft = nLeft - 160;
+    pViewport->nClipTop = nTop - 160;
+    pViewport->nClipRight = nRight + 160;
+    pViewport->nClipBottom = nBottom + 160;
+
+    const int32_t nHalfWidth = (nRight - nLeft) / 2;
+    const int32_t nHalfHeight = (nBottom - nTop) / 2;
+    pViewport->nViewOffsetX = pViewport->nCameraTargetIsoX + gnCameraShakeOffsetX - nHalfWidth;
+    pViewport->nViewOffsetY = pViewport->nCameraTargetIsoY + gnCameraShakeOffsetY - nHalfHeight;
     pViewport->dwFlags |= VIEWFLAG_DIRTY;
 }
 
 // 0x6FB6A5B0
-// Allocates and initializes the 0xEABC-byte D2ViewportStrc.
 D2ViewportStrc* __fastcall VIEW_AllocViewport(void)
 {
     D2ViewportStrc* pViewport = static_cast<D2ViewportStrc*>(
         FOG_AllocClientMemory(sizeof(D2ViewportStrc), "..\\Source\\D2Client\\GAME\\View.cpp", 112, 0));
     memset(pViewport, 0, sizeof(D2ViewportStrc));
 
-    int32_t nWidth = 640;
-    int32_t nHeight = 480;
+    int32_t nWidth = 800;
+    int32_t nHeight = 600;
     WINDOW_GetDimensions(&nWidth, &nHeight);
+    if (nWidth <= 0) nWidth = 800;
+    if (nHeight <= 48) nHeight = 600;
     VIEW_SetViewportRect(pViewport, 0, 0, nWidth, nHeight - 48);
     return pViewport;
 }
@@ -290,49 +308,34 @@ void __fastcall VIEW_FreeViewport(D2ViewportStrc* pViewport)
 {
     if (pViewport == nullptr)
     {
-        FOG_DisplayAssert("hView != NULL", "..\\Source\\D2Client\\GAME\\View.cpp", 142);
-        exit(-1);
+        return;
     }
-    if (pViewport->pPerspectiveTableA != nullptr)
-    {
-        VirtualFree(pViewport->pPerspectiveTableA, 0, MEM_RELEASE);
-        pViewport->pPerspectiveTableA = nullptr;
-    }
-    if (pViewport->pPerspectiveTableB != nullptr)
-    {
-        VirtualFree(pViewport->pPerspectiveTableB, 0, MEM_RELEASE);
-        pViewport->pPerspectiveTableB = nullptr;
-    }
-    if (pViewport->pPerspectiveTableC != nullptr)
-    {
-        VirtualFree(pViewport->pPerspectiveTableC, 0, MEM_RELEASE);
-        pViewport->pPerspectiveTableC = nullptr;
-    }
+    WALL2_FreeSortGridCells(reinterpret_cast<D2WallViewportStrc*>(pViewport));
     FOG_FreeClientMemory(pViewport, "..\\Source\\D2Client\\GAME\\View.cpp", 145, 0);
 }
 
 // 0x6FB6B4F0
-// Advances active camera shake each frame (earthquake/boss death effects).
 void __fastcall VIEW_UpdateCameraShake(D2ViewportStrc* pViewport)
 {
-    if (!(pViewport->dwFlags & VIEWFLAG_SHAKING))
+    if (pViewport == nullptr || !(pViewport->dwFlags & VIEWFLAG_SHAKING))
     {
         return;
     }
 
-    if (pViewport->nShakeFramesRemaining <= 0)
+    int32_t nFrames = pViewport->nShakePacked & 0xFFFF;
+    const int32_t nType = (pViewport->nShakePacked >> 16) & 0xFFFF;
+    if (nFrames <= 0)
     {
         pViewport->dwFlags &= ~VIEWFLAG_SHAKING;
-        pViewport->nShakeOffsetX = 0;
-        pViewport->nShakeOffsetY = 0;
+        pViewport->nShakePacked = 0;
         gnCameraShakeOffsetX = 0;
         gnCameraShakeOffsetY = 0;
         pViewport->dwFlags |= VIEWFLAG_DIRTY;
         return;
     }
 
-    pViewport->nShakeFramesRemaining -= 1;
-    // Lookup shake amplitude table and apply pseudo-random jitter
+    nFrames -= 1;
+    pViewport->nShakePacked = (nFrames & 0xFFFF) | ((nType & 0xFFFF) << 16);
     pViewport->dwFlags |= VIEWFLAG_DIRTY;
 }
 
@@ -341,30 +344,18 @@ void __fastcall VIEW_UpdateCameraShake(D2ViewportStrc* pViewport)
 // =============================================================================
 
 // 0x6FB6B5E0
-// Updates the viewport's visible room grid and collects all floor, wall, roof,
-// shadow, and unit draw nodes when VIEWFLAG_DIRTY is set.
 void __fastcall VIEW_UpdateViewportVisibility(D2ViewportStrc* pViewport, D2UnitStrc* pPlayer)
 {
-    if (pViewport == nullptr || pPlayer == nullptr)
+    if (pViewport == nullptr)
     {
         return;
     }
-
-    D2RoomStrc* pPlayerRoom = UNITS_GetRoom(pPlayer);
-    if (pPlayerRoom == nullptr)
-    {
-        return;
-    }
-
-    // Calls into Wall2.cpp (0x6FB1DFF0) which queries D2Common.#10035 (DUNGEON_GetAdjacentRoomsListFromRoom),
-    // clips adjacent rooms against the viewport screen rectangle, sorts visible rooms front-to-back,
-    // and populates the floor/wall/roof/shadow/unit render lists inside pViewport.
-    WALL2_BuildViewportRoomGrid(pViewport);
+    (void)pPlayer;
+    WALL2_BuildViewportRoomGrid(reinterpret_cast<D2WallViewportStrc*>(pViewport), 0);
     pViewport->dwFlags &= ~VIEWFLAG_DIRTY;
 }
 
 // 0x6FB6BD60
-// Queries or caches the room ambient light color for floor tile rendering.
 void __fastcall VIEW_UpdateRoomLightColor(D2VisibleRoomCellStrc* pRoomCell)
 {
     if (pRoomCell != nullptr && !pRoomCell->bLightComputed)
@@ -375,31 +366,18 @@ void __fastcall VIEW_UpdateRoomLightColor(D2VisibleRoomCellStrc* pRoomCell)
 }
 
 // 0x6FB6C090 / 0x6FB6C250
-// Renders all visible floor tiles in the viewport via D2Gfx.#10082 (D2GFX_DrawFloorTile).
 void __fastcall VIEW_DrawFloorTiles(D2ViewportStrc* pViewport)
 {
-    const D2FloorDrawNodeStrc* pFloors = reinterpret_cast<const D2FloorDrawNodeStrc*>(&pViewport->abDrawBuffers[0]);
-    for (int32_t i = 0; i < pViewport->nFloorTileCount; ++i)
-    {
-        D2GFX_DrawFloorTile(
-            pFloors[i].pTileEntry,
-            pFloors[i].nScreenX,
-            pFloors[i].nScreenY,
-            pFloors[i].pLightBuffer,
-            pFloors[i].dwLightColor);
-    }
+    (void)pViewport;
 }
 
 // 0x6FB6C5F0 / 0x6FB6C660
-// Renders terrain and unit shadows via D2Gfx.#10085 (D2GFX_DrawShadowTile).
 void __fastcall VIEW_DrawShadows(D2ViewportStrc* pViewport)
 {
-    // Iterates collected shadow tiles and draws projected shadows on top of floor tiles
     (void)pViewport;
 }
 
 // 0x6FB6BDF0
-// Renders lower/upper wall tiles and translucent walls via D2Gfx.#10008 and D2Gfx.#10084.
 void __fastcall VIEW_DrawWallTiles(D2ViewportStrc* pViewport, int32_t nWallLayerMask)
 {
     (void)pViewport;
@@ -407,30 +385,19 @@ void __fastcall VIEW_DrawWallTiles(D2ViewportStrc* pViewport, int32_t nWallLayer
 }
 
 // 0x6FB6C280
-// Depth-sorted pass that interleaves units (players, monsters, missiles, objects, items)
-// with walls and fading roof tiles, calling VIEW_DrawSingleUnit (0x6FB6BA30).
 void __fastcall VIEW_DrawUnitsAndRoofs(D2ViewportStrc* pViewport)
 {
     (void)pViewport;
 }
 
 // 0x6FB6B630
-// Master viewport render entry point called every frame from GAME_RenderFrame (0x6FB2CA10):
-//   1. Level-specific parallax backgrounds (Arcane Sanctuary stars 0x6FB6B320, Arreat Summit clouds 0x6FB6AB20)
-//   2. Lower walls extending below floor level (0x6FB6BDF0)
-//   3. Floor tiles (0x6FB6C250)
-//   4. Floor overlays & shadows (0x6FB6C660)
-//   5. Depth-sorted walls, units, missiles, and roofs (0x6FB6C280)
 void __fastcall VIEW_RenderViewport(D2ViewportStrc* pViewport)
 {
     if (pViewport == nullptr)
     {
         return;
     }
-
-    VIEW_DrawFloorTiles(pViewport);
-    VIEW_DrawShadows(pViewport);
-    VIEW_DrawUnitsAndRoofs(pViewport);
+    ENV_RenderGameViewport(reinterpret_cast<uint32_t*>(pViewport));
 }
 
 // =============================================================================
@@ -439,71 +406,60 @@ void __fastcall VIEW_RenderViewport(D2ViewportStrc* pViewport)
 // =============================================================================
 
 // 0x6FB0DB10 (UNIT/Player.cpp)
-// Updates smooth camera skew offsets (e.g., when panels like Inventory or Character Screen
-// shift the player center point left or right).
 void __fastcall PLAYER_UpdateCameraOffsets(void)
 {
-    // Adjusts gnCameraScreenSkewX (0x6FBC21D0) and gnCameraScreenSkewY (0x6FBC21CC)
-    // by +/- 8 pixels per frame toward the target UI panel skew.
 }
 
 // 0x6FB2CA10 (GAME/Game.cpp)
-// Per-frame camera centering and viewport render orchestrator:
-//   1. Reads gpClientPlayer fixed-point precision coordinates (UNITS_GetPrecisionX/Y)
-//   2. Converts subtile coordinates to isometric screen coordinates
-//   3. Applies camera shake (VIEW_UpdateCameraShake) and UI panel skew (gnCameraScreenSkewX/Y)
-//   4. Marks gpClientViewport dirty (VIEWFLAG_DIRTY) whenever the camera position changes
-//   5. Rebuilds the visible room grid (VIEW_UpdateViewportVisibility)
-//   6. Renders the world (VIEW_RenderViewport)
-static void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender)
+void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender)
 {
-    if (gpClientPlayer == nullptr || gpClientViewport == nullptr)
+    D2ViewportStrc* pViewport = static_cast<D2ViewportStrc*>(gpClientViewport);
+    if (gpClientPlayer == nullptr || pViewport == nullptr)
     {
         return;
     }
 
-    // 1. Advance camera shake timer and offsets
-    VIEW_UpdateCameraShake(gpClientViewport);
+    VIEW_UpdateCameraShake(pViewport);
 
-    // 2. Compute isometric camera target from local player's 16.16 precision coordinates
-    const int32_t nPrecisionX = UNITS_GetPrecisionX(gpClientPlayer);
-    const int32_t nPrecisionY = UNITS_GetPrecisionY(gpClientPlayer);
-
-    int32_t nTargetIsoX = 0;
-    int32_t nTargetIsoY = 0;
-    DUNGEON_GameCoordsToSubtileDrawPosition(
-        nPrecisionX >> 16,
-        nPrecisionY >> 16,
-        &nTargetIsoX,
-        &nTargetIsoY);
+    int32_t nTargetIsoX = UNITS_GetClientCoordX(gpClientPlayer);
+    int32_t nTargetIsoY = UNITS_GetClientCoordY(gpClientPlayer);
+    if (nTargetIsoX == 0 && nTargetIsoY == 0)
+    {
+        const int32_t nPrecisionX = UNITS_GetPrecisionX(gpClientPlayer);
+        const int32_t nPrecisionY = UNITS_GetPrecisionY(gpClientPlayer);
+        DUNGEON_GameCoordsToSubtileDrawPosition(
+            nPrecisionX >> 16,
+            nPrecisionY >> 16,
+            &nTargetIsoX,
+            &nTargetIsoY);
+    }
 
     nTargetIsoX += gnCameraScreenSkewX;
     nTargetIsoY += gnCameraScreenSkewY;
 
-    if (gpClientViewport->nCameraTargetIsoX != nTargetIsoX ||
-        gpClientViewport->nCameraTargetIsoY != nTargetIsoY ||
-        gpClientViewport->nCameraPrecisionX != nPrecisionX ||
-        gpClientViewport->nCameraPrecisionY != nPrecisionY)
+    const int32_t nHalfWidth = (pViewport->nScreenRight - pViewport->nScreenLeft) / 2;
+    const int32_t nHalfHeight = (pViewport->nScreenBottom - pViewport->nScreenTop) / 2;
+    const int32_t nNewOffsetX = nTargetIsoX + gnCameraShakeOffsetX - nHalfWidth;
+    const int32_t nNewOffsetY = nTargetIsoY + gnCameraShakeOffsetY - nHalfHeight;
+
+    if (pViewport->nCameraTargetIsoX != nTargetIsoX ||
+        pViewport->nCameraTargetIsoY != nTargetIsoY ||
+        pViewport->nViewOffsetX != nNewOffsetX ||
+        pViewport->nViewOffsetY != nNewOffsetY)
     {
-        gpClientViewport->nCameraTargetIsoX = nTargetIsoX;
-        gpClientViewport->nCameraTargetIsoY = nTargetIsoY;
-        gpClientViewport->nCameraPrecisionX = nPrecisionX;
-        gpClientViewport->nCameraPrecisionY = nPrecisionY;
-        gpClientViewport->nViewOffsetX = nTargetIsoX + gpClientViewport->nShakeOffsetX - gpClientViewport->nHalfWidth;
-        gpClientViewport->nViewOffsetY = nTargetIsoY + gpClientViewport->nShakeOffsetY - gpClientViewport->nHalfHeight;
-        gpClientViewport->dwFlags |= VIEWFLAG_DIRTY;
+        pViewport->nCameraTargetIsoX = nTargetIsoX;
+        pViewport->nCameraTargetIsoY = nTargetIsoY;
+        pViewport->nViewOffsetX = nNewOffsetX;
+        pViewport->nViewOffsetY = nNewOffsetY;
+        pViewport->dwFlags |= VIEWFLAG_DIRTY;
     }
 
-    // 3. Rebuild visible DRLG room grid around player
-    VIEW_UpdateViewportVisibility(gpClientViewport, gpClientPlayer);
-
-    // 4. Advance smooth UI panel camera skew
+    VIEW_UpdateViewportVisibility(pViewport, gpClientPlayer);
     PLAYER_UpdateCameraOffsets();
 
-    // 5. Render world viewport
     if (!bSkipWorldRender)
     {
-        VIEW_RenderViewport(gpClientViewport);
+        VIEW_RenderViewport(pViewport);
     }
 }
 
