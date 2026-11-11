@@ -88,12 +88,7 @@ int32_t __fastcall UNIT_GetComponentBBox(D2UnitStrc* pUnit, RECT* pOutRect)
     pOutRect->right  = 0;
     pOutRect->bottom = 0;
 
-    if (pUnit->pAnimSeq == nullptr)
-    {
-        return 0;
-    }
-
-    return D2CMP_GetCelBoundingBox(pUnit->pAnimSeq, pOutRect);
+    return D2CMP_GetCelBoundingBox(pUnit, pOutRect);
 }
 
 // 0x6FAD0010 (UNIT/CUnit.cpp)
@@ -176,7 +171,7 @@ int32_t __fastcall UNIT_HitTest(D2UnitStrc* pUnit, int32_t nIsoCursorX, int32_t 
     }
 
     // Per-pixel non-transparent CEL texel test via D2CMP.#10023
-    return D2CMP_CelHitTestPixel(pUnit->pAnimSeq, nLocalX, nLocalY, bStrictPixelTest);
+    return D2CMP_CelHitTestPixel(pUnit, nLocalX, nLocalY, bStrictPixelTest);
 }
 
 // =============================================================================

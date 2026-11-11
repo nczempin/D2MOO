@@ -129,11 +129,15 @@ uint8_t        gnLocalPlayerCharClass   = 0;       // 0x6FBB33D4
 int32_t        gnPlayerStandStillFlag   = 0;       // 0x6FBCC054
 int32_t        gnOpenPanelMode          = 0;       // 0x6FBCC1D0 (1 = right, 2 = left, 3 = both)
 int32_t        gnScreenWidth            = 800;     // 0x6FB8C6E0
-int32_t        gnMouseCursorX           = 0;       // 0x6FBB1638
+int32_t        gnScreenHeight           = 600;     // 0x6FB8C6E4
+int32_t        gnMouseX                 = 0;       // 0x6FBB1638
+int32_t        gnMouseY                 = 0;       // 0x6FBB1634
+#define gnMouseCursorX gnMouseX
 int32_t        gnGameType               = 0;       // 0x6FBCBFF8
 uint8_t        gnClientDifficulty       = 0;       // 0x6FBCBFF4
 int32_t        gbIsExpansion            = 0;       // 0x6FBB330C
-int32_t        gbHideGroundItems        = 0;       // 0x6FBB2B8C
+extern int32_t gaPanelStates[38];                  // 0x6FBB2B58
+#define gbHideGroundItems (gaPanelStates[13])
 int32_t        gnAutomapRefreshState    = 0;       // 0x6FBCC2F4
 int32_t        gnSelectedTargetA        = 0;       // 0x6FBCC118
 int32_t        gnSelectedTargetB        = 0;       // 0x6FBCC11C

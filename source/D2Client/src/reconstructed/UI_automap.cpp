@@ -223,19 +223,23 @@ uint8_t __fastcall OBJECTS_OperateAncientStatue(D2UnitStrc* pObject)
 // Preceding Game/Network Session Init & Shutdown (0x6FAEB9E0..0x6FAEBBF0)
 // ============================================================================
 
+extern int32_t gaPanelStates[38];
+static int32_t g_bSinglePlayerServerRunning = 0;
+static int32_t g_bConnectionTimedOut = 0;
+
 // 1.12a: 0x6FAEB9E0 (__stdcall)
 int32_t __stdcall NET_HasConnectionTimedOut(void)
 {
-    return *(int32_t*)0x6FBC47A0;
+    return g_bConnectionTimedOut;
 }
 
 // 1.12a: 0x6FAEB9F0 (__stdcall)
 int32_t __stdcall GAME_LeaveSinglePlayerServer(void)
 {
-    if (!*(int32_t*)0x6FBC4798) {
+    if (!g_bSinglePlayerServerRunning) {
         return 0;
     }
-    *(int32_t*)0x6FBC4798 = 0;
+    g_bSinglePlayerServerRunning = 0;
     // Tail-calls D2Game_10050 (#10036)
     return 1;
 }
@@ -243,7 +247,7 @@ int32_t __stdcall GAME_LeaveSinglePlayerServer(void)
 // 1.12a: 0x6FAEBA10 (__stdcall)
 int32_t __stdcall GAME_StepSinglePlayerServer(void)
 {
-    *(int32_t*)0x6FBC4798 = 1;
+    g_bSinglePlayerServerRunning = 1;
     // Tail-calls D2Game_10046 (#10046)
     return 1;
 }
@@ -356,8 +360,8 @@ int32_t __fastcall UI_HitTestNewStatBtn640(int32_t nMouseX, int32_t nSplitMode, 
 // 1.12a: 0x6FAEBE60 (custom: eax = nSplitMode)
 uint8_t __fastcall UI_IsRightSideBlockedForNewSkillBtn(int32_t nSplitMode)
 {
-    if (nSplitMode == 3 || *(int32_t*)0x6FBB2B68 || *(int32_t*)0x6FBB2B88 ||
-        (*(int32_t*)0x6FBB2BB0 && *(int32_t*)0x6FBB2B5C)) {
+    if (nSplitMode == 3 || gaPanelStates[4] || gaPanelStates[12] ||
+        (gaPanelStates[22] && gaPanelStates[1])) {
         return 1;
     }
     return 0;
@@ -366,13 +370,13 @@ uint8_t __fastcall UI_IsRightSideBlockedForNewSkillBtn(int32_t nSplitMode)
 // 1.12a: 0x6FAEBE90 (custom: eax = nSplitMode)
 uint8_t __fastcall UI_IsLeftSideBlockedForNewStatBtn(int32_t nSplitMode)
 {
-    if (nSplitMode == 3 || *(int32_t*)0x6FBB2B60) {
+    if (nSplitMode == 3 || gaPanelStates[2]) {
         return 1;
     }
-    if (*(int32_t*)0x6FBB2BB0 && (*(int32_t*)0x6FBB2B5C || *(int32_t*)0x6FBB2B68)) {
+    if (gaPanelStates[22] && (gaPanelStates[1] || gaPanelStates[4])) {
         return 1;
     }
-    return *(int32_t*)0x6FBB2B88 != 0;
+    return gaPanelStates[12] != 0;
 }
 
 // 1.12a: 0x6FAEBED0 (__stdcall)

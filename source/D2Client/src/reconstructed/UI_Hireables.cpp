@@ -163,14 +163,7 @@ struct D2WindowMsgStrc
     int32_t nReturnValue;       // +0x1C
 };
 
-struct D2GfxDataStrc
-{
-    void* pCache;               // +0x00
-    D2CellFileStrc* pCellFile;  // +0x04 (offset +0x3C in local stack frame)
-    int32_t nDir;               // +0x08 (offset +0x40 in local stack frame)
-    int32_t nFrame;             // +0x0C (offset +0x44 in local stack frame)
-    uint32_t aReserved[14];     // +0x10..0x47
-};
+#include "D2ClientReconstructed.h"
 
 struct D2RosterRelationStrc
 {
@@ -307,8 +300,8 @@ static int32_t g_bPartyCloseBtnPressed  = 0;               // 0x6FBCC1B4
 static int32_t g_bPartyLeaveBtnPressed  = 0;               // 0x6FBCC1B8
 static int32_t g_bPartyRowBtnPressed    = 0;               // 0x6FBCC1BC
 static int32_t g_nPartyLastPlayerCount  = 0;               // 0x6FBA7908
-static D2RosterUnitStrc* g_pRosterHead  = nullptr;         // 0x6FBCC080
-static D2PetInfoStrc* g_pPetInfoList    = nullptr;         // 0x6FBCB97C
+#define g_pRosterHead gpRosterUnitList
+#define g_pPetInfoList (reinterpret_cast<D2PetInfoStrc*>(gpRosterPetList))
 static int32_t g_nPortraitDisplayMode   = 0;               // 0x6FBCB98C
 static uint8_t g_nLifeBarColorGreen     = 0;               // 0x6FBCB990
 static uint8_t g_nLifeBarColorYellow    = 0;               // 0x6FBCB991
@@ -326,6 +319,22 @@ static D2CellFileStrc* g_pSummitCel     = nullptr;         // 0x6FBCB9D0
 static D2CellFileStrc* g_pCloudCel      = nullptr;         // 0x6FBCB9D4
 static uint8_t g_bCloudsInitialized     = 0;               // 0x6FBCB9DC
 static int32_t g_bStarsInitialized      = 0;               // 0x6FBCB9D8
+static int32_t g_bPartyNeedUiSync       = 0;
+static int32_t g_nPartyClearedHover[4]  = { 0 };
+static uint8_t g_aTileRenderPoolDesc[64]= { 0 };
+static int32_t g_bDisableSummitBg       = 0;
+static int32_t g_nSummitBaseY           = 0;
+static int32_t g_aStarX[256]            = { 0 };
+static int32_t g_aStarY[256]            = { 0 };
+static int32_t g_aStarVel[256]          = { 0 };
+static uint8_t g_aStarCol[256]          = { 0 };
+static uint8_t g_aStarPal[8]            = { 0 };
+static uint32_t g_dwStarLastTick        = 0;
+static int32_t g_nSavedScaleFactor      = 0;
+uint8_t g_nEnvLightB                    = 255;
+uint8_t g_nEnvLightG                    = 255;
+uint8_t g_nEnvLightIntensity            = 255;
+uint8_t g_nEnvLightR                    = 255;
 
 // Internal D2Client helpers
 extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szPath, int32_t nFileType); // 0x6FB6EF70
@@ -351,11 +360,11 @@ extern void __stdcall MSG_SendPacket(const void* pData);                        
 // Calling convention: __stdcall
 void __stdcall PARTY_UpdatePartyScreen()
 {
-    int32_t bPartyOpen = *(int32_t*)0x6FBB2B6C;
+    int32_t bPartyOpen = gaPanelStates[D2PANEL_PARTY];
     if (bPartyOpen)
     {
         g_bPartyNeedRefresh = 1;
-        *(int32_t*)0x6FBCBC9C = 1;
+        g_bPartyNeedUiSync = 1;
     }
 }
 
@@ -430,7 +439,7 @@ void __stdcall PARTY_SetNeedRefreshFlag()
 // Calling convention: __stdcall
 int32_t __stdcall PARTY_CanPartyOrHostileInLevel()
 {
-    D2UnitStrc* pLocalPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pLocalPlayer = gpPlayerUnit;
     if (!pLocalPlayer)
     {
         FOG_DisplayHalt(FOG_GetErrorLocation(289), "..\\Source\\D2Client\\UI\\Party.cpp", 289);
@@ -448,12 +457,12 @@ int32_t __stdcall PARTY_CanPartyOrHostileInLevel()
 // Calling convention: __stdcall
 void __stdcall PARTY_ClearCursorHover()
 {
-    if (*(int32_t*)0x6FBB2B6C)
+    if (gaPanelStates[D2PANEL_PARTY])
     {
-        *(int32_t*)0x6FBCC040 = 0;
-        *(int32_t*)0x6FBCC044 = 0;
-        *(int32_t*)0x6FBCC05C = 0;
-        *(int32_t*)0x6FBCC060 = 0;
+        g_nPartyClearedHover[0] = 0;
+        g_nPartyClearedHover[1] = 0;
+        g_nPartyClearedHover[2] = 0;
+        g_nPartyClearedHover[3] = 0;
     }
 }
 
@@ -561,12 +570,12 @@ int32_t __fastcall PARTY_GetPlayerRelationshipState(D2RosterUnitStrc* pRosterUni
 // Calling convention: __userpurge (eax = nX, edx = nY, [esp+4] = nWidth, [esp+8] = nHeight)
 int32_t __stdcall PARTY_IsMouseInRect(int32_t nX, int32_t nY, int32_t nWidth, int32_t nHeight)
 {
-    int32_t nMouseX = *(int32_t*)0x6FBB1638;
-    int32_t nMouseY = *(int32_t*)0x6FBB1634;
-    int32_t nLeft = nX + *(int32_t*)0x6FBCBD28;
+    int32_t nMouseX = gnMouseX;
+    int32_t nMouseY = gnMouseY;
+    int32_t nLeft = nX + g_nPanelOffsetX;
     if (nMouseX >= nLeft && nMouseX <= nLeft + nWidth)
     {
-        int32_t nBottom = nY - *(int32_t*)0x6FBCBD2C;
+        int32_t nBottom = nY - g_nPanelOffsetY;
         if (nMouseY >= nBottom - nHeight && nMouseY <= nBottom)
         {
             return 1;
@@ -668,8 +677,8 @@ void __fastcall PARTY_DrawPlayerNameAndGuild(D2RosterUnitStrc* pRosterUnit, int3
     D2Win_10127_SetFont(1);
     D2Win_10117_DrawText(
         wszName,
-        0x50 + *(int32_t*)0x6FBCBD28,
-        nRowY + 0x10 - *(int32_t*)0x6FBCBD2C,
+        0x50 + g_nPanelOffsetX,
+        nRowY + 0x10 - g_nPanelOffsetY,
         0,
         0);
 }
@@ -685,8 +694,8 @@ void __fastcall PARTY_DrawNodeLevelAndClass(D2PartyScreenNodeStrc* pNode, int32_
     Unicode_sprintf(128, wszBuf, wszFmt, pNode->nLevel, wszClass);
     D2Win_10117_DrawText(
         wszBuf,
-        0x50 + *(int32_t*)0x6FBCBD28,
-        pNode->nRowY + 0x1D - *(int32_t*)0x6FBCBD2C,
+        0x50 + g_nPanelOffsetX,
+        pNode->nRowY + 0x1D - g_nPanelOffsetY,
         nColor,
         0);
 }
@@ -704,8 +713,8 @@ void __fastcall PARTY_DrawButton(D2PartyButtonStrc* pButton)
     tGfxData.nFrame = pButton->nFrame;
     TEXTURE_CelDraw(
         &tGfxData,
-        pButton->nX + *(int32_t*)0x6FBCBD28,
-        pButton->nY - *(int32_t*)0x6FBCBD2C,
+        pButton->nX + g_nPanelOffsetX,
+        pButton->nY - g_nPanelOffsetY,
         0xFFFFFFFF,
         5,
         nullptr);
@@ -713,8 +722,8 @@ void __fastcall PARTY_DrawButton(D2PartyButtonStrc* pButton)
     {
         PARTY_DrawWrappedText(
             D2LANG_GetStringFromTblIndex((uint16_t)pButton->nTextStrId),
-            pButton->nX + *(int32_t*)0x6FBCBD28,
-            pButton->nY - *(int32_t*)0x6FBCBD2C - 5,
+            pButton->nX + g_nPanelOffsetX,
+            pButton->nY - g_nPanelOffsetY - 5,
             53);
     }
 }
@@ -733,8 +742,8 @@ void __fastcall PARTY_DrawButtonTooltip(D2PartyButtonStrc* pButton)
         Unicode* wszTip = D2LANG_GetStringFromTblIndex((uint16_t)pButton->nTextStrId);
         D2Win_10129_DrawFramedText(
             wszTip,
-            pButton->nX + *(int32_t*)0x6FBCBD28 + 10,
-            pButton->nY - *(int32_t*)0x6FBCBD2C - 22,
+            pButton->nX + g_nPanelOffsetX + 10,
+            pButton->nY - g_nPanelOffsetY - 22,
             0,
             1);
     }
@@ -898,8 +907,8 @@ void __fastcall PARTY_DrawRelationshipStatusText(D2RosterUnitStrc* pRosterUnit, 
     {
         D2Win_10117_DrawText(
             D2LANG_GetStringFromTblIndex(wStrId),
-            0xDC + *(int32_t*)0x6FBCBD28,
-            pNode->nRowY + 0x14 - *(int32_t*)0x6FBCBD2C,
+            0xDC + g_nPanelOffsetX,
+            pNode->nRowY + 0x14 - g_nPanelOffsetY,
             nColor,
             0);
     }
@@ -909,7 +918,7 @@ void __fastcall PARTY_DrawRelationshipStatusText(D2RosterUnitStrc* pRosterUnit, 
 // Calling convention: __stdcall
 void __stdcall PARTY_DrawPartyScreen()
 {
-    if (!*(int32_t*)0x6FBB2B6C)
+    if (!gaPanelStates[D2PANEL_PARTY])
     {
         return;
     }
@@ -917,8 +926,8 @@ void __stdcall PARTY_DrawPartyScreen()
 
     D2GfxDataStrc tGfxData = { 0 };
     tGfxData.pCellFile = g_pPartyPanelCel;
-    int32_t nBaseX = *(int32_t*)0x6FBCBD28;
-    int32_t nBaseY = *(int32_t*)0x6FBCBD2C;
+    int32_t nBaseX = g_nPanelOffsetX;
+    int32_t nBaseY = g_nPanelOffsetY;
 
     // 4 quadrant tiles of panel\party
     tGfxData.nFrame = 0;
@@ -994,7 +1003,7 @@ void __fastcall PARTY_PlayUISound(int32_t nSoundId)
 // Calling convention: __stdcall
 void __stdcall PARTY_ClosePartyScreen()
 {
-    *(int32_t*)0x6FBB2B6C = 0;
+    gaPanelStates[D2PANEL_PARTY] = 0;
     PARTY_FreeNodesAndCellFiles();
 }
 
@@ -1183,14 +1192,14 @@ void __stdcall ENV_FreeSummitCloudCellFiles()
 // Calling convention: __stdcall
 void __stdcall ENV_AllocTileRenderPools()
 {
-    D2Win_10178((void*)0x6FBAD118);
+    D2Win_10178((void*)g_aTileRenderPoolDesc);
 }
 
 // 1.12a: 0x6FB6AB20
 // Calling convention: __fastcall (ecx = pPlayerUnit)
 void __fastcall ENV_DrawArreatSummitBackground(D2UnitStrc* pPlayerUnit)
 {
-    if (*(int32_t*)0x6FBCC008 != 0)
+    if (g_bDisableSummitBg != 0)
     {
         return;
     }
@@ -1202,7 +1211,7 @@ void __fastcall ENV_DrawArreatSummitBackground(D2UnitStrc* pPlayerUnit)
     {
         g_pCloudCel = ARCHIVE_LoadCellFile("data\\global\\ui\\cloud01", 0);
     }
-    int32_t nPosY = UNITS_GetPrecisionY(pPlayerUnit) - *(int32_t*)0x6FBD36C0;
+    int32_t nPosY = UNITS_GetPrecisionY(pPlayerUnit) - g_nSummitBaseY;
     int32_t nScrollX = -((nPosY / 8) % 256);
     int32_t nBaseFrame = ((nPosY / 8) / 256) & 3;
 
@@ -1226,14 +1235,14 @@ void __fastcall ENV_DrawArreatSummitBackground(D2UnitStrc* pPlayerUnit)
 // Calling convention: __usercall (eax = bRespawnAtEdge, edi = nStarIdx)
 void __fastcall ENV_InitArcaneSanctuaryStar(int32_t bRespawnAtEdge, int32_t nStarIdx)
 {
-    int32_t* pStarX   = (int32_t*)0x6FBB0228;
-    int32_t* pStarY   = (int32_t*)0x6FBACCD8;
-    int32_t* pStarVel = (int32_t*)0x6FBB0628;
-    uint8_t* pStarCol = (uint8_t*)0x6FBACB78;
-    uint8_t* pStarPal = (uint8_t*)0x6FBB0218;
+    int32_t* pStarX   = g_aStarX;
+    int32_t* pStarY   = g_aStarY;
+    int32_t* pStarVel = g_aStarVel;
+    uint8_t* pStarCol = g_aStarCol;
+    uint8_t* pStarPal = g_aStarPal;
 
-    int32_t nScreenWidth  = *(int32_t*)0x6FBCD528;
-    int32_t nScreenHeight = *(int32_t*)0x6FBCD524;
+    int32_t nScreenWidth  = gnViewportWidth;
+    int32_t nScreenHeight = gnViewportHeight;
     pStarX[nStarIdx] = bRespawnAtEdge ? (nScreenWidth - 1) : (rand() % (nScreenWidth > 0 ? nScreenWidth : 1));
     pStarY[nStarIdx] = (nScreenHeight > 0) ? (rand() % nScreenHeight) : 0;
     pStarVel[nStarIdx] = -1 - (rand() % 5);
@@ -1268,11 +1277,11 @@ void __fastcall ENV_UpdateEarthquakeLoopSound(int32_t nShakeAmplitude)
 // Calling convention: __stdcall
 void __stdcall ENV_DrawArcaneSanctuaryStars()
 {
-    int32_t* pStarX   = (int32_t*)0x6FBB0228;
-    int32_t* pStarY   = (int32_t*)0x6FBACCD8;
-    int32_t* pStarVel = (int32_t*)0x6FBB0628;
-    uint8_t* pStarCol = (uint8_t*)0x6FBACB78;
-    uint8_t* pStarPal = (uint8_t*)0x6FBB0218;
+    int32_t* pStarX   = g_aStarX;
+    int32_t* pStarY   = g_aStarY;
+    int32_t* pStarVel = g_aStarVel;
+    uint8_t* pStarCol = g_aStarCol;
+    uint8_t* pStarPal = g_aStarPal;
 
     if (!g_bStarsInitialized)
     {
@@ -1293,9 +1302,9 @@ void __stdcall ENV_DrawArcaneSanctuaryStars()
     }
 
     uint32_t dwTick = GetTickCount();
-    if (dwTick - *(uint32_t*)0x6FBACCD0 > 40)
+    if (dwTick - g_dwStarLastTick > 40)
     {
-        *(uint32_t*)0x6FBACCD0 = dwTick;
+        g_dwStarLastTick = dwTick;
         for (int i = 0; i < 256; ++i)
         {
             pStarX[i] += pStarVel[i];
@@ -1317,19 +1326,22 @@ void __stdcall ENV_DrawArcaneSanctuaryStars_Epilog()
 // Calling convention: __stdcall
 void __stdcall ENV_ApplyScreenShake(int32_t* pOffsetX, int32_t* pOffsetY)
 {
-    uint32_t dwElapsed = GetTickCount() - *(uint32_t*)0x6FBAD104;
-    uint32_t dwAttack  = *(uint32_t*)0x6FBAD108;
-    uint32_t dwSustain = *(uint32_t*)0x6FBAD10C;
-    uint32_t dwDecay   = *(uint32_t*)0x6FBAD110;
+    (void)pOffsetX;
+    (void)pOffsetY;
+    uint32_t dwElapsed = GetTickCount() - g_dwShakeStartTick;
+    uint32_t dwAttack  = (uint32_t)g_nShakeRampUpMs;
+    uint32_t dwSustain = (uint32_t)g_nShakeHoldMs;
+    uint32_t dwDecay   = (uint32_t)g_nShakeRampDownMs;
     if (dwElapsed > dwAttack + dwSustain + dwDecay)
     {
         ENV_UpdateEarthquakeLoopSound(0);
-        *(int32_t*)0x6FBCB9B0 = 0;
-        *(int32_t*)0x6FBCB9B4 = 0;
-        *(int32_t*)0x6FBAD114 = 0;
+        g_nShakeMaxAmplitude = 0;
+        g_nShakeOffsetX = 0;
+        g_nShakeOffsetY = 0;
+        g_bScreenShakeActive = 0;
         return;
     }
-    int32_t nMaxAmp = *(int32_t*)0x6FBCB9B0;
+    int32_t nMaxAmp = g_nShakeMaxAmplitude;
     int32_t nAmp = nMaxAmp;
     if (dwElapsed < dwAttack && dwAttack > 0)
     {
@@ -1363,15 +1375,15 @@ void __fastcall ENV_RenderGameViewport(uint32_t* pViewport)
         return;
     }
     SCALE_UpdateFactor();
-    *(int32_t*)0x6FBAD100 = SCALE_GetFactor();
+    g_nSavedScaleFactor = SCALE_GetFactor();
     if (D2GFX_CheckPerspective())
     {
-        D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+        D2UnitStrc* pPlayer = gpPlayerUnit;
         int32_t nX = UNITS_GetPrecisionX(pPlayer);
         int32_t nY = UNITS_GetClientCoordX(pPlayer);
         SCALE_CheckPerspectivePosition(nX, nY);
     }
-    D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pPlayer = gpPlayerUnit;
     D2RoomStrc* pRoom = UNITS_GetRoom(pPlayer);
     if (DUNGEON_GetLevelIdFromRoom(pRoom) == 74)
     {
@@ -1400,8 +1412,8 @@ void __fastcall ENV_DrawUnitDebugTargetCrosshair(D2UnitStrc* pUnit)
     int32_t nX = *(uint16_t*)((uint8_t*)pUnit + 0x8C);
     int32_t nY = *(uint16_t*)((uint8_t*)pUnit + 0x8E);
     DUNGEON_GameSubtileToClientCoords(&nY, &nX);
-    int32_t nScreenX = nY + *(int32_t*)0x6FBCC1D4 - *(int32_t*)0x6FBC21D0;
-    int32_t nScreenY = nX - *(int32_t*)0x6FBC21CC;
+    int32_t nScreenX = nY + gnViewportShiftOffsetX - gnCameraScreenSkewX;
+    int32_t nScreenY = nX - gnCameraScreenSkewY;
     D2GFX_DrawLine(nScreenX, nScreenY + 8, nScreenX + 16, nScreenY + 16, 0xFF, 0xFF);
     D2GFX_DrawLine(nScreenX, nScreenY + 8, nScreenX - 16, nScreenY + 16, 0xFF, 0xFF);
     D2GFX_DrawLine(nScreenX - 16, nScreenY + 16, nScreenX, nScreenY + 24, 0xFF, 0xFF);
@@ -1416,7 +1428,7 @@ int32_t __fastcall ENV_CheckUnitLineOfSight(D2UnitStrc* pUnit)
     {
         return 1;
     }
-    D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pPlayer = gpPlayerUnit;
     if (!pPlayer || pPlayer == pUnit)
     {
         *(uint32_t*)((uint8_t*)pUnit + 0xC8) |= 0x80;
@@ -1492,11 +1504,11 @@ const int32_t* __stdcall ENV_GetTileLightOffsets(int32_t* pTileOrientation, uint
 // Calling convention: __stdcall
 void __stdcall ENV_UpdateActEnvironmentLighting()
 {
-    void* pAct = *(void**)0x6FBCC01C;
-    ENVIRONMENT_GetLightColorFromAct(pAct, (uint8_t*)0x6FBACB6F, (uint8_t*)0x6FBACB6D, (uint8_t*)0x6FBACB6C);
-    *(uint8_t*)0x6FBACB6E = ENVIRONMENT_GetIntensityFromAct(pAct);
+    void* pAct = gpClientAct;
+    ENVIRONMENT_GetLightColorFromAct(pAct, &g_nEnvLightR, &g_nEnvLightG, &g_nEnvLightB);
+    g_nEnvLightIntensity = ENVIRONMENT_GetIntensityFromAct(pAct);
 
-    D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pPlayer = gpPlayerUnit;
     if (pPlayer)
     {
         D2RoomStrc* pRoom = UNITS_GetRoom(pPlayer);
@@ -1506,10 +1518,10 @@ void __stdcall ENV_UpdateActEnvironmentLighting()
             DUNGEON_GetRGB_IntensityFromRoom(pRoom, &nInt, &nR, &nG, &nB);
             if (nR || nG || nB)
             {
-                *(uint8_t*)0x6FBACB6E = nInt;
-                *(uint8_t*)0x6FBACB6F = nR;
-                *(uint8_t*)0x6FBACB6D = nG;
-                *(uint8_t*)0x6FBACB6C = nB;
+                g_nEnvLightIntensity = nInt;
+                g_nEnvLightR = nR;
+                g_nEnvLightG = nG;
+                g_nEnvLightB = nB;
             }
         }
     }
@@ -1694,17 +1706,21 @@ int32_t __fastcall SPINNER_Proxy_OnKeyDown(void* pThis, void* _edx, D2WindowMsgS
     return (*(int32_t(__thiscall**)(void*, D2WindowMsgStrc*))(*(uintptr_t*)pImpl + 0x08))(pImpl, pMsg);
 }
 
+extern const void* const g_aSpinnerProxyVtable[13];
+extern const void* const g_aSpinnerImplVtable[13];
+static const void* const g_aWidgetBaseVtable[13] = { nullptr };
+
 // 1.12a: 0x6FB6C8A0
 // Calling convention: __thiscall (ecx = this)
 void __fastcall SPINNER_Proxy_Destructor(void* pThis)
 {
-    *(uintptr_t*)pThis = 0x6FB808B0;
+    *(const void* const**)pThis = g_aSpinnerProxyVtable;
     void* pImpl = *((void**)pThis + 2);
     if (pImpl)
     {
         (*(void(__thiscall**)(void*, int32_t))(*(uintptr_t*)pImpl))(pImpl, 1);
     }
-    *(uintptr_t*)pThis = 0x6FB80918;
+    *(const void* const**)pThis = g_aWidgetBaseVtable;
 }
 
 // 1.12a: 0x6FB6C900
@@ -1889,22 +1905,63 @@ int32_t __fastcall SPINNER_Impl_OnMouseDown(int32_t* pThis, void* _edx, D2Window
 // Calling convention: __stdcall
 void __stdcall SPINNER_Impl_Destructor(int32_t* pThis)
 {
-    *(uintptr_t*)pThis = 0x6FB808E4;
+    *(const void* const**)pThis = g_aSpinnerImplVtable;
     D2CellFileStrc* pCel = (D2CellFileStrc*)pThis[20];
     D2CMP_CelFileFreeHardware(pCel);
     if (pCel)
     {
         FOG_Free(pCel, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 122, 0);
     }
-    *(uintptr_t*)pThis = 0x6FB80918;
+    *(const void* const**)pThis = g_aWidgetBaseVtable;
 }
+
+static void __fastcall SPINNER_Impl_ScalarDeletingDestructor(int32_t* pThis, void* _edx, int32_t bDelete)
+{
+    SPINNER_Impl_Destructor(pThis);
+    if (bDelete & 1)
+    {
+        FOG_Free(pThis, "delete", -1, 0);
+    }
+}
+
+const void* const g_aSpinnerProxyVtable[13] = {
+    (const void*)&SPINNER_Proxy_Destructor,
+    (const void*)&SPINNER_Proxy_Draw,
+    (const void*)&SPINNER_Proxy_OnKeyDown,
+    (const void*)&SPINNER_Proxy_OnMouseDown,
+    (const void*)&SPINNER_Proxy_OnMouseUp,
+    (const void*)&SPINNER_Proxy_VFunc5,
+    (const void*)&SPINNER_Proxy_VFunc6,
+    (const void*)&SPINNER_Proxy_VFunc7,
+    (const void*)&SPINNER_Proxy_VFunc8,
+    (const void*)&SPINNER_Proxy_VFunc9,
+    (const void*)&SPINNER_Proxy_VFunc10,
+    (const void*)&SPINNER_Proxy_GetState,
+    (const void*)&SPINNER_Proxy_GetTickDelta
+};
+
+const void* const g_aSpinnerImplVtable[13] = {
+    (const void*)&SPINNER_Impl_ScalarDeletingDestructor,
+    (const void*)&SPINNER_Impl_Draw,
+    (const void*)&SPINNER_Impl_OnMouseWheel,
+    (const void*)&SPINNER_Impl_OnMouseDown,
+    (const void*)&SPINNER_Impl_OnMouseUp,
+    (const void*)&SPINNER_Impl_Stub5,
+    (const void*)&SPINNER_Impl_Stub6,
+    (const void*)&SPINNER_Impl_Stub7,
+    (const void*)&SPINNER_Impl_Stub8,
+    (const void*)&SPINNER_Impl_Stub9,
+    (const void*)&SPINNER_Impl_Stub10,
+    (const void*)&SPINNER_Impl_GetActiveDirection,
+    (const void*)&SPINNER_Impl_GetRepeatStep
+};
 
 // 1.12a: 0x6FB6CD00
 // Calling convention: __stdcall
 void* __stdcall SPINNER_Impl_Constructor(int32_t* pThis, int32_t nY, int32_t nX, int32_t bSideBySide, void* pfnCallback)
 {
     char szPath[260];
-    *(uintptr_t*)pThis = 0x6FB808E4;
+    *(const void* const**)pThis = g_aSpinnerImplVtable;
     sprintf(szPath, "%s\\ui\\menu\\spinner", "DATA\\GLOBAL");
     D2CellFileStrc* pCel = ARCHIVE_LoadCellFile(szPath, 0);
     pThis[2]  = nX;
@@ -1943,7 +2000,7 @@ void* __stdcall SPINNER_Impl_Constructor(int32_t* pThis, int32_t nY, int32_t nX,
 // Calling convention: __stdcall
 void* __stdcall SPINNER_Proxy_Constructor(int32_t* pThis, int32_t nX, int32_t nY, int32_t bSideBySide, void* pfnCallback)
 {
-    *(uintptr_t*)pThis = 0x6FB808B0;
+    *(const void* const**)pThis = g_aSpinnerProxyVtable;
     int32_t* pImpl = (int32_t*)SMemAlloc(0x54, "new", -1, 0);
     if (pImpl)
     {
@@ -1974,7 +2031,7 @@ void __stdcall HIREABLES_InitPanelState()
 // Calling convention: __stdcall
 D2UnitStrc* __stdcall HIREABLES_GetLocalCursorItem()
 {
-    D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pPlayer = gpPlayerUnit;
     if (!pPlayer)
     {
         return nullptr;
@@ -2093,14 +2150,11 @@ void __stdcall HIREABLES_DrawAsciiPortraitLabel(const char* szName, int32_t nX, 
 // Calling convention: __userpurge (eax = nPetType, [esp+4] = nX, [esp+8] = nY)
 void __stdcall HIREABLES_DrawPetTypeNameLabel(int32_t nPetType, int32_t nX, int32_t nY)
 {
-    uint8_t* pDataTables = **(uint8_t***)0x6FB7E454; // sgptDataTables
-    int32_t nPetTypeCount = *(int32_t*)(pDataTables + 0xBF0);
-    if (nPetType < 0 || nPetType >= nPetTypeCount)
+    const D2PetTypeTxt* pRecord = static_cast<const D2PetTypeTxt*>(D2Client_GetPetTypeRecord(nPetType));
+    if (!pRecord)
     {
         return;
     }
-    D2PetTypeTxt* pPetTypes = *(D2PetTypeTxt**)(pDataTables + 0xBE8);
-    D2PetTypeTxt* pRecord = &pPetTypes[nPetType];
     if (pRecord->wNameStr > 0 && pRecord->wNameStr != 0x1506)
     {
         Unicode wszLabel[32] = { 0 };
@@ -2124,8 +2178,7 @@ void __stdcall HIREABLES_FreePortraitCellFiles()
     }
     if (g_ppPetTypeIcons)
     {
-        uint8_t* pDataTables = **(uint8_t***)0x6FB7E454;
-        int32_t nTotalIcons = *(int32_t*)(pDataTables + 0xBF0) * 5;
+        int32_t nTotalIcons = D2Client_GetPetTypeCount() * 5;
         for (int i = 0; i < nTotalIcons; ++i)
         {
             if (g_ppPetTypeIcons[i])
@@ -2161,12 +2214,11 @@ D2CellFileStrc* __stdcall HIREABLES_GetOrLoadPetPortraitCellFile(
     D2UnitStrc* pPlayerUnit,
     int32_t* pOutPetGuid)
 {
-    uint8_t* pDataTables = **(uint8_t***)0x6FB7E454;
-    if (nPetType < 0 || nPetType >= *(int32_t*)(pDataTables + 0xBF0))
+    const D2PetTypeTxt* pRecord = static_cast<const D2PetTypeTxt*>(D2Client_GetPetTypeRecord(nPetType));
+    if (!pRecord)
     {
         return nullptr;
     }
-    D2PetTypeTxt* pRecord = &(*(D2PetTypeTxt**)(pDataTables + 0xBE8))[nPetType];
     if (pDrawHpFlag)
     {
         *pDrawHpFlag = (pRecord->nFlags & 0x20) ? 1 : 0;
@@ -2275,8 +2327,7 @@ void __stdcall HIREABLES_LoadPortraitCellFiles()
         g_apClassIcons[5] = UI_LoadPanelCellFile("Hireables\\AssassinIcon");
         g_apClassIcons[6] = UI_LoadPanelCellFile("Hireables\\DruidIcon");
     }
-    uint8_t* pDataTables = **(uint8_t***)0x6FB7E454;
-    int32_t nAllocSize = *(int32_t*)(pDataTables + 0xBF0) * 5 * sizeof(D2CellFileStrc*);
+    int32_t nAllocSize = D2Client_GetPetTypeCount() * 5 * sizeof(D2CellFileStrc*);
     g_ppPetTypeIcons = (D2CellFileStrc**)FOG_AllocPool(nullptr, nAllocSize, "..\\Source\\D2Client\\UI\\Hireables.cpp", 150, 0);
     memset(g_ppPetTypeIcons, 0, nAllocSize);
 }
@@ -2438,7 +2489,8 @@ int32_t __stdcall HIREABLES_DrawPartyMemberPortraits(
 // Calling convention: __stdcall
 int32_t __stdcall HIREABLES_CanMercUseCursorItem(int32_t bPlayErrorSpeech)
 {
-    if (!*(int32_t*)0x6FBB330C)
+    (void)bPlayErrorSpeech;
+    if (!gbIsExpansion)
     {
         return 0;
     }
@@ -2467,7 +2519,7 @@ int32_t __stdcall HIREABLES_CanMercUseCursorItem(int32_t bPlayErrorSpeech)
 // Calling convention: __stdcall
 void __stdcall HIREABLES_OnMouseMove(D2WindowMsgStrc* pMsg)
 {
-    if (!*(int32_t*)0x6FBB330C)
+    if (!gbIsExpansion)
     {
         return;
     }
@@ -2501,7 +2553,7 @@ void __stdcall HIREABLES_OnMouseMove(D2WindowMsgStrc* pMsg)
 // Calling convention: __stdcall
 void __stdcall HIREABLES_OnLeftMouseDown(D2WindowMsgStrc* pMsg)
 {
-    if (!*(int32_t*)0x6FBB330C)
+    if (!gbIsExpansion)
     {
         return;
     }
@@ -2525,7 +2577,7 @@ void __stdcall HIREABLES_OnLeftMouseDown(D2WindowMsgStrc* pMsg)
 // Calling convention: __stdcall
 void __stdcall HIREABLES_OnLeftMouseHold(D2WindowMsgStrc* pMsg)
 {
-    if (!*(int32_t*)0x6FBB330C)
+    if (!gbIsExpansion)
     {
         return;
     }
@@ -2555,10 +2607,10 @@ void __stdcall HIREABLES_CyclePortraitDisplayMode()
 {
     if (g_nPortraitDisplayMode == 0)
     {
-        g_nPortraitDisplayMode = (*(int32_t*)0x6FBCBFF8 != 0) ? 1 : 2;
+        g_nPortraitDisplayMode = (gnGameType != 0) ? 1 : 2;
         g_dwMercHoverStartTick = 0;
     }
-    else if (g_nPortraitDisplayMode == 1 && *(int32_t*)0x6FBCBFF8 != 0)
+    else if (g_nPortraitDisplayMode == 1 && gnGameType != 0)
     {
         g_nPortraitDisplayMode = 2;
         g_dwMercHoverStartTick = 0;
@@ -2585,7 +2637,7 @@ void __stdcall HIREABLES_UpdateMercScreenWindowState()
 // Calling convention: __stdcall
 void __stdcall HIREABLES_DrawAllPortraits()
 {
-    int32_t nScreenPanels = *(int32_t*)0x6FBCC1D0;
+    int32_t nScreenPanels = gnViewportShiftMode;
     if (nScreenPanels == 2 || nScreenPanels == 3 || g_nPortraitDisplayMode == 2)
     {
         g_bMercPortraitHighlight = 0;
@@ -2593,7 +2645,7 @@ void __stdcall HIREABLES_DrawAllPortraits()
         return;
     }
 
-    D2UnitStrc* pPlayer = *(D2UnitStrc**)0x6FBCC3D0;
+    D2UnitStrc* pPlayer = gpPlayerUnit;
     int32_t nX = 15;
     int32_t nLabelY = 72;
     int32_t nStaggerOffset = 0;
@@ -2601,12 +2653,12 @@ void __stdcall HIREABLES_DrawAllPortraits()
     int32_t bDrewAny = HIREABLES_DrawPartyMemberPortraits(pPlayer, &nX, &nLabelY, &nStaggerOffset);
     bDrewAny |= HIREABLES_DrawMercenaryPortrait(pPlayer, &nX, &nLabelY, &nStaggerOffset);
 
-    uint8_t* pDataTables = **(uint8_t***)0x6FB7E454;
-    int32_t nPetTypeCount = *(int32_t*)(pDataTables + 0xBF0);
-    D2PetTypeTxt* pPetTypes = *(D2PetTypeTxt**)(pDataTables + 0xBE8);
+    int32_t nPetTypeCount = D2Client_GetPetTypeCount();
     for (int32_t nPetType = 0; nPetType < nPetTypeCount; ++nPetType)
     {
-        switch (pPetTypes[nPetType].nIconType)
+        const D2PetTypeTxt* pPetRec = static_cast<const D2PetTypeTxt*>(D2Client_GetPetTypeRecord(nPetType));
+        if (!pPetRec) continue;
+        switch (pPetRec->nIconType)
         {
         case 1:
             bDrewAny |= HIREABLES_DrawSingleSummonPortrait_Mode1(nPetType, pPlayer, &nLabelY, &nX, &nStaggerOffset);
@@ -2622,7 +2674,7 @@ void __stdcall HIREABLES_DrawAllPortraits()
         }
     }
 
-    if (g_bPopupHirelingPending && *(int32_t*)0x6FBB2BE8 == 0)
+    if (g_bPopupHirelingPending && gaPanelStates[D2PANEL_MERCINV] == 0)
     {
         SRegSaveValue("Diablo II", "PopupHireling", 0, 1);
         g_bPopupHirelingPending = 0;

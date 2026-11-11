@@ -159,13 +159,15 @@ extern int32_t     gnMouseScreenY;                  // 0x6FBB1638
 extern int32_t     gnActiveNpcClassId;              // 0x6FBCB62D
 extern int32_t     gnActiveNpcGUID;                 // 0x6FBCB625
 extern int32_t     gbNpcMenuOpen;                   // 0x6FBCB629
-extern D2UnitStrc* gapClientItemHashTable[128];     // 0x6FBCB160
+extern D2UnitStrc* gapServerSideUnitHashTables[6][128]; // 0x6FBCA960
+#define gapClientItemHashTable (gapServerSideUnitHashTables[4])
 extern D2UnitStrc* gpCursorLockedItem;              // 0x6FBB1644
 extern int32_t     gnCursorTargetMode;              // 0x6FBB1664
 extern int32_t     gnCursorTargetSubType;           // 0x6FBB1668
 extern int32_t     gnCursorSpriteType;              // 0x6FBB1674
 extern int32_t     gbUseItemPanelOpen;              // 0x6FBCC120
-extern int32_t     gnRightPanelOpenFlag;            // 0x6FBB2B90
+extern int32_t     gaPanelStates[38];               // 0x6FBB2B58
+#define gnRightPanelOpenFlag (gaPanelStates[14])
 extern int32_t     gnEscMenuOpenFlag;               // 0x6FBB5490
 extern int32_t     gnViewportShiftMode;             // 0x6FBCC1D0
 extern int32_t     gnViewportShiftOffsetX;          // 0x6FBCC1D4

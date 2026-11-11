@@ -120,12 +120,47 @@ void __stdcall sub_6FB1F500()
     // Unlinks and frees the tail node of the message log history list (0x6FBB54D8).
 }
 
+static RECT                g_aOverheadBubbleRects[16] = {};
+static int32_t             g_nOverheadBubbleRectCount = 0;
+static int32_t             g_bNpcSpeechBoxActive = 0;
+static int32_t             g_bNpcInteractActive = 0;
+static int32_t             g_nNpcInteractUnitType = 6;
+static int32_t             g_nNpcInteractUnitGUID = -1;
+static int32_t             g_nNpcUnk54EE = 0;
+static int32_t             g_nNpcUnk54A0 = 0;
+static int32_t             g_bNpcMenuOpenReq = 0;
+static int32_t             g_nNpcUnk549C = 0;
+static int32_t             g_bNpcSpeechRectValid = 0;
+static intptr_t            g_nMsgLogScrollOrTextHdr = 0;
+static int32_t             g_nTradeStashCubeBgState = 0;
+static int32_t             g_nNpcSpeechDefaultX = 238;
+static int32_t             g_nNpcSpeechDefaultY = 60;
+static int32_t             g_aCfgCtrlCaptured[7] = {};
+static int32_t             g_nCfgCtrlRowCount = 0;
+static void*               g_aEditBoxBaseVtable[19] = {};
+static Unicode             g_wszChatInputBuf[256] = {};
+static int32_t             g_nChatInputLen = 0;
+static int32_t             g_bChatInputActive = 0;
+static D2NpcSpeechBoxStrc* g_pActiveNpcSpeechBox = NULL;
+static uint32_t            g_dwNpcQuestParams[3] = {};
+static int32_t             g_bTextDisplayBeta = 0;
+static void*               g_pfnPostSpeechCallback = NULL;
+static int32_t             g_nPostSpeechArg = 0;
+static uint8_t             g_bNpcSpeechClickValid = 0;
+static D2ChatMsgListStrc   g_tScreenChatList = {};
+static D2ChatMsgListStrc   g_tMsgLogHistoryList = {};
+static int32_t             g_nChatHistHead = 7;
+static int32_t             g_nChatHistTail = 7;
+static int32_t             g_nChatHistCursor = 0;
+static uint16_t            g_wChatHistUnk44 = 0;
+static int32_t             g_nChatHistUnk48 = 0;
+
 // 1.12a: 0x6FB1F5A0
 // Calling convention: __stdcall (0 args)
 void __stdcall sub_6FB1F5A0()
 {
     // Resets the active overhead chat bubble bounding-box count (0x6FBB5488 = 0).
-    *(int32_t*)0x6FBB5488 = 0;
+    g_nOverheadBubbleRectCount = 0;
 }
 
 // 1.12a: 0x6FB1F5B0
@@ -133,12 +168,12 @@ void __stdcall sub_6FB1F5A0()
 void __fastcall sub_6FB1F5B0(RECT* pRect)
 {
     // Appends a bounding rectangle to the overhead chat bubble collision array (0x6FBB5388, max 16).
-    int32_t nCount = *(int32_t*)0x6FBB5488;
+    int32_t nCount = g_nOverheadBubbleRectCount;
     if (nCount < 16)
     {
-        RECT* pDst = &((RECT*)0x6FBB5388)[nCount];
+        RECT* pDst = &g_aOverheadBubbleRects[nCount];
         *pDst = *pRect;
-        *(int32_t*)0x6FBB5488 = nCount + 1;
+        g_nOverheadBubbleRectCount = nCount + 1;
     }
 }
 
@@ -148,10 +183,10 @@ BOOL __fastcall sub_6FB1F5E0(RECT* pRect)
 {
     // Tests whether pRect intersects any existing overhead chat bubble rectangle in 0x6FBB5388[0..nCount].
     RECT rcIntersect;
-    int32_t nCount = *(int32_t*)0x6FBB5488;
+    int32_t nCount = g_nOverheadBubbleRectCount;
     for (int32_t i = 0; i < nCount; ++i)
     {
-        if (IntersectRect(&rcIntersect, pRect, &((RECT*)0x6FBB5388)[i]))
+        if (IntersectRect(&rcIntersect, pRect, &g_aOverheadBubbleRects[i]))
             return TRUE;
     }
     return FALSE;
@@ -162,7 +197,7 @@ BOOL __fastcall sub_6FB1F5E0(RECT* pRect)
 int32_t __stdcall sub_6FB1F630()
 {
     // Returns 1 if the NPC speech box is active (0x6FBB54A8 != 0), else 0.
-    return *(int32_t*)0x6FBB54A8 != 0;
+    return g_bNpcSpeechBoxActive != 0;
 }
 
 // 1.12a: 0x6FB1F640
@@ -178,7 +213,7 @@ BOOL __fastcall sub_6FB1F640(D2UnitStrc* pUnit)
 int32_t __stdcall sub_6FB1F670()
 {
     // Returns the active NPC interaction unit GUID (0x6FBB54EA) if 0x6FBB54E2 != 0, else -1.
-    return (*(int32_t*)0x6FBB54E2 != 0) ? *(int32_t*)0x6FBB54EA : -1;
+    return (g_bNpcInteractActive != 0) ? g_nNpcInteractUnitGUID : -1;
 }
 
 // 1.12a: 0x6FB1F690
@@ -186,7 +221,7 @@ int32_t __stdcall sub_6FB1F670()
 int32_t __stdcall sub_6FB1F690()
 {
     // Returns the active NPC interaction unit type (0x6FBB54E6) if 0x6FBB54E2 != 0, else 6.
-    return (*(int32_t*)0x6FBB54E2 != 0) ? *(int32_t*)0x6FBB54E6 : 6;
+    return (g_bNpcInteractActive != 0) ? g_nNpcInteractUnitType : 6;
 }
 
 // 1.12a: 0x6FB1F6B0
@@ -194,7 +229,7 @@ int32_t __stdcall sub_6FB1F690()
 int32_t __stdcall sub_6FB1F6B0()
 {
     // Returns 0x6FBB54E2 (whether an NPC interaction is active).
-    return *(int32_t*)0x6FBB54E2;
+    return g_bNpcInteractActive;
 }
 
 // 1.12a: 0x6FB1F6C0
@@ -202,9 +237,9 @@ int32_t __stdcall sub_6FB1F6B0()
 void __fastcall sub_6FB1F6C0(int32_t bActive, int32_t nUnitType, int32_t nUnitGUID)
 {
     // Sets active NPC interaction state (0x6FBB54E2, 0x6FBB54E6, 0x6FBB54EA).
-    *(int32_t*)0x6FBB54E2 = bActive;
-    *(int32_t*)0x6FBB54E6 = nUnitType;
-    *(int32_t*)0x6FBB54EA = nUnitGUID;
+    g_bNpcInteractActive = bActive;
+    g_nNpcInteractUnitType = nUnitType;
+    g_nNpcInteractUnitGUID = nUnitGUID;
 }
 
 // 1.12a: 0x6FB1F6E0
@@ -212,7 +247,7 @@ void __fastcall sub_6FB1F6C0(int32_t bActive, int32_t nUnitType, int32_t nUnitGU
 void __stdcall sub_6FB1F6E0()
 {
     // Clears 0x6FBB54EE = 0.
-    *(int32_t*)0x6FBB54EE = 0;
+    g_nNpcUnk54EE = 0;
 }
 
 // 1.12a: 0x6FB1F6F0
@@ -220,7 +255,7 @@ void __stdcall sub_6FB1F6E0()
 int32_t __stdcall sub_6FB1F6F0()
 {
     // Returns 0x6FBB54EE.
-    return *(int32_t*)0x6FBB54EE;
+    return g_nNpcUnk54EE;
 }
 
 // 1.12a: 0x6FB1F700
@@ -228,7 +263,7 @@ int32_t __stdcall sub_6FB1F6F0()
 int32_t __stdcall sub_6FB1F700()
 {
     // Returns 0x6FBB54A0.
-    return *(int32_t*)0x6FBB54A0;
+    return g_nNpcUnk54A0;
 }
 
 // 1.12a: 0x6FB1F710
@@ -236,7 +271,7 @@ int32_t __stdcall sub_6FB1F700()
 void __stdcall sub_6FB1F710(int32_t nVal)
 {
     // Sets 0x6FBB54A0 = nVal.
-    *(int32_t*)0x6FBB54A0 = nVal;
+    g_nNpcUnk54A0 = nVal;
 }
 
 // 1.12a: 0x6FB1F720
@@ -244,7 +279,7 @@ void __stdcall sub_6FB1F710(int32_t nVal)
 void __stdcall sub_6FB1F720()
 {
     // Sets 0x6FBB5498 = 1 (Requests NPC menu open).
-    *(int32_t*)0x6FBB5498 = 1;
+    g_bNpcMenuOpenReq = 1;
 }
 
 // 1.12a: 0x6FB1F730
@@ -252,7 +287,7 @@ void __stdcall sub_6FB1F720()
 int32_t __stdcall sub_6FB1F730()
 {
     // Returns 0x6FBB5498.
-    return *(int32_t*)0x6FBB5498;
+    return g_bNpcMenuOpenReq;
 }
 
 // 1.12a: 0x6FB1F740
@@ -260,7 +295,7 @@ int32_t __stdcall sub_6FB1F730()
 int32_t __stdcall sub_6FB1F740()
 {
     // Returns 0x6FBB549C.
-    return *(int32_t*)0x6FBB549C;
+    return g_nNpcUnk549C;
 }
 
 // 1.12a: 0x6FB1F750
@@ -268,7 +303,7 @@ int32_t __stdcall sub_6FB1F740()
 void __stdcall sub_6FB1F750(int32_t nVal)
 {
     // Sets 0x6FBB549C = nVal.
-    *(int32_t*)0x6FBB549C = nVal;
+    g_nNpcUnk549C = nVal;
 }
 
 // 1.12a: 0x6FB1F760
@@ -276,7 +311,7 @@ void __stdcall sub_6FB1F750(int32_t nVal)
 int32_t __stdcall sub_6FB1F760()
 {
     // Returns 0x6FBB550C (NPC speech box rect valid flag).
-    return *(int32_t*)0x6FBB550C;
+    return g_bNpcSpeechRectValid;
 }
 
 // 1.12a: 0x6FB1F770
@@ -284,7 +319,7 @@ int32_t __stdcall sub_6FB1F760()
 void __stdcall sub_6FB1F770()
 {
     // Clears 0x6FBB550C = 0.
-    *(int32_t*)0x6FBB550C = 0;
+    g_bNpcSpeechRectValid = 0;
 }
 
 // 1.12a: 0x6FB1F780
@@ -292,7 +327,7 @@ void __stdcall sub_6FB1F770()
 void __stdcall sub_6FB1F780(RECT* pRect)
 {
     // Copies the screen bounds of the NPC speech box (0x6FBB5388) into *pRect.
-    *pRect = *(RECT*)0x6FBB5388;
+    *pRect = g_aOverheadBubbleRects[0];
 }
 
 // 1.12a: 0x6FB1F7B0
@@ -307,7 +342,7 @@ void __stdcall sub_6FB1F7B0()
 void __stdcall sub_6FB1F800()
 {
     // Clears the message log scroll offset (0x6FBB5538 = 0).
-    *(int32_t*)0x6FBB5538 = 0;
+    g_nMsgLogScrollOrTextHdr = 0;
 }
 
 // 1.12a: 0x6FB1F810
@@ -336,7 +371,7 @@ void __stdcall sub_6FB1F860()
 int32_t __stdcall sub_6FB1F880()
 {
     // Returns 0x6FBB553C (Trade/Stash/Cube background open state).
-    return *(int32_t*)0x6FBB553C;
+    return g_nTradeStashCubeBgState;
 }
 
 // 1.12a: 0x6FB1F890
@@ -344,7 +379,7 @@ int32_t __stdcall sub_6FB1F880()
 void __stdcall sub_6FB1F890()
 {
     // Clears 0x6FBB553C = 0.
-    *(int32_t*)0x6FBB553C = 0;
+    g_nTradeStashCubeBgState = 0;
 }
 
 // 1.12a: 0x6FB1F8A0
@@ -488,8 +523,8 @@ D2NpcSpeechBoxStrc* __fastcall sub_6FB20D90(const Unicode* wszText, int32_t nSou
     return sub_6FB20760(
         wszText,
         nSoundId,
-        *(int32_t*)0x6FBD3304,
-        *(int32_t*)0x6FB928EC,
+        g_nNpcSpeechDefaultX,
+        g_nNpcSpeechDefaultY,
         325,
         112,
         nScrollSpeed,
@@ -754,7 +789,7 @@ BOOL __fastcall sub_6FB24350(int32_t nControlIdx)
     // Returns TRUE if no other control in the Configure Controls screen is currently captured.
     for (int32_t i = 0; i < 7; ++i)
     {
-        if (((int32_t*)0x6FBCC0B0)[i] != 0 && i != nControlIdx)
+        if (g_aCfgCtrlCaptured[i] != 0 && i != nControlIdx)
             return FALSE;
     }
     return TRUE;
@@ -821,7 +856,7 @@ int32_t __fastcall sub_6FB245F0(int32_t nMouseY)
 int32_t __stdcall sub_6FB24640()
 {
     // Returns the maximum top row scroll index (nTotalRows - 15) in Configure Controls.
-    int32_t nCount = *(int32_t*)0x6FBCC09C;
+    int32_t nCount = g_nCfgCtrlRowCount;
     for (int32_t i = 0; i < 15; ++i)
     {
         if (--nCount <= 0)
@@ -1253,7 +1288,7 @@ void __fastcall sub_6FB34280(D2EditBoxProxyStrc* pThis, void* _edx, BOOL bNumeri
 void __fastcall sub_6FB34290(D2EditBoxProxyStrc* pThis)
 {
     // Base proxy vtable destructor stub (sets vtable to 0x6FB80918).
-    pThis->pVtable = (void**)0x6FB80918;
+    pThis->pVtable = g_aEditBoxBaseVtable;
 }
 
 // 1.12a: 0x6FB342A0
@@ -1312,7 +1347,7 @@ void __fastcall sub_6FB34300(D2EditBoxImplStrc* pThis, void* _edx, BOOL (__stdca
 D2EditBoxImplStrc* __fastcall sub_6FB34310(D2EditBoxImplStrc* pThis, void* _edx, uint8_t bFlag)
 {
     // Base impl vtable scalar deleting destructor stub.
-    pThis->pVtable = (void**)0x6FB80918;
+    pThis->pVtable = g_aEditBoxBaseVtable;
     return pThis;
 }
 
@@ -1321,7 +1356,7 @@ D2EditBoxImplStrc* __fastcall sub_6FB34310(D2EditBoxImplStrc* pThis, void* _edx,
 void __fastcall sub_6FB34330(D2EditBoxImplStrc* pThis)
 {
     // Base impl destructor stub.
-    pThis->pVtable = (void**)0x6FB80918;
+    pThis->pVtable = g_aEditBoxBaseVtable;
 }
 
 // 1.12a: 0x6FB34340
@@ -1499,8 +1534,8 @@ D2EditBoxProxyStrc* __fastcall sub_6FB34DE0(
 void __stdcall sub_6FB34E90()
 {
     // Clears the current chat input buffer (0x6FBCFC40) and resets length (0x6FB8FCC8 = 0).
-    *(Unicode*)0x6FBCFC40 = 0;
-    *(int32_t*)0x6FB8FCC8 = 0;
+    g_wszChatInputBuf[0] = 0;
+    g_nChatInputLen = 0;
 }
 
 // 1.12a: 0x6FB34EB0
@@ -1529,7 +1564,7 @@ void __stdcall sub_6FB34FB0()
 BOOL __stdcall sub_6FB35060()
 {
     // Returns TRUE if the current chat input buffer (0x6FBCFC40) begins with '/' (0x2F).
-    return (*(uint16_t*)0x6FBCFC40 == 0x2F);
+    return (g_wszChatInputBuf[0] == 0x2F);
 }
 
 // 1.12a: 0x6FB35080
@@ -1576,7 +1611,7 @@ BOOL __fastcall sub_6FB352F0(const Unicode* wszStr, const Unicode* wszPrefix)
 int32_t __stdcall sub_6FB35350()
 {
     // Returns 0x6FBCFA10 (whether the chat input box is currently active).
-    return *(int32_t*)0x6FBCFA10;
+    return g_bChatInputActive;
 }
 
 // 1.12a: 0x6FB35360
@@ -1584,11 +1619,11 @@ int32_t __stdcall sub_6FB35350()
 void __fastcall sub_6FB35360(int32_t bActive)
 {
     // Sets 0x6FBCFA10 = bActive and clears chat input buffer if deactivated.
-    *(int32_t*)0x6FBCFA10 = bActive;
+    g_bChatInputActive = bActive;
     if (!bActive)
     {
-        *(Unicode*)0x6FBCFC40 = 0;
-        *(int32_t*)0x6FB8FCC8 = 0;
+        g_wszChatInputBuf[0] = 0;
+        g_nChatInputLen = 0;
     }
 }
 
@@ -1746,7 +1781,7 @@ BOOL __stdcall sub_6FB1F3E0()
 BOOL __stdcall sub_6FB1F400()
 {
     // Returns TRUE if an NPC speech box (0x6FBB5490) is currently allocated.
-    return (*(void**)0x6FBB5490 != NULL);
+    return (g_pActiveNpcSpeechBox != NULL);
 }
 
 // 1.12a: 0x6FB1F410
@@ -1756,10 +1791,10 @@ void __fastcall sub_6FB1F410(uint8_t* pPacket)
     // Stores 3 DWORD parameters from packet (+3, +7, +11) into 0x6FBB537C..0x6FBB5384 when word[+1] == 4.
     if (*(uint16_t*)(pPacket + 1) == 4)
     {
-        *(uint32_t*)0x6FBB537C = *(uint32_t*)(pPacket + 3);
-        *(uint32_t*)0x6FBB5380 = *(uint32_t*)(pPacket + 7);
-        *(uint32_t*)0x6FBB5384 = *(uint32_t*)(pPacket + 11);
-        *(int32_t*)0x6FBB553C = 0;
+        g_dwNpcQuestParams[0] = *(uint32_t*)(pPacket + 3);
+        g_dwNpcQuestParams[1] = *(uint32_t*)(pPacket + 7);
+        g_dwNpcQuestParams[2] = *(uint32_t*)(pPacket + 11);
+        g_nTradeStashCubeBgState = 0;
     }
 }
 
@@ -1783,7 +1818,7 @@ const Unicode* __fastcall sub_6FB1F450(int32_t _ecx, uint16_t wKeyId)
 void* __stdcall sub_6FB1F4A0()
 {
     // Returns the active NPC text header pointer (0x6FBB5538).
-    return *(void**)0x6FBB5538;
+    return (void*)g_nMsgLogScrollOrTextHdr;
 }
 
 // 1.12a: 0x6FB1F4B0
@@ -1791,7 +1826,7 @@ void* __stdcall sub_6FB1F4A0()
 int32_t __stdcall sub_6FB1F4B0()
 {
     // Returns the 'Text Display Beta' registry setting value (0x6FBB54DE).
-    return *(int32_t*)0x6FBB54DE;
+    return g_bTextDisplayBeta;
 }
 
 // 1.12a: 0x6FB1F4C0
@@ -1820,8 +1855,8 @@ void __stdcall sub_6FB1F530()
 void __fastcall sub_6FB1F540(void* pfnCallback, int32_t nArg)
 {
     // Registers a post-speech callback (0x6FBCC0F4) and context argument (0x6FBCC0F8).
-    *(void**)0x6FBCC0F4 = pfnCallback;
-    *(int32_t*)0x6FBCC0F8 = nArg;
+    g_pfnPostSpeechCallback = pfnCallback;
+    g_nPostSpeechArg = nArg;
 }
 
 // 1.12a: 0x6FB1F550
@@ -1852,7 +1887,7 @@ BOOL __fastcall sub_6FB1F8B0(D2NpcSpeechBoxStrc* pBox)
 void __stdcall sub_6FB1F8D0()
 {
     // Clears the NPC speech click-target valid byte (0x6FBB5522 = 0).
-    *(uint8_t*)0x6FBB5522 = 0;
+    g_bNpcSpeechClickValid = 0;
 }
 
 // 1.12a: 0x6FB1F900
@@ -1967,8 +2002,8 @@ void __fastcall sub_6FB20A20(D2UnitStrc* pUnit, int32_t nStringId)
 void __stdcall sub_6FB20B50()
 {
     // Frees both the screen chat list (0x6FBB54CC) and the message log history list (0x6FBB54D8).
-    sub_6FB20660((void*)0x6FBB54CC);
-    sub_6FB20660((void*)0x6FBB54D8);
+    sub_6FB20660(&g_tScreenChatList);
+    sub_6FB20660(&g_tMsgLogHistoryList);
 }
 
 // 1.12a: 0x6FB20B70
@@ -2114,11 +2149,11 @@ const char* __fastcall sub_6FB34EF0(const char* szName)
 void __stdcall sub_6FB34F10()
 {
     // Resets chat history ring buffer head/tail indices (0x6FB8FCD4 = 7, 0x6FB8FCD8 = 7, 0x6FBCBF44 = 0).
-    *(int32_t*)0x6FB8FCD4 = 7;
-    *(int32_t*)0x6FB8FCD8 = 7;
-    *(int32_t*)0x6FBB2BF0 = 0;
-    *(uint16_t*)0x6FBCBF44 = 0;
-    *(int32_t*)0x6FBCBF48 = 0;
+    g_nChatHistHead = 7;
+    g_nChatHistTail = 7;
+    g_nChatHistCursor = 0;
+    g_wChatHistUnk44 = 0;
+    g_nChatHistUnk48 = 0;
 }
 
 // 1.12a: 0x6FB34F70

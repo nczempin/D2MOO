@@ -92,54 +92,67 @@ extern int32_t gbSpeedBarRightSide_6FBCBC54;           // 0x6FBCBC54: Speedbar o
 // PART 1: Display / Cache / Performance Helpers (0x6FAE03E0..0x6FAE0C30)
 // ============================================================================
 
+static int32_t g_bLightingQuality = 1;
+static int32_t g_bBlendedShadows = 1;
+static int32_t g_bLowQualityMode = 0;
+static int32_t g_nFpsDisplayMode = 0;
+static int32_t g_bFpsDisplayActive = 0;
+static int32_t g_nPerfCounterA = 0;
+static int32_t g_nPerfCounterB = 0;
+static int32_t g_nPerfCounterC = 0;
+static int32_t g_nPerfCounterD = 0;
+static void*   g_pPerfPool = nullptr;
+static int32_t g_nSpeedBarHoverIdx = -1;
+static int32_t g_bPlayerMouseActionLock = 0;
+
 // 1.12a: 0x6FAE03E0 (__stdcall)
 int32_t __stdcall D2Client_GetPerfStat6FBA675C()
 {
-    return *(int32_t*)0x6FBA675C;
+    return g_bLightingQuality;
 }
 
 // 1.12a: 0x6FAE03F0 (__stdcall)
 int32_t __stdcall D2Client_GetPerfStat6FBA6760()
 {
-    return *(int32_t*)0x6FBA6760;
+    return g_bBlendedShadows;
 }
 
 // 1.12a: 0x6FAE0400 (__stdcall)
 int32_t __stdcall D2Client_GetPerfStat6FBA6764()
 {
-    return *(int32_t*)0x6FBA6764;
+    return g_bLowQualityMode;
 }
 
 // 1.12a: 0x6FAE0410 (custom: eax = nValue)
 int32_t D2Client_SetPerfStat6FBA675C(/*eax*/ int32_t nValue)
 {
-    int32_t nPrev = *(int32_t*)0x6FBA675C;
-    *(int32_t*)0x6FBA675C = nValue;
+    int32_t nPrev = g_bLightingQuality;
+    g_bLightingQuality = nValue;
     return nPrev;
 }
 
 // 1.12a: 0x6FAE0420 (custom: eax = nValue)
 int32_t D2Client_SetPerfStat6FBA6760(/*eax*/ int32_t nValue)
 {
-    int32_t nPrev = *(int32_t*)0x6FBA6760;
-    *(int32_t*)0x6FBA6760 = nValue;
+    int32_t nPrev = g_bBlendedShadows;
+    g_bBlendedShadows = nValue;
     return nPrev;
 }
 
 // 1.12a: 0x6FAE0430 (custom: eax = nValue)
 int32_t D2Client_SetPerfStat6FBA6764(/*eax*/ int32_t nValue)
 {
-    int32_t nPrev = *(int32_t*)0x6FBA6764;
-    *(int32_t*)0x6FBA6764 = nValue;
+    int32_t nPrev = g_bLowQualityMode;
+    g_bLowQualityMode = nValue;
     return nPrev;
 }
 
 // 1.12a: 0x6FAE0440 (__stdcall)
 void __stdcall D2Client_SetWeatherAndLightingQuality(BOOL bEnable)
 {
-    *(int32_t*)0x6FBA6764 = bEnable;
-    *(int32_t*)0x6FBC97EC = bEnable;
-    *(int32_t*)0x6FBA675C = bEnable;
+    g_bLowQualityMode = bEnable;
+    g_bFpsDisplayActive = bEnable;
+    g_bLightingQuality = bEnable;
     // D2Client_SetWeatherEnabled(bEnable); // 0x6FAD1C40
     // D2Gfx_10042(bEnable);
 }
@@ -147,17 +160,17 @@ void __stdcall D2Client_SetWeatherAndLightingQuality(BOOL bEnable)
 // 1.12a: 0x6FAE0470 (__stdcall)
 void __stdcall D2Client_ResetFramePerfCounters()
 {
-    *(int32_t*)0x6FBC97E0 = 0;
-    *(int32_t*)0x6FBC97E8 = 0;
-    *(int32_t*)0x6FBC97DC = 0;
-    *(int32_t*)0x6FBC97E4 = 0;
+    g_nPerfCounterA = 0;
+    g_nPerfCounterD = 0;
+    g_nPerfCounterC = 0;
+    g_nPerfCounterB = 0;
 }
 
 // 1.12a: 0x6FAE0490 (custom: ecx = nDeltaA, eax = nDeltaB)
 void D2Client_AccumulatePerfCounters(/*ecx*/ int32_t nDeltaA, /*eax*/ int32_t nDeltaB)
 {
-    *(int32_t*)0x6FBC97E4 += nDeltaA;
-    *(int32_t*)0x6FBC97E8 += nDeltaB;
+    g_nPerfCounterB += nDeltaA;
+    g_nPerfCounterD += nDeltaB;
 }
 
 // 1.12a: 0x6FAE04B0 (__stdcall)
@@ -165,11 +178,11 @@ void __stdcall D2Client_ShutdownTileAndSpriteCaches()
 {
     // D2CMP_10040(); // DestroyTileCache
     // D2CMP_10099(1); // FlushSpriteCache(TRUE)
-    void** ppPool = *(void***)0x6FBC97F0;
+    void** ppPool = (void**)g_pPerfPool;
     if (ppPool)
     {
         // FOG_10144(ppPool); // FOG_FreePool
-        *(void**)0x6FBC97F0 = nullptr;
+        g_pPerfPool = nullptr;
     }
 }
 
@@ -208,15 +221,15 @@ int32_t __stdcall D2Client_TogglePerspectiveMode()
 // 1.12a: 0x6FAE0910 (__stdcall)
 BOOL __stdcall D2Client_ToggleBlendedShadows()
 {
-    BOOL bNewVal = (*(int32_t*)0x6FBA6760 == 0);
-    *(int32_t*)0x6FBA6760 = bNewVal;
+    BOOL bNewVal = (g_bBlendedShadows == 0);
+    g_bBlendedShadows = bNewVal;
     return bNewVal;
 }
 
 // 1.12a: 0x6FAE0930 (__stdcall)
 BOOL __stdcall D2Client_ToggleLowQualityMode()
 {
-    BOOL bNewVal = (*(int32_t*)0x6FBA6764 == 0);
+    BOOL bNewVal = (g_bLowQualityMode == 0);
     D2Client_SetWeatherAndLightingQuality(bNewVal);
     return bNewVal;
 }
@@ -224,14 +237,14 @@ BOOL __stdcall D2Client_ToggleLowQualityMode()
 // 1.12a: 0x6FAE0990 (custom: edi = nMode)
 void D2Client_ToggleFpsDisplayMode(/*edi*/ int32_t nMode)
 {
-    if (*(int32_t*)0x6FBC97EC && *(int32_t*)0x6FBC97D8 == nMode)
+    if (g_bFpsDisplayActive && g_nFpsDisplayMode == nMode)
     {
-        *(int32_t*)0x6FBC97EC = 0;
+        g_bFpsDisplayActive = 0;
     }
     else
     {
-        *(int32_t*)0x6FBC97EC = 1;
-        *(int32_t*)0x6FBC97D8 = nMode;
+        g_bFpsDisplayActive = 1;
+        g_nFpsDisplayMode = nMode;
     }
 }
 
@@ -599,7 +612,7 @@ void __fastcall D2Client_ToggleSpeedBarPopup(BOOL bRightHand)
         if (bRightHand != gbSpeedBarRightSide_6FBCBC54)
         {
             gbSpeedBarRightSide_6FBCBC54 = bRightHand;
-            *(int32_t*)0x6FBCBD20 = -1;
+            g_nSpeedBarHoverIdx = -1;
             D2Client_LayoutAndRenderSpeedBarPopup(FALSE);
             return;
         }
@@ -610,7 +623,7 @@ void __fastcall D2Client_ToggleSpeedBarPopup(BOOL bRightHand)
         // Close overlapping panels and open speedbar
         gbSpeedBarOpen_6FBCBC50 = 1;
         gbSpeedBarRightSide_6FBCBC54 = bRightHand;
-        *(int32_t*)0x6FBCBD20 = -1;
+        g_nSpeedBarHoverIdx = -1;
     }
     D2Client_LayoutAndRenderSpeedBarPopup(FALSE);
 }
@@ -683,7 +696,7 @@ int32_t D2Client_GetPlayerEquippedItemComponent(/*ebx*/ int32_t nBodyLoc, /*esi*
 // 1.12a: 0x6FB095C0 (__stdcall)
 void __stdcall D2Client_ClearPlayerMouseActionLock()
 {
-    *(int32_t*)0x6FBCB704 = 0;
+    g_bPlayerMouseActionLock = 0;
 }
 
 // 1.12a: 0x6FB095D0 (custom: eax = nTargetX, ecx = nTargetY, edx = pTargetUnit, ebx = pSkill, edi = pPlayerUnit)

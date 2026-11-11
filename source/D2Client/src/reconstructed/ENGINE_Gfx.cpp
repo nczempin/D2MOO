@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "D2ClientReconstructed.h"
+
+int __fastcall D2Client_PopulateUnitComponentGfxNames(D2UnitStrc* pUnit, D2GfxDataStrc* pOutGfxData, int nComponent, const char* szWeaponClass);
+int __fastcall D2Client_PopulateNonCompositeGfxName(D2UnitStrc* pUnit, D2GfxDataStrc* pOutGfxData);
+struct D2MonStats2Txt* __fastcall UNITS_GetMonStats2TxtRecordFromMonsterId(int nMonsterId);
 
 // Forward declarations for D2MOO / engine types
 struct D2UnitStrc;
@@ -69,6 +74,7 @@ extern "C" {
 
     // D2Common.dll
     void  __stdcall  ROOM_GetRoomCoordinates(D2ActiveRoomStrc* pRoom, void* pCoords);            // #10001
+    D2UnitStrc* __stdcall DUNGEON_GetFirstUnitInRoom(D2ActiveRoomStrc* pRoom);                   // #10029
     D2UnitStrc* __stdcall INVENTORY_GetItemFromInventory(D2InventoryStrc* pInventory);           // #10035
     void  __stdcall  UNITS_UpdateDirectionAndSpeed(D2UnitStrc* pUnit, int nX, int nY);           // #10042
     int   __stdcall  UNITS_GetWeaponClass(D2UnitStrc* pUnit);                                    // #10045
@@ -131,6 +137,7 @@ D2UnitStrc* __fastcall CLIENT_FindUnit(int nUnitId, int nUnitType);             
 int   __fastcall MISSILE_DrawSpecial(D2UnitStrc* pMissile);                      // 0x6FB5CE80
 uint8_t* __fastcall PALSHIFT_GetMonsterPalette(int nMonsterId, int nPalIdx);     // 0x6FB6F5B0
 uint8_t* __fastcall PALSHIFT_GetUnitPalette(int nColorIdx);                      // 0x6FB6F010
+int   __fastcall GFXUTIL_EngineDirToCofDir(int nEngineDir, int nCofDirections);  // 0x6FB66950
 
 // ============================================================================
 // Structures
@@ -215,29 +222,7 @@ struct D2UnitCofLinkStrc
     D2UnitCofLinkStrc* pNext;     // +0x10
 };
 
-// D2GfxDataStrc (0x48 bytes, standard D2CMP sprite request block)
-struct D2GfxDataStrc
-{
-    uint32_t dwFlags;             // +0x00
-    D2GfxCellStrc* pCell;         // +0x04
-    D2CellFileStrc* pCellFile;    // +0x08
-    int32_t  nCellNo;             // +0x0C
-    int32_t  nDirection;          // +0x10
-    int32_t  nFrame;              // +0x14
-    int32_t  nMaxDirections;      // +0x18
-    int32_t  nMaxFrames;          // +0x1C
-    int32_t  nUnitType;           // +0x20
-    uint8_t  nComponent;          // +0x24
-    uint8_t  nPad25;              // +0x25
-    uint16_t wUnitFlags;          // +0x26
-    int32_t  nClassId;            // +0x28
-    int32_t  nPlrType;            // +0x2C
-    int32_t  nMode;               // +0x30
-    int32_t  nOverlayId;          // +0x34
-    char     szCompCode[4];       // +0x38
-    char     szWeaponClass[4];    // +0x3C
-    char     szCofName[8];        // +0x40
-};
+// D2GfxDataStrc (0x48 bytes, defined in D2ClientReconstructed.h)
 
 // Unit Overlay node (0xA8 bytes, allocated in 0x6FB430E0)
 struct D2OverlayStrc
@@ -781,7 +766,7 @@ uint8_t __fastcall GFX_GetUnitHighlightPaletteColor(D2UnitStrc* pUnit)
 
     if (*(uint32_t*)pUnit == 1) { // UNIT_MONSTER
         void* pMonStats = DATATBLS_GetMonsterTxtRecord(*(uint32_t*)((uint8_t*)pUnit + 0x04));
-        if (!pMonStats || (*(uint8_t*)((uint8_t*)pMonStats + 0x1AC) & 0x01) == 0) {
+        if (!pMonStats || (*(uint32_t*)((uint8_t*)pMonStats + 0x0C) & 0x0200u) != 0) {
             return g_bHighlightBlue;
         }
     }
@@ -805,8 +790,10 @@ int __fastcall GFX_ValidateUnitGfxData(D2UnitStrc* pUnit, D2GfxDataStrc* pGfxDat
     int nUnitType = *(int*)pUnit;
     int nClassId  = *(int*)((uint8_t*)pUnit + 0x04);
     memset(pGfxData, 0, sizeof(D2GfxDataStrc));
-    pGfxData->nUnitType = nUnitType;
-    pGfxData->nClassId  = nClassId;
+    pGfxData->nUnitType  = nUnitType;
+    pGfxData->nClassId   = nClassId;
+    pGfxData->nDirection = UNITS_GetDir(pUnit);
+    pGfxData->nFrame     = (*(int*)((uint8_t*)pUnit + 0x44)) >> 8;
 
     switch (nUnitType) {
     case 0: // UNIT_PLAYER
@@ -818,11 +805,13 @@ int __fastcall GFX_ValidateUnitGfxData(D2UnitStrc* pUnit, D2GfxDataStrc* pGfxDat
             if (!pObjTxt) {
                 return 0;
             }
-            if (!*(uint8_t*)((uint8_t*)pObjTxt + 0x10B)) {
+            int nObjMode = *(int*)((uint8_t*)pUnit + 0x10);
+            if (nObjMode < 0 || nObjMode >= 8 || !*(uint8_t*)((uint8_t*)pObjTxt + 0x13F + nObjMode)) {
                 return 0;
             }
         }
         pGfxData->nMode = *(int*)((uint8_t*)pUnit + 0x10);
+        D2Client_PopulateUnitComponentGfxNames(pUnit, pGfxData, 1, "hth");
         return D2CMP_SpriteValidate(pGfxData, 1, 0);
     }
     case 3: // UNIT_MISSILE
@@ -831,11 +820,13 @@ int __fastcall GFX_ValidateUnitGfxData(D2UnitStrc* pUnit, D2GfxDataStrc* pGfxDat
         if (dwFlags & 0x00010000) {
             return 0;
         }
+        D2Client_PopulateNonCompositeGfxName(pUnit, pGfxData);
         return D2CMP_SpriteValidate(pGfxData, 1, 0);
     }
     case 4: // UNIT_ITEM
         pGfxData->nMode = *(int*)((uint8_t*)pUnit + 0x10);
         pGfxData->nClassId = ITEMS_GetFileIndex(pUnit);
+        D2Client_PopulateNonCompositeGfxName(pUnit, pGfxData);
         return D2CMP_SpriteValidate(pGfxData, 1, 0);
     case 5: // UNIT_TILE
         return 0;
@@ -908,6 +899,9 @@ int __fastcall GFX_SetupOverlayGfxData(D2OverlayStrc* pOverlay, D2GfxDataStrc* p
     memset(pOutGfxData, 0, sizeof(D2GfxDataStrc));
     pOutGfxData->nUnitType  = 6; // Overlay unit type
     pOutGfxData->nOverlayId = pOverlay->nFileIndex;
+    if (void* pOverlayTxt = DATATBLS_GetOverlaysTxtRecord(pOverlay->nFileIndex)) {
+        pOutGfxData->pName = (char*)pOverlayTxt + 0x02; // D2OverlaysTxt::szFilename
+    }
 
     switch (pOverlay->nDirType) {
     case 0:
@@ -1070,12 +1064,6 @@ int __fastcall GFX_SetupUnitComponentGfxData(
     if (!pUnit || nComponent >= 16) {
         return 0;
     }
-    D2UnitGfxDataStrc* pGfxData = *(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54);
-    int nCompCodeIdx = pGfxData ? *(uint8_t*)((uint8_t*)pGfxData + nComponent) : 0;
-    if (nCompCodeIdx == 0xFF) {
-        return 0;
-    }
-
     int nUnitType = *(int*)pUnit;
     int nClassId  = *(int*)((uint8_t*)pUnit + 0x04);
     memset(pOutGfxData, 0, sizeof(D2GfxDataStrc));
@@ -1085,6 +1073,9 @@ int __fastcall GFX_SetupUnitComponentGfxData(
     pOutGfxData->nMode      = *(int*)((uint8_t*)pUnit + 0x10);
     pOutGfxData->nDirection = nDirection;
     pOutGfxData->nFrame     = nFrame;
+    if (!D2Client_PopulateUnitComponentGfxNames(pUnit, pOutGfxData, nComponent, szWeaponClass)) {
+        return 0;
+    }
     return D2CMP_SpriteValidate(pOutGfxData, bAsync, bForceLoad);
 }
 
@@ -1159,7 +1150,7 @@ uint8_t* __fastcall GFX_GetUnitComponentPalette(
                     case 5: // Left Arm
                     {
                         void* pItemTxt = DATATBLS_GetItemsTxtRecord(*(int*)((uint8_t*)pItem + 0x04));
-                        uint8_t nComp = *(uint8_t*)((uint8_t*)pItemTxt + 0x11F);
+                        uint8_t nComp = pItemTxt ? *(uint8_t*)((uint8_t*)pItemTxt + 0x115) : 16;
                         if (nComp != 16) {
                             if (nComp == 5 || nComp == 6) {
                                 int nWeapClass = 0;
@@ -1188,8 +1179,7 @@ uint8_t* __fastcall GFX_GetUnitComponentPalette(
         if (D2Common_11037_GetStateColor(pUnit, &nStateColor)) {
             return D2CMP_GetPaletteRemapTable(3, nStateColor);
         }
-        uint8_t* pMonData = *(uint8_t**)((uint8_t*)pUnit + 0x14);
-        int nPalIdx = pMonData ? pMonData[0x19] : 0;
+        int nPalIdx = *(int*)((uint8_t*)pUnit + 0x6C);
         int nMonsterId = *(int*)((uint8_t*)pUnit + 0x04);
         void* pMonTxt = DATATBLS_GetMonsterTxtRecord(nMonsterId);
         uint8_t aMonComps[16];
@@ -1270,7 +1260,7 @@ void __fastcall GFX_CacheUnitCof(D2UnitStrc* pUnit, int nMode, int nWeaponClass)
 
     if (nUnitType == 2) { // UNIT_OBJECT
         void* pObjTxt = UNITS_GetObjectTxtRecordFromObject(pUnit);
-        if (!pObjTxt || !*(uint8_t*)((uint8_t*)pObjTxt + 0x10B)) {
+        if (!pObjTxt || nMode < 0 || nMode >= 8 || !*(uint8_t*)((uint8_t*)pObjTxt + 0x13F + nMode)) {
             return;
         }
     }
@@ -1338,9 +1328,11 @@ void __fastcall GFX_InitObjectCofLayers(D2UnitStrc* pUnit)
     }
     GFX_FreeUnitCofList(pGfxData);
     void* pObjTxt = DATATBLS_GetObjectsTxtRecord(*(int*)((uint8_t*)pUnit + 0x04));
-    for (int i = 0; i < 8; ++i) {
-        if (*(uint8_t*)((uint8_t*)pObjTxt + 0x10B + i)) {
-            GFX_CacheUnitCof(pUnit, i, 0);
+    if (pObjTxt) {
+        for (int i = 0; i < 8; ++i) {
+            if (*(uint8_t*)((uint8_t*)pObjTxt + 0x13F + i)) {
+                GFX_CacheUnitCof(pUnit, i, 0);
+            }
         }
     }
     D2CofRecordStrc* pCof = GFX_GetUnitActiveCofRecord(pUnit);
@@ -1365,9 +1357,10 @@ void __fastcall GFX_InitMonsterCofLayers(D2UnitStrc* pUnit)
     }
     GFX_FreeUnitCofList(pGfxData);
     int nWeaponClass = UNITS_GetWeaponClass(pUnit);
-    void* pMonTxt = DATATBLS_GetMonsterTxtRecord(*(int*)((uint8_t*)pUnit + 0x04));
+    void* pMonStats2 = UNITS_GetMonStats2TxtRecordFromMonsterId(*(int*)((uint8_t*)pUnit + 0x04));
+    uint32_t dwModeFlags = pMonStats2 ? *(uint32_t*)((uint8_t*)pMonStats2 + 0xF0) : 0;
     for (int i = 0; i < 16; ++i) {
-        if (*(uint8_t*)((uint8_t*)pMonTxt + 0x106 + i)) {
+        if ((dwModeFlags & (1u << i)) != 0) {
             GFX_CacheUnitCof(pUnit, i, nWeaponClass);
         }
     }
@@ -1416,14 +1409,15 @@ void __fastcall GFX_UpdateMonsterCompositeComponents(D2UnitStrc* pUnit)
     if (!pGfxData) {
         return;
     }
-    void* pMonTxt = DATATBLS_GetMonsterTxtRecord(*(int*)((uint8_t*)pUnit + 0x04));
-    if (!pMonTxt) {
+    void* pMonStats2 = UNITS_GetMonStats2TxtRecordFromMonsterId(*(int*)((uint8_t*)pUnit + 0x04));
+    if (!pMonStats2) {
         return;
     }
     GFX_FreeUnitCofList(pGfxData);
     int nWeaponClass = UNITS_GetWeaponClass(pUnit);
+    uint32_t dwModeFlags = *(uint32_t*)((uint8_t*)pMonStats2 + 0xF0);
     for (int i = 0; i < 16; ++i) {
-        if (*(uint8_t*)((uint8_t*)pMonTxt + 0x106 + i)) {
+        if ((dwModeFlags & (1u << i)) != 0) {
             if (i == 0 || i == 12) {
                 GFX_CacheUnitCof(pUnit, i, 0);
             } else {
@@ -1649,15 +1643,17 @@ void __fastcall GFX_AttachOverlayToUnit(D2UnitStrc* pUnit, int nOverlayId, int b
     memset(pOverlay, 0, sizeof(D2OverlayStrc));
 
     pOverlay->nOverlayId   = nOverlayId;
-    pOverlay->nFileIndex   = *(int*)((uint8_t*)pOverlayTxt + 0x00);
-    pOverlay->bPreDraw     = bPreDrawOverride ? 1 : *(uint8_t*)((uint8_t*)pOverlayTxt + 0x44);
-    pOverlay->nFrames      = *(int*)((uint8_t*)pOverlayTxt + 0x4C);
-    pOverlay->nXOffset     = *(int*)((uint8_t*)pOverlayTxt + 0x58);
-    pOverlay->nYOffset     = *(int*)((uint8_t*)pOverlayTxt + 0x5C);
-    pOverlay->nAnimRate    = *(int*)((uint8_t*)pOverlayTxt + 0x50);
-    pOverlay->nInitWait    = *(int*)((uint8_t*)pOverlayTxt + 0x54);
-    pOverlay->nDrawMode    = *(uint8_t*)((uint8_t*)pOverlayTxt + 0x64);
-    pOverlay->nTransIndex  = *(uint8_t*)((uint8_t*)pOverlayTxt + 0x65);
+    pOverlay->nFileIndex   = *(uint16_t*)((uint8_t*)pOverlayTxt + 0x00);
+    pOverlay->nVersion     = *(uint16_t*)((uint8_t*)pOverlayTxt + 0x42);
+    pOverlay->nFrames      = *(int*)((uint8_t*)pOverlayTxt + 0x44);
+    pOverlay->bPreDraw     = bPreDrawOverride ? 1 : *(uint8_t*)((uint8_t*)pOverlayTxt + 0x48);
+    pOverlay->nDirType     = *(uint8_t*)((uint8_t*)pOverlayTxt + 0x50);
+    pOverlay->nXOffset     = *(int*)((uint8_t*)pOverlayTxt + 0x54);
+    pOverlay->nYOffset     = *(int*)((uint8_t*)pOverlayTxt + 0x58);
+    pOverlay->nAnimRate    = *(int*)((uint8_t*)pOverlayTxt + 0x6C);
+    pOverlay->nInitWait    = *(int*)((uint8_t*)pOverlayTxt + 0x78);
+    pOverlay->nDrawMode    = *(uint8_t*)((uint8_t*)pOverlayTxt + 0x7C);
+    pOverlay->nTransIndex  = 0;
     pOverlay->nEndFrameFp  = pOverlay->nFrames << 8;
     pOverlay->nStepFp      = pOverlay->nAnimRate;
     pOverlay->dwStartTick  = GetTickCount();
@@ -1702,14 +1698,12 @@ void __fastcall GFX_DrawCompositeUnitHighlight(D2UnitStrc* pUnit, int nXPos, int
         return;
     }
     int nDir   = UNITS_GetDir(pUnit);
-    int nFrame = (*(int*)((uint8_t*)pUnit + 0x40)) >> 8;
-    if (nFrame >= (int)pCof->nFramesPerDir) {
+    int nFrame = (*(int*)((uint8_t*)pUnit + 0x44)) >> 8;
+    if (nFrame < 0 || nFrame >= (int)pCof->nFramesPerDir) {
         nFrame = 0;
     }
 
-    int nCofDir = (pCof->nDirections == 32) ? g_aDirToCofDir32[nDir & 31]
-                : (pCof->nDirections == 16) ? g_aDirToCofDir16[nDir & 15]
-                : nDir % (pCof->nDirections ? pCof->nDirections : 1);
+    int nCofDir = GFXUTIL_EngineDirToCofDir(nDir, pCof->nDirections);
 
     uint8_t* pOrder = pCof->pLayerPriority + ((nCofDir * pCof->nFramesPerDir + nFrame) * pCof->nLayers);
     D2GfxDataStrc tGfxData;
@@ -1737,14 +1731,12 @@ void __fastcall GFX_DrawCompositeUnitShadow(D2UnitStrc* pUnit, int nXPos, int nY
         return;
     }
     int nDir   = UNITS_GetDir(pUnit);
-    int nFrame = (*(int*)((uint8_t*)pUnit + 0x40)) >> 8;
-    if (nFrame >= (int)pCof->nFramesPerDir) {
+    int nFrame = (*(int*)((uint8_t*)pUnit + 0x44)) >> 8;
+    if (nFrame < 0 || nFrame >= (int)pCof->nFramesPerDir) {
         nFrame = 0;
     }
 
-    int nCofDir = (pCof->nDirections == 32) ? g_aDirToCofDir32[nDir & 31]
-                : (pCof->nDirections == 16) ? g_aDirToCofDir16[nDir & 15]
-                : nDir % (pCof->nDirections ? pCof->nDirections : 1);
+    int nCofDir = GFXUTIL_EngineDirToCofDir(nDir, pCof->nDirections);
 
     uint8_t* pOrder = pCof->pLayerPriority + ((nCofDir * pCof->nFramesPerDir + nFrame) * pCof->nLayers);
     D2GfxDataStrc tGfxData;
@@ -1774,14 +1766,12 @@ void __fastcall GFX_DrawCompositeUnit(D2UnitStrc* pUnit, int nXPos, int nYPos, u
     GFX_DrawUnitOverlays(pUnit, nXPos, nYPos, dwGamma, 1, nScreenMode);
 
     int nDir   = UNITS_GetDir(pUnit);
-    int nFrame = (*(int*)((uint8_t*)pUnit + 0x40)) >> 8;
-    if (nFrame >= (int)pCof->nFramesPerDir) {
+    int nFrame = (*(int*)((uint8_t*)pUnit + 0x44)) >> 8;
+    if (nFrame < 0 || nFrame >= (int)pCof->nFramesPerDir) {
         nFrame = 0;
     }
 
-    int nCofDir = (pCof->nDirections == 32) ? g_aDirToCofDir32[nDir & 31]
-                : (pCof->nDirections == 16) ? g_aDirToCofDir16[nDir & 15]
-                : nDir % (pCof->nDirections ? pCof->nDirections : 1);
+    int nCofDir = GFXUTIL_EngineDirToCofDir(nDir, pCof->nDirections);
 
     uint8_t* pOrder = pCof->pLayerPriority + ((nCofDir * pCof->nFramesPerDir + nFrame) * pCof->nLayers);
     D2GfxDataStrc tGfxData;
@@ -1827,7 +1817,7 @@ void __fastcall GFX_PrecacheRoomMonsters(D2ActiveRoomStrc* pRoom)
     }
     g_dwLastAsyncPrecacheTick = dwNow;
 
-    for (D2UnitStrc* pUnit = *(D2UnitStrc**)((uint8_t*)pRoom + 0x74); pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE8)) {
+    for (D2UnitStrc* pUnit = DUNGEON_GetFirstUnitInRoom(pRoom); pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE8)) {
         if (*(int*)pUnit == 1) {
             GFX_AsyncPreloadUnitSprites(pUnit, 0);
         }
@@ -1941,10 +1931,6 @@ int __fastcall GFXUTIL_PopulateComponentGfxData(
     if (!pGfxData) {
         return 0;
     }
-    uint8_t nCompIdx = *((uint8_t*)pGfxData + nComponent);
-    if (nCompIdx == 0xFF || nCompIdx == 0) {
-        return 0;
-    }
 
     memset(pOutGfxData, 0, sizeof(D2GfxDataStrc));
     pOutGfxData->nUnitType      = *(int*)pUnit;
@@ -1956,8 +1942,7 @@ int __fastcall GFXUTIL_PopulateComponentGfxData(
     pOutGfxData->nMaxDirections = pCof->nDirections;
     pOutGfxData->nMaxFrames     = pCof->nFramesPerDir;
 
-    SStrCopy(pOutGfxData->szWeaponClass, pCof->pLayers[nLayerIdx].szWeaponClass, 4);
-    return 1;
+    return D2Client_PopulateUnitComponentGfxNames(pUnit, pOutGfxData, nComponent, pCof->pLayers[nLayerIdx].szWeaponClass);
 }
 
 // 1.12a: 0x6FB68130

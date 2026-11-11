@@ -29,6 +29,9 @@
 #include <D2Items.h>
 #include <D2DataTbls.h>
 #include <D2BitManip.h>
+#include <D2QuestRecord.h>
+
+#include "D2ClientReconstructed.h"
 
 typedef D2ActiveRoomStrc D2RoomStrc;
 
@@ -67,7 +70,8 @@ struct D2UnitPacketQueueStrc // 16 bytes
 // =============================================================================
 extern D2UnitStrc*    gpClientPlayer;        // 0x6FBCC3D0
 extern D2DrlgActStrc* gpClientAct;           // 0x6FBCC02C
-extern D2UnitStrc*    gapMonsterHashTable[128]; // 0x6FBCAB60
+extern D2UnitStrc*    gapServerSideUnitHashTables[6][128]; // 0x6FBCA960
+#define gapMonsterHashTable (gapServerSideUnitHashTables[1])
 extern uint8_t        gnClientDifficulty;    // 0x6FBCBFF4
 extern int32_t        gbIsExpansionClient;   // 0x6FBB330C
 extern int32_t        gbIsLadderClient;      // 0x6FBB3310
@@ -100,6 +104,49 @@ D2UnitStrc* __fastcall UNIT_AssignClientMonster(
     const char* szMonName,
     int32_t nNameFlags);                                                                        // 0x6FAD0EB0
 void __fastcall UNIT_RemoveClientUnit(uint8_t nUnitType, uint32_t dwUnitGUID);                  // 0x6FAD0620
+
+// Cross-module reconstructed helpers invoked by S->C handlers
+struct D2RosterPetCreateDataStrc
+{
+    uint32_t dwMonSeed;
+    uint32_t dwNameIdx;
+    uint32_t dwSpecialFlag;
+};
+
+void __stdcall  sub_6FB23EE0(uint8_t* pPacket);                                                 // UI_text.cpp (0x26 GameChat)
+void __fastcall sub_6FB21D70(uint8_t* pPacket);                                                 // UI_text.cpp (0x27 NpcInfo / speech)
+int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);     // UI_ui.cpp (0x6FB3EF00: 0=Open, 1=Close, 2=Toggle)
+void __fastcall D2Client_ProcessItemPacket9C(uint8_t* pPacket);                                 // UNIT_Item.cpp (0x9C)
+void __fastcall D2Client_ProcessItemPacket9D(uint8_t* pPacket);                                 // UNIT_Item.cpp (0x9D)
+void __fastcall D2Client_OnNpcInfoPacket(uint8_t* pPacket);                                     // UI_npcmenu.cpp / bridge (0x27)
+void __fastcall D2Client_OnWeaponSwitchPacket(void);                                            // D2ClientLinkBridge.cpp (0x97)
+void __fastcall D2Client_PlayUnitSound(int32_t nUnitType, uint32_t dwUnitId, uint16_t wSound);  // Sound_SoundHdr.cpp / bridge (0x2C)
+void __fastcall D2Client_AssignSkillHotkey(int32_t nSlot, int32_t nSkillId, int32_t bLeft, uint32_t dwItemGUID); // UNIT_PlrSkills.cpp / bridge (0x7B)
+
+// GAME_Roster.cpp exports
+void __fastcall ROSTER_AddOrUpdatePlayer(
+    uint32_t dwUnitId,
+    const char* szCharName,
+    uint32_t dwClassId,
+    uint16_t wLevel,
+    uint16_t wPartyId,
+    uint32_t dwPartyFlags,
+    uint16_t wGuildEmblem,
+    const char* szAccountName,
+    const char* szGuildTag);
+void __fastcall ROSTER_RemovePlayerFromRoster(uint32_t dwUnitId);
+void __fastcall ROSTER_AddPlayerCorpse(uint32_t dwPlayerUnitId, uint32_t dwCorpseUnitId);
+void __fastcall ROSTER_RemovePlayerCorpse(uint32_t dwPlayerUnitId, uint32_t dwCorpseUnitId);
+void __fastcall ROSTER_UpdatePlayerPartyAndLevel(uint32_t dwUnitId, uint16_t wPartyId, uint16_t wLevel, uint32_t dwPartyFlags);
+void __fastcall ROSTER_UpdatePlayerLifeAndLevelId(uint32_t dwUnitId, uint32_t dwPartyLife, uint16_t wLevelId);
+void __fastcall ROSTER_UpdatePlayerPartyFlags(uint32_t dwUnitId, uint8_t nPartyFlags);
+void __fastcall ROSTER_OnRelationPacketReceived(uint32_t dwSourceUnitId, uint32_t dwTargetUnitId, uint16_t wRelationState);
+void __fastcall ROSTER_UpdatePlayerPartyId(uint32_t dwUnitId, uint16_t wPartyId);
+void __fastcall ROSTER_SetPlayerCoordsByUnitId(uint32_t dwUnitId, int32_t nXpos, int32_t nYpos);
+void __fastcall ROSTER_SetPlayerArenaScore(uint32_t dwUnitId, int16_t nArenaScore);
+void __fastcall ROSTERPETS_RemoveOrMarkPetDead(uint32_t dwPetUnitId);
+void __fastcall ROSTERPETS_AddOrUpdateBasicPet(int32_t nPetType, uint32_t dwPetUnitId, uint32_t dwOwnerId, int32_t nClassId);
+void __fastcall ROSTERPETS_AddOrUpdateFullPet(int32_t nPetType, uint32_t dwPetUnitId, const D2RosterPetCreateDataStrc* pCreateData, uint32_t dwOwnerId, int32_t nClassId);
 
 // =============================================================================
 // SECTION 1: Deferred Per-Unit Packet Queue Management (0x6FB14190 .. 0x6FB14AE0)
@@ -738,24 +785,12 @@ void __fastcall SCMD_UnitHandler6D_MonsterStop(D2UnitStrc* pMonster, uint8_t* pP
 //   0x15: UpdateStatsEx        0x16: WeaponSwitch        0x17: SwapCursorBuffer
 void __fastcall SCMD_Handler9C_ItemActionWorld(uint8_t* pPacket)
 {
-    const uint8_t nAction     = pPacket[1];
-    const uint8_t nPacketSize = pPacket[2];
-    (void)nAction;
-    (void)nPacketSize;
-    // Full 24-case jump table at 0x6FB166FC in GAME_SCmd.asm
+    D2Client_ProcessItemPacket9C(pPacket);
 }
 
 void __fastcall SCMD_Handler9D_ItemActionOwned(uint8_t* pPacket)
 {
-    const uint8_t  nAction     = pPacket[1];
-    const uint8_t  nPacketSize = pPacket[2];
-    const uint8_t  nOwnerType  = pPacket[8];
-    const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[9]);
-    (void)nAction;
-    (void)nPacketSize;
-    (void)nOwnerType;
-    (void)dwOwnerGUID;
-    // Full 24-case jump table at 0x6FB16EE0 in GAME_SCmd.asm
+    D2Client_ProcessItemPacket9D(pPacket);
 }
 
 // 0x6FB16990 (0xAC: S2C_ASSIGNNPC - variable length)
@@ -809,6 +844,484 @@ void __fastcall SCMD_HandlerAC_AssignNPC(uint8_t* pPacket)
     }
 }
 
+// Additional Reconstructed S->C Packet Handlers (0x0B .. 0xAE)
+
+static void __fastcall SCMD_Handler0B_GameHandshake(uint8_t* pPacket)
+{
+    (void)pPacket;
+}
+
+static void __fastcall SCMD_Handler0E_ObjectState(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwObjGUID  = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nAnimMode  = pPacket[7];
+
+    D2UnitStrc* pObj = UNIT_FindClientUnit(static_cast<int32_t>(dwObjGUID), nUnitType);
+    if (pObj != nullptr)
+    {
+        pObj->dwAnimMode = nAnimMode;
+        UNITS_ChangeAnimMode(pObj, nAnimMode);
+    }
+}
+
+static void __fastcall SCMD_Handler11_ReportKill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType = pPacket[1];
+    const uint32_t dwGUID    = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwGUID), nUnitType);
+    if (pUnit != nullptr && pUnit->dwUnitType == UNIT_MONSTER)
+    {
+        UNITS_ChangeAnimMode(pUnit, MONMODE_DEAD);
+    }
+}
+
+static void __fastcall SCMD_Handler16_MultiUnitUpdate(uint8_t* pPacket)
+{
+    const uint8_t nCount = pPacket[3];
+    const uint8_t* pEntry = &pPacket[4];
+    for (uint8_t i = 0; i < nCount; ++i, pEntry += 9)
+    {
+        const uint8_t  nUnitType = pEntry[0];
+        const uint32_t dwGUID    = *reinterpret_cast<const uint32_t*>(&pEntry[1]);
+        const int32_t  nX        = *reinterpret_cast<const uint16_t*>(&pEntry[5]);
+        const int32_t  nY        = *reinterpret_cast<const uint16_t*>(&pEntry[7]);
+        D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwGUID), nUnitType);
+        if (pUnit != nullptr)
+        {
+            UNIT_SetClientUnitPosition(pUnit, nX, nY);
+        }
+    }
+}
+
+static void __fastcall SCMD_Handler_NoOp(uint8_t* pPacket)
+{
+    (void)pPacket;
+}
+
+static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
+    const uint8_t  nBaseLevel = pPacket[8];
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr)
+    {
+        pUnit = UNIT_GetClientPlayer();
+    }
+    if (pUnit != nullptr)
+    {
+        SKILLS_AssignSkill(pUnit, wSkillId, nBaseLevel, FALSE, __FILE__, __LINE__);
+    }
+}
+
+static void __fastcall SCMD_Handler22_UpdateItemSkill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[2];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[3]);
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const uint8_t  nAmount    = pPacket[9];
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        D2SkillStrc* pSkill = SKILLS_GetHighestLevelSkillFromUnitAndId(pUnit, wSkillId);
+        if (pSkill != nullptr)
+        {
+            SKILLS_SetQuantity(pSkill, nAmount);
+        }
+    }
+}
+
+static void __fastcall SCMD_Handler23_SetSkill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nHand      = pPacket[6];
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const int32_t  nItemGUID  = *reinterpret_cast<int32_t*>(&pPacket[9]);
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr)
+    {
+        pUnit = UNIT_GetClientPlayer();
+    }
+    if (pUnit != nullptr)
+    {
+        if (SKILLS_GetSkillById(pUnit, wSkillId, nItemGUID) == nullptr)
+        {
+            SKILLS_AddSkill(pUnit, wSkillId);
+        }
+        if (nHand != 0)
+        {
+            SKILLS_SetLeftActiveSkill(pUnit, wSkillId, nItemGUID);
+        }
+        else
+        {
+            SKILLS_SetRightActiveSkill(pUnit, wSkillId, nItemGUID);
+        }
+    }
+}
+
+static void __fastcall SCMD_Handler26_GameChat(uint8_t* pPacket)
+{
+    sub_6FB23EE0(pPacket);
+}
+
+static void __fastcall SCMD_Handler27_NpcInfo(uint8_t* pPacket)
+{
+    D2Client_OnNpcInfoPacket(pPacket);
+    sub_6FB21D70(pPacket);
+}
+
+static void __fastcall SCMD_Handler28_PlayerQuestInfo(uint8_t* pPacket)
+{
+    if (g_pPlayerQuestRecord != nullptr)
+    {
+        QUESTRECORD_CopyBufferToRecord(g_pPlayerQuestRecord, &pPacket[7], 96, FALSE);
+    }
+}
+
+static void __fastcall SCMD_Handler29_GameQuestInfo(uint8_t* pPacket)
+{
+    if (g_pGameQuestRecord != nullptr)
+    {
+        QUESTRECORD_CopyBufferToRecord(g_pGameQuestRecord, &pPacket[1], 96, FALSE);
+    }
+}
+
+static void __fastcall SCMD_Handler2C_PlaySound(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint16_t wSoundId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
+    D2Client_PlayUnitSound(nUnitType, dwUnitGUID, wSoundId);
+}
+
+static void __fastcall SCMD_Handler42_ClearCursor(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr && pUnit->pInventory != nullptr)
+    {
+        INVENTORY_SetCursorItem(pUnit->pInventory, nullptr);
+    }
+}
+
+static void __fastcall SCMD_Handler4C_UnitSkillOnTarget(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType    = pPacket[1];
+    const uint32_t dwUnitGUID   = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nTargetType  = pPacket[10];
+    const uint32_t dwTargetGUID = *reinterpret_cast<uint32_t*>(&pPacket[11]);
+
+    D2UnitStrc* pUnit   = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    D2UnitStrc* pTarget = UNIT_FindClientUnit(static_cast<int32_t>(dwTargetGUID), nTargetType);
+    if (pUnit != nullptr)
+    {
+        UNITMODE_DispatchClientEvent(pUnit, 0x03, 0, 0, pTarget, 0, 0);
+    }
+}
+
+static void __fastcall SCMD_Handler4D_UnitCastSkill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const int32_t  nX         = *reinterpret_cast<uint16_t*>(&pPacket[11]);
+    const int32_t  nY         = *reinterpret_cast<uint16_t*>(&pPacket[13]);
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        UNITMODE_DispatchClientEvent(pUnit, 0x02, nX, nY, nullptr, 0, 0);
+    }
+}
+
+static void __fastcall SCMD_Handler58_OpenUIDialog(uint8_t* pPacket)
+{
+    const uint8_t nUIType = pPacket[5];
+    switch (nUIType)
+    {
+    case 2: // Stash
+        UI_SetPanelState(D2PANEL_STASH, 0, 0);
+        UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
+        break;
+    case 3: // Horadric Cube
+        UI_SetPanelState(D2PANEL_CUBE, 0, 0);
+        UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
+        break;
+    default:
+        break;
+    }
+}
+
+static void __fastcall SCMD_Handler5B_PlayerInGame(uint8_t* pPacket)
+{
+    const uint32_t dwUnitId   = *reinterpret_cast<uint32_t*>(&pPacket[3]);
+    const uint8_t  nClassId   = pPacket[7];
+    char szName[17] = { 0 };
+    memcpy(szName, &pPacket[8], 16);
+    const uint16_t wLevel     = *reinterpret_cast<uint16_t*>(&pPacket[24]);
+    const uint16_t wPartyId   = *reinterpret_cast<uint16_t*>(&pPacket[26]);
+
+    ROSTER_AddOrUpdatePlayer(dwUnitId, szName, nClassId, wLevel, wPartyId, 1, 0, "", "");
+}
+
+static void __fastcall SCMD_Handler5C_PlayerLeftGame(uint8_t* pPacket)
+{
+    const uint32_t dwUnitId = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    ROSTER_RemovePlayerFromRoster(dwUnitId);
+}
+
+static void __fastcall SCMD_Handler63_WaypointMenu(uint8_t* pPacket)
+{
+    (void)pPacket;
+    UI_SetPanelState(D2PANEL_WAYPOINT, 0, 0);
+}
+
+static void __fastcall SCMD_Handler65_PlayerKillCount(uint8_t* pPacket)
+{
+    const uint32_t dwPlayerId = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const int16_t  nCount     = *reinterpret_cast<int16_t*>(&pPacket[5]);
+    ROSTER_SetPlayerArenaScore(dwPlayerId, nCount);
+}
+
+static void __fastcall SCMD_Handler74_PlayerCorpseAssign(uint8_t* pPacket)
+{
+    const uint8_t  bAssign      = pPacket[1];
+    const uint32_t dwPlayerGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint32_t dwCorpseGUID = *reinterpret_cast<uint32_t*>(&pPacket[6]);
+    if (bAssign != 0)
+    {
+        ROSTER_AddPlayerCorpse(dwPlayerGUID, dwCorpseGUID);
+    }
+    else
+    {
+        ROSTER_RemovePlayerCorpse(dwPlayerGUID, dwCorpseGUID);
+    }
+}
+
+static void __fastcall SCMD_Handler75_PlayerPartyInfo(uint8_t* pPacket)
+{
+    const uint32_t dwUnitGUID   = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const uint16_t wPartyId     = *reinterpret_cast<uint16_t*>(&pPacket[5]);
+    const uint16_t wLevel       = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const uint8_t  bInYourParty = pPacket[11];
+    ROSTER_UpdatePlayerPartyAndLevel(dwUnitGUID, wPartyId, wLevel, bInYourParty ? 3u : 1u);
+}
+
+static void __fastcall SCMD_Handler7A_PetAction(uint8_t* pPacket)
+{
+    const uint8_t  bAdd        = pPacket[1];
+    const uint8_t  nPetType    = pPacket[3];
+    const uint32_t dwPetGUID   = *reinterpret_cast<uint32_t*>(&pPacket[4]);
+    const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[8]);
+
+    if (bAdd != 0)
+    {
+        ROSTERPETS_AddOrUpdateBasicPet(nPetType, dwPetGUID, dwOwnerGUID, 0);
+    }
+    else
+    {
+        ROSTERPETS_RemoveOrMarkPetDead(dwPetGUID);
+    }
+}
+
+static void __fastcall SCMD_Handler7B_AssignSkillHotkey(uint8_t* pPacket)
+{
+    const uint8_t  nSlot      = pPacket[1];
+    const uint8_t  nSkillId   = pPacket[2];
+    const uint8_t  bLeft      = pPacket[3];
+    const uint32_t dwItemGUID = *reinterpret_cast<uint32_t*>(&pPacket[4]);
+    D2Client_AssignSkillHotkey(nSlot, nSkillId, (bLeft != 0) ? 1 : 0, dwItemGUID);
+}
+
+static void __fastcall SCMD_Handler7F_AllyPartyInfo(uint8_t* pPacket)
+{
+    const uint8_t  bIsPet   = pPacket[1];
+    const uint16_t wLifePct = *reinterpret_cast<uint16_t*>(&pPacket[2]);
+    const uint32_t dwUnitId = *reinterpret_cast<uint32_t*>(&pPacket[4]);
+    const uint16_t wLevelId = *reinterpret_cast<uint16_t*>(&pPacket[8]);
+    if (bIsPet == 0)
+    {
+        ROSTER_UpdatePlayerLifeAndLevelId(dwUnitId, wLifePct, wLevelId);
+    }
+}
+
+static void __fastcall SCMD_Handler81_AssignMerc(uint8_t* pPacket)
+{
+    const uint16_t wPetType    = *reinterpret_cast<uint16_t*>(&pPacket[2]);
+    const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[4]);
+    const uint32_t dwMercGUID  = *reinterpret_cast<uint32_t*>(&pPacket[8]);
+    const uint32_t dwMonSeed   = *reinterpret_cast<uint32_t*>(&pPacket[12]);
+    const uint16_t wNameIdx    = *reinterpret_cast<uint16_t*>(&pPacket[16]);
+
+    D2RosterPetCreateDataStrc tCreate = { dwMonSeed, wNameIdx, 0 };
+    ROSTERPETS_AddOrUpdateFullPet(wPetType, dwMercGUID, &tCreate, dwOwnerGUID, 7);
+}
+
+static void __fastcall SCMD_Handler8B_PlayerPartyRelationship(uint8_t* pPacket)
+{
+    const uint32_t dwUnitId    = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const uint8_t  nPartyFlags = pPacket[5];
+    ROSTER_UpdatePlayerPartyFlags(dwUnitId, nPartyFlags);
+}
+
+static void __fastcall SCMD_Handler8C_PlayerRelationshipUpdate(uint8_t* pPacket)
+{
+    const uint32_t dwSourceId = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const uint32_t dwTargetId = *reinterpret_cast<uint32_t*>(&pPacket[5]);
+    const uint16_t wState     = *reinterpret_cast<uint16_t*>(&pPacket[9]);
+    ROSTER_OnRelationPacketReceived(dwSourceId, dwTargetId, wState);
+}
+
+static void __fastcall SCMD_Handler8D_AssignPlayerToParty(uint8_t* pPacket)
+{
+    const uint32_t dwPlayerId = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const uint16_t wPartyId   = *reinterpret_cast<uint16_t*>(&pPacket[5]);
+    ROSTER_UpdatePlayerPartyId(dwPlayerId, wPartyId);
+}
+
+static void __fastcall SCMD_Handler8F_Pong(uint8_t* pPacket)
+{
+    (void)pPacket;
+}
+
+static void __fastcall SCMD_Handler90_PartyAutomapCoords(uint8_t* pPacket)
+{
+    const uint32_t dwPlayerId = *reinterpret_cast<uint32_t*>(&pPacket[1]);
+    const int32_t  nX         = *reinterpret_cast<int32_t*>(&pPacket[5]);
+    const int32_t  nY         = *reinterpret_cast<int32_t*>(&pPacket[9]);
+    ROSTER_SetPlayerCoordsByUnitId(dwPlayerId, nX, nY);
+}
+
+static void __fastcall SCMD_Handler92_RemoveUnitDisplay(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    UNIT_RemoveClientUnit(nUnitType, dwUnitGUID);
+}
+
+static void __fastcall SCMD_Handler94_BaseSkillLevels(uint8_t* pPacket)
+{
+    const uint8_t  nCount       = pPacket[1];
+    const uint32_t dwPlayerGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    D2UnitStrc* pPlayer = UNIT_FindClientUnit(static_cast<int32_t>(dwPlayerGUID), UNIT_PLAYER);
+    if (pPlayer == nullptr)
+    {
+        pPlayer = UNIT_GetClientPlayer();
+    }
+    if (pPlayer == nullptr)
+    {
+        return;
+    }
+
+    const uint8_t* pCursor = &pPacket[6];
+    for (uint8_t i = 0; i < nCount; ++i, pCursor += 3)
+    {
+        const uint16_t wSkillId = *reinterpret_cast<const uint16_t*>(&pCursor[0]);
+        const uint8_t  nLevel   = pCursor[2];
+        SKILLS_AssignSkill(pPlayer, wSkillId, nLevel, FALSE, __FILE__, __LINE__);
+    }
+}
+
+static void __fastcall SCMD_Handler97_WeaponSwitch(uint8_t* pPacket)
+{
+    (void)pPacket;
+    D2Client_OnWeaponSwitchPacket();
+}
+
+static void __fastcall SCMD_Handler9E_A2_MercAttr(uint8_t* pPacket)
+{
+    const uint8_t  bOpcode    = pPacket[0];
+    const uint8_t  nStatId    = pPacket[1];
+    const uint32_t dwMercGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    D2UnitStrc* pMerc = UNIT_FindClientUnit(static_cast<int32_t>(dwMercGUID), UNIT_MONSTER);
+    if (pMerc == nullptr)
+    {
+        return;
+    }
+
+    int32_t nValue = 0;
+    switch (bOpcode)
+    {
+    case 0x9E:
+    case 0xA1:
+        nValue = pPacket[6];
+        break;
+    case 0x9F:
+    case 0xA2:
+        nValue = *reinterpret_cast<uint16_t*>(&pPacket[6]);
+        break;
+    case 0xA0:
+        nValue = *reinterpret_cast<int32_t*>(&pPacket[6]);
+        break;
+    default:
+        return;
+    }
+
+    if (bOpcode >= 0xA1)
+    {
+        STATLIST_AddUnitStat(pMerc, nStatId, nValue, 0);
+    }
+    else
+    {
+        STATLIST_SetUnitStat(pMerc, nStatId, nValue, 0);
+    }
+}
+
+static void __fastcall SCMD_HandlerA7_DelayedState(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nState     = pPacket[6];
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        STATES_ToggleState(pUnit, nState, TRUE);
+    }
+}
+
+static void __fastcall SCMD_HandlerA8_SetState(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nState     = pPacket[7];
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        STATES_ToggleState(pUnit, nState, TRUE);
+    }
+}
+
+static void __fastcall SCMD_HandlerA9_EndState(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nState     = pPacket[6];
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        STATES_ToggleState(pUnit, nState, FALSE);
+    }
+}
+
+static void __fastcall SCMD_HandlerAB_NpcHeal(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nLifePct   = pPacket[6];
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        STATLIST_SetUnitStat(pUnit, STAT_HITPOINTS, nLifePct, 0);
+    }
+}
+
 // =============================================================================
 // SECTION 3: Complete 175-Opcode S->C Dispatch Table (0x6FB93D20: 0x00 .. 0xAE)
 // =============================================================================
@@ -817,181 +1330,181 @@ void __fastcall SCMD_HandlerAC_AssignNPC(uint8_t* pPacket)
 // along with the exact 1.12a handler VA in comments.
 const D2SCmdTableStrc sgptSCmdTable[0xAF] =
 {
-    /* 0x00 */ { SCMD_Handler00_GameLoading,           1,  nullptr }, // 0x6FB18020
-    /* 0x01 */ { SCMD_Handler01_GameLogonReceipt,      8,  nullptr }, // 0x6FB18000
-    /* 0x02 */ { SCMD_Handler02_LoadDone,              1,  nullptr }, // 0x6FB14FF0
-    /* 0x03 */ { SCMD_Handler03_LoadAct,              12,  nullptr }, // 0x6FB160F0
-    /* 0x04 */ { SCMD_Handler04_LoadComplete,          1,  nullptr }, // 0x6FB16550
-    /* 0x05 */ { SCMD_Handler05_UnloadComplete,        1,  nullptr }, // 0x6FB15550
-    /* 0x06 */ { SCMD_Handler06_GameLogoutSuccess,     1,  nullptr }, // 0x6FB157A0
-    /* 0x07 */ { SCMD_Handler07_AddRoom,               6,  nullptr }, // 0x6FB14920
-    /* 0x08 */ { SCMD_Handler08_RemoveRoom,            6,  nullptr }, // 0x6FB148B0
-    /* 0x09 */ { SCMD_Handler09_AssignWarp,           11,  nullptr }, // 0x6FB164E0
-    /* 0x0A */ { SCMD_Handler0A_RemoveUnit,            6,  nullptr }, // 0x6FB154F0
-    /* 0x0B */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14B70),  6,  nullptr }, // 0x6FB14B70: GameHandshake
-    /* 0x0C */ { nullptr,                              9,  SCMD_UnitHandler0C_GameHandshake }, // 0x6FB17B60
-    /* 0x0D */ { nullptr,                             13,  SCMD_UnitHandler0D_PlayerStop },    // 0x6FB17B00
-    /* 0x0E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17E80), 12,  nullptr }, // 0x6FB17E80: ObjectState
-    /* 0x0F */ { nullptr,                             16,  SCMD_UnitHandler0F_PlayerMove },    // 0x6FB17A80
-    /* 0x10 */ { nullptr,                             16,  SCMD_UnitHandler10_PlayerToTarget },// 0x6FB17A30
-    /* 0x11 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB149D0),  8,  nullptr }, // 0x6FB149D0: ReportKill
-    /* 0x12 */ { nullptr,                             26,  nullptr }, // 0x12: Unused
-    /* 0x13 */ { nullptr,                             14,  nullptr }, // 0x13: Unused
-    /* 0x14 */ { nullptr,                             18,  nullptr }, // 0x14: Unused
-    /* 0x15 */ { SCMD_Handler15_ReassignPlayer,       11,  nullptr }, // 0x6FB17BB0
-    /* 0x16 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17DA0), -1,  nullptr }, // 0x6FB17DA0:MultiUnitUpdate
-    /* 0x17 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB156B0), -1,  nullptr }, // 0x6FB156B0: UnusedVar
-    /* 0x18 */ { SCMD_Handler18_PlayerHPMP,           15,  nullptr }, // 0x6FB172E0
-    /* 0x19 */ { SCMD_Handler19_1F_StatUpdate,         2,  nullptr }, // 0x6FB17430: GoldToInvByte
-    /* 0x1A */ { SCMD_Handler19_1F_StatUpdate,         2,  nullptr }, // 0x6FB17430: AddExpByte
-    /* 0x1B */ { SCMD_Handler19_1F_StatUpdate,         3,  nullptr }, // 0x6FB17430: AddExpWord
-    /* 0x1C */ { SCMD_Handler19_1F_StatUpdate,         5,  nullptr }, // 0x6FB17430: SetExpDword
-    /* 0x1D */ { SCMD_Handler19_1F_StatUpdate,         3,  nullptr }, // 0x6FB17430: SetAttrByte
-    /* 0x1E */ { SCMD_Handler19_1F_StatUpdate,         4,  nullptr }, // 0x6FB17430: SetAttrWord
-    /* 0x1F */ { SCMD_Handler19_1F_StatUpdate,         6,  nullptr }, // 0x6FB17430: SetAttrDword
-    /* 0x20 */ { SCMD_Handler20_PlayerAttrUpdate,     10,  nullptr }, // 0x6FB173C0
-    /* 0x21 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17540), 12,  nullptr }, // 0x6FB17540: UpdateSkill
-    /* 0x22 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17600), 12,  nullptr }, // 0x6FB17600: UpdateItemSkill
-    /* 0x23 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB176F0), 13,  nullptr }, // 0x6FB176F0: SetSkill
-    /* 0x24 */ { nullptr,                             90,  nullptr }, // 0x24: Unused
-    /* 0x25 */ { nullptr,                             90,  nullptr }, // 0x25: Unused
-    /* 0x26 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15AC0), -1,  nullptr }, // 0x6FB15AC0: GameChat
-    /* 0x27 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14C50), 40,  nullptr }, // 0x6FB14C50: NpcInfo
-    /* 0x28 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14CE0),103,  nullptr }, // 0x6FB14CE0: PlayerQuestInfo
-    /* 0x29 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14D10), 97,  nullptr }, // 0x6FB14D10: GameQuestInfo
-    /* 0x2A */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14F70), 15,  nullptr }, // 0x6FB14F70: NpcTransaction
-    /* 0x2B */ { nullptr,                              0,  nullptr }, // 0x2B: Unused
-    /* 0x2C */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14E10),  8,  nullptr }, // 0x6FB14E10: PlaySound
-    /* 0x2D */ { nullptr,                              0,  nullptr }, // 0x2D: Unused
-    /* 0x2E */ { nullptr,                              0,  nullptr }, // 0x2E: Unused
-    /* 0x2F */ { nullptr,                              0,  nullptr }, // 0x2F: Unused
-    /* 0x30 */ { nullptr,                              0,  nullptr }, // 0x30: Unused
-    /* 0x31 */ { nullptr,                              0,  nullptr }, // 0x31: Unused
-    /* 0x32 */ { nullptr,                              0,  nullptr }, // 0x32: Unused
-    /* 0x33 */ { nullptr,                              0,  nullptr }, // 0x33: Unused
-    /* 0x34 */ { nullptr,                              0,  nullptr }, // 0x34: Unused
-    /* 0x35 */ { nullptr,                              0,  nullptr }, // 0x35: Unused
-    /* 0x36 */ { nullptr,                              0,  nullptr }, // 0x36: Unused
-    /* 0x37 */ { nullptr,                              0,  nullptr }, // 0x37: Unused
-    /* 0x38 */ { nullptr,                              0,  nullptr }, // 0x38: Unused
-    /* 0x39 */ { nullptr,                              0,  nullptr }, // 0x39: Unused
-    /* 0x3A */ { nullptr,                              0,  nullptr }, // 0x3A: Unused
-    /* 0x3B */ { nullptr,                              0,  nullptr }, // 0x3B: Unused
-    /* 0x3C */ { nullptr,                              0,  nullptr }, // 0x3C: Unused
-    /* 0x3D */ { nullptr,                              0,  nullptr }, // 0x3D: Unused
-    /* 0x3E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16D80), -1,  nullptr }, // 0x6FB16D80: UpdateItemStats
-    /* 0x3F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17070),  8,  nullptr }, // 0x6FB17070: UseStackableItem
-    /* 0x40 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16D40), 13,  nullptr }, // 0x6FB16D40:ItemTrigger
-    /* 0x41 */ { nullptr,                              0,  nullptr }, // 0x41: Unused
-    /* 0x42 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB157F0),  6,  nullptr }, // 0x6FB157F0: ClearCursor
-    /* 0x43 */ { nullptr,                              0,  nullptr }, // 0x43: Unused
-    /* 0x44 */ { nullptr,                              0,  nullptr }, // 0x44: Unused
-    /* 0x45 */ { nullptr,                             13,  nullptr }, // 0x45: Unused
-    /* 0x46 */ { nullptr,                              0,  nullptr }, // 0x46: Unused
-    /* 0x47 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17F30), 11,  nullptr }, // 0x6FB17F30: Relator1
-    /* 0x48 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17F80), 11,  nullptr }, // 0x6FB17F80: Relator2
-    /* 0x49 */ { nullptr,                              0,  nullptr }, // 0x49: Unused
-    /* 0x4A */ { nullptr,                              0,  nullptr }, // 0x4A: Unused
-    /* 0x4B */ { nullptr,                              0,  nullptr }, // 0x4B: Unused
-    /* 0x4C */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB153F0), 16,  nullptr }, // 0x6FB153F0: UnitSkillOnTarget
-    /* 0x4D */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15380), 17,  nullptr }, // 0x6FB15380: UnitCastSkill
-    /* 0x4E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14C30),  7,  nullptr }, // 0x6FB14C30: MercForHire
-    /* 0x4F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14C40),  1,  nullptr }, // 0x6FB14C40: ClearMercList
-    /* 0x50 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14BF0), 15,  nullptr }, // 0x6FB14BF0: QuestSpecial
-    /* 0x51 */ { SCMD_Handler51_AssignObject,         14,  nullptr }, // 0x6FB164B0
-    /* 0x52 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14D30), 42,  nullptr }, // 0x6FB14D30: QuestLogInfo
-    /* 0x53 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14840), 10,  nullptr }, // 0x6FB14840: PlayerSlotRefresh
-    /* 0x54 */ { nullptr,                             10,  nullptr }, // 0x54: Unused
-    /* 0x55 */ { nullptr,                              3,  nullptr }, // 0x55: Unused
-    /* 0x56 */ { nullptr,                              0,  nullptr }, // 0x56: Unused
-    /* 0x57 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16530), 14,  nullptr }, // 0x6FB16530: MonsterEnchants
-    /* 0x58 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14FB0),  7,  nullptr }, // 0x6FB14FB0: OpenUIDialog
-    /* 0x59 */ { SCMD_Handler59_AssignPlayer,         26,  nullptr }, // 0x6FB16470
-    /* 0x5A */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15D60), 40,  nullptr }, // 0x6FB15D60: EventMessages
-    /* 0x5B */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16030), 36,  nullptr }, // 0x6FB16030: PlayerInGame
-    /* 0x5C */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16010),  5,  nullptr }, // 0x6FB16010: PlayerLeftGame
-    /* 0x5D */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14D50),  6,  nullptr }, // 0x6FB14D50: QuestItemState
-    /* 0x5E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14DA0), 38,  nullptr }, // 0x6FB14DA0: GameQuestAvailability
-    /* 0x5F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14DC0),  5,  nullptr }, // 0x6FB14DC0: Unknown5F
-    /* 0x60 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15320),  7,  nullptr }, // 0x6FB15320: TownportalState
-    /* 0x61 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14DE0),  2,  nullptr }, // 0x6FB14DE0: CanGoToAct
-    /* 0x62 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB154B0),  7,  nullptr }, // 0x6FB154B0: MakeUnitTargetable
-    /* 0x63 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15F30), 21,  nullptr }, // 0x6FB15F30: WaypointMenu
-    /* 0x64 */ { nullptr,                              0,  nullptr }, // 0x64: Unused
-    /* 0x65 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15F10),  7,  nullptr }, // 0x6FB15F10: PlayerKillCount
-    /* 0x66 */ { nullptr,                              7,  nullptr }, // 0x66: Unused
-    /* 0x67 */ { nullptr,                             16,  SCMD_UnitHandler67_MonsterMove },        // 0x6FB179D0
-    /* 0x68 */ { nullptr,                             21,  SCMD_UnitHandler68_MonsterMoveToTarget },// 0x6FB17960
-    /* 0x69 */ { nullptr,                             12,  SCMD_UnitHandler69_MonsterState },       // 0x6FB17900
-    /* 0x6A */ { nullptr,                             12,  SCMD_UnitHandler6A_MonsterUnk6A },       // 0x6FB178B0
-    /* 0x6B */ { nullptr,                             16,  SCMD_UnitHandler6B_MonsterAction },      // 0x6FB17D30
-    /* 0x6C */ { nullptr,                             16,  SCMD_UnitHandler6C_MonsterAttackUnit },  // 0x6FB17CC0
-    /* 0x6D */ { nullptr,                             10,  SCMD_UnitHandler6D_MonsterStop },        // 0x6FB17820
-    /* 0x6E */ { nullptr,                              1,  nullptr }, // 0x6E..0x72: Unused
-    /* 0x6F */ { nullptr,                              1,  nullptr },
-    /* 0x70 */ { nullptr,                              1,  nullptr },
-    /* 0x71 */ { nullptr,                              1,  nullptr },
-    /* 0x72 */ { nullptr,                              1,  nullptr },
-    /* 0x73 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15460), 32,  nullptr }, // 0x6FB15460: MissileData
-    /* 0x74 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB152E0), 10,  nullptr }, // 0x6FB152E0: PlayerCorpseAssign
-    /* 0x75 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15FE0), 13,  nullptr }, // 0x6FB15FE0: PlayerPartyInfo
-    /* 0x76 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17C70),  6,  nullptr }, // 0x6FB17C70: PlayerInSight
-    /* 0x77 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14FA0),  2,  nullptr }, // 0x6FB14FA0: TradeAction
-    /* 0x78 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15060), 21,  nullptr }, // 0x6FB15060: TradeAccepted
-    /* 0x79 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB150A0),  6,  nullptr }, // 0x6FB150A0: GoldInTrade
-    /* 0x7A */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15270), 13,  nullptr }, // 0x6FB15270: PetAction
-    /* 0x7B */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB177D0),  8,  nullptr }, // 0x6FB177D0: AssignSkillHotkey
-    /* 0x7C */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15000),  6,  nullptr }, // 0x6FB15000: UseScroll
-    /* 0x7D */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15220), 18,  nullptr }, // 0x6FB15220: SetItemFlags
-    /* 0x7E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB150C0),  5,  nullptr }, // 0x6FB150C0: CMNCOF
-    /* 0x7F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15FA0), 10,  nullptr }, // 0x6FB15FA0: AllyPartyInfo
-    /* 0x80 */ { nullptr,                              4,  nullptr }, // 0x80: Unused
-    /* 0x81 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB151D0), 20,  nullptr }, // 0x6FB151D0: AssignMerc
-    /* 0x82 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15FD0), 29,  nullptr }, // 0x6FB15FD0: PortalOwnership
-    /* 0x83 */ { nullptr,                              0,  nullptr }, // 0x83..0x89: Unused
-    /* 0x84 */ { nullptr,                              0,  nullptr },
-    /* 0x85 */ { nullptr,                              0,  nullptr },
-    /* 0x86 */ { nullptr,                              0,  nullptr },
-    /* 0x87 */ { nullptr,                              0,  nullptr },
-    /* 0x88 */ { nullptr,                              0,  nullptr },
-    /* 0x89 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14DF0),  2,  nullptr }, // 0x6FB14DF0: SpecialQuestEvent
-    /* 0x8A */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15160),  6,  nullptr }, // 0x6FB15160: NpcWantsInteract
-    /* 0x8B */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15F80),  6,  nullptr }, // 0x6FB15F80: PlayerPartyRelationship
-    /* 0x8C */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15F50), 11,  nullptr }, // 0x6FB15F50: PlayerRelationshipUpdate
-    /* 0x8D */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15F40),  7,  nullptr }, // 0x6FB15F40: AssignPlayerToParty
-    /* 0x8E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB152B0), 10,  nullptr }, // 0x6FB152B0: CorpseAssign
-    /* 0x8F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15780), 33,  nullptr }, // 0x6FB15780: Pong
-    /* 0x90 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15EF0), 13,  nullptr }, // 0x6FB15EF0: PartyAutomapCoords
-    /* 0x91 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14B90), 26,  nullptr }, // 0x6FB14B90: NpcGossipFlags
-    /* 0x92 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16C90),  6,  nullptr }, // 0x6FB16C90: RemoveUnitDisplay
-    /* 0x93 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14FD0),  8,  nullptr }, // 0x6FB14FD0: Unknown93
-    /* 0x94 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17590), -1,  nullptr }, // 0x6FB17590: BaseSkillLevels
-    /* 0x95 */ { SCMD_Handler95_PlayerLifeManaChange, 13,  nullptr }, // 0x6FB17220
-    /* 0x96 */ { SCMD_Handler96_WalkVerify,            9,  nullptr }, // 0x6FB15EC0
-    /* 0x97 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16DB0),  1,  nullptr }, // 0x6FB16DB0: WeaponSwitch
-    /* 0x98 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14BB0),  7,  nullptr }, // 0x6FB14BB0: EvilUrn
-    /* 0x99 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB153F0), 16,  nullptr }, // 0x6FB153F0: SkillTriggeredAtUnit
-    /* 0x9A */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15380), 17,  nullptr }, // 0x6FB15380: SkillTriggeredAtCoord
-    /* 0x9B */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14FC0),  7,  nullptr }, // 0x6FB14FC0: MercReviveCost
-    /* 0x9C */ { SCMD_Handler9C_ItemActionWorld,      -1,  nullptr }, // 0x6FB165F0
-    /* 0x9D */ { SCMD_Handler9D_ItemActionOwned,      -1,  nullptr }, // 0x6FB16DE0
-    /* 0x9E */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17330),  7,  nullptr }, // 0x6FB17330: MercAttrByte
-    /* 0x9F */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17330),  8,  nullptr }, // 0x6FB17330: MercAttrWord
-    /* 0xA0 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17330), 10,  nullptr }, // 0x6FB17330: MercAttrDword
-    /* 0xA1 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17330),  7,  nullptr }, // 0x6FB17330: MercAddExpByte
-    /* 0xA2 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17330),  8,  nullptr }, // 0x6FB17330: MercAddExpWord
-    /* 0xA3 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB15590), 24,  nullptr }, // 0x6FB15590: AuraStatSkill
-    /* 0xA4 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14E90),  3,  nullptr }, // 0x6FB14E90: BaalWaveClassId
-    /* 0xA5 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB17500),  8,  nullptr }, // 0x6FB17500: StateSkillEffect
-    /* 0xA6 */ { nullptr,                             -1,  nullptr }, // 0xA6: UnusedVar
-    /* 0xA7 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB162B0),  7,  nullptr }, // 0x6FB162B0: DelayedState
-    /* 0xA8 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB162F0), -1,  nullptr }, // 0x6FB162F0: SetState (Bitstream)
-    /* 0xA9 */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16430),  7,  nullptr }, // 0x6FB16430: EndState
-    /* 0xAA */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB16110), -1,  nullptr }, // 0x6FB16110: AddUnit / StateList
-    /* 0xAB */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14980),  7,  nullptr }, // 0x6FB14980: NpcHeal
-    /* 0xAC */ { SCMD_HandlerAC_AssignNPC,            -1,  nullptr }, // 0x6FB16990
-    /* 0xAD */ { nullptr,                              9,  nullptr }, // 0xAD: Unused
-    /* 0xAE */ { reinterpret_cast<SCMD_PacketHandlerFn>(0x6FB14EB0), -1,  nullptr }, // 0x6FB14EB0: WardenRequest
+    /* 0x00 */ { SCMD_Handler00_GameLoading,             1,  nullptr }, // 0x6FB18020
+    /* 0x01 */ { SCMD_Handler01_GameLogonReceipt,        8,  nullptr }, // 0x6FB18000
+    /* 0x02 */ { SCMD_Handler02_LoadDone,                1,  nullptr }, // 0x6FB14FF0
+    /* 0x03 */ { SCMD_Handler03_LoadAct,                12,  nullptr }, // 0x6FB160F0
+    /* 0x04 */ { SCMD_Handler04_LoadComplete,            1,  nullptr }, // 0x6FB16550
+    /* 0x05 */ { SCMD_Handler05_UnloadComplete,          1,  nullptr }, // 0x6FB15550
+    /* 0x06 */ { SCMD_Handler06_GameLogoutSuccess,       1,  nullptr }, // 0x6FB157A0
+    /* 0x07 */ { SCMD_Handler07_AddRoom,                 6,  nullptr }, // 0x6FB14920
+    /* 0x08 */ { SCMD_Handler08_RemoveRoom,              6,  nullptr }, // 0x6FB148B0
+    /* 0x09 */ { SCMD_Handler09_AssignWarp,             11,  nullptr }, // 0x6FB164E0
+    /* 0x0A */ { SCMD_Handler0A_RemoveUnit,              6,  nullptr }, // 0x6FB154F0
+    /* 0x0B */ { SCMD_Handler0B_GameHandshake,           6,  nullptr }, // 0x6FB14B70: GameHandshake
+    /* 0x0C */ { nullptr,                                9,  SCMD_UnitHandler0C_GameHandshake }, // 0x6FB17B60
+    /* 0x0D */ { nullptr,                               13,  SCMD_UnitHandler0D_PlayerStop },    // 0x6FB17B00
+    /* 0x0E */ { SCMD_Handler0E_ObjectState,            12,  nullptr }, // 0x6FB17E80: ObjectState
+    /* 0x0F */ { nullptr,                               16,  SCMD_UnitHandler0F_PlayerMove },    // 0x6FB17A80
+    /* 0x10 */ { nullptr,                               16,  SCMD_UnitHandler10_PlayerToTarget },// 0x6FB17A30
+    /* 0x11 */ { SCMD_Handler11_ReportKill,              8,  nullptr }, // 0x6FB149D0: ReportKill
+    /* 0x12 */ { nullptr,                               26,  nullptr }, // 0x12: Unused
+    /* 0x13 */ { nullptr,                               14,  nullptr }, // 0x13: Unused
+    /* 0x14 */ { nullptr,                               18,  nullptr }, // 0x14: Unused
+    /* 0x15 */ { SCMD_Handler15_ReassignPlayer,         11,  nullptr }, // 0x6FB17BB0
+    /* 0x16 */ { SCMD_Handler16_MultiUnitUpdate,        -1,  nullptr }, // 0x6FB17DA0: MultiUnitUpdate
+    /* 0x17 */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB156B0: UnusedVar
+    /* 0x18 */ { SCMD_Handler18_PlayerHPMP,             15,  nullptr }, // 0x6FB172E0
+    /* 0x19 */ { SCMD_Handler19_1F_StatUpdate,           2,  nullptr }, // 0x6FB17430: GoldToInvByte
+    /* 0x1A */ { SCMD_Handler19_1F_StatUpdate,           2,  nullptr }, // 0x6FB17430: AddExpByte
+    /* 0x1B */ { SCMD_Handler19_1F_StatUpdate,           3,  nullptr }, // 0x6FB17430: AddExpWord
+    /* 0x1C */ { SCMD_Handler19_1F_StatUpdate,           5,  nullptr }, // 0x6FB17430: SetExpDword
+    /* 0x1D */ { SCMD_Handler19_1F_StatUpdate,           3,  nullptr }, // 0x6FB17430: SetAttrByte
+    /* 0x1E */ { SCMD_Handler19_1F_StatUpdate,           4,  nullptr }, // 0x6FB17430: SetAttrWord
+    /* 0x1F */ { SCMD_Handler19_1F_StatUpdate,           6,  nullptr }, // 0x6FB17430: SetAttrDword
+    /* 0x20 */ { SCMD_Handler20_PlayerAttrUpdate,       10,  nullptr }, // 0x6FB173C0
+    /* 0x21 */ { SCMD_Handler21_UpdateSkill,            12,  nullptr }, // 0x6FB17540: UpdateSkill
+    /* 0x22 */ { SCMD_Handler22_UpdateItemSkill,        12,  nullptr }, // 0x6FB17600: UpdateItemSkill
+    /* 0x23 */ { SCMD_Handler23_SetSkill,               13,  nullptr }, // 0x6FB176F0: SetSkill
+    /* 0x24 */ { nullptr,                               90,  nullptr }, // 0x24: Unused
+    /* 0x25 */ { nullptr,                               90,  nullptr }, // 0x25: Unused
+    /* 0x26 */ { SCMD_Handler26_GameChat,               -1,  nullptr }, // 0x6FB15AC0: GameChat
+    /* 0x27 */ { SCMD_Handler27_NpcInfo,                40,  nullptr }, // 0x6FB14C50: NpcInfo
+    /* 0x28 */ { SCMD_Handler28_PlayerQuestInfo,       103,  nullptr }, // 0x6FB14CE0: PlayerQuestInfo
+    /* 0x29 */ { SCMD_Handler29_GameQuestInfo,          97,  nullptr }, // 0x6FB14D10: GameQuestInfo
+    /* 0x2A */ { SCMD_Handler_NoOp,                     15,  nullptr }, // 0x6FB14F70: NpcTransaction
+    /* 0x2B */ { nullptr,                                0,  nullptr }, // 0x2B: Unused
+    /* 0x2C */ { SCMD_Handler2C_PlaySound,               8,  nullptr }, // 0x6FB14E10: PlaySound
+    /* 0x2D */ { nullptr,                                0,  nullptr }, // 0x2D: Unused
+    /* 0x2E */ { nullptr,                                0,  nullptr }, // 0x2E: Unused
+    /* 0x2F */ { nullptr,                                0,  nullptr }, // 0x2F: Unused
+    /* 0x30 */ { nullptr,                                0,  nullptr }, // 0x30: Unused
+    /* 0x31 */ { nullptr,                                0,  nullptr }, // 0x31: Unused
+    /* 0x32 */ { nullptr,                                0,  nullptr }, // 0x32: Unused
+    /* 0x33 */ { nullptr,                                0,  nullptr }, // 0x33: Unused
+    /* 0x34 */ { nullptr,                                0,  nullptr }, // 0x34: Unused
+    /* 0x35 */ { nullptr,                                0,  nullptr }, // 0x35: Unused
+    /* 0x36 */ { nullptr,                                0,  nullptr }, // 0x36: Unused
+    /* 0x37 */ { nullptr,                                0,  nullptr }, // 0x37: Unused
+    /* 0x38 */ { nullptr,                                0,  nullptr }, // 0x38: Unused
+    /* 0x39 */ { nullptr,                                0,  nullptr }, // 0x39: Unused
+    /* 0x3A */ { nullptr,                                0,  nullptr }, // 0x3A: Unused
+    /* 0x3B */ { nullptr,                                0,  nullptr }, // 0x3B: Unused
+    /* 0x3C */ { nullptr,                                0,  nullptr }, // 0x3C: Unused
+    /* 0x3D */ { nullptr,                                0,  nullptr }, // 0x3D: Unused
+    /* 0x3E */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB16D80: UpdateItemStats
+    /* 0x3F */ { SCMD_Handler_NoOp,                      8,  nullptr }, // 0x6FB17070: UseStackableItem
+    /* 0x40 */ { SCMD_Handler_NoOp,                     13,  nullptr }, // 0x6FB16D40: ItemTrigger
+    /* 0x41 */ { nullptr,                                0,  nullptr }, // 0x41: Unused
+    /* 0x42 */ { SCMD_Handler42_ClearCursor,             6,  nullptr }, // 0x6FB157F0: ClearCursor
+    /* 0x43 */ { nullptr,                                0,  nullptr }, // 0x43: Unused
+    /* 0x44 */ { nullptr,                                0,  nullptr }, // 0x44: Unused
+    /* 0x45 */ { nullptr,                               13,  nullptr }, // 0x45: Unused
+    /* 0x46 */ { nullptr,                                0,  nullptr }, // 0x46: Unused
+    /* 0x47 */ { SCMD_Handler_NoOp,                     11,  nullptr }, // 0x6FB17F30: Relator1
+    /* 0x48 */ { SCMD_Handler_NoOp,                     11,  nullptr }, // 0x6FB17F80: Relator2
+    /* 0x49 */ { nullptr,                                0,  nullptr }, // 0x49: Unused
+    /* 0x4A */ { nullptr,                                0,  nullptr }, // 0x4A: Unused
+    /* 0x4B */ { nullptr,                                0,  nullptr }, // 0x4B: Unused
+    /* 0x4C */ { SCMD_Handler4C_UnitSkillOnTarget,      16,  nullptr }, // 0x6FB153F0: UnitSkillOnTarget
+    /* 0x4D */ { SCMD_Handler4D_UnitCastSkill,          17,  nullptr }, // 0x6FB15380: UnitCastSkill
+    /* 0x4E */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14C30: MercForHire
+    /* 0x4F */ { SCMD_Handler_NoOp,                      1,  nullptr }, // 0x6FB14C40: ClearMercList
+    /* 0x50 */ { SCMD_Handler_NoOp,                     15,  nullptr }, // 0x6FB14BF0: QuestSpecial
+    /* 0x51 */ { SCMD_Handler51_AssignObject,           14,  nullptr }, // 0x6FB164B0
+    /* 0x52 */ { SCMD_Handler_NoOp,                     42,  nullptr }, // 0x6FB14D30: QuestLogInfo
+    /* 0x53 */ { SCMD_Handler_NoOp,                     10,  nullptr }, // 0x6FB14840: PlayerSlotRefresh
+    /* 0x54 */ { nullptr,                               10,  nullptr }, // 0x54: Unused
+    /* 0x55 */ { nullptr,                                3,  nullptr }, // 0x55: Unused
+    /* 0x56 */ { nullptr,                                0,  nullptr }, // 0x56: Unused
+    /* 0x57 */ { SCMD_Handler_NoOp,                     14,  nullptr }, // 0x6FB16530: MonsterEnchants
+    /* 0x58 */ { SCMD_Handler58_OpenUIDialog,            7,  nullptr }, // 0x6FB14FB0: OpenUIDialog
+    /* 0x59 */ { SCMD_Handler59_AssignPlayer,           26,  nullptr }, // 0x6FB16470
+    /* 0x5A */ { SCMD_Handler_NoOp,                     40,  nullptr }, // 0x6FB15D60: EventMessages
+    /* 0x5B */ { SCMD_Handler5B_PlayerInGame,           36,  nullptr }, // 0x6FB16030: PlayerInGame
+    /* 0x5C */ { SCMD_Handler5C_PlayerLeftGame,          5,  nullptr }, // 0x6FB16010: PlayerLeftGame
+    /* 0x5D */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB14D50: QuestItemState
+    /* 0x5E */ { SCMD_Handler_NoOp,                     38,  nullptr }, // 0x6FB14DA0: GameQuestAvailability
+    /* 0x5F */ { SCMD_Handler_NoOp,                      5,  nullptr }, // 0x6FB14DC0: Unknown5F
+    /* 0x60 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB15320: TownportalState
+    /* 0x61 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14DE0: CanGoToAct
+    /* 0x62 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB154B0: MakeUnitTargetable
+    /* 0x63 */ { SCMD_Handler63_WaypointMenu,           21,  nullptr }, // 0x6FB15F30: WaypointMenu
+    /* 0x64 */ { nullptr,                                0,  nullptr }, // 0x64: Unused
+    /* 0x65 */ { SCMD_Handler65_PlayerKillCount,         7,  nullptr }, // 0x6FB15F10: PlayerKillCount
+    /* 0x66 */ { nullptr,                                7,  nullptr }, // 0x66: Unused
+    /* 0x67 */ { nullptr,                               16,  SCMD_UnitHandler67_MonsterMove },        // 0x6FB179D0
+    /* 0x68 */ { nullptr,                               21,  SCMD_UnitHandler68_MonsterMoveToTarget },// 0x6FB17960
+    /* 0x69 */ { nullptr,                               12,  SCMD_UnitHandler69_MonsterState },       // 0x6FB17900
+    /* 0x6A */ { nullptr,                               12,  SCMD_UnitHandler6A_MonsterUnk6A },       // 0x6FB178B0
+    /* 0x6B */ { nullptr,                               16,  SCMD_UnitHandler6B_MonsterAction },      // 0x6FB17D30
+    /* 0x6C */ { nullptr,                               16,  SCMD_UnitHandler6C_MonsterAttackUnit },  // 0x6FB17CC0
+    /* 0x6D */ { nullptr,                               10,  SCMD_UnitHandler6D_MonsterStop },        // 0x6FB17820
+    /* 0x6E */ { nullptr,                                1,  nullptr }, // 0x6E..0x72: Unused
+    /* 0x6F */ { nullptr,                                1,  nullptr },
+    /* 0x70 */ { nullptr,                                1,  nullptr },
+    /* 0x71 */ { nullptr,                                1,  nullptr },
+    /* 0x72 */ { nullptr,                                1,  nullptr },
+    /* 0x73 */ { SCMD_Handler_NoOp,                     32,  nullptr }, // 0x6FB15460: MissileData
+    /* 0x74 */ { SCMD_Handler74_PlayerCorpseAssign,     10,  nullptr }, // 0x6FB152E0: PlayerCorpseAssign
+    /* 0x75 */ { SCMD_Handler75_PlayerPartyInfo,        13,  nullptr }, // 0x6FB15FE0: PlayerPartyInfo
+    /* 0x76 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB17C70: PlayerInSight
+    /* 0x77 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14FA0: TradeAction
+    /* 0x78 */ { SCMD_Handler_NoOp,                     21,  nullptr }, // 0x6FB15060: TradeAccepted
+    /* 0x79 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB150A0: GoldInTrade
+    /* 0x7A */ { SCMD_Handler7A_PetAction,              13,  nullptr }, // 0x6FB15270: PetAction
+    /* 0x7B */ { SCMD_Handler7B_AssignSkillHotkey,       8,  nullptr }, // 0x6FB177D0: AssignSkillHotkey
+    /* 0x7C */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB15000: UseScroll
+    /* 0x7D */ { SCMD_Handler_NoOp,                     18,  nullptr }, // 0x6FB15220: SetItemFlags
+    /* 0x7E */ { SCMD_Handler_NoOp,                      5,  nullptr }, // 0x6FB150C0: CMNCOF
+    /* 0x7F */ { SCMD_Handler7F_AllyPartyInfo,          10,  nullptr }, // 0x6FB15FA0: AllyPartyInfo
+    /* 0x80 */ { nullptr,                                4,  nullptr }, // 0x80: Unused
+    /* 0x81 */ { SCMD_Handler81_AssignMerc,             20,  nullptr }, // 0x6FB151D0: AssignMerc
+    /* 0x82 */ { SCMD_Handler_NoOp,                     29,  nullptr }, // 0x6FB15FD0: PortalOwnership
+    /* 0x83 */ { nullptr,                                0,  nullptr }, // 0x83..0x88: Unused
+    /* 0x84 */ { nullptr,                                0,  nullptr },
+    /* 0x85 */ { nullptr,                                0,  nullptr },
+    /* 0x86 */ { nullptr,                                0,  nullptr },
+    /* 0x87 */ { nullptr,                                0,  nullptr },
+    /* 0x88 */ { nullptr,                                0,  nullptr },
+    /* 0x89 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14DF0: SpecialQuestEvent
+    /* 0x8A */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB15160: NpcWantsInteract
+    /* 0x8B */ { SCMD_Handler8B_PlayerPartyRelationship, 6,  nullptr }, // 0x6FB15F80: PlayerPartyRelationship
+    /* 0x8C */ { SCMD_Handler8C_PlayerRelationshipUpdate,11, nullptr }, // 0x6FB15F50: PlayerRelationshipUpdate
+    /* 0x8D */ { SCMD_Handler8D_AssignPlayerToParty,     7,  nullptr }, // 0x6FB15F40: AssignPlayerToParty
+    /* 0x8E */ { SCMD_Handler74_PlayerCorpseAssign,     10,  nullptr }, // 0x6FB152B0: CorpseAssign
+    /* 0x8F */ { SCMD_Handler8F_Pong,                   33,  nullptr }, // 0x6FB15780: Pong
+    /* 0x90 */ { SCMD_Handler90_PartyAutomapCoords,     13,  nullptr }, // 0x6FB15EF0: PartyAutomapCoords
+    /* 0x91 */ { SCMD_Handler_NoOp,                     26,  nullptr }, // 0x6FB14B90: NpcGossipFlags
+    /* 0x92 */ { SCMD_Handler92_RemoveUnitDisplay,       6,  nullptr }, // 0x6FB16C90: RemoveUnitDisplay
+    /* 0x93 */ { SCMD_Handler_NoOp,                      8,  nullptr }, // 0x6FB14FD0: Unknown93
+    /* 0x94 */ { SCMD_Handler94_BaseSkillLevels,        -1,  nullptr }, // 0x6FB17590: BaseSkillLevels
+    /* 0x95 */ { SCMD_Handler95_PlayerLifeManaChange,   13,  nullptr }, // 0x6FB17220
+    /* 0x96 */ { SCMD_Handler96_WalkVerify,              9,  nullptr }, // 0x6FB15EC0
+    /* 0x97 */ { SCMD_Handler97_WeaponSwitch,            1,  nullptr }, // 0x6FB16DB0: WeaponSwitch
+    /* 0x98 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14BB0: EvilUrn
+    /* 0x99 */ { SCMD_Handler4C_UnitSkillOnTarget,      16,  nullptr }, // 0x6FB153F0: SkillTriggeredAtUnit
+    /* 0x9A */ { SCMD_Handler4D_UnitCastSkill,          17,  nullptr }, // 0x6FB15380: SkillTriggeredAtCoord
+    /* 0x9B */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14FC0: MercReviveCost
+    /* 0x9C */ { SCMD_Handler9C_ItemActionWorld,        -1,  nullptr }, // 0x6FB165F0
+    /* 0x9D */ { SCMD_Handler9D_ItemActionOwned,        -1,  nullptr }, // 0x6FB16DE0
+    /* 0x9E */ { SCMD_Handler9E_A2_MercAttr,             7,  nullptr }, // 0x6FB17330: MercAttrByte
+    /* 0x9F */ { SCMD_Handler9E_A2_MercAttr,             8,  nullptr }, // 0x6FB17330: MercAttrWord
+    /* 0xA0 */ { SCMD_Handler9E_A2_MercAttr,            10,  nullptr }, // 0x6FB17330: MercAttrDword
+    /* 0xA1 */ { SCMD_Handler9E_A2_MercAttr,             7,  nullptr }, // 0x6FB17330: MercAddExpByte
+    /* 0xA2 */ { SCMD_Handler9E_A2_MercAttr,             8,  nullptr }, // 0x6FB17330: MercAddExpWord
+    /* 0xA3 */ { SCMD_Handler_NoOp,                     24,  nullptr }, // 0x6FB15590: AuraStatSkill
+    /* 0xA4 */ { SCMD_Handler_NoOp,                      3,  nullptr }, // 0x6FB14E90: BaalWaveClassId
+    /* 0xA5 */ { SCMD_Handler_NoOp,                      8,  nullptr }, // 0x6FB17500: StateSkillEffect
+    /* 0xA6 */ { nullptr,                               -1,  nullptr }, // 0xA6: UnusedVar
+    /* 0xA7 */ { SCMD_HandlerA7_DelayedState,            7,  nullptr }, // 0x6FB162B0: DelayedState
+    /* 0xA8 */ { SCMD_HandlerA8_SetState,               -1,  nullptr }, // 0x6FB162F0: SetState (Bitstream)
+    /* 0xA9 */ { SCMD_HandlerA9_EndState,                7,  nullptr }, // 0x6FB16430: EndState
+    /* 0xAA */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB16110: AddUnit / StateList
+    /* 0xAB */ { SCMD_HandlerAB_NpcHeal,                 7,  nullptr }, // 0x6FB14980: NpcHeal
+    /* 0xAC */ { SCMD_HandlerAC_AssignNPC,              -1,  nullptr }, // 0x6FB16990
+    /* 0xAD */ { nullptr,                                9,  nullptr }, // 0xAD: Unused
+    /* 0xAE */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB14EB0: WardenRequest
 };
 
 // =============================================================================

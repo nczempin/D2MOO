@@ -11,9 +11,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "D2ClientReconstructed.h"
+
 struct D2UnitStrc;
 struct D2RoomStrc;
-struct D2GfxDataStrc;
 struct D2CellFileStrc;
 struct D2InventoryStrc;
 struct D2SkillStrc;
@@ -296,34 +297,270 @@ struct D2HirelingEntryStrc {
 #pragma pack(pop)
 
 // ============================================================================
+// Cross-Module Forward Declarations & SMsg Registration Tables
+// ============================================================================
+struct D2SMsgRegEntryStrc {
+    uint32_t nDispatchType;
+    uint32_t dwMsgOrKey;
+    void (__stdcall* pfnHandler)(void* pMsg);
+};
+
+extern void __fastcall WALL2_UnregisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+extern void __fastcall WALL2_RegisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, int32_t nFileType);
+extern void __fastcall UI_DrawBoxPiecesFrame(RECT* pRect);
+extern void __fastcall UI_StartPanelCloseClickCooldown(void);
+extern int32_t __fastcall GAME_HasMouseWheelB(void);
+extern int32_t __fastcall CMDTBL_HasKeyBound(int32_t nCommandId, int32_t bIsPrimary);
+extern uint16_t __fastcall CMDTBL_GetBoundKey(int32_t nCommandId, int32_t bIsPrimary);
+extern void __stdcall INV_ClearHoveredItemState();
+extern void __stdcall SOUND_PlaySoundEffect(uint32_t nSoundId, D2UnitStrc* pUnit, int32_t nX, int32_t nY, BOOL bGlobal);
+extern int32_t __fastcall UI_HitTestNewSkillBtn640(int32_t nMouseX, int32_t nSplitMode, int32_t nMouseY);
+extern int32_t __fastcall UI_HitTestNewStatBtn640(int32_t nMouseX, int32_t nSplitMode, int32_t nMouseY);
+extern int32_t __fastcall D2Client_HitTestMiniPanel(int32_t nMouseX);
+extern void __stdcall AUTOMAP_NoOp(int32_t nUnused);
+extern void __stdcall AUTOMAP_PanRight(int32_t nUnused);
+extern void __stdcall AUTOMAP_PanLeft(int32_t nUnused);
+extern void __stdcall AUTOMAP_PanUp(int32_t nUnused);
+extern void __stdcall AUTOMAP_PanDown(int32_t nUnused);
+
+extern int32_t __fastcall MSG_SendByteDword(uint8_t bOpcode, uint32_t dw1);
+extern int32_t __fastcall MSG_SendByte2Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2);
+extern int32_t __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3);
+extern int32_t __fastcall MSG_SendByte4Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3, uint32_t dw4);
+
+extern int32_t g_bLeftMouseHeld;
+extern int32_t g_bLeftMouseRepeating;
+extern int32_t g_bRightMouseHeld;
+extern int32_t g_bRightMouseRepeating;
+extern int32_t gnTooltipUnitType;
+extern int32_t gnTooltipUnitGUID;
+
+void __stdcall sub_6FB13180(void* pMsg);
+void __stdcall sub_6FB13540(void* pMsg);
+void __stdcall sub_6FB135D0(void* pMsg);
+void __stdcall sub_6FB13AA0(void* pMsg);
+void __stdcall sub_6FB13C00(void* pMsg);
+void __stdcall sub_6FB13CB0(void* pMsg);
+void __stdcall sub_6FB13D30(void* pMsg);
+void __stdcall sub_6FB13DB0(void* pMsg);
+void __stdcall sub_6FB13E30(void* pMsg);
+void __stdcall sub_6FB13EB0(void* pMsg);
+void __stdcall sub_6FB13F60(void* pMsg);
+void __stdcall sub_6FB14120(void* pMsg);
+
+int __cdecl sub_6FAC8DD0();
+int __cdecl sub_6FAC9B40();
+int __cdecl sub_6FAC9D00();
+int __cdecl sub_6FAC9D40();
+int __cdecl sub_6FACAA20();
+int __cdecl sub_6FACAA80();
+int __cdecl sub_6FACB280();
+int __cdecl sub_6FACB2B0();
+int __cdecl sub_6FACB2E0();
+int __cdecl sub_6FACBB80();
+int __cdecl sub_6FACC100();
+int __cdecl sub_6FACC2E0();
+int __cdecl sub_6FACDE00();
+int __cdecl sub_6FACDE30();
+int __cdecl sub_6FACDE60();
+D2UnitStrc* __cdecl sub_6FACE310();
+
+static const D2SMsgRegEntryStrc s_aAutomapArrowHandlers[5] = {
+    { 3, VK_UP,    reinterpret_cast<void (__stdcall*)(void*)>(AUTOMAP_PanUp)    },
+    { 3, VK_DOWN,  reinterpret_cast<void (__stdcall*)(void*)>(AUTOMAP_PanDown)  },
+    { 3, VK_RIGHT, reinterpret_cast<void (__stdcall*)(void*)>(AUTOMAP_PanRight) },
+    { 3, VK_LEFT,  reinterpret_cast<void (__stdcall*)(void*)>(AUTOMAP_PanLeft)  },
+    { 3, VK_END,   reinterpret_cast<void (__stdcall*)(void*)>(AUTOMAP_NoOp)     },
+};
+
+static D2SMsgRegEntryStrc s_aDialogMsgHandlers[14] = {
+    { 3, VK_ESCAPE,      sub_6FB135D0 },
+    { 3, VK_ESCAPE,      sub_6FB135D0 },
+    { 0, WM_LBUTTONUP,   sub_6FB13180 },
+    { 0, WM_LBUTTONDOWN, sub_6FB13F60 },
+    { 0, WM_RBUTTONUP,   sub_6FB13180 },
+    { 0, WM_RBUTTONDOWN, sub_6FB13F60 },
+    { 3, VK_UP,          sub_6FB13D30 },
+    { 3, VK_DOWN,        sub_6FB13CB0 },
+    { 3, VK_RIGHT,       sub_6FB13E30 },
+    { 3, VK_LEFT,        sub_6FB13DB0 },
+    { 3, VK_RETURN,      sub_6FB13AA0 },
+    { 3, VK_ESCAPE,      sub_6FB13540 },
+    { 0, WM_CHAR,        sub_6FB13C00 },
+    { 0, WM_MOUSEMOVE,   sub_6FB14120 },
+};
+
+static const D2SMsgRegEntryStrc s_aDialogWheelHandlers[1] = {
+    { 0, WM_MOUSEWHEEL,  sub_6FB13EB0 },
+};
+
+// ============================================================================
 // Module Globals
 // ============================================================================
-D2DialogStrc*& g_pActiveDialog = *(D2DialogStrc**)0x6FBCC18C;
-int32_t& g_bDialogOpen = *(int32_t*)0x6FBCC190;
-int32_t& g_nActiveDialogCount = *(int32_t*)0x6FBCC194;
-D2CellFileStrc*& g_pPentagramCel = *(D2CellFileStrc**)0x6FBCBD50;
-uint32_t& g_dwPentagramFrame = *(uint32_t*)0x6FBB557C;
-int32_t& g_nDialogModalRefCount = *(int32_t*)0x6FBB5578;
-RECT& g_rcDialogBounds = *(RECT*)0x6FBB5544;
-int32_t& g_bDialogBoundsValid = *(int32_t*)0x6FBCC120;
-const char** const g_apszDialogBgNames = (const char**)0x6FB94620;
+D2DialogStrc* g_pActiveDialog = nullptr;
+int32_t g_bDialogOpen = 0;
+int32_t g_nActiveDialogCount = 0;
+D2CellFileStrc* g_pPentagramCel = nullptr;
+uint32_t g_dwPentagramFrame = 0;
+int32_t g_nDialogModalRefCount = 0;
+RECT g_rcDialogBounds = { 0 };
+int32_t g_bDialogBoundsValid = 0;
+static int32_t s_bDialogCursorInvalidated = 0;
+static int32_t s_nDialogBorderPadX = 16;
+static int32_t s_nDialogBorderPadY = 16;
+static const char* const g_apszDialogBgNames[] = { "dialogbackground" };
 
-D2NpcMenuDefStrc* const g_aNpcMenuDefs = (D2NpcMenuDefStrc*)0x6FBA8300;
-D2NpcGossipDefStrc* const g_aNpcGossipDefs = (D2NpcGossipDefStrc*)0x6FBA7F08;
-D2NpcQuestActionDefStrc* const g_aNpcQuestActionDefs = (D2NpcQuestActionDefStrc*)0x6FBA6AA8;
+static const D2NpcMenuDefStrc g_aNpcMenuDefs[48] = {
+    { 148, 3, { 3381, 3396,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Akara
+    { 176, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Atma
+    { 146, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 }, // Cain1
+    { 154, 3, { 3381, 3334,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Charsi
+    { 177, 3, { 3381, 3396,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Drognan
+    { 199, 4, { 3381, 3396, 3398, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, (void*)sub_6FAC9D40, nullptr, nullptr }, 1 }, // Elzix
+    { 200, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Geglash
+    { 147, 4, { 3381, 3396, 3398, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, (void*)sub_6FAC9D40, nullptr, nullptr }, 1 }, // Gheed
+    { 198, 3, { 3381, 3397,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FACBB80, nullptr,             nullptr, nullptr }, 1 }, // Greiz
+    { 201, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Jerhyn
+    { 202, 3, { 3381, 3396,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Lysander
+    { 150, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Kashya
+    { 178, 3, { 3381, 3334,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Fara
+    { 155, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Warriv1
+    { 175, 3, { 3381, 3383,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FACAA20, nullptr,             nullptr, nullptr }, 1 }, // Warriv2
+    { 210, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Meshif1
+    { 244, 3, { 3381, 4020,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC8DD0, nullptr,             nullptr, nullptr }, 1 }, // Cain2
+    { 265, 3, { 3381, 4020,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC8DD0, nullptr,             nullptr, nullptr }, 1 }, // Cain5
+    { 245, 3, { 3381, 4020,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC8DD0, nullptr,             nullptr, nullptr }, 1 }, // Cain3
+    { 246, 3, { 3381, 4020,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC8DD0, nullptr,             nullptr, nullptr }, 1 }, // Cain4
+    { 251, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
+    { 367, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Tyrael
+    { 257, 2, { 3334,    0,    0, 0, 0 }, { (void*)sub_6FAC9D00, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Halbu
+    { 405, 3, { 3396, 3398,    0, 0, 0 }, { (void*)sub_6FAC9D00, (void*)sub_6FAC9D40, nullptr,             nullptr, nullptr }, 1 }, // Jamella
+    { 252, 4, { 3381, 3397, 3396, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FACBB80, (void*)sub_6FAC9D00, nullptr, nullptr }, 1 }, // Asheara
+    { 253, 3, { 3381, 3334,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Hratli
+    { 254, 4, { 3381, 3396, 3398, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, (void*)sub_6FAC9D40, nullptr, nullptr }, 1 }, // Alkor
+    { 255, 3, { 3381, 3396,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Ormus
+    { 406, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Izual
+    { 257, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 },
+    { 264, 3, { 3381, 3385,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FACAA80, nullptr,             nullptr, nullptr }, 1 }, // Meshif2
+    { 297, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Natalya
+    { 266, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Flavie
+    { 331, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Kaelan
+    { 408, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Hadriel
+    { 378, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 },
+    { 377, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 },
+    { 521, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Tyrael2
+    { 520, 3, { 3381, 4020,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC8DD0, nullptr,             nullptr, nullptr }, 1 }, // Cain6
+    { 511, 3, { 3381, 3334,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Larzuk
+    { 513, 3, { 3381, 3396,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, nullptr,             nullptr, nullptr }, 1 }, // Malah
+    { 512, 4, { 3381, 3396, 3398, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D00, (void*)sub_6FAC9D40, nullptr, nullptr }, 1 }, // Anya
+    { 514, 3, { 3381, 3398,    0, 0, 0 }, { (void*)sub_6FACC100, (void*)sub_6FAC9D40, nullptr,             nullptr, nullptr }, 1 }, // Nihlathak
+    { 515, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 1 }, // Qual-Kehk
+    { 527, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
+    { 537, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
+    { 538, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
+    { 539, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
+};
 
-int32_t& g_bInteractingWithNpc = *(int32_t*)0x6FBC99AC;
-int32_t& g_nInteractingNpcGUID = *(int32_t*)0x6FBC99B0;
-int32_t& g_nInteractingNpcClassId = *(int32_t*)0x6FBC99B4;
-int32_t& g_nActiveNpcMenuIdx = *(int32_t*)0x6FBC99B8;
-D2DialogStrc*& g_pNpcMainMenuDialog = *(D2DialogStrc**)0x6FBC97EC;
-D2DialogStrc*& g_pNpcSubDialog = *(D2DialogStrc**)0x6FBC9800;
-D2DialogStrc*& g_pNpcPopupDialog = *(D2DialogStrc**)0x6FBC9A50;
-D2UnitStrc*& g_pTradeNpcUnit = *(D2UnitStrc**)0x6FBC9A58;
-D2BitBufferStrc*& g_pClientQuestRecord = *(D2BitBufferStrc**)0x6FBC9A64;
-D2BitBufferStrc*& g_pTempQuestRecord = *(D2BitBufferStrc**)0x6FBC9A68;
-D2TextHeaderStrc*& g_pNpcTextHeader = *(D2TextHeaderStrc**)0x6FBC9AB4;
-D2HirelingEntryStrc*& g_pHirelingListHead = *(D2HirelingEntryStrc**)0x6FBC9AC0;
+static D2NpcGossipDefStrc g_aNpcGossipDefs[45] = {
+    { 148, 0, {  6144, 47727, 3439, 0, 0, 0, 0,   0 }, 256 },
+    { 154, 0, { 36864, 47726, 2415, 0, 0, 0, 0,   0 }, 256 },
+    { 146, 0, { 14336, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
+    { 147, 0, { 45056, 47724, 2415, 0, 0, 0, 0,   0 }, 256 },
+    { 150, 0, { 20480, 47723, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 155, 0, {  2048, 47724, 2927, 0, 0, 0, 0, 256 }, 256 },
+    { 331, 0, {  2048, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
+    { 266, 0, {  2048, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
+    { 408, 0, {  2051, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
+    { 175, 0, {  6145, 47734, 1903, 0, 0, 0, 0,   0 }, 257 },
+    { 176, 0, { 57345, 47727, 2671, 0, 0, 0, 0,   0 }, 257 },
+    { 177, 0, { 30721, 47728, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 199, 0, {  2049, 47730, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 200, 0, { 49153, 47730, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 198, 0, { 12289, 47729, 3695, 0, 0, 0, 0,   0 }, 256 },
+    { 201, 0, { 26625, 47731, 2671, 0, 0, 0, 0,   0 }, 256 },
+    { 202, 0, {     1, 47732, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 178, 0, { 47105, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 210, 0, { 24577, 47733, 3183, 0, 0, 0, 0, 256 }, 256 },
+    { 265, 0, { 14336, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
+    { 244, 0, { 43009, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
+    { 245, 0, {  6146, 47726, 2159, 0, 0, 0, 0,   0 }, 256 },
+    { 246, 0, { 64515, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
+    { 251, 0, { 52225, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
+    { 252, 0, { 59394, 47735, 2415, 0, 0, 0, 0,   0 }, 256 },
+    { 253, 0, { 12290, 47735, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 254, 0, { 28674, 47736, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 255, 0, {  6146, 47737, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 406, 0, { 47106, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 257, 0, { 47106, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 264, 0, { 34818, 47734, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 297, 0, { 12290, 47738, 1647, 0, 0, 0, 0,   0 }, 256 },
+    { 367, 0, { 52227, 47737,  879, 0, 0, 0, 0, 256 }, 256 },
+    { 405, 0, { 52227, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
+    { 257, 0, { 52227, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
+    { 511, 0, {     4, 47740, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 512, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 513, 0, { 47108, 47740, 4207, 0, 0, 0, 0,   0 }, 256 },
+    { 514, 0, { 43012, 47741, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 515, 0, { 24580, 47742, 2927, 0, 0, 0, 0,   0 }, 256 },
+    { 521, 0, { 52228, 47737,  879, 0, 0, 0, 0, 256 }, 256 },
+    { 520, 0, { 36868, 47738, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 527, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 537, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
+    { 538, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
+};
+
+static const D2NpcQuestActionDefStrc g_aNpcQuestActionDefs[8] = {
+    { 155,  6, 0, 1, sub_6FACB2E0 },
+    { 210, 14, 0, 1, sub_6FACB2B0 },
+    { 150,  2, 0, 1, sub_6FACC2E0 },
+    { 154,  3, 1, 1, sub_6FACDE60 },
+    { 511, 35, 1, 1, sub_6FACDE30 },
+    { 512, 38, 1, 1, sub_6FACDE00 },
+    { 515, 36, 0, 1, sub_6FACC100 },
+    { 367, 28, 0, 1, sub_6FACB280 },
+};
+
+int32_t g_bInteractingWithNpc = 0;
+int32_t g_nInteractingNpcGUID = 0;
+int32_t g_nInteractingNpcClassId = -1;
+int32_t g_nActiveNpcMenuIdx = -1;
+D2DialogStrc* g_pNpcMainMenuDialog = nullptr;
+D2DialogStrc* g_pNpcSubDialog = nullptr;
+D2DialogStrc* g_pNpcPopupDialog = nullptr;
+D2UnitStrc* g_pTradeNpcUnit = nullptr;
+D2BitBufferStrc* g_pPlayerQuestRecord = nullptr;
+D2BitBufferStrc* g_pGameQuestRecord = nullptr;
+static D2BitBufferStrc*& g_pClientQuestRecord = g_pPlayerQuestRecord;
+D2BitBufferStrc* g_pTempQuestRecord = nullptr;
+D2TextHeaderStrc* g_pNpcTextHeader = nullptr;
+D2HirelingEntryStrc* g_pHirelingListHead = nullptr;
+
+static void* s_pStartupPoolCheck = nullptr;
+static int32_t s_bCmdLineFlagSet = 0;
+static const uint8_t s_aCmdLineArgList[0x2F * 32] = { 0 };
+static uint32_t s_dwMissileSyncEndTick = 0;
+static uint32_t s_dwNpcSyncTime = 0;
+static int32_t s_nNpcMissileFlag = 0;
+static int32_t s_nWeatherState = 0;
+static int32_t s_nWeatherMode = 0;
+static int32_t s_hEnvParticles = 0;
+static int32_t s_hEnvSplashes = 0;
+static int32_t s_hEnvBubbles = 0;
+static D2CellFileStrc* s_pRainCel = nullptr;
+static int32_t s_nGameLoopMode = 0;
+static int32_t s_nMpqCheckState = 0;
+static int32_t s_bNpcQuestUpdated = 0;
+static int32_t s_nNpcTalkState = 0;
+static int32_t s_nNpcHireState = 0;
+static int32_t s_nNpcShopStateA = 0;
+static int32_t s_nNpcShopStateB = 0;
+static int32_t s_nNpcMenuSubState = 0;
+static int32_t s_bNpcSpeechActive = 0;
+static D2CellFileStrc* s_pBuySellCel = nullptr;
+static int32_t s_nNpcInteractSubFlag = 0;
+static int32_t s_nNpcShopTabMode = 0;
+static int32_t s_nClientUnitHashResetFlag = 0;
 
 // ============================================================================
 // PART 1: UI\dialog.cpp (0x6FB12960..0x6FB14190, 39 functions)
@@ -515,8 +752,8 @@ void __fastcall sub_6FB12C80(D2DialogStrc* pDialog)
     int nOffsetY = pDialog->bUseNonSelectableHeightAnchor ? (nNonSelectableCount * 21) : (nTotalHeight / 3);
     pDialog->nPosY = pDialog->nAnchorY - nOffsetY;
 
-    int nScreenW = *(int32_t*)0x6FB8C6E0;
-    int nScreenH = *(int32_t*)0x6FB8C6E4;
+    int nScreenW = gnScreenWidth;
+    int nScreenH = gnScreenHeight;
     if (nMaxWidth > nScreenW - 0x50) {
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0x5DD));
         exit(-1);
@@ -602,17 +839,16 @@ void __fastcall sub_6FB12F40(D2DialogStrc* pDialog)
     rcBox.right = pDialog->nPosX + pDialog->nWidth - 1;
     rcBox.bottom = pDialog->nPosY + pDialog->nHeight - 1;
 
-    uint32_t aGfxData[18] = { 0 };
+    D2GfxDataStrc gfxData = {};
     if (pDialog->bHasBackgroundCel) {
         if (pDialog->pBackgroundCel) {
-            aGfxData[15] = reinterpret_cast<uint32_t>(pDialog->pBackgroundCel);
-            aGfxData[16] = 0;
-            TEXTURE_CelDraw(reinterpret_cast<D2GfxDataStrc*>(aGfxData), rcBox.left, rcBox.bottom + 1, 0xFFFFFFFF, 5, nullptr);
+            gfxData.pCellFile = pDialog->pBackgroundCel;
+            gfxData.nFrame = 0;
+            TEXTURE_CelDraw(&gfxData, rcBox.left, rcBox.bottom + 1, 0xFFFFFFFF, 5, nullptr);
         }
     } else {
         D2GFX_DrawBox(rcBox.left, rcBox.top, rcBox.right + 1, rcBox.bottom + 1, 0, 1);
-        extern void __fastcall sub_6FB3AB50(RECT* pRect);
-        sub_6FB3AB50(&rcBox);
+        UI_DrawBoxPiecesFrame(&rcBox);
     }
 
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
@@ -632,11 +868,11 @@ void __fastcall sub_6FB12F40(D2DialogStrc* pDialog)
         if (pDialog->nSelectedIndex == i) {
             if (pDialog->nSelectionCursorMode == 1) {
                 nColor = 3;
-            } else if (pDialog->nSelectionCursorMode == 2) {
-                aGfxData[15] = reinterpret_cast<uint32_t>(g_pPentagramCel);
-                aGfxData[16] = g_dwPentagramFrame % 7;
-                TEXTURE_CelDraw(reinterpret_cast<D2GfxDataStrc*>(aGfxData), nDrawX - 24, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
-                TEXTURE_CelDraw(reinterpret_cast<D2GfxDataStrc*>(aGfxData), nDrawX + pLine->nTextWidth + 2, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
+            } else if (pDialog->nSelectionCursorMode == 2 && g_pPentagramCel) {
+                gfxData.pCellFile = g_pPentagramCel;
+                gfxData.nFrame = g_dwPentagramFrame % 7;
+                TEXTURE_CelDraw(&gfxData, nDrawX - 24, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
+                TEXTURE_CelDraw(&gfxData, nDrawX + pLine->nTextWidth + 2, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
                 g_dwPentagramFrame++;
             }
         }
@@ -660,8 +896,7 @@ void __stdcall sub_6FB13120(void* pMsg, int bInvokeCancel)
         }
         if (pDialog->dwFrameCount >= 5 && pDialog->pfnCancel) {
             pDialog->pfnCancel();
-            extern void __cdecl sub_6FB3AA10();
-            sub_6FB3AA10();
+            UI_StartPanelCloseClickCooldown();
         }
     }
 }
@@ -672,9 +907,9 @@ void __stdcall sub_6FB13180(void* pMsg)
     D2DialogStrc* pDialog = g_pActiveDialog;
     int nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
     int nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
-    if (*(int32_t*)0x6FBB2BAC) {
-        int nHalfW = *(int32_t*)0x6FB8C6E0 / 2;
-        int nScreenH = *(int32_t*)0x6FB8C6E4;
+    if (gaPanelStates[D2PANEL_MINIPANEL]) {
+        int nHalfW = gnScreenWidth / 2;
+        int nScreenH = gnScreenHeight;
         if (nMouseX > nHalfW - 0x4A && nMouseX < nHalfW + 0x47 && nMouseY < nScreenH - 0x32 && nMouseY > nScreenH - 0x45) {
             if (!pDialog) return;
             if (pDialog->bMousePressedInDialog != 1) pDialog->bMousePressedInDialog = 0;
@@ -716,18 +951,15 @@ void __cdecl sub_6FB13290()
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0x441));
         exit(-1);
     }
-    extern void __fastcall sub_6FB1D100(int nType, HWND hWnd, void* pTable);
-    extern void __fastcall sub_6FB1D0A0(int nType, HWND hWnd, void* pTable);
-    extern int __cdecl sub_6FB2A520();
-    if (*(int32_t*)0x6FBB2B80) {
-        sub_6FB1D100(5, WINDOW_GetWindow(), (void*)0x6FB81530);
+    if (gaPanelStates[D2PANEL_AUTOMAP]) {
+        WALL2_RegisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
     }
-    sub_6FB1D0A0(14, WINDOW_GetWindow(), (void*)0x6FB94558);
-    if (sub_6FB2A520()) {
-        sub_6FB1D0A0(1, WINDOW_GetWindow(), (void*)0x6FB94600);
+    WALL2_UnregisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+    if (GAME_HasMouseWheelB()) {
+        WALL2_UnregisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
     }
     D2DialogStrc* pDialog = g_pActiveDialog;
-    *(int32_t*)0x6FB8CAC0 = 1;
+    s_bDialogCursorInvalidated = 1;
     g_bDialogBoundsValid = 0;
     g_bDialogOpen = 0;
 
@@ -749,29 +981,16 @@ void __cdecl sub_6FB13290()
 // 1.12a: 0x6FB133B0 (__cdecl)
 void __cdecl sub_6FB133B0()
 {
-    extern int __fastcall sub_6FB50740(int bAlternate, int nHotkeyId);
-    if (sub_6FB50740(1, 0x26)) {
-        for (int i = 0; i < 114; ++i) {
-            uint8_t* pEntry = (uint8_t*)0x6FBB11A0 + i * 10;
-            if (*(int32_t*)pEntry == 0x26 && *(int32_t*)(pEntry + 6) == 1) {
-                uint16_t wKey = *(uint16_t*)(pEntry + 4);
-                if (wKey != 0xFFFF && wKey <= 0xDF) {
-                    *(uint32_t*)0x6FB9455C = wKey;
-                }
-                break;
-            }
+    if (CMDTBL_HasKeyBound(0x26, 1)) {
+        uint16_t wKey = CMDTBL_GetBoundKey(0x26, 1);
+        if (wKey != 0xFFFF && wKey <= 0xDF) {
+            s_aDialogMsgHandlers[0].dwMsgOrKey = wKey;
         }
     }
-    if (sub_6FB50740(0, 0x26)) {
-        for (int i = 0; i < 114; ++i) {
-            uint8_t* pEntry = (uint8_t*)0x6FBB11A0 + i * 10;
-            if (*(int32_t*)pEntry == 0x26 && *(int32_t*)(pEntry + 6) == 0) {
-                uint16_t wKey = *(uint16_t*)(pEntry + 4);
-                if (wKey != 0xFFFF && wKey <= 0xDF) {
-                    *(uint32_t*)0x6FB94568 = wKey;
-                }
-                break;
-            }
+    if (CMDTBL_HasKeyBound(0x26, 0)) {
+        uint16_t wKey = CMDTBL_GetBoundKey(0x26, 0);
+        if (wKey != 0xFFFF && wKey <= 0xDF) {
+            s_aDialogMsgHandlers[1].dwMsgOrKey = wKey;
         }
     }
 }
@@ -779,12 +998,10 @@ void __cdecl sub_6FB133B0()
 // 1.12a: 0x6FB13460 (__cdecl)
 void __cdecl sub_6FB13460()
 {
-    extern void __fastcall sub_6FB1D0A0(int nType, HWND hWnd, void* pTable);
-    extern int __cdecl sub_6FB2A520();
     if (g_bDialogOpen) {
-        sub_6FB1D0A0(14, WINDOW_GetWindow(), (void*)0x6FB94558);
-        if (sub_6FB2A520()) {
-            sub_6FB1D0A0(1, WINDOW_GetWindow(), (void*)0x6FB94600);
+        WALL2_UnregisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+        if (GAME_HasMouseWheelB()) {
+            WALL2_UnregisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
         }
         g_nDialogModalRefCount--;
     }
@@ -803,12 +1020,10 @@ int32_t __fastcall sub_6FB134E0(D2DialogStrc* pDialog, int nKey)
     if (pDialog->bIgnoreMenuHotkeys) {
         return 0;
     }
-    extern int __fastcall sub_6FB50740(int bAlternate, int nHotkeyId);
-    extern uint16_t __fastcall sub_6FB4FA40(int bAlternate, int nHotkeyId);
-    if (sub_6FB50740(1, 5) && sub_6FB4FA40(1, 5) == nKey) {
+    if (CMDTBL_HasKeyBound(5, 1) && CMDTBL_GetBoundKey(5, 1) == nKey) {
         return 1;
     }
-    if (sub_6FB50740(0, 5) && sub_6FB4FA40(0, 5) == nKey) {
+    if (CMDTBL_HasKeyBound(5, 0) && CMDTBL_GetBoundKey(5, 0) == nKey) {
         return 1;
     }
     return 0;
@@ -834,8 +1049,7 @@ void __stdcall sub_6FB13540(void* pMsg)
     }
     if (pDialog->dwFrameCount >= 5 && pDialog->pfnCancel) {
         pDialog->pfnCancel();
-        extern void __cdecl sub_6FB3AA10();
-        sub_6FB3AA10();
+        UI_StartPanelCloseClickCooldown();
     }
 }
 
@@ -843,7 +1057,7 @@ void __stdcall sub_6FB13540(void* pMsg)
 void __stdcall sub_6FB135D0(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
-    if (pDialog->bIgnoreMenuHotkeys || *(int32_t*)0x6FBB2B6C == 0) {
+    if (pDialog->bIgnoreMenuHotkeys || gaPanelStates[D2PANEL_CHAT] == 0) {
         sub_6FB13120(pMsg, pDialog->bCloseOnRightClick == 0);
     }
 }
@@ -861,31 +1075,19 @@ D2DialogStrc* __stdcall sub_6FB13600(
     int bCloseOnRightClick,
     int bIgnoreMenuHotkeys)
 {
-    extern void __fastcall sub_6FB1D0A0(int nType, HWND hWnd, void* pTable);
-    extern void __fastcall sub_6FB1D100(int nType, HWND hWnd, void* pTable);
-    extern int __cdecl sub_6FB2A520();
-    if (*(int32_t*)0x6FBB2B80) {
-        sub_6FB1D0A0(5, WINDOW_GetWindow(), (void*)0x6FB81530);
+    if (gaPanelStates[D2PANEL_AUTOMAP]) {
+        WALL2_UnregisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
     }
-    *(int32_t*)0x6FB8CAC8 = -1;
-    *(int32_t*)0x6FB8CACC = -1;
-    *(int32_t*)0x6FB8CAD0 = -1;
-    *(int32_t*)0x6FB8CAD4 = -1;
-    *(int32_t*)0x6FB8CAD8 = -1;
-    *(int32_t*)0x6FB8CADC = -1;
-    *(int32_t*)0x6FB90358 = 16;
-    *(int32_t*)0x6FB90354 = 16;
-    *(int32_t*)0x6FB8CAC0 = 0;
-    *(int32_t*)0x6FBCB9EC = 0;
-    *(int32_t*)0x6FBCB9F0 = 0;
-    *(int32_t*)0x6FBCB9FC = 0;
-    *(int32_t*)0x6FBCBA00 = 0;
-    *(int32_t*)0x6FBCC040 = 0;
-    *(int32_t*)0x6FBCC044 = 0;
-    *(int32_t*)0x6FBCC05C = 0;
-    *(int32_t*)0x6FBCC060 = 0;
-    *(int32_t*)0x6FBCC11C = 0;
-    *(int32_t*)0x6FBCC118 = 0;
+    INV_ClearHoveredItemState();
+    s_nDialogBorderPadX = 16;
+    s_nDialogBorderPadY = 16;
+    s_bDialogCursorInvalidated = 0;
+    g_bLeftMouseHeld = 0;
+    g_bLeftMouseRepeating = 0;
+    g_bRightMouseHeld = 0;
+    g_bRightMouseRepeating = 0;
+    gnTooltipUnitGUID = 0;
+    gnTooltipUnitType = 0;
     if (nAnchorX == 0) {
         return nullptr;
     }
@@ -916,9 +1118,9 @@ D2DialogStrc* __stdcall sub_6FB13600(
 
     g_bDialogOpen = 1;
     sub_6FB133B0();
-    sub_6FB1D100(14, WINDOW_GetWindow(), (void*)0x6FB94558);
-    if (sub_6FB2A520()) {
-        sub_6FB1D100(1, WINDOW_GetWindow(), (void*)0x6FB94600);
+    WALL2_RegisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+    if (GAME_HasMouseWheelB()) {
+        WALL2_RegisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
     }
     g_nDialogModalRefCount++;
     if (g_nActiveDialogCount != 1) {
@@ -937,32 +1139,19 @@ D2DialogStrc* __stdcall sub_6FB13800(
     int nBgNameIdx,
     int bBlockUnhandledKeys)
 {
-    extern void __fastcall sub_6FB1D0A0(int nType, HWND hWnd, void* pTable);
-    extern void __fastcall sub_6FB1D100(int nType, HWND hWnd, void* pTable);
-    extern int __cdecl sub_6FB2A520();
-    extern D2CellFileStrc* __fastcall sub_6FB6EF70(const char* szPath, int nMode);
-    if (*(int32_t*)0x6FBB2B80) {
-        sub_6FB1D0A0(5, WINDOW_GetWindow(), (void*)0x6FB81530);
+    if (gaPanelStates[D2PANEL_AUTOMAP]) {
+        WALL2_UnregisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
     }
-    *(int32_t*)0x6FB90358 = 16;
-    *(int32_t*)0x6FB90354 = 16;
-    *(int32_t*)0x6FB8CAC0 = 0;
-    *(int32_t*)0x6FB8CAC8 = -1;
-    *(int32_t*)0x6FB8CACC = -1;
-    *(int32_t*)0x6FB8CAD0 = -1;
-    *(int32_t*)0x6FB8CAD4 = -1;
-    *(int32_t*)0x6FB8CAD8 = -1;
-    *(int32_t*)0x6FB8CADC = -1;
-    *(int32_t*)0x6FBCB9EC = 0;
-    *(int32_t*)0x6FBCB9F0 = 0;
-    *(int32_t*)0x6FBCB9FC = 0;
-    *(int32_t*)0x6FBCBA00 = 0;
-    *(int32_t*)0x6FBCC040 = 0;
-    *(int32_t*)0x6FBCC044 = 0;
-    *(int32_t*)0x6FBCC05C = 0;
-    *(int32_t*)0x6FBCC060 = 0;
-    *(int32_t*)0x6FBCC11C = 0;
-    *(int32_t*)0x6FBCC118 = 0;
+    s_nDialogBorderPadX = 16;
+    s_nDialogBorderPadY = 16;
+    s_bDialogCursorInvalidated = 0;
+    INV_ClearHoveredItemState();
+    g_bLeftMouseHeld = 0;
+    g_bLeftMouseRepeating = 0;
+    g_bRightMouseHeld = 0;
+    g_bRightMouseRepeating = 0;
+    gnTooltipUnitGUID = 0;
+    gnTooltipUnitType = 0;
     if (nPosX == 0 || !pfnCancel) {
         return nullptr;
     }
@@ -984,11 +1173,11 @@ D2DialogStrc* __stdcall sub_6FB13800(
 
     char szPath[260];
     wsprintfA(szPath, "%s\\ui\\menu\\%s", "DATA\\GLOBAL", g_apszDialogBgNames[nBgNameIdx]);
-    pDialog->pBackgroundCel = sub_6FB6EF70(szPath, 0);
+    pDialog->pBackgroundCel = ARCHIVE_LoadCellFileDefault(szPath, 0);
 
-    uint32_t aGfxData[18] = { 0 };
-    aGfxData[15] = reinterpret_cast<uint32_t>(pDialog->pBackgroundCel);
-    void* pCelHandle = D2CMP_CelGetHandle(reinterpret_cast<D2GfxDataStrc*>(aGfxData));
+    D2GfxDataStrc gfxData = {};
+    gfxData.pCellFile = pDialog->pBackgroundCel;
+    void* pCelHandle = D2CMP_CelGetHandle(&gfxData);
     if (!pCelHandle) {
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0x3B6));
         exit(-1);
@@ -1002,9 +1191,9 @@ D2DialogStrc* __stdcall sub_6FB13800(
 
     g_bDialogOpen = 1;
     sub_6FB133B0();
-    sub_6FB1D100(14, WINDOW_GetWindow(), (void*)0x6FB94558);
-    if (sub_6FB2A520()) {
-        sub_6FB1D100(1, WINDOW_GetWindow(), (void*)0x6FB94600);
+    WALL2_RegisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+    if (GAME_HasMouseWheelB()) {
+        WALL2_RegisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
     }
     g_nDialogModalRefCount++;
     if (g_nActiveDialogCount != 1) {
@@ -1031,8 +1220,7 @@ void __stdcall sub_6FB13AA0(void* pMsg)
     if (pDialog->nSelectedIndex >= 0 && pDialog->nSelectedIndex < pDialog->nLineCount) {
         auto pfnAction = pDialog->aLines[pDialog->nSelectedIndex].pfnAction;
         if (pfnAction && pfnAction() == 1) {
-            extern void __cdecl sub_6FB3AA10();
-            sub_6FB3AA10();
+            UI_StartPanelCloseClickCooldown();
         }
     } else {
         sub_6FB12C40(pDialog);
@@ -1051,8 +1239,7 @@ int32_t __stdcall sub_6FB13B40(D2DialogStrc* pDialog, void* pMsg)
     pDialog->nSelectedIndex = nHitLine;
     pDialog->nHoveredIndex = nHitLine;
     if (nHitLine != nPrevSelected && nHitLine != -1) {
-        extern void __stdcall sub_6FAE1FA0(int nSoundId, int a2, int a3, int a4, int a5);
-        sub_6FAE1FA0(1, 0, 0, 0, 0);
+        SOUND_PlaySoundEffect(1, nullptr, 0, 0, 0);
         return 1;
     }
     return 0;
@@ -1074,8 +1261,7 @@ void __fastcall sub_6FB13BB0(D2DialogStrc* pDialog, int nDelta)
         }
     } while (!pDialog->aLines[nCur].bSelectable);
 
-    extern void __stdcall sub_6FAE1FA0(int nSoundId, int a2, int a3, int a4, int a5);
-    sub_6FAE1FA0(1, 0, 0, 0, 0);
+    SOUND_PlaySoundEffect(1, nullptr, 0, 0, 0);
     pDialog->nSelectedIndex = nCur;
 }
 
@@ -1244,22 +1430,19 @@ void __stdcall sub_6FB13F60(void* pMsg)
         SMsgBreakHandlerChain(pMsg);
         return;
     }
-    extern int __fastcall sub_6FB02DD0(int nMouseX);
-    if (*(int32_t*)0x6FBB2BAC && sub_6FB02DD0(nMouseX)) {
+    if (gaPanelStates[D2PANEL_MINIPANEL] && D2Client_HitTestMiniPanel(nMouseX)) {
         return;
     }
     if (pDialog->pfnOutsideClick) {
         if (!pDialog->pfnOutsideClick()) {
             return;
         }
-        extern int __fastcall sub_6FAEBE00(int nMouseX, void* pPanel);
-        extern int __fastcall sub_6FAEBDB0(int nMouseX, void* pPanel, int nMouseY);
-        if (*(int32_t*)0x6FBB2B70 && sub_6FAEBE00(nMouseX, *(void**)0x6FBCC1D0)) {
+        if (gaPanelStates[D2PANEL_NEWSTATS] && UI_HitTestNewStatBtn640(nMouseX, gnViewportShiftMode, nMouseY)) {
             *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
             *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
             SMsgBreakHandlerChain(pMsg);
         }
-        if (*(int32_t*)0x6FBB2B74 && sub_6FAEBDB0(nMouseX, *(void**)0x6FBCC1D0, nMouseY)) {
+        if (gaPanelStates[D2PANEL_NEWSKILLS] && UI_HitTestNewSkillBtn640(nMouseX, gnViewportShiftMode, nMouseY)) {
             *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
             *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
             SMsgBreakHandlerChain(pMsg);
@@ -1317,7 +1500,7 @@ int __stdcall sub_6FAC2190(const char* szArg, int a2)
 // 1.12a: 0x6FAC2200 (__cdecl)
 void __cdecl sub_6FAC2200()
 {
-    if (!*(void**)0x6FBBA6CC) {
+    if (!s_pStartupPoolCheck) {
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0xB4));
         exit(-1);
     }
@@ -1352,14 +1535,14 @@ int __stdcall sub_6FAC2360(int a1)
 // 1.12a: 0x6FAC2370 (__stdcall)
 int __stdcall sub_6FAC2370(const char* szArg, int a2)
 {
-    *(int32_t*)0x6FBBA6C8 = 1;
+    s_bCmdLineFlagSet = 1;
     return 1;
 }
 
 // 1.12a: 0x6FAC23A0 (register: eax=szCmdLine)
 void __fastcall sub_6FAC23A0(const char* szCmdLine)
 {
-    SCmdRegisterArgList((const void*)0x6FBA5DC0, 0x2F);
+    SCmdRegisterArgList(s_aCmdLineArgList, 0x2F);
     char szDefaultCmd[256] = { 0 };
     if (SRegLoadString("Diablo II", "Default Command Line", 0, szDefaultCmd, sizeof(szDefaultCmd))) {
         SCmdProcess(szDefaultCmd, 0, nullptr, 0);
@@ -1398,7 +1581,7 @@ int __cdecl sub_6FAC2630()
 // 1.12a: 0x6FAC26D0 (register: eax=pUnit)
 void __fastcall sub_6FAC26D0(D2UnitStrc* pUnit)
 {
-    *(uint32_t*)0x6FBC97A0 = FOG_10055_GetSyncTime() + 500;
+    s_dwMissileSyncEndTick = FOG_10055_GetSyncTime() + 500;
 }
 
 // 1.12a: 0x6FAC26F0 (register: eax=pUnit)
@@ -1452,19 +1635,19 @@ void __fastcall sub_6FAC28E0(D2UnitStrc* pMissile)
 // 1.12a: 0x6FAC2940 (__cdecl)
 int __cdecl sub_6FAC2940()
 {
-    return *(int32_t*)0x6FBC97A4;
+    return static_cast<int>(s_dwNpcSyncTime);
 }
 
 // 1.12a: 0x6FAC2950 (__cdecl)
 void __cdecl sub_6FAC2950()
 {
-    *(uint32_t*)0x6FBC97A4 = FOG_10055_GetSyncTime();
+    s_dwNpcSyncTime = FOG_10055_GetSyncTime();
 }
 
 // 1.12a: 0x6FAC2970 (__cdecl)
 void __cdecl sub_6FAC2970()
 {
-    *(int32_t*)0x6FBC97A4 = 0;
+    s_dwNpcSyncTime = 0;
 }
 
 // 1.12a: 0x6FAC2980 (__stdcall)
@@ -1487,7 +1670,7 @@ D2UnitStrc* __fastcall sub_6FAC2AA0(D2UnitStrc* pUnit)
 // 1.12a: 0x6FAC2B30 (__cdecl)
 void __cdecl sub_6FAC2B30()
 {
-    *(int32_t*)0x6FBC97A8 = 0;
+    s_nNpcMissileFlag = 0;
 }
 
 // 1.12a: 0x6FAC2B50 (register: eax=pUnit)
@@ -1707,10 +1890,10 @@ void __cdecl sub_6FAC3D00() {}
 void __cdecl sub_6FAC3D10() {}
 
 // 1.12a: 0x6FAC3D20 (__cdecl)
-int __cdecl sub_6FAC3D20() { return *(int32_t*)0x6FBC97C0; }
+int __cdecl sub_6FAC3D20() { return s_nWeatherState; }
 
 // 1.12a: 0x6FAC3D30 (__cdecl)
-void __cdecl sub_6FAC3D30(int nVal) { *(int32_t*)0x6FBC97C0 = nVal; }
+void __cdecl sub_6FAC3D30(int nVal) { s_nWeatherState = nVal; }
 
 // --- Section 2C: Environment Weather & Rain/Snow Particles (0x6FAC3D40..0x6FAC5B4F) ---
 
@@ -1718,14 +1901,14 @@ void __cdecl sub_6FAC3D30(int nVal) { *(int32_t*)0x6FBC97C0 = nVal; }
 void __stdcall sub_6FAC3D40(void* pParticle)
 {
     if (D2GFX_CheckPerspective()) {
-        UnimplementedOrdinal_10065(*(int32_t*)0x6FBC97CC, pParticle);
+        UnimplementedOrdinal_10065(s_hEnvParticles, pParticle);
     }
 }
 
 // 1.12a: 0x6FAC3E90 (__cdecl)
 void __cdecl sub_6FAC3E90()
 {
-    if (!UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97CC)) {
+    if (!UnimplementedOrdinal_10063(s_hEnvParticles)) {
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0xCF));
         exit(-1);
     }
@@ -1734,24 +1917,24 @@ void __cdecl sub_6FAC3E90()
 // 1.12a: 0x6FAC3ED0 (__cdecl)
 int __cdecl sub_6FAC3ED0()
 {
-    return *(int32_t*)0x6FBC97C8;
+    return s_nWeatherMode;
 }
 
 // 1.12a: 0x6FAC3EE0 (__cdecl)
 void __cdecl sub_6FAC3EE0()
 {
-    UnimplementedOrdinal_10061(*(int32_t*)0x6FBC97CC);
-    UnimplementedOrdinal_10061(*(int32_t*)0x6FBC97D0);
-    UnimplementedOrdinal_10061(*(int32_t*)0x6FBC97D4);
+    UnimplementedOrdinal_10061(s_hEnvParticles);
+    UnimplementedOrdinal_10061(s_hEnvSplashes);
+    UnimplementedOrdinal_10061(s_hEnvBubbles);
 }
 
 // 1.12a: 0x6FAC3F10 (__cdecl)
 void __cdecl sub_6FAC3F10()
 {
     UnimplementedOrdinal_10060(300, 0x28);
-    UnimplementedOrdinal_10062(*(int32_t*)0x6FBC97CC, "Environment Particles", 300, 0x28);
-    UnimplementedOrdinal_10062(*(int32_t*)0x6FBC97D0, "Environment Splashes", 100, 0x28);
-    UnimplementedOrdinal_10062(*(int32_t*)0x6FBC97D4, "Environment Bubbles", 50, 0x28);
+    UnimplementedOrdinal_10062(s_hEnvParticles, "Environment Particles", 300, 0x28);
+    UnimplementedOrdinal_10062(s_hEnvSplashes, "Environment Splashes", 100, 0x28);
+    UnimplementedOrdinal_10062(s_hEnvBubbles, "Environment Bubbles", 50, 0x28);
 }
 
 // 1.12a: 0x6FAC3FB0 (register: eax=pSplash)
@@ -1782,18 +1965,16 @@ void __fastcall sub_6FAC4210(void* pParticle)
 // 1.12a: 0x6FAC4460 (__cdecl)
 void __cdecl sub_6FAC4460()
 {
-    D2CellFileStrc** ppRainCel = (D2CellFileStrc**)0x6FBC97DC;
-    if (*ppRainCel) {
-        D2CMP_CelFileFreeHardware(*ppRainCel);
-        FOG_Free(*ppRainCel, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 0x7A, 0);
-        *ppRainCel = nullptr;
+    if (s_pRainCel) {
+        D2CMP_CelFileFreeHardware(s_pRainCel);
+        FOG_Free(s_pRainCel, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 0x7A, 0);
+        s_pRainCel = nullptr;
     }
 }
 
 // 1.12a: 0x6FAC44E0 (__cdecl)
 void __cdecl sub_6FAC44E0()
 {
-    extern D2UnitStrc* __cdecl sub_6FACE310();
     D2UnitStrc* pPlayer = sub_6FACE310();
     if (pPlayer) {
         D2RoomStrc* pRoom = UNITS_GetRoom(pPlayer);
@@ -1826,19 +2007,19 @@ void __cdecl sub_6FAC4670()
 // 1.12a: 0x6FAC47D0 (__stdcall)
 void __stdcall sub_6FAC47D0(int a1)
 {
-    UnimplementedOrdinal_10064(*(int32_t*)0x6FBC97CC, nullptr);
+    UnimplementedOrdinal_10064(s_hEnvParticles, nullptr);
 }
 
 // 1.12a: 0x6FAC4A10 (__stdcall)
 void __stdcall sub_6FAC4A10(int nX, int nY, int a3, int a4)
 {
-    UnimplementedOrdinal_10064(*(int32_t*)0x6FBC97D0, nullptr);
+    UnimplementedOrdinal_10064(s_hEnvSplashes, nullptr);
 }
 
 // 1.12a: 0x6FAC4B40 (__stdcall)
 void __stdcall sub_6FAC4B40(int nX, int nY, int a3, int a4)
 {
-    UnimplementedOrdinal_10064(*(int32_t*)0x6FBC97D4, nullptr);
+    UnimplementedOrdinal_10064(s_hEnvBubbles, nullptr);
 }
 
 // 1.12a: 0x6FAC4CB0 (__cdecl)
@@ -1855,7 +2036,7 @@ void __cdecl sub_6FAC4F00()
 // 1.12a: 0x6FAC5030 (__stdcall)
 void __stdcall sub_6FAC5030(void* pParticle)
 {
-    UnimplementedOrdinal_10065(*(int32_t*)0x6FBC97CC, pParticle);
+    UnimplementedOrdinal_10065(s_hEnvParticles, pParticle);
 }
 
 // 1.12a: 0x6FAC51F0 (__stdcall)
@@ -1885,35 +2066,34 @@ void __cdecl sub_6FAC5410()
 // 1.12a: 0x6FAC5540 (__stdcall)
 void __stdcall sub_6FAC5540(int nCount)
 {
-    UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97CC);
+    UnimplementedOrdinal_10063(s_hEnvParticles);
 }
 
 // 1.12a: 0x6FAC55C0 (__cdecl)
 void __cdecl sub_6FAC55C0()
 {
-    UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97CC);
+    UnimplementedOrdinal_10063(s_hEnvParticles);
 }
 
 // 1.12a: 0x6FAC5760 (__cdecl)
 void __cdecl sub_6FAC5760()
 {
-    UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97D0);
+    UnimplementedOrdinal_10063(s_hEnvSplashes);
 }
 
 // 1.12a: 0x6FAC57F0 (__cdecl)
 void __cdecl sub_6FAC57F0()
 {
-    UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97CC);
-    UnimplementedOrdinal_10063(*(int32_t*)0x6FBC97D0);
+    UnimplementedOrdinal_10063(s_hEnvParticles);
+    UnimplementedOrdinal_10063(s_hEnvSplashes);
 }
 
 // 1.12a: 0x6FAC5820 (__cdecl)
 void __cdecl sub_6FAC5820()
 {
-    extern D2CellFileStrc* __fastcall sub_6FB6EF70(const char* szPath, int nMode);
     char szPath[260];
     wsprintfA(szPath, "%s\\UncompOverlays\\Rain1", "DATA\\GLOBAL");
-    *(D2CellFileStrc**)0x6FBC97DC = sub_6FB6EF70(szPath, 0);
+    s_pRainCel = ARCHIVE_LoadCellFileDefault(szPath, 0);
 }
 
 // --- Section 2D: Client Pathfinding, Distance & Collision Helpers (0x6FAC5B50..0x6FAC7471) ---
@@ -2117,10 +2297,10 @@ D2LevelsTxt* __stdcall sub_6FAC7320(D2RoomStrc* pRoom)
 // --- Section 2E: Game Loop, MPQ & Registry Setup (0x6FAC7480..0x6FAC7CD8) ---
 
 // 1.12a: 0x6FAC7480 (__cdecl)
-int __cdecl sub_6FAC7480() { return *(int32_t*)0x6FBC97E0; }
+int __cdecl sub_6FAC7480() { return s_nGameLoopMode; }
 
 // 1.12a: 0x6FAC7490 (__cdecl)
-void __cdecl sub_6FAC7490(int nVal) { *(int32_t*)0x6FBC97E0 = nVal; }
+void __cdecl sub_6FAC7490(int nVal) { s_nGameLoopMode = nVal; }
 
 // 1.12a: 0x6FAC74A0 (register: ecx=szPath)
 int __fastcall sub_6FAC74A0(const char* szPath)
@@ -2129,7 +2309,7 @@ int __fastcall sub_6FAC74A0(const char* szPath)
 }
 
 // 1.12a: 0x6FAC74D0 (__cdecl)
-void __cdecl sub_6FAC74D0(int nVal) { *(int32_t*)0x6FBC97E4 = nVal; }
+void __cdecl sub_6FAC74D0(int nVal) { s_nMpqCheckState = nVal; }
 
 // 1.12a: 0x6FAC74E0 (register: ecx=szFileName)
 int __fastcall sub_6FAC74E0(const char* szFileName)
@@ -2143,7 +2323,7 @@ int __fastcall sub_6FAC74E0(const char* szFileName)
 }
 
 // 1.12a: 0x6FAC7510 (__cdecl)
-int __cdecl sub_6FAC7510() { return *(int32_t*)0x6FBC97E4; }
+int __cdecl sub_6FAC7510() { return s_nMpqCheckState; }
 
 // 1.12a: 0x6FAC7540 (__cdecl)
 int __cdecl sub_6FAC7540()
@@ -2210,10 +2390,10 @@ int __fastcall sub_6FAC7D50(D2UnitStrc* pNpcUnit)
 }
 
 // 1.12a: 0x6FAC7D90 (__cdecl)
-void __cdecl sub_6FAC7D90() { *(int32_t*)0x6FBC9A54 = 1; }
+void __cdecl sub_6FAC7D90() { s_bNpcQuestUpdated = 1; }
 
 // 1.12a: 0x6FAC7DA0 (__cdecl)
-int __cdecl sub_6FAC7DA0() { return *(int32_t*)0x6FBC9A54; }
+int __cdecl sub_6FAC7DA0() { return s_bNpcQuestUpdated; }
 
 // 1.12a: 0x6FAC7DB0 (register: eax=pBuffer)
 void __fastcall sub_6FAC7DB0(uint8_t* pBuffer)
@@ -2294,22 +2474,22 @@ void __cdecl sub_6FAC8030()
 }
 
 // 1.12a: 0x6FAC8050 (__cdecl)
-void __cdecl sub_6FAC8050() { *(int32_t*)0x6FBC9A5C = 0; }
+void __cdecl sub_6FAC8050() { s_nNpcTalkState = 0; }
 
 // 1.12a: 0x6FAC8060 (__cdecl)
-int __cdecl sub_6FAC8060() { return *(int32_t*)0x6FBC9A5C; }
+int __cdecl sub_6FAC8060() { return s_nNpcTalkState; }
 
 // 1.12a: 0x6FAC8090 (__cdecl)
-void __cdecl sub_6FAC8090(int nVal) { *(int32_t*)0x6FBC9A60 = nVal; }
+void __cdecl sub_6FAC8090(int nVal) { s_nNpcHireState = nVal; }
 
 // 1.12a: 0x6FAC80A0 (__cdecl)
-int __cdecl sub_6FAC80A0() { return *(int32_t*)0x6FBC9A60; }
+int __cdecl sub_6FAC80A0() { return s_nNpcHireState; }
 
 // 1.12a: 0x6FAC80B0 (__cdecl)
-int __cdecl sub_6FAC80B0() { return *(int32_t*)0x6FBC9A6C; }
+int __cdecl sub_6FAC80B0() { return s_nNpcShopStateA; }
 
 // 1.12a: 0x6FAC80C0 (__cdecl)
-int __cdecl sub_6FAC80C0() { return *(int32_t*)0x6FBC9A70; }
+int __cdecl sub_6FAC80C0() { return s_nNpcShopStateB; }
 
 // 1.12a: 0x6FAC80D0 (register: eax=nNpcClassId)
 int __fastcall sub_6FAC80D0(int nNpcClassId)
@@ -2320,7 +2500,7 @@ int __fastcall sub_6FAC80D0(int nNpcClassId)
 // 1.12a: 0x6FAC8130 (__cdecl)
 void __cdecl sub_6FAC8130()
 {
-    *(int32_t*)0x6FBC9A74 = 0;
+    s_nNpcMenuSubState = 0;
 }
 
 // 1.12a: 0x6FAC8150 (__cdecl)
@@ -2335,12 +2515,12 @@ int __cdecl sub_6FAC8150()
 // 1.12a: 0x6FAC81E0 (internal entry point)
 void __cdecl sub_6FAC81B0()
 {
-    *(int32_t*)0x6FBC9A78 = 0;
+    s_bNpcSpeechActive = 0;
 }
 
 void __cdecl sub_6FAC81E0()
 {
-    *(int32_t*)0x6FBC9A78 = 1;
+    s_bNpcSpeechActive = 1;
 }
 
 // 1.12a: 0x6FAC81F0 (__cdecl)
@@ -2359,10 +2539,9 @@ int __cdecl sub_6FAC8270()
 // 1.12a: 0x6FAC82A0 (__cdecl)
 void __cdecl sub_6FAC82A0()
 {
-    extern D2CellFileStrc* __fastcall sub_6FB6EF70(const char* szPath, int nMode);
     char szPath[260];
     wsprintfA(szPath, "%s\\ui\\panel\\buysell", "DATA\\GLOBAL");
-    *(D2CellFileStrc**)0x6FBC9A7C = sub_6FB6EF70(szPath, 0);
+    s_pBuySellCel = ARCHIVE_LoadCellFileDefault(szPath, 0);
     g_pClientQuestRecord = QUESTRECORD_AllocRecord(nullptr);
     g_pTempQuestRecord = QUESTRECORD_AllocRecord(nullptr);
 }
@@ -2445,11 +2624,10 @@ void __cdecl sub_6FAC8940()
         QUESTRECORD_FreeRecord(nullptr, g_pTempQuestRecord);
         g_pTempQuestRecord = nullptr;
     }
-    D2CellFileStrc** ppBuySellCel = (D2CellFileStrc**)0x6FBC9A7C;
-    if (*ppBuySellCel) {
-        D2CMP_CelFileFreeHardware(*ppBuySellCel);
-        FOG_Free(*ppBuySellCel, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 0x7A, 0);
-        *ppBuySellCel = nullptr;
+    if (s_pBuySellCel) {
+        D2CMP_CelFileFreeHardware(s_pBuySellCel);
+        FOG_Free(s_pBuySellCel, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 0x7A, 0);
+        s_pBuySellCel = nullptr;
     }
 }
 
@@ -2468,7 +2646,7 @@ int __fastcall sub_6FAC8AB0(int nNpcClassId)
 // 1.12a: 0x6FAC8B40 (__cdecl)
 void __cdecl sub_6FAC8B40()
 {
-    *(int32_t*)0x6FBC9A80 = 0;
+    s_nNpcInteractSubFlag = 0;
 }
 
 // 1.12a: 0x6FAC8B60 (register: eax=pNpcUnit, ecx=pOutRect)
@@ -2489,9 +2667,8 @@ int __cdecl sub_6FAC8BF0()
 // 1.12a: 0x6FAC8D00 (__cdecl)
 void __cdecl sub_6FAC8D00()
 {
-    extern void __fastcall sub_6FB26790(uint8_t bCmd, int nType, int nGUID);
     if (g_bInteractingWithNpc) {
-        sub_6FB26790(0x30, 1, g_nInteractingNpcGUID);
+        MSG_SendByte2Dwords(0x30, 1, g_nInteractingNpcGUID);
         g_bInteractingWithNpc = 0;
     }
 }
@@ -2507,9 +2684,8 @@ int __cdecl sub_6FAC8D40()
 int __cdecl sub_6FAC8DD0()
 {
     // Cain Identify Items (C2S 0x34)
-    extern void __fastcall sub_6FB267B0(uint8_t bCmd, int nNpcGUID);
     sub_6FAC8450();
-    sub_6FB267B0(0x34, g_nInteractingNpcGUID);
+    MSG_SendByteDword(0x34, g_nInteractingNpcGUID);
     return 1;
 }
 
@@ -2525,9 +2701,8 @@ int __cdecl sub_6FAC8EE0()
 int __cdecl sub_6FAC8FF0()
 {
     // Resurrect Mercenary (C2S 0x62)
-    extern void __fastcall sub_6FB267B0(uint8_t bCmd, int nNpcGUID);
     sub_6FAC8450();
-    sub_6FB267B0(0x62, g_nInteractingNpcGUID);
+    MSG_SendByteDword(0x62, g_nInteractingNpcGUID);
     return 1;
 }
 
@@ -2546,7 +2721,7 @@ void __cdecl sub_6FAC9110()
 // 1.12a: 0x6FAC9140 (__stdcall)
 void __stdcall sub_6FAC9140(int nMode)
 {
-    *(int32_t*)0x6FBC9A84 = nMode;
+    s_nNpcShopTabMode = nMode;
 }
 
 // 1.12a: 0x6FAC91C0 (__stdcall)
@@ -2623,18 +2798,16 @@ int __cdecl sub_6FAC9C00()
 int __cdecl sub_6FAC9D00()
 {
     // Request Trade Inventory (C2S 0x38, mode 1)
-    extern void __fastcall sub_6FB267C0(uint8_t bCmd, int nMode, int nNpcGUID, int nParam);
     sub_6FAC8450();
-    sub_6FB267C0(0x38, 1, g_nInteractingNpcGUID, 0);
+    MSG_SendByte3Dwords(0x38, 1, g_nInteractingNpcGUID, 0);
     return 1;
 }
 
 int __cdecl sub_6FAC9D40()
 {
     // Request Gamble Inventory (C2S 0x38, mode 2)
-    extern void __fastcall sub_6FB267C0(uint8_t bCmd, int nMode, int nNpcGUID, int nParam);
     sub_6FAC8450();
-    sub_6FB267C0(0x38, 2, g_nInteractingNpcGUID, 0);
+    MSG_SendByte3Dwords(0x38, 2, g_nInteractingNpcGUID, 0);
     return 1;
 }
 
@@ -2642,8 +2815,7 @@ int __cdecl sub_6FAC9D40()
 int __cdecl sub_6FAC9D90()
 {
     // Repair All Items (C2S 0x35 with bit 0x80000000)
-    extern void __fastcall sub_6FB267D0(uint8_t bCmd, int nNpcGUID, int nItemGUID, int nTab, uint32_t dwFlags);
-    sub_6FB267D0(0x35, g_nInteractingNpcGUID, 0, 0, 0x80000000);
+    MSG_SendByte4Dwords(0x35, g_nInteractingNpcGUID, 0, 0, static_cast<int32_t>(0x80000000u));
     return 1;
 }
 
@@ -2668,10 +2840,9 @@ void __cdecl sub_6FACA1F0()
 // 1.12a: 0x6FACA340 (__stdcall)
 int __stdcall sub_6FACA340(int nActTarget)
 {
-    // Travel to Act I (Warriv)
-    extern void __fastcall sub_6FB267C0(uint8_t bCmd, int nMode, int nNpcGUID, int nParam);
+    // Travel to Act (Warriv / Meshif / Tyrael)
     sub_6FAC9760();
-    sub_6FB267C0(0x38, 0, g_nInteractingNpcGUID, nActTarget);
+    MSG_SendByte3Dwords(0x38, 0, g_nInteractingNpcGUID, nActTarget);
     return 1;
 }
 
@@ -2962,16 +3133,65 @@ int __cdecl sub_6FACCC00()
 // 1.12a: 0x6FACD250 (internal entry point)
 int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit)
 {
+    extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
+
     // Build & Open Main Town NPC Interaction Menu Dialog
     int nMenuIdx = sub_6FAC7D50(pNpcUnit);
     if (nMenuIdx < 0) return 0;
+    sub_6FAC9760();
     g_nActiveNpcMenuIdx = nMenuIdx;
+    if (pNpcUnit) {
+        g_bInteractingWithNpc = 1;
+        g_nInteractingNpcGUID = *(int32_t*)((uint8_t*)pNpcUnit + 0x0C);
+        g_nInteractingNpcClassId = *(int32_t*)((uint8_t*)pNpcUnit + 0x04);
+    }
+    if (!g_pPentagramCel) {
+        g_pPentagramCel = ARCHIVE_LoadCellFileDefault("DATA\\GLOBAL\\UI\\MENU\\pentaspin", 0);
+    }
     RECT rcNpc = { 0 };
     sub_6FAC8B60(&rcNpc, pNpcUnit);
     int nAnchorX = (rcNpc.left + rcNpc.right) / 2;
     int nAnchorY = rcNpc.top;
+    if (nAnchorX <= 0) {
+        nAnchorX = (gnScreenWidth > 0) ? (gnScreenWidth / 2) : 400;
+    }
+    if (nAnchorY <= 0) {
+        nAnchorY = (gnScreenHeight > 0) ? (gnScreenHeight / 3) : 180;
+    }
     g_pNpcMainMenuDialog = sub_6FB13600(nAnchorX, nAnchorY, sub_6FAC9B40, nullptr, 0, 1, 1, 0, 0, 0, 0);
-    return g_pNpcMainMenuDialog != nullptr;
+    if (!g_pNpcMainMenuDialog) {
+        return 0;
+    }
+
+    const Unicode* wszNpcName = D2Client_GetNpcDisplayName(pNpcUnit);
+    if (wszNpcName && wszNpcName->ch != 0) {
+        sub_6FB12DF0(g_pNpcMainMenuDialog, 4, wszNpcName, 21, 0, 1, nullptr, 0);
+    }
+
+    const D2NpcMenuDefStrc& rMenuDef = g_aNpcMenuDefs[nMenuIdx];
+    for (int i = 0; i < 5; ++i) {
+        if (rMenuDef.wStringIds[i] != 0 && rMenuDef.pfnCallbacks[i] != nullptr) {
+            const Unicode* wszOpt = D2LANG_GetStringFromTblIndex(rMenuDef.wStringIds[i]);
+            if (wszOpt) {
+                sub_6FB12DF0(
+                    g_pNpcMainMenuDialog,
+                    0,
+                    wszOpt,
+                    18,
+                    0,
+                    1,
+                    reinterpret_cast<int (__cdecl*)(void)>(rMenuDef.pfnCallbacks[i]),
+                    1);
+            }
+        }
+    }
+
+    const Unicode* wszCancel = D2LANG_GetStringFromTblIndex(3382);
+    if (wszCancel) {
+        sub_6FB12DF0(g_pNpcMainMenuDialog, 0, wszCancel, 18, 0, 1, sub_6FAC9B40, 1);
+    }
+
+    return 1;
 }
 
 int __cdecl sub_6FACD250()
@@ -3105,19 +3325,19 @@ int __fastcall sub_6FACE2C0(int nState, D2UnitStrc* pUnit)
 // 1.12a: 0x6FACE310 (__cdecl)
 D2UnitStrc* __cdecl sub_6FACE310()
 {
-    return *(D2UnitStrc**)0x6FBCC3D0;
+    return gpPlayerUnit;
 }
 
 // 1.12a: 0x6FACE320 (register: eax=pPlayer)
 // 1.12a: 0x6FACE350 (internal entry point)
 void __fastcall sub_6FACE320(D2UnitStrc* pPlayer)
 {
-    *(D2UnitStrc**)0x6FBCC3D0 = pPlayer;
+    gpPlayerUnit = pPlayer;
 }
 
 void __fastcall sub_6FACE350(D2UnitStrc* pPlayer)
 {
-    *(D2UnitStrc**)0x6FBCC3D0 = pPlayer;
+    gpPlayerUnit = pPlayer;
 }
 
 // 1.12a: 0x6FACE380 (__stdcall)
@@ -3152,20 +3372,20 @@ int __fastcall sub_6FACE440(int a2, D2UnitStrc* pUnit) { return D2COMMON_11017_C
 int __fastcall sub_6FACE450(D2UnitStrc* pUnit) { return D2COMMON_11021(pUnit); }
 
 // 1.12a: 0x6FACE460 (__cdecl)
-void __cdecl sub_6FACE460() { *(int32_t*)0x6FBC9D58 = 0; }
+void __cdecl sub_6FACE460() { s_nClientUnitHashResetFlag = 0; }
 
 // 1.12a: 0x6FACE470 (__cdecl)
 void __cdecl sub_6FACE470()
 {
-    memset((void*)0x6FBCA960, 0, 6 * 128 * sizeof(void*));
-    memset((void*)0x6FBC9D60, 0, 6 * 128 * sizeof(void*));
+    memset(gapServerSideUnitHashTables, 0, sizeof(gapServerSideUnitHashTables));
+    memset(gapClientSideUnitHashTables, 0, sizeof(gapClientSideUnitHashTables));
 }
 
 // 1.12a: 0x6FACE490 (__cdecl)
-void* __cdecl sub_6FACE490() { return (void*)0x6FBCA960; }
+void* __cdecl sub_6FACE490() { return &gapServerSideUnitHashTables[0][0]; }
 
 // 1.12a: 0x6FACE4A0 (__cdecl)
-void* __cdecl sub_6FACE4A0() { return (void*)0x6FBC9D60; }
+void* __cdecl sub_6FACE4A0() { return &gapClientSideUnitHashTables[0][0]; }
 
 // 1.12a: 0x6FACE4B0 (register: eax=pUnit)
 void __fastcall sub_6FACE4B0(D2UnitStrc* pUnit) { STATLIST_FreeModStats(pUnit); }
@@ -3176,7 +3396,7 @@ void __cdecl sub_6FACE4C0() {}
 // 1.12a: 0x6FACE4D0 (__stdcall)
 void __stdcall sub_6FACE4D0(void (__fastcall* pfnCallback)(D2UnitStrc*))
 {
-    D2UnitStrc** ppTable = (D2UnitStrc**)0x6FBCA960;
+    D2UnitStrc** ppTable = &gapServerSideUnitHashTables[0][0];
     for (int i = 0; i < 6 * 128; ++i) {
         for (D2UnitStrc* pUnit = ppTable[i]; pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE4)) {
             pfnCallback(pUnit);
@@ -3199,7 +3419,7 @@ void __stdcall sub_6FACE530(D2UnitStrc* pUnit)
 // 1.12a: 0x6FACE550 (register: ecx=nUnitGUID, edx=nUnitType)
 D2UnitStrc* __fastcall sub_6FACE550(int nUnitGUID, int nUnitType)
 {
-    D2UnitStrc** ppTable = (nUnitGUID < 0) ? (D2UnitStrc**)0x6FBC9D60 : (D2UnitStrc**)0x6FBCA960;
+    D2UnitStrc** ppTable = (nUnitGUID < 0) ? &gapClientSideUnitHashTables[0][0] : &gapServerSideUnitHashTables[0][0];
     uint32_t dwHash = static_cast<uint32_t>(nUnitGUID) & 0x7F;
     for (D2UnitStrc* pUnit = ppTable[nUnitType * 128 + dwHash]; pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE4)) {
         if (*(int32_t*)((uint8_t*)pUnit + 0x0C) == nUnitGUID) {

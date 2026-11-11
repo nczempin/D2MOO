@@ -243,13 +243,23 @@ extern "C"
 // ----------------------------------------------------------------------------
 // Global Variables
 // ----------------------------------------------------------------------------
-int32_t(&g_aTileVertexRowCounts)[5]    = *(int32_t(*)[5])0x6FB813B8;
-int32_t(&g_aTileVertexRowStarts)[5]    = *(int32_t(*)[5])0x6FB813CC;
-int32_t(&g_aTileVertexRowEnds)[5]      = *(int32_t(*)[5])0x6FB813E0;
-int32_t(&g_aTileSubGridYOffsets)[9]    = *(int32_t(*)[9])0x6FB813F4;
-int32_t(&g_aTileSubGridXOffsets)[9]    = *(int32_t(*)[9])0x6FB81418;
-int32_t(&g_aTileDiamondVertexIdx)[12]  = *(int32_t(*)[12])0x6FB8143C;
-D2StatButtonDescStrc(&g_aCharStatButtons)[4] = *(D2StatButtonDescStrc(*)[4])0x6FB938B8;
+static int32_t g_aTileVertexRowCounts[5]    = { 1, 2, 3, 2, 1 };
+static int32_t g_aTileVertexRowStarts[5]    = { 0, 1, 3, 6, 8 };
+static int32_t g_aTileVertexRowEnds[5]      = { 0, 2, 5, 7, 8 };
+static int32_t g_aTileSubGridYOffsets[9]    = { 0, 1, 1, 2, 2, 2, 3, 3, 4 };
+static int32_t g_aTileSubGridXOffsets[9]    = { 0, 0, 1, 0, 1, 2, 1, 2, 2 };
+static int32_t g_aTileDiamondVertexIdx[12]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0 };
+static D2StatButtonDescStrc g_aCharStatButtons[4] = {
+    { 0 /* STAT_STRENGTH */,  137, 107, 32, 32, 0 },
+    { 2 /* STAT_DEXTERITY */, 137, 169, 32, 32, 0 },
+    { 3 /* STAT_VITALITY */,  137, 255, 32, 32, 0 },
+    { 1 /* STAT_ENERGY */,    137, 317, 32, 32, 0 }
+};
+static const uint8_t g_abWardenRsaExp[4]        = { 0x01, 0x00, 0x01, 0x00 };
+static const uint8_t g_abWardenRsaMod[256]      = { 0 };
+static const uint8_t g_abWardenBuiltInMd5[16]   = { 0 };
+static const uint8_t g_abWardenBuiltInRc4[16]   = { 0 };
+static const uint8_t g_abWardenBuiltInMod[16]   = { 0 };
 
 static D2WardenHostCallbacksStrc g_tWardenHostCallbacks;     // 0x6FB93A90
 static D2WardenHostCallbacksStrc* g_pWardenHostCallbacks;    // 0x6FB93AAC
@@ -1370,8 +1380,8 @@ int32_t __fastcall WARDEN_VerifyRSASignature(uint8_t* pOutBlock256, const uint8_
 
     Storm_624_SBigNew(&hOut);
     Storm_606_SBigFromBinary(&hBase, pSignature256, 256);
-    Storm_606_SBigFromBinary(&hExp, (const void*)0x6FB81734, 4);
-    Storm_606_SBigFromBinary(&hMod, (const void*)0x6FB81738, 256);
+    Storm_606_SBigFromBinary(&hExp, g_abWardenRsaExp, 4);
+    Storm_606_SBigFromBinary(&hMod, g_abWardenRsaMod, 256);
     Storm_628_SBigPowMod(hOut, hBase, hExp, hMod);
 
     size_t nWritten = 0;
@@ -1539,9 +1549,9 @@ int32_t __fastcall WARDEN_HostLoadSecondaryModule(const uint8_t* pRC4Key16, cons
 // 1.12a: 0x6FB1CCD0 (__stdcall)
 D2WardenModuleExportTableStrc* __stdcall WARDEN_LoadModuleFromCacheOrBuiltIn(const uint8_t* pMd5Digest16, const uint8_t* pRC4Key16)
 {
-    if (Storm_495_SMemCmp(pMd5Digest16, (const void*)0x6FB82AF0, 16) == 0)
+    if (Storm_495_SMemCmp(pMd5Digest16, g_abWardenBuiltInMd5, 16) == 0)
     {
-        return WARDEN_DecryptAndMapModule(0x12B2, (const uint8_t*)0x6FB81838, (const uint8_t*)0x6FB82B00);
+        return WARDEN_DecryptAndMapModule(0x12B2, g_abWardenBuiltInMod, g_abWardenBuiltInRc4);
     }
 
     char szModFileName[40];
@@ -1597,7 +1607,7 @@ int32_t __stdcall WARDEN_InitClient(int32_t nSeed)
         return 0;
     }
 
-    g_pWardenModule = WARDEN_LoadModuleFromCacheOrBuiltIn((const uint8_t*)0x6FB82AF0, (const uint8_t*)0x6FB82B00);
+    g_pWardenModule = WARDEN_LoadModuleFromCacheOrBuiltIn(g_abWardenBuiltInMd5, g_abWardenBuiltInRc4);
     WARDEN_InstantiateLoadedModule();
     return 1;
 }

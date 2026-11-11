@@ -19,14 +19,7 @@ struct D2UnitStrc;
 struct D2CellFileStrc;
 struct D2StatListStrc;
 
-struct D2GfxDataStrc
-{
-    uint8_t pad0x00[0x38];
-    uint32_t nDirection;        // +0x38
-    D2CellFileStrc* pCellFile;  // +0x3C
-    uint32_t nFrame;            // +0x40
-    int32_t nMaxFrames;         // +0x44 (total 0x48 = 72 bytes)
-};
+#include "D2ClientReconstructed.h"
 
 struct D2StatStrc
 {
@@ -152,19 +145,130 @@ extern "C" {
 }
 
 // ============================================================================
-// Global Variables in D2Client.dll (.data / .bss / .rdata)
+// Global Variables & Cross-Module Reconstructed Prototypes
 // ============================================================================
-extern D2UnitStrc* gpLocalPlayerUnit;               // 0x6FBCC3D0
-extern int32_t gnScreenWidth;                       // 0x6FB8C6E0
-extern int32_t gnScreenHeight;                      // 0x6FB8C6E4
-extern int32_t gnViewportWidth;                     // 0x6FBCD528
-extern int32_t gnViewportHeight;                    // 0x6FBCD524
-extern int32_t gnViewportCenterY;                   // 0x6FBCC028
-extern int32_t gnMouseX;                            // 0x6FBB1634
-extern int32_t gnMouseY;                            // 0x6FBB1638
-extern int32_t gnPanelShiftMode;                    // 0x6FBCC1D0
-extern int32_t gnPanelShiftOffset;                  // 0x6FBCC1D4
-extern int32_t gaPanelStates[38];                   // 0x6FBB2B58 (0x01=Inv, 0x02=Char, 0x03=SkillSelect, 0x04=SkillTree, 0x05=Chat, 0x08=NPCMenu, 0x09=EscMenu, 0x0A=Automap, 0x0B=CfgControls, 0x0C=Trade/Shop, 0x0D=ShowItems, 0x0E=ModItem, 0x0F=Quest, 0x13=Belt, 0x15=MiniPanel, 0x16=Party, 0x17=TradePrompt, 0x18=MessageLog, 0x19=Stash, 0x1A=Cube, 0x1F=QuestScroll, 0x21=MercInv)
+static D2UnitStrc*& gpLocalPlayerUnit   = gpPlayerUnit;
+static int32_t&     gnPanelShiftMode    = gnViewportShiftMode;
+static int32_t&     gnPanelShiftOffset  = gnViewportShiftOffsetX;
+int32_t             gnViewportCenterY   = 0;
+
+// HUD / Panel / Gold Dialog / Loading Screen / Hover State Globals
+int32_t             g_nEquippedBeltRows         = 1;
+D2CellFileStrc*     g_pGeneralSkillsCel         = nullptr;
+D2CellFileStrc*     g_apClassSkillsCel[7]       = {};
+D2CellFileStrc*     g_pBeltRowCel               = nullptr;
+int32_t             g_bLeftSkillPressed         = 0;
+int32_t             g_bRightSkillPressed        = 0;
+int32_t             g_nSpeedBarSide             = 0;
+int32_t             g_nPressedBeltSlot          = -1;
+int32_t             g_bGoldDialogOpen           = 0;
+DWORD               g_dwLastThrottleTick50ms    = 0;
+int32_t             g_nLoadingScreenAct         = 0;
+int32_t             g_nGoldDialogVal            = 0;
+void*               g_pLoadingPalette           = nullptr;
+wchar_t             g_wszMonsterImmunityText[64]= {};
+wchar_t             g_wszMonsterSubText[64]     = {};
+int32_t             g_nGoldDialogUnk2D0         = 0;
+D2CellFileStrc*     g_pBoxPiecesCel             = nullptr;
+D2CellFileStrc*     g_pFocus16Cel               = nullptr;
+D2CellFileStrc*     g_pPentSpinCel              = nullptr;
+D2CellFileStrc*     g_pBuySellBtnCel            = nullptr;
+int32_t             g_nDeferredHoverX           = 0;
+int32_t             g_nDeferredHoverY           = 0;
+wchar_t             g_wszDeferredHoverText[64]  = {};
+int32_t             g_nGoldDialogMax            = 0;
+int32_t             g_nGoldDialogMode           = 0;
+int32_t             g_bPanelCloseClickCooldown  = 0;
+DWORD               g_dwPanelCloseCooldownTick  = 0;
+int32_t             g_nLoadingScreenFrame       = 0;
+int32_t             g_bWMPaintReceived          = 0;
+D2CellFileStrc*     g_pLoadingScreenCel         = nullptr;
+D2WinEditBoxStrc*   g_pGoldEditBox              = nullptr;
+int32_t             g_bPendingInteractClose     = 0;
+int32_t             g_nPendingInteractType      = 0;
+int32_t             g_nPendingInteractGUID      = 0;
+uint8_t             g_nPalColorRed              = 0;
+uint8_t             g_nPalColorGreen            = 0;
+uint8_t             g_nPalColorBlue             = 0;
+int32_t             g_bRightMouseBeltConsumed   = 0;
+int32_t             g_bMercMenuActive           = 0;
+void*               g_pMercMenuDialogWidget     = nullptr;
+
+// Cross-module reconstructed functions
+struct D2ViewportStrc;
+void            __fastcall VIEW_SetViewportRect(D2ViewportStrc* pViewport, int32_t nLeft, int32_t nTop, int32_t nRight, int32_t nBottom);
+D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, int32_t nFileType);
+void            __fastcall GFX_DrawItemUnit(D2UnitStrc* pItem, int nXPos, int nYPos, uint32_t dwGamma, int nScreenMode);
+void            __stdcall  INV_ClearHoveredItemState();
+D2UnitStrc*     __stdcall  sub_6FACEB20(D2UnitStrc* pUnit);
+int             __fastcall sub_6FACEAC0(D2UnitStrc* pUnit);
+void            __stdcall  sub_6FB235B0();
+void            __stdcall  sub_6FB34E90();
+void            __cdecl    sub_6FB13290();
+void            __cdecl    sub_6FACADF0();
+void            __fastcall CURSOR_WarpMousePosition(int32_t nNewMouseX, int32_t nNewMouseY);
+const void*     __fastcall CMDTBL_GetShortBindingNameString(int32_t nCommandId, int32_t bIsPrimary);
+int32_t         __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3);
+int32_t         __fastcall MSG_SendByte2Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2);
+int32_t         __fastcall MSG_SendByte3Words(uint8_t bOpcode, uint16_t w1, uint16_t w2, uint16_t w3);
+void            __fastcall D2Client_ApplyState54ToItemUnit(D2UnitStrc* pItem);
+void            __fastcall D2Client_TriggerQuestMonologueOrSound(D2UnitStrc* pUnit, int32_t nEventType);
+int32_t         __fastcall D2Client_GetThrowWeaponIconCel(D2UnitStrc* pUnit);
+int32_t         __fastcall D2Client_IsCurrentSkillUsable();
+void            __stdcall  D2Client_DrawBeltItemHoverTooltip(D2UnitStrc* pItem, int32_t nX, int32_t nY);
+void            __fastcall D2Client_DrawSkillQuantityOverlay(D2SkillStrc* pSkill, int32_t nX, int32_t nY);
+void            __stdcall  D2Client_RenderSpeedBarLeft();
+void            __stdcall  D2Client_RenderSpeedBarRight();
+void            __fastcall D2Client_DrawSpeedBarLeftTooltip(int32_t nMouseX, int32_t nMouseY);
+void            __fastcall D2Client_DrawSpeedBarRightTooltip(int32_t nMouseX, int32_t nMouseY);
+void            __fastcall D2Client_DrawActiveSkillButtonsTooltip(int32_t nMouseX, int32_t nMouseY);
+int32_t         __fastcall D2Client_IsCommandHeld(int32_t nCommandId);
+D2UnitStrc*     __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+const wchar_t*  __fastcall D2Client_GetLevelNameString(int32_t nLevelId);
+int32_t         __fastcall D2Client_IsLocalPlayerDead();
+int32_t         __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
+void            __stdcall  UI_LoadLoadingPalette();
+
+static void UI_AppendCommandBindingText(wchar_t* wszBuf, int32_t nCommandId)
+{
+    const wchar_t* wszPrimary = reinterpret_cast<const wchar_t*>(CMDTBL_GetShortBindingNameString(nCommandId, 1));
+    if (!wszPrimary || wszPrimary[0] == 0)
+    {
+        wszPrimary = reinterpret_cast<const wchar_t*>(CMDTBL_GetShortBindingNameString(nCommandId, 0));
+    }
+    if (wszPrimary && wszPrimary[0] != 0)
+    {
+        if (wszBuf[0] != 0)
+        {
+            D2LANG_UnicodeStrCat(wszBuf, L" (");
+            D2LANG_UnicodeStrCat(wszBuf, wszPrimary);
+            D2LANG_UnicodeStrCat(wszBuf, L")");
+        }
+        else
+        {
+            D2LANG_UnicodeStrCpy(wszBuf, wszPrimary);
+        }
+    }
+}
+
+static void UI_ApplyViewportRectForShiftMode(int32_t nShiftMode)
+{
+    if (!gpClientViewport || gnScreenWidth <= 0 || gnScreenHeight <= 48)
+    {
+        return;
+    }
+    int32_t nLeft = 0;
+    int32_t nRight = gnScreenWidth;
+    if (nShiftMode == 1)
+    {
+        nRight = gnScreenWidth / 2;
+    }
+    else if (nShiftMode == 2)
+    {
+        nLeft = gnScreenWidth / 2;
+    }
+    VIEW_SetViewportRect(static_cast<D2ViewportStrc*>(gpClientViewport), nLeft, 0, nRight, gnScreenHeight - 48);
+}
 
 // ============================================================================
 // PART 1: UI_panel.asm (0x6FB32E00 .. 0x6FB34180)
@@ -187,21 +291,21 @@ void __fastcall PANEL_DrawSkillIcon(int32_t nSkillId /*ecx*/, int32_t nX /*edx*/
     }
 
     D2CellFileStrc* pCellFile = (nCharClass < 0)
-        ? *(D2CellFileStrc**)0x6FBCAD24
-        : ((D2CellFileStrc**)0x6FBCAD28)[nCharClass];
+        ? g_pGeneralSkillsCel
+        : ((nCharClass < 7) ? g_apClassSkillsCel[nCharClass] : nullptr);
     if (!pCellFile) {
         return;
     }
 
     if (gpLocalPlayerUnit && nSkillId == 0x02) { // Throw skill icon override by right/left hand weapon
-        int32_t nThrowIcon = ((int32_t(__fastcall*)(D2UnitStrc*))0x6FB55A60)(gpLocalPlayerUnit);
+        int32_t nThrowIcon = D2Client_GetThrowWeaponIconCel(gpLocalPlayerUnit);
         if (nThrowIcon != 0) {
             nIconCel = (int16_t)nThrowIcon;
         }
     }
 
-    int32_t bSkillDisabled = ((int32_t(__fastcall*)())0x6FB082C0)();
-    int32_t nFrame = (int32_t)nIconCel + (bSkillDisabled == 0 ? 1 : 0);
+    int32_t bSkillDisabled = D2Client_IsCurrentSkillUsable() == 0;
+    int32_t nFrame = (int32_t)nIconCel + (bSkillDisabled ? 1 : 0);
 
     D2GfxDataStrc gfxData;
     memset(&gfxData, 0, sizeof(gfxData));
@@ -222,13 +326,13 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
             const wchar_t* wszShowBelt = D2LANG_GetStringByReferenceIndex(0x1028);
             wchar_t wszTooltip[128];
             D2LANG_UnicodeStrCpy(wszTooltip, wszShowBelt);
-            ((void(__fastcall*)(wchar_t*, int32_t))0x6FB4F280)(wszTooltip, 7);
+            UI_AppendCommandBindingText(wszTooltip, 7);
             D2WIN_DrawFramedText(wszTooltip, gnScreenWidth / 2 + 240, gnScreenHeight - 49, 0, 1);
             return;
         }
     }
 
-    if (((void*(__fastcall*)())0x6FB565C0)() != nullptr) {
+    if (!gpLocalPlayerUnit || sub_6FACEB20(gpLocalPlayerUnit) != nullptr) {
         return;
     }
 
@@ -239,8 +343,8 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
 
     int32_t nCol = (nMouseX - nBeltStartX) / 31;
     int32_t nMaxSlots = 4;
-    if (gaPanelStates[0x13] != 0) {
-        nMaxSlots = 4 * *(int32_t*)0x6FBCAD1C;
+    if (gaPanelStates[D2PANEL_BELT] != 0) {
+        nMaxSlots = 4 * g_nEquippedBeltRows;
     }
     int32_t nBottomY = gnScreenHeight - 9;
     int32_t nTopY = nBottomY - (nMaxSlots / 4) * 29 - 29;
@@ -258,7 +362,7 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
     if (pBeltItem) {
         int32_t nTooltipX = nBeltStartX + 14 + 31 * (nBeltSlot & 3);
         int32_t nTooltipY = gnScreenHeight - 45 - 31 * (nBeltSlot / 4);
-        ((void(__stdcall*)(D2UnitStrc*, int32_t, int32_t))0x6FB5CE00)(pBeltItem, nTooltipX, nTooltipY);
+        D2Client_DrawBeltItemHoverTooltip(pBeltItem, nTooltipX, nTooltipY);
     }
 }
 
@@ -281,19 +385,19 @@ void __fastcall PANEL_DrawLeftAndRightSkillButtons()
     D2SkillStrc* pLeftSkill = D2COMMON_GetLeftSkill(gpLocalPlayerUnit);
     if (pLeftSkill) {
         int32_t nLeftSkillId = D2COMMON_GetSkillId(pLeftSkill, __FILE__, __LINE__);
-        int32_t nLeftDrawX = (*(int32_t*)0x6FBCAD48 != 0) ? (nLeftBtnX - 2) : nLeftBtnX;
-        int32_t nLeftDrawY = (*(int32_t*)0x6FBCAD48 != 0) ? gnScreenHeight : (gnScreenHeight - 2);
+        int32_t nLeftDrawX = (g_bLeftSkillPressed != 0) ? (nLeftBtnX - 2) : nLeftBtnX;
+        int32_t nLeftDrawY = (g_bLeftSkillPressed != 0) ? gnScreenHeight : (gnScreenHeight - 2);
         PANEL_DrawSkillIcon(nLeftSkillId, nLeftDrawX, nLeftDrawY);
-        ((void(__fastcall*)(D2SkillStrc*, int32_t, int32_t))0x6FB35340)(pLeftSkill, nLeftBtnX + 44, gnScreenHeight - 4);
+        D2Client_DrawSkillQuantityOverlay(pLeftSkill, nLeftBtnX + 44, gnScreenHeight - 4);
     }
 
     D2SkillStrc* pRightSkill = D2COMMON_GetRightSkill(gpLocalPlayerUnit);
     if (pRightSkill) {
         int32_t nRightSkillId = D2COMMON_GetSkillId(pRightSkill, __FILE__, __LINE__);
-        int32_t nRightDrawX = (*(int32_t*)0x6FBCAD4C != 0) ? (nRightBtnX - 2) : nRightBtnX;
-        int32_t nRightDrawY = (*(int32_t*)0x6FBCAD4C != 0) ? gnScreenHeight : (gnScreenHeight - 2);
+        int32_t nRightDrawX = (g_bRightSkillPressed != 0) ? (nRightBtnX - 2) : nRightBtnX;
+        int32_t nRightDrawY = (g_bRightSkillPressed != 0) ? gnScreenHeight : (gnScreenHeight - 2);
         PANEL_DrawSkillIcon(nRightSkillId, nRightDrawX, nRightDrawY);
-        ((void(__fastcall*)(D2SkillStrc*, int32_t, int32_t))0x6FB35340)(pRightSkill, nRightBtnX + 44, gnScreenHeight - 4);
+        D2Client_DrawSkillQuantityOverlay(pRightSkill, nRightBtnX + 44, gnScreenHeight - 4);
     }
 }
 
@@ -301,6 +405,9 @@ void __fastcall PANEL_DrawLeftAndRightSkillButtons()
 // Draws the belt slots, hotkey labels (1..4), and belt items on the bottom HUD
 void __fastcall PANEL_DrawBeltSlotsAndPotions()
 {
+    if (!gpLocalPlayerUnit) {
+        return;
+    }
     D2WIN_SetFont(6);
 
     // Count equipped belt rows
@@ -316,16 +423,16 @@ void __fastcall PANEL_DrawBeltSlotsAndPotions()
             break;
         }
     }
-    *(int32_t*)0x6FBCAD1C = nBeltRows;
+    g_nEquippedBeltRows = nBeltRows;
 
     int32_t nBeltBaseX = gnScreenWidth / 2 + 95;
     int32_t nBeltTopY = gnScreenHeight - 43;
 
-    // If expanded belt panel (0x13) is open, draw extra belt rows
-    if (gaPanelStates[0x13] != 0 && nBeltRows > 1) {
+    // If expanded belt panel (0x1F) is open, draw extra belt rows
+    if (gaPanelStates[D2PANEL_BELT] != 0 && nBeltRows > 1 && g_pBeltRowCel) {
         D2GfxDataStrc beltRowGfx;
         memset(&beltRowGfx, 0, sizeof(beltRowGfx));
-        beltRowGfx.pCellFile = *(D2CellFileStrc**)0x6FBCAD44;
+        beltRowGfx.pCellFile = g_pBeltRowCel;
         beltRowGfx.nDirection = 0;
         for (int32_t r = 1; r < nBeltRows; ++r) {
             beltRowGfx.nFrame = 0;
@@ -337,7 +444,7 @@ void __fastcall PANEL_DrawBeltSlotsAndPotions()
     }
 
     // 1.12a: 0x6FB33400 (continuation inside PANEL_DrawBeltSlotsAndPotions)
-    int32_t nVisibleSlots = (gaPanelStates[0x13] != 0) ? (4 * nBeltRows) : 4;
+    int32_t nVisibleSlots = (gaPanelStates[D2PANEL_BELT] != 0) ? (4 * nBeltRows) : 4;
     for (int32_t nSlot = 0; nSlot < nVisibleSlots; ++nSlot) {
         int32_t nCol = nSlot & 3;
         int32_t nRow = nSlot / 4;
@@ -346,18 +453,18 @@ void __fastcall PANEL_DrawBeltSlotsAndPotions()
 
         D2UnitStrc* pBeltItem = D2COMMON_GetBeltItem(*(void**)((uint8_t*)gpLocalPlayerUnit + 0x60), nSlot);
         if (pBeltItem) {
-            if (*(int32_t*)0x6FBCAD58 == nSlot) {
+            if (g_nPressedBeltSlot == nSlot) {
                 nSlotX -= 2;
                 nSlotY += 2;
             }
-            ((void(__stdcall*)(D2UnitStrc*, int32_t, int32_t, int32_t, int32_t))0x6FB55AF0)(pBeltItem, nSlotX, nSlotY, -1, 5);
+            GFX_DrawItemUnit(pBeltItem, nSlotX, nSlotY, (uint32_t)-1, 5);
         }
 
         // Draw hotkey label on the bottom row (slots 0..3)
         if (nSlot < 4) {
             wchar_t wszKey[64];
             wszKey[0] = 0;
-            ((void(__fastcall*)(wchar_t*, int32_t))0x6FB4F280)(wszKey, nSlot + 0x16);
+            UI_AppendCommandBindingText(wszKey, nSlot + 0x16);
             int32_t nKeyLen = D2LANG_UnicodeStrLen(wszKey);
             if (nKeyLen > 0) {
                 if (nKeyLen > 2) {
@@ -377,24 +484,24 @@ void __fastcall PANEL_RenderControlPanel()
     PANEL_DrawLeftAndRightSkillButtons();
     PANEL_DrawBeltSlotsAndPotions();
 
-    if (*(int32_t*)0x6FBCAD50 == 1) {
-        if (gaPanelStates[0x03] != 0) {
-            ((void(__stdcall*)())0x6FB374E0)();
+    if (g_nSpeedBarSide == 1) {
+        if (gaPanelStates[D2PANEL_SKILLSELECT] != 0) {
+            D2Client_RenderSpeedBarLeft();
         }
-    } else if (*(int32_t*)0x6FBCAD50 == 2) {
-        if (gaPanelStates[0x03] != 0) {
-            ((void(__stdcall*)())0x6FB378C0)();
+    } else if (g_nSpeedBarSide == 2) {
+        if (gaPanelStates[D2PANEL_SKILLSELECT] != 0) {
+            D2Client_RenderSpeedBarRight();
         }
     }
 
-    if (gaPanelStates[0x03] != 0) {
-        if (*(int32_t*)0x6FBCAD50 == 1) {
-            ((void(__fastcall*)(int32_t, int32_t))0x6FB37280)(gnMouseX, gnMouseY);
-        } else if (*(int32_t*)0x6FBCAD50 == 2) {
-            ((void(__fastcall*)(int32_t, int32_t))0x6FB373B0)(gnMouseX, gnMouseY);
+    if (gaPanelStates[D2PANEL_SKILLSELECT] != 0) {
+        if (g_nSpeedBarSide == 1) {
+            D2Client_DrawSpeedBarLeftTooltip(gnMouseX, gnMouseY);
+        } else if (g_nSpeedBarSide == 2) {
+            D2Client_DrawSpeedBarRightTooltip(gnMouseX, gnMouseY);
         }
     } else {
-        ((void(__fastcall*)(int32_t, int32_t))0x6FB371D0)(gnMouseX, gnMouseY);
+        D2Client_DrawActiveSkillButtonsTooltip(gnMouseX, gnMouseY);
     }
 
     PANEL_DrawBeltItemTooltip(gnMouseX, gnMouseY);
@@ -427,17 +534,17 @@ void __fastcall PANEL_OnLButtonUp(D2MsgStrc* pMsg /*eax*/)
 // Uses a belt item in the given slot (0..15), sending C2S 0x26 (with Shift = feed mercenary)
 int32_t __fastcall PANEL_UseBeltItemInSlot(int32_t nBeltSlot /*eax*/)
 {
-    if (*(int32_t*)0x6FBB58FC != 0) {
+    if (g_bGoldDialogOpen != 0 || !gpLocalPlayerUnit) {
         return 0;
     }
     int32_t nMode = *(int32_t*)((uint8_t*)gpLocalPlayerUnit + 0x10);
     if (nMode == 0x11 || nMode == 0x00 || nMode == 0x09) {
         return 0;
     }
-    if (((void*(__fastcall*)())0x6FB565C0)() != nullptr) {
+    if (sub_6FACEB20(gpLocalPlayerUnit) != nullptr) {
         return 0;
     }
-    if (nBeltSlot >= 4 * *(int32_t*)0x6FBCAD1C) {
+    if (nBeltSlot >= 4 * g_nEquippedBeltRows) {
         return 0;
     }
 
@@ -450,11 +557,11 @@ int32_t __fastcall PANEL_UseBeltItemInSlot(int32_t nBeltSlot /*eax*/)
         return 0;
     }
 
-    int32_t bShiftHeld = (((int32_t(__fastcall*)(int32_t))0x6FB4C900)(0x1C) != 0 ||
-                          ((int32_t(__fastcall*)(int32_t))0x6FB4C900)(0x1B) != 0);
-    int32_t bFeedMerc = 0;
+    int32_t bShiftHeld = (D2Client_IsCommandHeld(0x1C) != 0 ||
+                          D2Client_IsCommandHeld(0x1B) != 0);
+    uint32_t bFeedMerc = 0;
     if (bShiftHeld) {
-        D2UnitStrc* pMerc = ((D2UnitStrc*(__fastcall*)(D2UnitStrc*))0x6FB66DB0)(gpLocalPlayerUnit);
+        D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(gpLocalPlayerUnit);
         if (!pMerc) {
             return 0;
         }
@@ -463,14 +570,14 @@ int32_t __fastcall PANEL_UseBeltItemInSlot(int32_t nBeltSlot /*eax*/)
             !D2COMMON_CheckItemType(pBeltItem, 0x4E) &&
             !D2COMMON_CheckItemType(pBeltItem, 0x52))
         {
-            ((void(__stdcall*)(D2UnitStrc*, int32_t))0x6FB63E70)(gpLocalPlayerUnit, 0x1C);
+            D2Client_TriggerQuestMonologueOrSound(gpLocalPlayerUnit, 0x1C);
             return 0;
         }
         bFeedMerc = 0x8000;
     }
 
-    ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FACDB30)(*(int32_t*)((uint8_t*)pBeltItem + 0x0C), bFeedMerc, 0);
-    ((void(__fastcall*)(D2UnitStrc*, D2UnitStrc*, int32_t))0x6FB5E1F0)(gpLocalPlayerUnit, pBeltItem, bFeedMerc);
+    MSG_SendByte3Dwords(0x26, *(uint32_t*)((uint8_t*)pBeltItem + 0x0C), bFeedMerc, 0);
+    D2Client_ApplyState54ToItemUnit(pBeltItem);
     return 1;
 }
 
@@ -484,7 +591,7 @@ int32_t __fastcall PANEL_UseBeltSlot(int32_t nSlot /*eax*/)
     if (nMode == 0x11 || nMode == 0x00) {
         return 0;
     }
-    if (nSlot < 0 || nSlot >= 4 * *(int32_t*)0x6FBCAD1C) {
+    if (nSlot < 0 || nSlot >= 4 * g_nEquippedBeltRows) {
         FOG_DisplayAssert("slot >= 0 && slot < MAX_BELT_SLOTS * sgNumBelts", __FILE__, 0x20C);
         exit(-1);
     }
@@ -502,7 +609,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg /*eax*/)
     if (nMode == 0x11 || nMode == 0x00 || nMode == 0x09) {
         return;
     }
-    if (((void*(__fastcall*)())0x6FB565C0)() != nullptr) {
+    if (sub_6FACEB20(gpLocalPlayerUnit) != nullptr) {
         return;
     }
 
@@ -513,7 +620,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg /*eax*/)
         return;
     }
 
-    int32_t nMaxSlots = (gaPanelStates[0x13] != 0) ? (4 * *(int32_t*)0x6FBCAD1C) : 4;
+    int32_t nMaxSlots = (gaPanelStates[D2PANEL_BELT] != 0) ? (4 * g_nEquippedBeltRows) : 4;
     int32_t nBottomY = gnScreenHeight - 9;
     int32_t nTopY = nBottomY - (nMaxSlots / 4) * 29 - 29;
     if (nMouseY > nBottomY || nMouseY < nTopY) {
@@ -526,7 +633,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg /*eax*/)
     if (nSlot >= 0 && nSlot < nMaxSlots) {
         if (PANEL_UseBeltItemInSlot(nSlot)) {
             *(int32_t*)((uint8_t*)pMsg + 0x14) = 1;
-            *(int32_t*)0x6FBCC48C = 0;
+            g_bRightMouseBeltConsumed = 0;
         }
     }
 }
@@ -563,11 +670,16 @@ struct D2PairedDamageStatsStrc {
 };
 
 // 1.12a: 0x6FB38080 (__fastcall)
-// Returns the population count of a 6-bit mask from table 0x6FB84448
+// Returns the population count of a 6-bit mask
 int32_t __fastcall ITEMDESC_GetPopCount6Bit(uint32_t nMask6Bit /*eax*/)
 {
-    const int32_t* pPopCountTable = (const int32_t*)0x6FB84448;
-    return pPopCountTable[nMask6Bit & 0x3F];
+    static const int32_t s_aPopCount6Bit[64] = {
+        0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6
+    };
+    return s_aPopCount6Bit[nMask6Bit & 0x3F];
 }
 
 // 1.12a: 0x6FB38090 (merged inside sub_6FB38080 in UI_ui.asm)
@@ -633,17 +745,11 @@ int32_t __fastcall ITEMDESC_FormatPairedDamageStat(int32_t nStatId /*ecx*/, D2Pa
 int32_t __fastcall ITEMDESC_CalcStatDisplayValue(D2UnitStrc* pItem /*ecx*/, int32_t nStatId /*edx*/, int32_t nRawValue /*[esp+4]*/)
 {
     int32_t nResult = nRawValue;
-    int32_t nNumStatDefs = *(int32_t*)(*(uintptr_t*)0x6FB993A4 + 0xBC0);
-    if (nStatId >= 0 && nStatId < nNumStatDefs) {
-        uint8_t* pStatCostTxt = *(uint8_t**)(*(uintptr_t*)0x6FB993A4 + 0xBBC) + 0x144 * nStatId;
-        if (pStatCostTxt) {
-            uint8_t nOp = pStatCostTxt[0x34];
-            if (nOp >= 2 && nOp <= 5 && gpLocalPlayerUnit) {
-                int16_t nOpStat = *(int16_t*)(pStatCostTxt + 0x36);
-                int32_t nBaseStatVal = D2COMMON_GetUnitStatUInt(gpLocalPlayerUnit, nOpStat, 0);
-                uint8_t nOpParam = pStatCostTxt[0x35];
-                nResult = (nRawValue * nBaseStatVal) >> nOpParam;
-            }
+    D2ClientItemStatDescInfoStrc descInfo = {};
+    if (D2Client_GetItemStatDescInfo(nStatId, &descInfo)) {
+        if (descInfo.nOp >= 2 && descInfo.nOp <= 5 && gpLocalPlayerUnit) {
+            int32_t nBaseStatVal = D2COMMON_GetUnitStatUInt(gpLocalPlayerUnit, descInfo.wOpBase, 0);
+            nResult = (nRawValue * nBaseStatVal) >> descInfo.nOpParam;
         }
     }
     if (nStatId == 0x7A && D2COMMON_CheckItemType(pItem, 0x39)) {
@@ -659,16 +765,18 @@ void __fastcall ITEMDESC_AppendBluntUndeadBonus(D2UnitStrc* pItem /*ecx*/, wchar
     if (!D2COMMON_CheckItemType(pItem, 0x39)) {
         return;
     }
-    uint8_t* pStatCostTxt = *(uint8_t**)(*(uintptr_t*)0x6FB993A4 + 0xBBC) + 0x144 * 0x7A;
-    uint16_t wDescStrPos = *(uint16_t*)(pStatCostTxt + 0x4E);
-    const wchar_t* wszDesc = D2LANG_GetStringByReferenceIndex(wDescStrPos);
+    D2ClientItemStatDescInfoStrc descInfo = {};
+    if (!D2Client_GetItemStatDescInfo(0x7A, &descInfo) || descInfo.wDescStrPos == 0) {
+        return;
+    }
+    const wchar_t* wszDesc = D2LANG_GetStringByReferenceIndex(descInfo.wDescStrPos);
     wchar_t wszLine[128];
     D2LANG_UnicodeSPrintf(128, wszLine, L"%+d%% %s\n", 50, wszDesc);
     D2LANG_UnicodeStrCat(wszBuf, wszLine);
 }
 
 // 1.12a: 0x6FB38910 (__fastcall)
-// Appends elixir stat bonus lines using table 0x6FB8FC70
+// Appends elixir stat bonus lines
 void __fastcall ITEMDESC_AppendElixirStats(D2UnitStrc* pItem /*ecx*/, wchar_t* wszBuf /*edx*/)
 {
     (void)pItem;
@@ -681,11 +789,10 @@ int32_t __fastcall ITEMDESC_CheckAllStatsGroupEqual(D2StatListStrc* pStatList /*
 {
     int32_t bFirst = 1;
     int32_t nFirstVal = 0;
-    int32_t nNumStatDefs = *(int32_t*)(*(uintptr_t*)0x6FB993A4 + 0xBC0);
-    uint8_t* pStatTable = *(uint8_t**)(*(uintptr_t*)0x6FB993A4 + 0xBBC);
+    int32_t nNumStatDefs = D2Client_GetItemStatCostCount();
     for (int32_t i = 0; i < nNumStatDefs; ++i) {
-        uint8_t* pRec = pStatTable + 0x144 * i;
-        if (*(uint16_t*)(pRec + 0x56) == (uint16_t)nGroup) {
+        D2ClientItemStatDescInfoStrc descInfo = {};
+        if (D2Client_GetItemStatDescInfo(i, &descInfo) && descInfo.wDescGrp == (uint16_t)nGroup) {
             int32_t nVal = D2COMMON_GetStatFromStatList(pStatList, i, 0);
             if (bFirst) {
                 nFirstVal = nVal;
@@ -804,7 +911,7 @@ void __fastcall ITEMDESC_FormatGemOrRuneBonuses(D2UnitStrc* pItem /*ecx*/, wchar
 // 1.12a: 0x6FB3A770 (__stdcall)
 int32_t __stdcall UI_IsGoldDialogOpen()
 {
-    return *(int32_t*)0x6FBB58FC;
+    return g_bGoldDialogOpen;
 }
 
 // 1.12a: 0x6FB3A780 (__stdcall)
@@ -817,29 +924,29 @@ int32_t __stdcall UI_GetBottomPanelY()
 int32_t __fastcall UI_CheckTickThrottle50ms()
 {
     DWORD dwNow = GetTickCount();
-    if (dwNow - *(DWORD*)0x6FBB5900 <= 50) {
+    if (dwNow - g_dwLastThrottleTick50ms <= 50) {
         return 0;
     }
-    *(DWORD*)0x6FBB5900 = dwNow;
+    g_dwLastThrottleTick50ms = dwNow;
     return 1;
 }
 
 // 1.12a: 0x6FB3A7C0 (__stdcall)
 int32_t __stdcall UI_IsLoadingScreenActive()
 {
-    return *(int32_t*)0x6FBCC3C8 != 0;
+    return g_pLoadingScreenCel != nullptr;
 }
 
 // 1.12a: 0x6FB3A7D0 (__stdcall)
 int32_t __stdcall UI_GetLoadingScreenAct()
 {
-    return *(int32_t*)0x6FB8FCB0;
+    return g_nLoadingScreenAct;
 }
 
 // 1.12a: 0x6FB3A7E0 (__fastcall)
 void __fastcall UI_SetLoadingScreenAct(int32_t nAct /*ecx*/)
 {
-    *(int32_t*)0x6FB8FCB0 = nAct;
+    g_nLoadingScreenAct = nAct;
 }
 
 // 1.12a: 0x6FB3A7F0 (__stdcall)
@@ -854,7 +961,7 @@ void __stdcall UI_LoadLoadingPalette()
         uint32_t dwRead = 0;
         SFileReadFile(hFile, pBuf, dwSize, &dwRead, nullptr);
         SFileCloseFile(hFile);
-        *(void**)0x6FBCC1E8 = pBuf;
+        g_pLoadingPalette = pBuf;
     }
 }
 
@@ -885,28 +992,28 @@ void* __fastcall UI_LoadRawGfxFile(const char* szRelPath /*ecx*/, int32_t* pOutS
 // 1.12a: 0x6FB3A930 (__fastcall)
 void __fastcall UI_ClearGoldDialogState()
 {
-    *(int32_t*)0x6FBB58FC = 0;
-    *(int32_t*)0x6FBCC390 = 0;
-    *(int32_t*)0x6FBCC1E4 = 0;
-    *(int32_t*)0x6FBCC394 = 0;
-    *(int32_t*)0x6FBCC2D0 = 0;
+    g_bGoldDialogOpen   = 0;
+    g_nGoldDialogMax    = 0;
+    g_nGoldDialogVal    = 0;
+    g_nGoldDialogMode   = 0;
+    g_nGoldDialogUnk2D0 = 0;
 }
 
 // 1.12a: 0x6FB3A960 (__fastcall)
 int32_t __fastcall UI_OnGoldSpinnerTick(int32_t nDelta /*ecx*/)
 {
-    int32_t nVal = *(int32_t*)0x6FBCC1E4 + nDelta;
+    int32_t nVal = g_nGoldDialogVal + nDelta;
     if (nVal < 0) {
         nVal = 0;
     }
-    if (nVal > *(int32_t*)0x6FBCC390) {
-        nVal = *(int32_t*)0x6FBCC390;
+    if (nVal > g_nGoldDialogMax) {
+        nVal = g_nGoldDialogMax;
     }
-    *(int32_t*)0x6FBCC1E4 = nVal;
-    if (*(D2WinEditBoxStrc**)0x6FBCC3CC) {
+    g_nGoldDialogVal = nVal;
+    if (g_pGoldEditBox) {
         wchar_t wszVal[32];
         D2LANG_UnicodeSPrintf(32, wszVal, L"%d", nVal);
-        D2WIN_SetEditBoxText(*(D2WinEditBoxStrc**)0x6FBCC3CC, wszVal);
+        D2WIN_SetEditBoxText(g_pGoldEditBox, wszVal);
     }
     return 1;
 }
@@ -920,32 +1027,32 @@ int32_t __fastcall UI_OnGoldEditChar(wchar_t wc /*ecx*/)
 // 1.12a: 0x6FB3AA10 (__fastcall)
 void __fastcall UI_StartPanelCloseClickCooldown()
 {
-    *(int32_t*)0x6FBCC3B8 = 1;
-    *(DWORD*)0x6FBCC3BC = GetTickCount() + 300;
+    g_bPanelCloseClickCooldown = 1;
+    g_dwPanelCloseCooldownTick = GetTickCount() + 300;
 }
 
 // 1.12a: 0x6FB3AA30 (__fastcall)
 void __fastcall UI_EnablePanelCloseClickCooldown()
 {
-    *(int32_t*)0x6FBCC3B8 = 1;
+    g_bPanelCloseClickCooldown = 1;
 }
 
 // 1.12a: 0x6FB3AA40 (__fastcall)
 void __fastcall UI_DisablePanelCloseClickCooldown()
 {
-    *(int32_t*)0x6FBCC3B8 = 0;
+    g_bPanelCloseClickCooldown = 0;
 }
 
 // 1.12a: 0x6FB3AA50 (__stdcall)
 D2CellFileStrc* __stdcall UI_GetFocus16CellFile()
 {
-    return *(D2CellFileStrc**)0x6FBCC2D8;
+    return g_pFocus16Cel;
 }
 
 // 1.12a: 0x6FB3AA60 (__stdcall)
 D2CellFileStrc* __stdcall UI_GetPentSpinCellFile()
 {
-    return *(D2CellFileStrc**)0x6FBCC2DC;
+    return g_pPentSpinCel;
 }
 
 // 1.12a: 0x6FB3AA70 (__fastcall)
@@ -957,13 +1064,13 @@ int32_t __fastcall UI_GetPanelStateFast(int32_t nPanelId /*eax*/)
 // 1.12a: 0x6FB3AA80 (__stdcall)
 int32_t __stdcall UI_IsSkillTreeOrPopupActive()
 {
-    return (gaPanelStates[0x03] != 0 || gaPanelStates[0x04] != 0) ? 1 : 0;
+    return (gaPanelStates[D2PANEL_SKILLSELECT] != 0 || gaPanelStates[D2PANEL_SKILLTREE] != 0) ? 1 : 0;
 }
 
 // 1.12a: 0x6FB3AA90 (__stdcall)
 int32_t __stdcall UI_GetPanelState(int32_t nPanelId)
 {
-    if (nPanelId >= 0x26) {
+    if (nPanelId >= D2PANEL_COUNT) {
         FOG_DisplayAssert("nToggle < NUM_TOGGLES", __FILE__, 0xAF6);
         exit(-1);
     }
@@ -973,32 +1080,33 @@ int32_t __stdcall UI_GetPanelState(int32_t nPanelId)
 // 1.12a: 0x6FB3AAC0 (__fastcall)
 void __fastcall UI_DrawDeferredHoverText()
 {
-    if (*(wchar_t*)0x6FBCC300 != 0) {
+    if (g_wszDeferredHoverText[0] != 0) {
         D2WIN_SetFont(1);
-        D2WIN_DrawFramedText((const wchar_t*)0x6FBCC300, *(int32_t*)0x6FBCC2F8, *(int32_t*)0x6FBCC2FC, 0, 1);
-        *(wchar_t*)0x6FBCC300 = 0;
+        D2WIN_DrawFramedText(g_wszDeferredHoverText, g_nDeferredHoverX, g_nDeferredHoverY, 0, 1);
+        g_wszDeferredHoverText[0] = 0;
     }
 }
 
 // 1.12a: 0x6FB3AB50 (__fastcall)
 void __fastcall UI_DrawBoxPiecesFrame(RECT* pRect /*eax*/)
 {
-    if (!*(D2CellFileStrc**)0x6FBCC2D4) {
+    if (!pRect) {
         return;
     }
     D2GFX_DrawRect(pRect->left + 4, pRect->top + 4, pRect->right - 4, pRect->bottom - 4, 0, 2);
+    D2GFX_DrawBoxFrame(pRect, 0x10);
 }
 
 // 1.12a: 0x6FB3AD30 (__fastcall)
 void __fastcall UI_SetMonsterImmunityText(const wchar_t* wszText /*ecx*/)
 {
-    D2LANG_UnicodeStrNCpy((wchar_t*)0x6FBCC1EC, wszText, 64);
+    D2LANG_UnicodeStrNCpy(g_wszMonsterImmunityText, wszText, 64);
 }
 
 // 1.12a: 0x6FB3AD60 (__fastcall)
 void __fastcall UI_SetMonsterSubText(const wchar_t* wszText /*ecx*/)
 {
-    D2LANG_UnicodeStrNCpy((wchar_t*)0x6FBCC26C, wszText, 64);
+    D2LANG_UnicodeStrNCpy(g_wszMonsterSubText, wszText, 64);
 }
 
 // 1.12a: 0x6FB3AD90 (__fastcall, 1 stack arg: ret 4)
@@ -1010,9 +1118,9 @@ void __fastcall UI_DrawFramedTooltipText(const wchar_t* wszText /*ecx*/, int32_t
 // 1.12a: 0x6FB3ADB0 (__fastcall, 1 stack arg: ret 4)
 void __fastcall UI_SetDeferredHoverText(const wchar_t* wszText /*ecx*/, int32_t nX /*edx*/, int32_t nY /*[esp+4]*/)
 {
-    D2LANG_UnicodeStrNCpy((wchar_t*)0x6FBCC300, wszText, 64);
-    *(int32_t*)0x6FBCC2F8 = nX;
-    *(int32_t*)0x6FBCC2FC = nY;
+    D2LANG_UnicodeStrNCpy(g_wszDeferredHoverText, wszText, 64);
+    g_nDeferredHoverX = nX;
+    g_nDeferredHoverY = nY;
 }
 
 // 1.12a: 0x6FB3ADF0 (__fastcall)
@@ -1046,7 +1154,7 @@ void __fastcall UI_NoOpStub2() {}
 void __stdcall UI_OnWMPaint(D2MsgStrc* pMsg)
 {
     (void)pMsg;
-    *(int32_t*)0x6FBCC3C4 = 1;
+    g_bWMPaintReceived = 1;
 }
 
 // 1.12a: 0x6FB3AF30 (__fastcall)
@@ -1063,9 +1171,9 @@ void __fastcall UI_GetVisibleViewportRect(RECT* pOutRect /*ecx*/)
     pOutRect->right = gnScreenWidth;
     pOutRect->bottom = gnScreenHeight - 48;
     if (gnPanelShiftMode == 1) {
-        pOutRect->left = gnScreenWidth / 2;
-    } else if (gnPanelShiftMode == 2) {
         pOutRect->right = gnScreenWidth / 2;
+    } else if (gnPanelShiftMode == 2) {
+        pOutRect->left = gnScreenWidth / 2;
     }
 }
 
@@ -1078,29 +1186,29 @@ void __fastcall UI_EnableAutomapInputHandlers()
 // 1.12a: 0x6FB3B140 (__fastcall)
 void __fastcall UI_DestroyGoldDialogForm()
 {
-    if (*(D2WinEditBoxStrc**)0x6FBCC3CC) {
-        D2WIN_DestroyEditBox(*(D2WinEditBoxStrc**)0x6FBCC3CC);
-        *(D2WinEditBoxStrc**)0x6FBCC3CC = nullptr;
+    if (g_pGoldEditBox) {
+        D2WIN_DestroyEditBox(g_pGoldEditBox);
+        g_pGoldEditBox = nullptr;
     }
 }
 
 // 1.12a: 0x6FB3B160 (__fastcall)
 void __fastcall UI_SendCloseInteractPacket27()
 {
-    if (*(int32_t*)0x6FBCC3D4 != 0) {
-        ((void(__fastcall*)(int32_t, int32_t))0x6FACDCD0)(*(int32_t*)0x6FBCC3D8, *(int32_t*)0x6FBCC3DC);
-        *(int32_t*)0x6FBCC3D4 = 0;
+    if (g_bPendingInteractClose != 0) {
+        MSG_SendByte2Dwords(0x30, (uint32_t)g_nPendingInteractType, (uint32_t)g_nPendingInteractGUID);
+        g_bPendingInteractClose = 0;
     }
 }
 
 // 1.12a: 0x6FB3B1A0 (__fastcall)
 const wchar_t* __fastcall UI_GetPortalDestinationName(D2UnitStrc* pPortalUnit /*ecx*/)
 {
-    if (!pPortalUnit) {
+    if (!pPortalUnit || !*(uintptr_t*)((uint8_t*)pPortalUnit + 0x14)) {
         return nullptr;
     }
     int32_t nDestLevel = *(uint8_t*)(*(uintptr_t*)((uint8_t*)pPortalUnit + 0x14) + 0x04);
-    return ((const wchar_t*(__fastcall*)(int32_t))0x6FB20090)(nDestLevel);
+    return D2Client_GetLevelNameString(nDestLevel);
 }
 
 // 1.12a: 0x6FB3B210 (__fastcall)
@@ -1112,15 +1220,15 @@ void __fastcall UI_DrawDebugPlayersList()
 // 1.12a: 0x6FB3B450 (__fastcall)
 void __fastcall UI_SendSimulatedMouseMove()
 {
-    ((void(__fastcall*)(int32_t, int32_t))0x6FB4ECD0)(gnMouseX, gnMouseY);
+    CURSOR_WarpMousePosition(gnMouseX, gnMouseY);
 }
 
 // 1.12a: 0x6FB3B480 (__stdcall)
 void __stdcall UI_CloseAllPanels()
 {
-    for (int32_t i = 1; i < 0x26; ++i) {
-        if (i != 0x0A && i != 0x15 && i != 0x0D && gaPanelStates[i] != 0) {
-            ((int32_t(__fastcall*)(int32_t, int32_t, int32_t))0x6FB3EF00)(i, 1, 0);
+    for (int32_t i = 1; i < D2PANEL_COUNT; ++i) {
+        if (i != D2PANEL_AUTOMAP && i != D2PANEL_MINIPANEL && i != D2PANEL_SHOWITEMS && gaPanelStates[i] != 0) {
+            UI_SetPanelState(i, 1, 0);
         }
     }
 }
@@ -1131,9 +1239,9 @@ void __fastcall UI_DrawCenteredViewportText(const wchar_t* wszText /*ecx*/, int3
     D2WIN_SetFont(nFont);
     int32_t nCenterX = gnScreenWidth / 2;
     if (gnPanelShiftMode == 1) {
-        nCenterX = (gnScreenWidth * 3) / 4;
-    } else if (gnPanelShiftMode == 2) {
         nCenterX = gnScreenWidth / 4;
+    } else if (gnPanelShiftMode == 2) {
+        nCenterX = (gnScreenWidth * 3) / 4;
     }
     D2WIN_DrawText(wszText, nCenterX, nY, nColor, 1);
 }
@@ -1170,18 +1278,26 @@ void __fastcall UI_PrependColorCode(wchar_t* wszBuf /*ecx*/, int32_t nColor /*ed
 // 1.12a: 0x6FB3B870 (__fastcall)
 void __fastcall UI_InitPaletteColors()
 {
-    *(uint8_t*)0x6FBCC3E0 = D2GFX_FindBestPaletteIndex(255, 0, 0);
-    *(uint8_t*)0x6FBCC3E1 = D2GFX_FindBestPaletteIndex(0, 255, 0);
-    *(uint8_t*)0x6FBCC3E2 = D2GFX_FindBestPaletteIndex(0, 0, 255);
+    g_nPalColorRed   = D2GFX_FindBestPaletteIndex(255, 0, 0);
+    g_nPalColorGreen = D2GFX_FindBestPaletteIndex(0, 255, 0);
+    g_nPalColorBlue  = D2GFX_FindBestPaletteIndex(0, 0, 255);
+}
+
+// 1.12a: 0x6FB3C170 (__fastcall)
+D2CellFileStrc* __fastcall UI_LoadGlobalUICellFile(const char* szName /*ecx*/)
+{
+    char szPath[260];
+    sprintf(szPath, "DATA\\GLOBAL\\UI\\%s", szName);
+    return ARCHIVE_LoadCellFileDefault(szPath, 0);
 }
 
 // 1.12a: 0x6FB3B8F0 (__fastcall)
 D2CellFileStrc* __fastcall UI_GetBuySellBtnCellFile()
 {
-    if (!*(D2CellFileStrc**)0x6FBCC2E0) {
-        *(D2CellFileStrc**)0x6FBCC2E0 = ((D2CellFileStrc*(__fastcall*)(const char*, int32_t))0x6FB20200)("PANEL\\buysellbtn", 0);
+    if (!g_pBuySellBtnCel) {
+        g_pBuySellBtnCel = UI_LoadGlobalUICellFile("PANEL\\buysellbtn");
     }
-    return *(D2CellFileStrc**)0x6FBCC2E0;
+    return g_pBuySellBtnCel;
 }
 
 // 1.12a: 0x6FB3B930 (__fastcall)
@@ -1224,14 +1340,6 @@ void __fastcall UI_BuildMonsterImmunitiesString(D2UnitStrc* pMonUnit /*ecx*/)
     (void)pMonUnit;
 }
 
-// 1.12a: 0x6FB3C170 (__fastcall)
-D2CellFileStrc* __fastcall UI_LoadGlobalUICellFile(const char* szName /*ecx*/)
-{
-    char szPath[260];
-    sprintf(szPath, "%s\\%s", "UI", szName);
-    return ((D2CellFileStrc*(__fastcall*)(const char*, int32_t))0x6FB20200)(szPath, 0);
-}
-
 // 1.12a: 0x6FB3C1D0 (__stdcall)
 int32_t __stdcall UI_OnGoldDialogCancelBtn()
 {
@@ -1250,25 +1358,25 @@ int32_t __stdcall UI_OnGoldDialogCancelKey()
 // Accepts the gold amount entered in the gold dialog and sends C2S 0x50 (drop gold) or C2S 0x4F (stash deposit/withdraw)
 int32_t __stdcall UI_OnGoldDialogAccept()
 {
-    if (*(D2WinEditBoxStrc**)0x6FBCC3CC) {
-        const wchar_t* wszText = D2WIN_GetEditBoxText(*(D2WinEditBoxStrc**)0x6FBCC3CC);
+    if (g_pGoldEditBox && gpLocalPlayerUnit) {
+        const wchar_t* wszText = D2WIN_GetEditBoxText(g_pGoldEditBox);
         char szAnsi[32];
         D2LANG_UnicodeToAnsi(szAnsi, wszText, 32);
         int32_t nAmount = atoi(szAnsi);
-        if (nAmount > *(int32_t*)0x6FBCC390) {
-            nAmount = *(int32_t*)0x6FBCC390;
+        if (nAmount > g_nGoldDialogMax) {
+            nAmount = g_nGoldDialogMax;
         }
         if (nAmount > 0) {
-            int32_t nDialogMode = *(int32_t*)0x6FBCC394;
+            int32_t nDialogMode = g_nGoldDialogMode;
             if (nDialogMode == 1) {
                 // Drop gold from inventory (C2S 0x50)
-                ((void(__fastcall*)(int32_t, int32_t))0x6FACDD80)(*(int32_t*)((uint8_t*)gpLocalPlayerUnit + 0x0C), nAmount);
+                MSG_SendByte2Dwords(0x50, *(uint32_t*)((uint8_t*)gpLocalPlayerUnit + 0x0C), (uint32_t)nAmount);
             } else if (nDialogMode == 2) {
                 // Deposit gold to stash (C2S 0x4F subcommand 0x14)
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FACDC50)(0x14, nAmount >> 16, nAmount & 0xFFFF);
+                MSG_SendByte3Words(0x4F, 0x14, (uint16_t)(nAmount >> 16), (uint16_t)(nAmount & 0xFFFF));
             } else if (nDialogMode == 3) {
                 // Withdraw gold from stash (C2S 0x4F subcommand 0x13)
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FACDC50)(0x13, nAmount >> 16, nAmount & 0xFFFF);
+                MSG_SendByte3Words(0x4F, 0x13, (uint16_t)(nAmount >> 16), (uint16_t)(nAmount & 0xFFFF));
             }
         }
     }
@@ -1279,7 +1387,7 @@ int32_t __stdcall UI_OnGoldDialogAccept()
 // 1.12a: 0x6FB3C2B0 (__fastcall)
 void __fastcall UI_ClearPanelCloseClickCooldownOnUp()
 {
-    *(int32_t*)0x6FBCC3B8 = 0;
+    g_bPanelCloseClickCooldown = 0;
 }
 
 // 1.12a: 0x6FB3C2C0 (__fastcall)
@@ -1389,22 +1497,23 @@ void __fastcall UI_DrawHoveredMercOrSummonName(D2UnitStrc* pUnit /*ecx*/)
 // 1.12a: 0x6FB3DC60 (__fastcall)
 void __fastcall UI_FreeLoadingScreen()
 {
-    if (*(D2CellFileStrc**)0x6FBCC3C8) {
-        D2CMP_DeleteCellFile(*(D2CellFileStrc**)0x6FBCC3C8);
-        *(D2CellFileStrc**)0x6FBCC3C8 = nullptr;
+    if (g_pLoadingScreenCel) {
+        D2CMP_DeleteCellFile(g_pLoadingScreenCel);
+        g_pLoadingScreenCel = nullptr;
     }
-    if (*(void**)0x6FBCC1E8) {
-        FOG_FreeClientMemory(*(void**)0x6FBCC1E8, __FILE__, __LINE__, 0);
-        *(void**)0x6FBCC1E8 = nullptr;
+    if (g_pLoadingPalette) {
+        FOG_FreeClientMemory(g_pLoadingPalette, __FILE__, __LINE__, 0);
+        g_pLoadingPalette = nullptr;
     }
 }
 
 // 1.12a: 0x6FB3DCF0 (__fastcall)
 void __fastcall UI_InitLoadingScreen()
 {
+    UI_FreeLoadingScreen();
     UI_LoadLoadingPalette();
-    *(D2CellFileStrc**)0x6FBCC3C8 = ((D2CellFileStrc*(__fastcall*)(const char*, int32_t))0x6FB20200)("UI\\Loading\\loadingscreen", 0);
-    *(int32_t*)0x6FBCC3C0 = 0;
+    g_pLoadingScreenCel = UI_LoadGlobalUICellFile("Loading\\loadingscreen");
+    g_nLoadingScreenFrame = 0;
 }
 
 // 1.12a: 0x6FB3DD80 (__fastcall)
@@ -1416,28 +1525,28 @@ void __fastcall UI_DrawChargeUpSkillIcons()
 // 1.12a: 0x6FB3DED0 (__fastcall)
 void __fastcall UI_DrawUniqueMonsterModsLine(int32_t nY /*ecx*/)
 {
-    if (*(wchar_t*)0x6FBCC26C != 0) {
-        UI_DrawCenteredViewportText((const wchar_t*)0x6FBCC26C, nY, 0, 6);
+    if (g_wszMonsterSubText[0] != 0) {
+        UI_DrawCenteredViewportText(g_wszMonsterSubText, nY, 0, 6);
     }
 }
 
 // 1.12a: 0x6FB3DF40 (__fastcall)
 void __fastcall UI_DrawMonsterSubtitles(int32_t nY /*ecx*/)
 {
-    if (*(wchar_t*)0x6FBCC1EC != 0) {
-        UI_DrawCenteredViewportText((const wchar_t*)0x6FBCC1EC, nY, 0, 6);
+    if (g_wszMonsterImmunityText[0] != 0) {
+        UI_DrawCenteredViewportText(g_wszMonsterImmunityText, nY, 0, 6);
     }
 }
 
 // 1.12a: 0x6FB3DFA0 (__stdcall)
 void __stdcall UI_StepAndDrawLoadingScreen()
 {
-    if (!*(D2CellFileStrc**)0x6FBCC3C8) {
+    if (!g_pLoadingScreenCel) {
         return;
     }
-    int32_t nFrame = *(int32_t*)0x6FBCC3C0;
+    int32_t nFrame = g_nLoadingScreenFrame;
     if (nFrame < 9) {
-        *(int32_t*)0x6FBCC3C0 = nFrame + 1;
+        g_nLoadingScreenFrame = nFrame + 1;
     }
 }
 
@@ -1445,7 +1554,6 @@ void __stdcall UI_StepAndDrawLoadingScreen()
 // Performs panel-specific initialization when a UI panel transitions from closed (0) to open (1)
 void __fastcall UI_OnPanelOpened(int32_t nPanelId /*eax*/)
 {
-    // Jump table at 0x6FB3E708 (cases 1..37): opens Inventory, CharStats, SkillSelect, SkillTree, Chat, NPCMenu, EscMenu, Automap, CfgControls, Trade/Shop, ShowItems, ModItem, Quest, Belt, MiniPanel, Party, TradePrompt, MessageLog, Stash, Cube, QuestScroll, MercInv
     (void)nPanelId;
 }
 
@@ -1462,7 +1570,6 @@ int32_t __fastcall UI_PreparePanelOpen(int32_t nAction /*eax*/, int32_t nPanelId
 // Performs panel-specific cleanup when a UI panel transitions from open (1) to closed (0)
 void __fastcall UI_OnPanelClosed(int32_t nPanelId /*eax*/)
 {
-    // Jump table at 0x6FB3EEA8 (cases 1..37): closes panel, frees temporary panel assets, sends C2S close packets if needed
     (void)nPanelId;
 }
 
@@ -1473,7 +1580,7 @@ void __fastcall UI_OnPanelClosed(int32_t nPanelId /*eax*/)
 //   bMoveMouse ([esp+4]): if non-zero, warps cursor by +-gnScreenWidth/4 when viewport shifts
 int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*edx*/, int32_t bMoveMouse /*[esp+4]*/)
 {
-    if ((uint32_t)nPanelId >= 0x26) {
+    if ((uint32_t)nPanelId >= D2PANEL_COUNT) {
         FOG_DisplayAssert("nToggle < NUM_TOGGLES", __FILE__, 0x13ED);
         exit(-1);
     }
@@ -1483,8 +1590,8 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
     }
 
     int32_t nPrevState = gaPanelStates[nPanelId];
-    if (!FOG_IsExpansion() || *(int32_t*)0x6FBB330C == 0) {
-        if (nPanelId == 0x23 || nPanelId == 0x24 || nPanelId == 0x25) {
+    if (!FOG_IsExpansion() || gbIsExpansion == 0) {
+        if (nPanelId == 0x23 || nPanelId == D2PANEL_MERCINV || nPanelId == 0x25) {
             return 0;
         }
     }
@@ -1495,7 +1602,7 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
 
     if (nAction == 0) {
         // Open
-        if (!gpLocalPlayerUnit || *(int32_t*)gpLocalPlayerUnit == 0 && ((int32_t(__fastcall*)())0x6FACEAC0)() == 0) {
+        if (!gpLocalPlayerUnit || (*(int32_t*)gpLocalPlayerUnit == 0 && D2Client_IsLocalPlayerDead() == 0)) {
             gaPanelStates[nPanelId] = 1;
         }
     } else if (nAction == 1) {
@@ -1505,18 +1612,18 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
         // Toggle
         if (!gpLocalPlayerUnit) {
             gaPanelStates[nPanelId] = (gaPanelStates[nPanelId] == 0) ? 1 : 0;
-        } else if (*(int32_t*)gpLocalPlayerUnit == 0 && ((int32_t(__fastcall*)())0x6FACEAC0)() == 0) {
+        } else if (*(int32_t*)gpLocalPlayerUnit == 0 && D2Client_IsLocalPlayerDead() == 0) {
             gaPanelStates[nPanelId] = (gaPanelStates[nPanelId] == 0) ? 1 : 0;
-        } else if (nPanelId == 5) {
-            gaPanelStates[5] = (gaPanelStates[5] == 0) ? 1 : 0;
+        } else if (nPanelId == D2PANEL_CHAT) {
+            gaPanelStates[D2PANEL_CHAT] = (gaPanelStates[D2PANEL_CHAT] == 0) ? 1 : 0;
         }
     }
 
     int32_t nNewState = gaPanelStates[nPanelId];
     if (nPrevState == 0 && nNewState != 0) {
         UI_OnPanelOpened(nPanelId);
-        if (nPanelId == 5) {
-            ((void(__stdcall*)())0x6FB34E90)();
+        if (nPanelId == D2PANEL_CHAT) {
+            sub_6FB34E90();
         }
     } else if (nPrevState != 0 && nNewState == 0) {
         UI_OnPanelClosed(nPanelId);
@@ -1528,77 +1635,81 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
 
     // Update viewport shift (gnPanelShiftMode: 0=None, 1=RightPanelOpen/ShiftLeft, 2=LeftPanelOpen/ShiftRight, 3=BothOpen)
     switch (nPanelId) {
-    case 0x01: // Inventory (Right side)
-    case 0x04: // Skill Tree (Right side)
-        ((void(__stdcall*)())0x6FB559A0)();
-        if (gaPanelStates[0x02] || gaPanelStates[0x14] || gaPanelStates[0x0F] ||
-            gaPanelStates[0x10] || gaPanelStates[0x24] || gaPanelStates[0x25] || gaPanelStates[0x16])
+    case D2PANEL_INVENTORY: // Inventory (Right side)
+    case D2PANEL_SKILLTREE: // Skill Tree (Right side)
+        INV_ClearHoveredItemState();
+        if (gaPanelStates[D2PANEL_CHAR] || gaPanelStates[0x14] || gaPanelStates[D2PANEL_QUEST] ||
+            gaPanelStates[D2PANEL_WAYPOINT] || gaPanelStates[D2PANEL_NPCSHOP] || gaPanelStates[D2PANEL_STASH] ||
+            gaPanelStates[D2PANEL_CUBE] || gaPanelStates[D2PANEL_MODITEM] ||
+            gaPanelStates[D2PANEL_MERCINV] || gaPanelStates[0x25] || gaPanelStates[D2PANEL_PARTY])
         {
             if (nNewState != 0) {
                 gnPanelShiftOffset = 0;
                 gnPanelShiftMode = 3;
                 D2GFX_SetViewportShift(0);
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth, 0);
+                UI_ApplyViewportRectForShiftMode(3);
             } else {
                 gnPanelShiftOffset = nQuarterW;
                 gnPanelShiftMode = 2;
                 D2GFX_SetViewportShift(nQuarterW);
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth + gnViewportWidth / 4, gnViewportWidth / 4);
+                UI_ApplyViewportRectForShiftMode(2);
             }
         } else if (nNewState != 0) {
             gnPanelShiftOffset = -nQuarterW;
             gnPanelShiftMode = 1;
             D2GFX_SetViewportShift(-nQuarterW);
-            ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth - gnViewportWidth / 4, -(gnViewportWidth / 4));
-            if (bMoveMouse && nSavedMouseY > nQuarterW) {
-                ((void(__fastcall*)(int32_t, int32_t))0x6FB4ECD0)(nSavedMouseX, nSavedMouseY - nQuarterW);
+            UI_ApplyViewportRectForShiftMode(1);
+            if (bMoveMouse && nSavedMouseX > nQuarterW) {
+                CURSOR_WarpMousePosition(nSavedMouseX - nQuarterW, nSavedMouseY);
             }
         } else {
             gnPanelShiftOffset = 0;
             gnPanelShiftMode = 0;
             D2GFX_SetViewportShift(0);
-            ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth, 0);
-            if (bMoveMouse && nSavedMouseY < gnScreenWidth / 2) {
-                ((void(__fastcall*)(int32_t, int32_t))0x6FB4ECD0)(nSavedMouseX, nSavedMouseY + nQuarterW);
+            UI_ApplyViewportRectForShiftMode(0);
+            if (bMoveMouse && nSavedMouseX < gnScreenWidth / 2) {
+                CURSOR_WarpMousePosition(nSavedMouseX + nQuarterW, nSavedMouseY);
             }
         }
         break;
 
-    case 0x02: // Character Stats (Left side)
-    case 0x0C: // NPC Shop / Trade (Left side)
-    case 0x0E: // Quest / Imbue / Socket (Left side)
-    case 0x0F: // Quest Log (Left side)
-    case 0x16: // Party Screen (Left side)
-    case 0x19: // Stash (Left side)
-    case 0x1A: // Horadric Cube (Left side)
-    case 0x21: // Mercenary Inventory (Left side)
-        if (gaPanelStates[0x01] || gaPanelStates[0x04]) {
+    case D2PANEL_CHAR:      // Character Stats (Left side)
+    case D2PANEL_NPCSHOP:   // NPC Shop / Trade (Left side)
+    case D2PANEL_MODITEM:   // Quest / Imbue / Socket (Left side)
+    case D2PANEL_QUEST:     // Quest Log (Left side)
+    case D2PANEL_WAYPOINT:  // Waypoint (Left side)
+    case 0x14:              // Waypoint alt index (Left side)
+    case D2PANEL_PARTY:     // Party Screen (Left side)
+    case D2PANEL_STASH:     // Stash (Left side)
+    case D2PANEL_CUBE:      // Horadric Cube (Left side)
+    case D2PANEL_MERCINV:   // Mercenary Inventory (Left side)
+        if (gaPanelStates[D2PANEL_INVENTORY] || gaPanelStates[D2PANEL_SKILLTREE]) {
             if (nNewState != 0) {
                 gnPanelShiftOffset = 0;
                 gnPanelShiftMode = 3;
                 D2GFX_SetViewportShift(0);
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth, 0);
+                UI_ApplyViewportRectForShiftMode(3);
             } else {
                 gnPanelShiftOffset = -nQuarterW;
                 gnPanelShiftMode = 1;
                 D2GFX_SetViewportShift(-nQuarterW);
-                ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth - gnViewportWidth / 4, -(gnViewportWidth / 4));
+                UI_ApplyViewportRectForShiftMode(1);
             }
         } else if (nNewState != 0) {
             gnPanelShiftOffset = nQuarterW;
             gnPanelShiftMode = 2;
             D2GFX_SetViewportShift(nQuarterW);
-            ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth + gnViewportWidth / 4, gnViewportWidth / 4);
-            if (bMoveMouse && nSavedMouseY < gnScreenWidth - nQuarterW) {
-                ((void(__fastcall*)(int32_t, int32_t))0x6FB4ECD0)(nSavedMouseX, nSavedMouseY + nQuarterW);
+            UI_ApplyViewportRectForShiftMode(2);
+            if (bMoveMouse && nSavedMouseX < gnScreenWidth - nQuarterW) {
+                CURSOR_WarpMousePosition(nSavedMouseX + nQuarterW, nSavedMouseY);
             }
         } else {
             gnPanelShiftOffset = 0;
             gnPanelShiftMode = 0;
             D2GFX_SetViewportShift(0);
-            ((void(__fastcall*)(int32_t, int32_t, int32_t))0x6FB6A990)(gnViewportHeight, gnViewportWidth, 0);
-            if (bMoveMouse && nSavedMouseY > gnScreenWidth / 2) {
-                ((void(__fastcall*)(int32_t, int32_t))0x6FB4ECD0)(nSavedMouseX, nSavedMouseY - nQuarterW);
+            UI_ApplyViewportRectForShiftMode(0);
+            if (bMoveMouse && nSavedMouseX > gnScreenWidth / 2) {
+                CURSOR_WarpMousePosition(nSavedMouseX - nQuarterW, nSavedMouseY);
             }
         }
         break;
@@ -1613,38 +1724,46 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
 // 1.12a: 0x6FB3F480 (__stdcall)
 void __stdcall UI_ReleaseAllAssets()
 {
-    // Frees all loaded HUD / UI cell files and resets pointers
+    if (g_pGeneralSkillsCel) { D2CMP_DeleteCellFile(g_pGeneralSkillsCel); g_pGeneralSkillsCel = nullptr; }
+    for (int i = 0; i < 7; ++i) {
+        if (g_apClassSkillsCel[i]) { D2CMP_DeleteCellFile(g_apClassSkillsCel[i]); g_apClassSkillsCel[i] = nullptr; }
+    }
+    if (g_pBeltRowCel)     { D2CMP_DeleteCellFile(g_pBeltRowCel);     g_pBeltRowCel     = nullptr; }
+    if (g_pBoxPiecesCel)   { D2CMP_DeleteCellFile(g_pBoxPiecesCel);   g_pBoxPiecesCel   = nullptr; }
+    if (g_pFocus16Cel)     { D2CMP_DeleteCellFile(g_pFocus16Cel);     g_pFocus16Cel     = nullptr; }
+    if (g_pPentSpinCel)    { D2CMP_DeleteCellFile(g_pPentSpinCel);    g_pPentSpinCel    = nullptr; }
+    if (g_pBuySellBtnCel)  { D2CMP_DeleteCellFile(g_pBuySellBtnCel);  g_pBuySellBtnCel  = nullptr; }
+    UI_FreeLoadingScreen();
 }
 
 // 1.12a: 0x6FB3F6B0 (__fastcall)
 void __fastcall UI_ToggleMiniPanel()
 {
-    UI_SetPanelState(0x15, 2, 0);
+    UI_SetPanelState(D2PANEL_MINIPANEL, 2, 0);
 }
 
 // 1.12a: 0x6FB3F800 (merged in tail of sub_6FB3F6B0 in UI_ui.asm)
 void __stdcall UI_CloseMercInteract()
 {
-    ((void(__stdcall*)())0x6FB235B0)();
-    void*** pppMercMenu = (void***)0x6FBCB67F;
-    if (*pppMercMenu != nullptr) {
-        if (*(int32_t*)0x6FBCB673 != 0) {
-            ((void(__stdcall*)())0x6FB13290)();
-            if (*pppMercMenu != nullptr) {
-                reinterpret_cast<void(__thiscall*)(void*, int32_t)>((*reinterpret_cast<void***>(*pppMercMenu))[0])(*pppMercMenu, 1);
+    sub_6FB235B0();
+    if (g_pMercMenuDialogWidget != nullptr) {
+        if (g_bMercMenuActive != 0) {
+            sub_6FB13290();
+            if (g_pMercMenuDialogWidget != nullptr) {
+                reinterpret_cast<void(__thiscall*)(void*, int32_t)>((*reinterpret_cast<void***>(g_pMercMenuDialogWidget))[0])(g_pMercMenuDialogWidget, 1);
             }
-            *pppMercMenu = nullptr;
-            *(int32_t*)0x6FBCB673 = 0;
+            g_pMercMenuDialogWidget = nullptr;
+            g_bMercMenuActive = 0;
         }
-        ((void(__stdcall*)())0x6FACADF0)();
+        sub_6FACADF0();
     }
 }
 
 // 1.12a: 0x6FB3F850 (__fastcall)
 void __fastcall UI_OpenGoldDialog(int32_t nMode /*ecx*/)
 {
-    *(int32_t*)0x6FBCC394 = nMode;
-    *(int32_t*)0x6FBB58FC = 1;
+    g_nGoldDialogMode = nMode;
+    g_bGoldDialogOpen = 1;
 }
 
 // 1.12a: 0x6FB3FCB0 (__stdcall)

@@ -165,12 +165,14 @@ static D2NpcSpeechRecordStrc g_aNpcSpeechRecords[29] = {
 // SECTION 1: Preceding Unit Tail Functions (0x6FB26E00..0x6FB2717D)
 // =============================================================================
 
+extern void __stdcall RECORD_SaveAndInvokeExitCallback(int32_t a1, int32_t a2, int32_t a3);
+
 // 1.12a: 0x6FB26E00 (__stdcall / void)
 void __stdcall RECORD_InstallPlaybackHook(void)
 {
     void* pPrevHook = gpfnClientLoopHook;
     gbRecordPlaybackActive = 1;
-    gpfnClientLoopHook = reinterpret_cast<void*>(0x6FB26C50);
+    gpfnClientLoopHook = reinterpret_cast<void*>(&RECORD_SaveAndInvokeExitCallback);
     gpfnPrevClientLoopHook = pPrevHook;
 }
 

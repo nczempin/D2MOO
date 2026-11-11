@@ -76,14 +76,10 @@ struct D2ClientMissileInitStrc
 #pragma pack(pop)
 
 // ============================================================================
-// Client State Callback Table Entry (8 bytes)
-// Dispatch tables at 0x6FB8CF28 (Applied) and 0x6FB8CFA8 (Removed)
+// Client State Callback Table Function Pointer (4 bytes, 2-arg __fastcall)
+// Dispatch tables at 0x6FB8CF28 (Applied, indexed by wSetFunc) and 0x6FB8CFA8 (Removed, indexed by wRemFunc)
 // ============================================================================
-struct D2ClientStateCallbackStrc
-{
-    int32_t nStateId;                                                   // +0x00
-    int32_t (__fastcall* pfCallback)(D2UnitStrc* pUnit, int32_t nState, int32_t bSet); // +0x04
-};
+typedef int32_t (__fastcall* D2ClientStateCallbackFn_t)(D2UnitStrc* pUnit, int32_t nState);
 
 typedef void (__fastcall* D2CltMissileDoFunc_t)(D2UnitStrc* pMissile);
 typedef int32_t (__fastcall* D2CltMissileHitFunc_t)(D2UnitStrc* pMissile, D2UnitStrc* pTarget, int32_t nX, int32_t nY);
@@ -98,17 +94,18 @@ extern int32_t gnGameFrame;                     // 0x6FBCC390
 extern int32_t gbRunWalkToggle;                 // 0x6FBCBE58
 extern int32_t gbStandStillHeld;                // 0x6FBCBC9C
 extern int32_t gbSkillSelectPopupOpen;          // 0x6FBD3400
-extern int32_t gbInventoryPanelOpen;            // 0x6FBB2B60
-extern int32_t gbCharacterPanelOpen;            // 0x6FBB2B5C
-extern int32_t gbSkillTreePanelOpen;            // 0x6FBB2BB0
-extern int32_t gbQuestLogPanelOpen;             // 0x6FBB2B68
-extern int32_t gbHelpScreenOpen;                // 0x6FBB2B70
+extern int32_t gaPanelStates[38];               // 0x6FBB2B58
+#define gbCharacterPanelOpen (gaPanelStates[1])
+#define gbInventoryPanelOpen (gaPanelStates[2])
+#define gbQuestLogPanelOpen  (gaPanelStates[4])
+#define gbHelpScreenOpen     (gaPanelStates[6])
+#define gbSkillTreePanelOpen (gaPanelStates[22])
 extern int32_t gbAutomapOpen;                   // 0x6FBCC1B0
 extern int32_t gnOpenPanelMask;                 // 0x6FBB590C
 extern int32_t gbExpansionMode;                 // 0x6FBC97E0
 
-extern D2ClientStateCallbackStrc gStateAppliedCallbacks[]; // 0x6FB8CF28 (16 entries)
-extern D2ClientStateCallbackStrc gStateRemovedCallbacks[]; // 0x6FB8CFA8 (19 entries)
+extern D2ClientStateCallbackFn_t gStateAppliedCallbacks[31]; // 0x6FB8CF28 (indexed by D2StatesTxt::wSetFunc)
+extern D2ClientStateCallbackFn_t gStateRemovedCallbacks[30]; // 0x6FB8CFA8 (indexed by D2StatesTxt::wRemFunc)
 extern D2CltMissileDoFunc_t gCltMissileDoFuncTable[];      // 0x6FBA67C8 (39 entries)
 extern D2CltMissileHitFunc_t gCltMissileHitFuncTable[];    // 0x6FBA6938 (66 entries)
 
@@ -253,9 +250,10 @@ void __cdecl D2Client_Hotkey_UseBeltSlot1()
 }
 
 // 1.12a: 0x6FB535D0 (__cdecl)
+const void* __fastcall CMDTBL_GetCommandCategoryTable(void);
 void* __cdecl D2Client_GetHotkeyTableBase()
 {
-    return (void*)0x6FB8D020;
+    return const_cast<void*>(CMDTBL_GetCommandCategoryTable());
 }
 
 
@@ -309,8 +307,9 @@ int32_t __cdecl D2Client_GetClientSkillCastingDelayEndFrame()
 
 // 1.12a: 0x6FB53660 (__fastcall)
 // State callback: refreshes passive skills on unit
-int32_t __fastcall D2Client_RefreshPassiveSkillsStateCallback(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+int32_t __fastcall D2Client_RefreshPassiveSkillsStateCallback(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     SKILLS_RefreshPassiveSkills(pUnit);
     return 1;
 }
@@ -335,15 +334,16 @@ int32_t __fastcall D2Client_GetChargeTierFromRatio(int32_t nMaxVal, int32_t nCur
 
 // 1.12a: 0x6FB536D0 (__fastcall)
 // State removed callback for Conversion/MindBlast: clears unit owner
-int32_t __fastcall D2Client_ClearUnitOwnerStateCallback(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+int32_t __fastcall D2Client_ClearUnitOwnerStateCallback(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     UNITS_StoreOwner(pUnit, nullptr);
     return 1;
 }
 
 // 1.12a: 0x6FB536E0 (__fastcall)
 // State applied callback: reads owner type (0x161) and GUID (0x162) from state statlist
-int32_t __fastcall D2Client_SetUnitOwnerFromStateStatList(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+int32_t __fastcall D2Client_SetUnitOwnerFromStateStatList(D2UnitStrc* pUnit, int32_t nState)
 {
     D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, nState);
     if (!pStatList)
@@ -477,9 +477,10 @@ int32_t __fastcall D2Client_UpdateUnitStateColorAndLight(D2UnitStrc* pUnit)
 }
 
 // 1.12a: 0x6FB53920 (__fastcall)
-// State applied callback for Cloak of Shadows / Invisibility
-int32_t __fastcall D2Client_ApplyInvisibilityStateCallback(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+// State callback for Cloak of Shadows / Invisibility: sets UNITFLAGEX_ISINVISIBLE
+int32_t __fastcall D2Client_ApplyInvisibilityStateCallback(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     if (pUnit != D2Client_GetPlayerUnit())
     {
         pUnit->dwFlagEx |= UNITFLAGEX_ISINVISIBLE;
@@ -488,9 +489,10 @@ int32_t __fastcall D2Client_ApplyInvisibilityStateCallback(D2UnitStrc* pUnit, in
 }
 
 // 1.12a: 0x6FB53940 (__fastcall)
-// State removed callback for Cloak of Shadows / Invisibility
-int32_t __fastcall D2Client_RemoveInvisibilityStateCallback(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+// State callback for Cloak of Shadows / Invisibility: clears UNITFLAGEX_ISINVISIBLE
+int32_t __fastcall D2Client_RemoveInvisibilityStateCallback(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     if (pUnit != D2Client_GetPlayerUnit())
     {
         pUnit->dwFlagEx &= ~UNITFLAGEX_ISINVISIBLE;
@@ -500,16 +502,18 @@ int32_t __fastcall D2Client_RemoveInvisibilityStateCallback(D2UnitStrc* pUnit, i
 
 // 1.12a: 0x6FB53960 (__fastcall)
 // State applied callback for Hide/Burrow: clears UNITFLAG_TARGETABLE
-int32_t __fastcall D2Client_ApplyUntargetableStateCallback(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+int32_t __fastcall D2Client_ApplyUntargetableStateCallback(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     pUnit->dwFlags &= ~UNITFLAG_TARGETABLE;
     return 1;
 }
 
 // 1.12a: 0x6FB53970 (__fastcall)
 // State removed callback for Monster Leap (skill 0xA7): restores unit collision footprint
-int32_t __fastcall D2Client_ClearMonsterLeapCollisionOnStateEnd(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+int32_t __fastcall D2Client_ClearMonsterLeapCollisionOnStateEnd(D2UnitStrc* pUnit, int32_t nState)
 {
+    (void)nState;
     if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
     {
         return 0;
@@ -543,8 +547,8 @@ int32_t __fastcall D2Client_ClearMonsterLeapCollisionOnStateEnd(D2UnitStrc* pUni
 }
 
 // 1.12a: 0x6FB53A00 (__fastcall)
-// State callback: syncs remote player skill assignment from state statlist
-int32_t __fastcall D2Client_SyncRemotePlayerSkillLevelFromState(D2UnitStrc* pUnit, int32_t nState, int32_t bSet)
+// State applied callback (wSetFunc == 3): syncs remote player skill assignment from state statlist
+int32_t __fastcall D2Client_SyncRemotePlayerSkillLevelFromState(D2UnitStrc* pUnit, int32_t nState)
 {
     if (!pUnit || pUnit == D2Client_GetPlayerUnit())
     {
@@ -563,25 +567,45 @@ int32_t __fastcall D2Client_SyncRemotePlayerSkillLevelFromState(D2UnitStrc* pUni
         return 0;
     }
 
-    int32_t nSkillLevel = 0;
-    if (bSet)
+    D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, nState);
+    if (!pStatList)
     {
-        D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, nState);
-        if (!pStatList)
-        {
-            return 0;
-        }
-
-        int16_t nStatId = pStatesTxt->wStat;
-        if (nStatId < 0 || nStatId >= sgptDataTables->nItemStatCostTxtRecordCount)
-        {
-            return 0;
-        }
-
-        nSkillLevel = STATLIST_GetStatValue(pStatList, nStatId, 0);
+        return 0;
     }
 
+    int16_t nStatId = pStatesTxt->wStat;
+    if (nStatId < 0 || nStatId >= sgptDataTables->nItemStatCostTxtRecordCount)
+    {
+        return 0;
+    }
+
+    int32_t nSkillLevel = STATLIST_GetStatValue(pStatList, nStatId, 0);
     SKILLS_AssignSkill(pUnit, nSkillId, nSkillLevel, 1, __FILE__, __LINE__);
+    return 1;
+}
+
+// 1.12a: 0x6FB53AB0 (__fastcall)
+// State callback (wSetFunc == 2): assigns skill level 1 on remote player from state record
+int32_t __fastcall D2Client_AssignDefaultStateSkillCallback(D2UnitStrc* pUnit, int32_t nState)
+{
+    if (!pUnit || pUnit == D2Client_GetPlayerUnit())
+    {
+        return 1;
+    }
+
+    D2StatesTxt* pStatesTxt = DATATBLS_GetStatesTxtRecord(nState);
+    if (!pStatesTxt)
+    {
+        return 0;
+    }
+
+    int16_t nSkillId = pStatesTxt->wSkill;
+    if (nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+    {
+        return 0;
+    }
+
+    SKILLS_AssignSkill(pUnit, nSkillId, 1, 1, __FILE__, __LINE__);
     return 1;
 }
 
@@ -606,9 +630,14 @@ BOOL __fastcall D2Client_IsUnitInSkillCastAnimMode(D2UnitStrc* pUnit)
 }
 
 // 1.12a: 0x6FB53C10 (__fastcall)
-// Dispatches client state removal callbacks from gStateRemovedCallbacks (0x6FB8CFA8)
+// Dispatches client state removal callbacks from gStateRemovedCallbacks (0x6FB8CFA8, indexed by D2StatesTxt::wRemFunc)
 int32_t __fastcall D2Client_OnStateRemovedDispatch(D2UnitStrc* pUnit, int32_t nState)
 {
+    if (!pUnit || nState < 0)
+    {
+        return 0;
+    }
+
     D2StatesTxt* pStatesTxt = DATATBLS_GetStatesTxtRecord(nState);
     if (!pStatesTxt)
     {
@@ -616,16 +645,13 @@ int32_t __fastcall D2Client_OnStateRemovedDispatch(D2UnitStrc* pUnit, int32_t nS
     }
 
     int32_t nResult = 1;
-    for (int32_t i = 0; gStateRemovedCallbacks[i].pfCallback != nullptr; ++i)
+    const int16_t wRemFunc = static_cast<int16_t>(pStatesTxt->wRemFunc);
+    if (wRemFunc >= 0 && wRemFunc < 30 && gStateRemovedCallbacks[wRemFunc] != nullptr)
     {
-        if (gStateRemovedCallbacks[i].nStateId == nState)
-        {
-            nResult = gStateRemovedCallbacks[i].pfCallback(pUnit, nState, 0);
-            break;
-        }
+        nResult = gStateRemovedCallbacks[wRemFunc](pUnit, nState);
     }
 
-    if (STATES_CheckStateMaskOnSoundByStateId(nState) && pStatesTxt->wOffSound > 0)
+    if (STATES_CheckStateMaskOnSoundByStateId(nState) && static_cast<int16_t>(pStatesTxt->wOffSound) > 0)
     {
         D2Client_PlayUnitSound(pUnit, pStatesTxt->wOffSound);
     }
@@ -634,9 +660,14 @@ int32_t __fastcall D2Client_OnStateRemovedDispatch(D2UnitStrc* pUnit, int32_t nS
 }
 
 // 1.12a: 0x6FB53C90 (__fastcall)
-// Dispatches client state application callbacks from gStateAppliedCallbacks (0x6FB8CF28)
+// Dispatches client state application callbacks from gStateAppliedCallbacks (0x6FB8CF28, indexed by D2StatesTxt::wSetFunc)
 int32_t __fastcall D2Client_OnStateAppliedDispatch(D2UnitStrc* pUnit, int32_t nState, int32_t bIsNewState)
 {
+    if (!pUnit || nState < 0)
+    {
+        return 0;
+    }
+
     D2StatesTxt* pStatesTxt = DATATBLS_GetStatesTxtRecord(nState);
     if (!pStatesTxt)
     {
@@ -644,16 +675,13 @@ int32_t __fastcall D2Client_OnStateAppliedDispatch(D2UnitStrc* pUnit, int32_t nS
     }
 
     int32_t nResult = 1;
-    for (int32_t i = 0; gStateAppliedCallbacks[i].pfCallback != nullptr; ++i)
+    const int16_t wSetFunc = static_cast<int16_t>(pStatesTxt->wSetFunc);
+    if (wSetFunc >= 0 && wSetFunc < 31 && gStateAppliedCallbacks[wSetFunc] != nullptr)
     {
-        if (gStateAppliedCallbacks[i].nStateId == nState)
-        {
-            nResult = gStateAppliedCallbacks[i].pfCallback(pUnit, nState, bIsNewState);
-            break;
-        }
+        nResult = gStateAppliedCallbacks[wSetFunc](pUnit, nState);
     }
 
-    if (bIsNewState && pStatesTxt->wOnSound > 0)
+    if (bIsNewState && static_cast<int16_t>(pStatesTxt->wOnSound) > 0)
     {
         D2Client_PlayUnitSound(pUnit, pStatesTxt->wOnSound);
     }

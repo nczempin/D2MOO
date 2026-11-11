@@ -36,14 +36,20 @@ struct SMsg;
 // ----------------------------------------------------------------------------
 // Global Variables (1.12a D2Client.dll .data / .bss addresses)
 // ----------------------------------------------------------------------------
-static int32_t  g_nScreenWidth               = 640;     // 0x6FB8C6E0
-static int32_t  g_nScreenHeight              = 480;     // 0x6FB8C6E4
-static int32_t  g_nViewportHeight            = 440;     // 0x6FBCD524
-static int32_t  g_nViewportWidth             = 640;     // 0x6FBCD528
-static int32_t  g_nViewportShiftMode         = 0;       // 0x6FBCC1D0
-static int32_t  g_nViewportOffsetX           = 0;       // 0x6FBCC1D4
-static int32_t  g_nPanelOffsetX              = 0;       // 0x6FBCBD28
-static int32_t  g_nPanelOffsetY              = 0;       // 0x6FBCBD2C
+extern int32_t  gnScreenWidth;                            // 0x6FB8C6E0
+extern int32_t  gnScreenHeight;                           // 0x6FB8C6E4
+int32_t         gnViewportHeight            = 440;        // 0x6FBCD524
+int32_t         gnViewportWidth             = 800;        // 0x6FBCD528
+extern int32_t  gnOpenPanelMode;                          // 0x6FBCC1D0
+int32_t         gnViewportShiftOffsetX      = 0;          // 0x6FBCC1D4
+int32_t         g_nPanelOffsetX             = 0;          // 0x6FBCBD28
+int32_t         g_nPanelOffsetY             = 0;          // 0x6FBCBD2C
+#define g_nScreenWidth       gnScreenWidth
+#define g_nScreenHeight      gnScreenHeight
+#define g_nViewportHeight    gnViewportHeight
+#define g_nViewportWidth     gnViewportWidth
+#define g_nViewportShiftMode gnOpenPanelMode
+#define g_nViewportOffsetX   gnViewportShiftOffsetX
 
 // Client State Machine Globals (CORE/WINMAIN.CPP)
 static int32_t  g_nClientState               = 3;       // 0x6FBA8B30
@@ -59,8 +65,10 @@ static int32_t  g_anClientStateStack[5]      = { 0 };   // 0x6FBCB8F4
 static uint32_t g_dwGameExitTargetTick       = 0;       // 0x6FBCC420
 
 // In-Game Loop & Network Globals (GAME/Game.cpp)
-static D2UnitStrc* g_pPlayerUnit             = nullptr; // 0x6FBCC3D0
-static D2ActStrc*  g_pClientAct              = nullptr; // 0x6FBCC01C
+extern D2UnitStrc* gpPlayerUnit;                        // 0x6FBCC3D0
+extern struct D2DrlgActStrc* gpClientAct;               // 0x6FBCC01C
+#define g_pPlayerUnit gpPlayerUnit
+#define g_pClientAct  (*reinterpret_cast<D2ActStrc**>(&gpClientAct))
 static D2ViewStrc* g_pClientView             = nullptr; // 0x6FBCC028
 static void*    g_pClientPoolSystem          = nullptr; // 0x6FBCC000
 static int32_t  g_bExitGameFlag              = 0;       // 0x6FBCC008
@@ -71,24 +79,30 @@ static HANDLE   g_hOpenServerThread          = nullptr; // 0x6FBB32DC
 static DWORD    g_dwOpenServerThreadId       = 0;       // 0x6FBB32D0
 static CRITICAL_SECTION g_csServerThread;               // 0x6FBB327C
 
-static uint8_t  g_nDifficulty                = 0;       // 0x6FBCBFF4
-static int32_t  g_nGameType                  = 0;       // 0x6FBCBFF8
-static int32_t  g_bIsExpansionGame           = 0;       // 0x6FBB330C
+extern uint8_t  gnClientDifficulty;                     // 0x6FBCBFF4
+extern int32_t  gnGameType;                             // 0x6FBCBFF8
+extern int32_t  gbIsExpansion;                          // 0x6FBB330C
+#define g_nDifficulty      gnClientDifficulty
+#define g_nGameType        gnGameType
+#define g_bIsExpansionGame gbIsExpansion
 static int32_t  g_bIsHardcoreGame            = 0;       // 0x6FBB3308
 static int32_t  g_bNoSoundCmdLine            = 0;       // 0x6FBCBFF0
 static int32_t  g_bBuildColorTable           = 0;       // 0x6FBCBFEC
 
 static void     (*g_pfnRenderFrame)(int32_t) = nullptr; // 0x6FBB329C
 static uint32_t g_dwLastFrameTick            = 0;       // 0x6FBB32AC
-static uint32_t g_dwClientFrameCount         = 0;       // 0x6FBB32B0
+uint32_t        gdwClientGameTick            = 0;       // 0x6FBB32B0
+#define g_dwClientFrameCount gdwClientGameTick
 static int32_t  g_nFrameTickAccumulator      = 0;       // 0x6FBB32B4
 static int32_t  g_nTargetFrameTickMs         = 40;      // 0x6FB8FFA8 (25 Hz)
-static uint32_t g_dwPingMs                   = 0;       // 0x6FBB32BC
+uint32_t        gdwClientPing                = 0;       // 0x6FBB32BC
+#define g_dwPingMs gdwClientPing
 static uint32_t g_dwPingSampleSum            = 0;       // 0x6FBB32E8
 static uint32_t g_dwPingSampleCount          = 0;       // 0x6FBB32EC
 static uint32_t g_dwLastPingSentTick         = 0;       // 0x6FBB32E4
 static uint32_t g_dwLastPacketRecvTick       = 0;       // 0x6FBB32C4
-static uint32_t g_dwActLoadGraceTick         = 0;       // 0x6FBB32D4
+uint32_t        gdwReassignGraceTick         = 0;       // 0x6FBB32D4
+#define g_dwActLoadGraceTick gdwReassignGraceTick
 static uint32_t g_dwDisconnectScreenTick     = 0;       // 0x6FBB32D8
 static int32_t  g_nDisconnectErrorStringIdx  = -1;      // 0x6FB90358
 static int32_t  g_bServerPaused              = 0;       // 0x6FBCC02C
@@ -96,23 +110,27 @@ static int32_t  g_bClientPaused              = 0;       // 0x6FBCC030
 static int32_t  g_bMinimizedInactive         = 0;       // 0x6FBCC00C
 
 // Screen Shake Globals (GAME/View.cpp)
-static int32_t  g_nShakeAmplitude            = 0;       // 0x6FBCB9B0
-static int32_t  g_nShakeOffsetX              = 0;       // 0x6FBCB9B4
-static int32_t  g_nShakeOffsetY              = 0;       // 0x6FBAD114
-static uint32_t g_dwShakeStartTick           = 0;       // 0x6FBAD104
-static uint32_t g_dwShakeAttackMs            = 0;       // 0x6FBAD108
-static uint32_t g_dwShakeSustainMs           = 0;       // 0x6FBAD10C
-static uint32_t g_dwShakeReleaseMs           = 0;       // 0x6FBAD110
+int32_t         g_nShakeMaxAmplitude         = 0;       // 0x6FBCB9B0
+#define g_nShakeAmplitude g_nShakeMaxAmplitude
+int32_t         g_nShakeOffsetX              = 0;       // 0x6FBCB9B4
+int32_t         g_nShakeOffsetY              = 0;       // 0x6FBAD114
+uint32_t        g_dwShakeStartTick           = 0;       // 0x6FBAD104
+int32_t         g_nShakeRampUpMs             = 0;       // 0x6FBAD108
+int32_t         g_nShakeHoldMs               = 0;       // 0x6FBAD10C
+int32_t         g_nShakeRampDownMs           = 0;       // 0x6FBAD110
+#define g_dwShakeAttackMs  (*reinterpret_cast<uint32_t*>(&g_nShakeRampUpMs))
+#define g_dwShakeSustainMs (*reinterpret_cast<uint32_t*>(&g_nShakeHoldMs))
+#define g_dwShakeReleaseMs (*reinterpret_cast<uint32_t*>(&g_nShakeRampDownMs))
 static int32_t  g_nEarthquakeSoundHandle     = 0;       // 0x6FBB0220
 
 // Mouse Hold / Repeat State
-static int32_t  g_bLeftMouseHeld             = 0;       // 0x6FBCC040
-static int32_t  g_bLeftMouseRepeating        = 0;       // 0x6FBCC044
+int32_t         g_bLeftMouseHeld             = 0;       // 0x6FBCC040
+int32_t         g_bLeftMouseRepeating        = 0;       // 0x6FBCC044
 static int32_t  g_nLeftMouseHoldX            = 0;       // 0x6FBCC048
 static int32_t  g_nLeftMouseHoldY            = 0;       // 0x6FBCC04C
 static uint32_t g_dwLeftMouseDownTick        = 0;       // 0x6FBCC058
-static int32_t  g_bRightMouseHeld            = 0;       // 0x6FBCC05C
-static int32_t  g_bRightMouseRepeating       = 0;       // 0x6FBCC060
+int32_t         g_bRightMouseHeld            = 0;       // 0x6FBCC05C
+int32_t         g_bRightMouseRepeating       = 0;       // 0x6FBCC060
 static int32_t  g_nRightMouseHoldX           = 0;       // 0x6FBCC064
 static int32_t  g_nRightMouseHoldY           = 0;       // 0x6FBCC068
 static uint32_t g_dwRightMouseDownTick       = 0;       // 0x6FBCC074

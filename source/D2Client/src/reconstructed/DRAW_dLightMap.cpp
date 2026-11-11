@@ -216,24 +216,30 @@ static int32_t            g_nLightNodesFreedCount;           // 0x6FBCC1C8
 static int32_t            g_nActiveLightNodesCount;          // 0x6FBCC1CC
 
 // View Skew & Colored Lighting Globals
-static int32_t            g_nViewSkewMode;                   // 0x6FBCC1D0
-static int32_t            g_nViewSkewOffset;                 // 0x6FBCC1D4
+extern int32_t            gnOpenPanelMode;                   // 0x6FBCC1D0
+extern int32_t            gnViewportShiftOffsetX;            // 0x6FBCC1D4
+#define g_nViewSkewMode   gnOpenPanelMode
+#define g_nViewSkewOffset gnViewportShiftOffsetX
 static int32_t            g_bColoredLightingEnabled;         // 0x6FB946C8
 static uint32_t           g_dwLightQualityLastTick;          // 0x6FBD3654
 static int32_t            g_nCachedLightQuality;             // 0x6FBD3658
 
 // External Client Globals Referenced
-extern int32_t            g_nScreenWidth;                    // 0x6FB8C6E0
+extern int32_t            gnScreenWidth;                     // 0x6FB8C6E0
+#define g_nScreenWidth    gnScreenWidth
 extern int32_t            g_bForceMediumLightQuality;        // 0x6FBA6778
 extern int32_t            g_nDiabloSealFlashCounter;         // 0x6FBA8AD4
-extern int32_t            g_nCurrentClientTick;              // 0x6FBB32B0
+extern uint32_t           gdwClientGameTick;                 // 0x6FBB32B0
+#define g_nCurrentClientTick (*reinterpret_cast<int32_t*>(&gdwClientGameTick))
 extern int32_t            g_nSmoothedFps;                    // 0x6FBB32C0
 extern int32_t            g_nOverrideAmbientIntensity;       // 0x6FBCB7C8
 extern uint8_t            g_nOverrideAmbientRed;             // 0x6FBCB7CC
 extern uint8_t            g_nOverrideAmbientGreen;           // 0x6FBCB7CD
 extern uint8_t            g_nOverrideAmbientBlue;            // 0x6FBCB7CE
-extern D2UnitLightViewStrc* g_aClientUnitHashTables[6][128]; // 0x6FBC9D60
-extern D2UnitLightViewStrc* g_aServerUnitHashTables[6][128]; // 0x6FBCA960
+extern struct D2UnitStrc* gapClientSideUnitHashTables[6][128]; // 0x6FBC9D60
+extern struct D2UnitStrc* gapServerSideUnitHashTables[6][128]; // 0x6FBCA960
+#define g_aClientUnitHashTables (*reinterpret_cast<D2UnitLightViewStrc*(*)[6][128]>(&gapClientSideUnitHashTables))
+#define g_aServerUnitHashTables (*reinterpret_cast<D2UnitLightViewStrc*(*)[6][128]>(&gapServerSideUnitHashTables))
 extern void*              g_pClientAct;                      // 0x6FBCC01C
 extern void*              g_pPrimaryViewport;                // 0x6FBCC028
 extern int32_t            g_nViewportOffsetX;                // 0x6FBCC040

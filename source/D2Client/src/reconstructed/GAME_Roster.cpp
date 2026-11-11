@@ -158,10 +158,11 @@ struct D2RecordFileHeaderStrc // 0x14 (20) bytes at 0x6FBB5368
 // =============================================================================
 // Module Globals (1.12a Addresses)
 // =============================================================================
-static D2RosterUnitStrc*       gpRosterUnitList        = nullptr;                // 0x6FBCC080
+D2RosterUnitStrc*              gpRosterUnitList        = nullptr;                // 0x6FBCC080
 static D2RosterUnitStrc*       gpRosterPendingList     = nullptr;                // 0x6FBCC084
 static D2RosterPartyGroupStrc* gpRosterPartyGroupList  = nullptr;                // 0x6FBCC088
-static D2RosterPetStrc*        gpRosterPetList         = nullptr;                // 0x6FBCB97C
+extern struct D2RosterPetEntryStrc* gpRosterPetList;                             // 0x6FBCB97C
+#define gpRosterPetList (*reinterpret_cast<D2RosterPetStrc**>(&gpRosterPetList))
 
 static D2RecordChunkStrc       g_tFirstRecordChunk     = { 0 };                  // 0x6FBB3418 (next at 0x6FBB5360)
 static D2RecordChunkStrc*      gpCurrentRecordChunk    = &g_tFirstRecordChunk;   // 0x6FB923B0
@@ -177,7 +178,8 @@ extern uint32_t                gdwClientGameTick;                               
 extern D2DrlgActStrc*          gpClientAct;                                      // 0x6FBCC01C
 extern D2UnitStrc*             gpClientPlayer;                                   // 0x6FBCC3D0
 extern uint32_t                gdwArenaFlags;                                    // 0x6FBA675C
-extern D2UnitStrc*             g_apServerMonsterHashTable[128];                  // 0x6FBCAB60
+extern D2UnitStrc*             gapServerSideUnitHashTables[6][128];              // 0x6FBCA960
+#define g_apServerMonsterHashTable (gapServerSideUnitHashTables[1])
 
 // Forward declarations
 D2RosterUnitStrc* __fastcall ROSTER_FindPlayerByUnitId(uint32_t dwUnitId);                  // 0x6FB281C0

@@ -31,7 +31,7 @@ inline int SKILLS_GetSkillCount()
 // External Globals (1.12a D2Client.dll)
 // ----------------------------------------------------------------------------
 extern D2UnitStrc* gpPlayerUnit;                        // 0x6FBCC3D0
-extern int32_t     gdwClientGameTick;                   // 0x6FBCC3C8
+extern uint32_t    gdwClientGameTick;                   // 0x6FBB32B0
 extern uint32_t    gdwRightHandWeaponClass;             // 0x6FBCBCE4
 extern uint32_t    gdwLeftHandWeaponClass;              // 0x6FBCBCE8
 extern int32_t     gbEquippedItemComponentChanged;      // 0x6FBCBCFC

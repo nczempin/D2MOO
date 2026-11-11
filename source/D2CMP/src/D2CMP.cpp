@@ -2293,7 +2293,7 @@ static bool BuildSpriteBasePath(const D2GfxDataStrc* pData, char* szOutBase, siz
 		{
 			snprintf(szOutBase, nMaxLen, "DATA\\GLOBAL\\ITEMS\\%s", pData->pName);
 		}
-		else if (pData->nUnitType == 5)
+		else if (pData->nUnitType == 5 || pData->nUnitType == 6)
 		{
 			snprintf(szOutBase, nMaxLen, "DATA\\GLOBAL\\OVERLAYS\\%s", pData->pName);
 		}

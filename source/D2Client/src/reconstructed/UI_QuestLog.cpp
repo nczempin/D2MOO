@@ -445,8 +445,9 @@ void __stdcall QUESTLOG_AcknowledgeQuestAlert(void)
 // 1.12a: 0x6FB6FDD0 (__fastcall, eax = nViewShiftState)
 int32_t __fastcall QUESTLOG_GetAlertButtonLayoutIndex(int32_t nViewShiftState)
 {
-    extern int32_t g_bMiniPanelOpen;     // 0x6FBB2B70
-    extern int32_t g_bbeltExpanded;      // 0x6FBB2B60
+    extern int32_t gaPanelStates[38];
+    int32_t g_bMiniPanelOpen = gaPanelStates[6];
+    int32_t g_bbeltExpanded  = gaPanelStates[2];
 
     if (g_bMiniPanelOpen && !g_bbeltExpanded)
     {
@@ -647,7 +648,8 @@ void __fastcall QUESTLOG_SetSelectedSocketIndex(int32_t nSocketIdx)
 // 1.12a: 0x6FB70190 (__stdcall)
 uint8_t __stdcall QUESTLOG_IsStaffTombSmokeUnitValid(void)
 {
-    extern D2UnitStrc* g_apClientUnitHashTables[128]; // 0x6FBC9F60 (UNIT_OBJECT = 2)
+    extern D2UnitStrc* gapClientSideUnitHashTables[6][128];
+    D2UnitStrc** g_apClientUnitHashTables = gapClientSideUnitHashTables[1];
 
     if (!g_bStaffTombSmokeSpawned)
     {
@@ -917,8 +919,8 @@ void __fastcall QUESTLOG_EvaluateQuestSocketState(D2QuestSocketStateStrc* pSocke
     int32_t bPrevCompleted = QUESTRECORD_GetQuestState(g_pPlayerQuestRecord, rRec.nQuestBitIndex, 13);
     int32_t bRewardPending = QUESTRECORD_GetQuestState(g_pPlayerQuestRecord, rRec.nQuestBitIndex, 1);
 
-    // Special case: Siege on Harrogath (0x6FB8C244) when reward pending
-    if (pDesc == (const D2QuestDescTableStrc*)0x6FB8C244 && bRewardPending && nFilterState == 0)
+    // Special case: Siege on Harrogath (A5Q1) when reward pending
+    if (pDesc == &g_aQuestDescTables[22] && bRewardPending && nFilterState == 0)
     {
         nFilterState = 4;
     }
@@ -927,7 +929,7 @@ void __fastcall QUESTLOG_EvaluateQuestSocketState(D2QuestSocketStateStrc* pSocke
     {
         if (bRewardGranted && pDesc->wRewardStateIdx != 0xFFFF)
         {
-            if (bRewardPending && pDesc != (const D2QuestDescTableStrc*)0x6FB8C184)
+            if (bRewardPending && pDesc != &g_aQuestDescTables[19])
             {
                 uint8_t nRewardIdx = (uint8_t)(pDesc->wRewardStateIdx + 1);
                 pSocket->wTitleStrId = pDesc->wTitleStrId;
@@ -1604,7 +1606,8 @@ void __stdcall QUESTLOG_OnPanelMouseUp(void* pMsg)
 // close button, and audio playback button.
 void __stdcall QUESTLOG_DrawPanel(void)
 {
-    extern int32_t g_bQuestPanelOpenFlag; // 0x6FBB2BA0
+    extern int32_t gaPanelStates[38];
+    int32_t& g_bQuestPanelOpenFlag = gaPanelStates[18];
     extern void*   g_pCelBuySellBtn;      // 0x6FBCBD4C
 
     if (!g_pPlayerUnit || g_pPlayerUnit->dwAnimMode == 17 || !g_bQuestPanelOpenFlag || g_bCutsceneActive)

@@ -59,6 +59,8 @@ struct D2CellFileStrc
 	D2GfxCellStrc* pGfxCells;				//0x18
 };
 
+#ifndef D2_GFX_DATA_STRC_DEFINED
+#define D2_GFX_DATA_STRC_DEFINED
 struct D2GfxDataStrc
 {
 #ifdef D2_VERSION_110F
@@ -133,6 +135,7 @@ struct D2GfxDataStrc
 	int32_t nMaxFrames;						//0x44
 #endif
 };
+#endif
 
 typedef D2GfxDataStrc D2CellBufferStrc;
 

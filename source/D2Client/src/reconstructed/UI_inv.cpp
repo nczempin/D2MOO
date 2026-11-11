@@ -132,30 +132,32 @@ extern int32_t g_nMouseX;                           // 0x6FBB1638
 extern D2UnitStrc* g_pActiveConsumeTomeOrScroll;    // 0x6FBB1644
 extern int32_t g_nCursorState;                      // 0x6FBB1674
 
-extern BOOL g_abPanelOpenState[38];                 // 0x6FBB2B58
-extern BOOL g_bInvPanelOpen;                        // 0x6FBB2B5C
-extern BOOL g_bCharPanelOpen;                       // 0x6FBB2B60
-extern BOOL g_bSkillSelectOpen;                     // 0x6FBB2B64
-extern BOOL g_bSkillTreeOpen;                       // 0x6FBB2B68
-extern BOOL g_bChatInputOpen;                       // 0x6FBB2B6C
-extern BOOL g_bNpcMenuOpen;                         // 0x6FBB2B70
-extern BOOL g_bEscMenuOpen;                         // 0x6FBB2B88
-extern BOOL g_bQuestLogOpen;                        // 0x6FBB2B94
-extern BOOL g_bWaypointOpen;                        // 0x6FBB2B98
-extern BOOL g_bPartyScreenOpen;                     // 0x6FBB2BA8
-extern BOOL g_bGuildStealOpen;                      // 0x6FBB2BB0
-extern BOOL g_bTradePanelOpen;                      // 0x6FBB2BB8
-extern BOOL g_bHoradricCubeOpen;                    // 0x6FBB2BBC
-extern BOOL g_bMercInvOpen;                         // 0x6FBB2BC0
-extern BOOL g_bStashPanelOpen;                      // 0x6FBB2BC4
-extern BOOL g_bNpcShopPanelOpen;                    // 0x6FBB2BE8
-extern BOOL g_bMercShopPanelOpen;                   // 0x6FBB2BEC
+extern int32_t gaPanelStates[38];                   // 0x6FBB2B58
+#define g_abPanelOpenState  gaPanelStates
+#define g_bInvPanelOpen     (gaPanelStates[1])
+#define g_bCharPanelOpen    (gaPanelStates[2])
+#define g_bSkillSelectOpen  (gaPanelStates[3])
+#define g_bSkillTreeOpen    (gaPanelStates[4])
+#define g_bChatInputOpen    (gaPanelStates[5])
+#define g_bNpcMenuOpen      (gaPanelStates[6])
+#define g_bEscMenuOpen      (gaPanelStates[12])
+#define g_bQuestLogOpen     (gaPanelStates[15])
+#define g_bWaypointOpen     (gaPanelStates[16])
+#define g_bPartyScreenOpen  (gaPanelStates[20])
+#define g_bGuildStealOpen   (gaPanelStates[22])
+#define g_bTradePanelOpen   (gaPanelStates[24])
+#define g_bHoradricCubeOpen (gaPanelStates[25])
+#define g_bMercInvOpen      (gaPanelStates[26])
+#define g_bStashPanelOpen   (gaPanelStates[27])
+#define g_bNpcShopPanelOpen (gaPanelStates[36])
+#define g_bMercShopPanelOpen (gaPanelStates[37])
 
 extern BOOL g_bExpansionMode;                       // 0x6FBB330C
 extern BOOL g_bEscMenuActive;                       // 0x6FBB5490
 extern int32_t g_nTradePartnerGold;                 // 0x6FBBC26D8
 extern int32_t g_nTradePlayerGold;                  // 0x6FBBC26E8
-extern D2UnitStrc* g_apClientUnitHashTable[128];    // 0x6FBCAB60
+extern D2UnitStrc* gapServerSideUnitHashTables[6][128]; // 0x6FBCA960
+#define g_apClientUnitHashTable (gapServerSideUnitHashTables[1])
 extern int32_t g_nInteractedNpcGUID;                // 0x6FBCB625
 extern BOOL g_bInteractedWithNpc;                   // 0x6FBCB629
 extern int32_t g_nCurrentAct;                       // 0x6FBCB643

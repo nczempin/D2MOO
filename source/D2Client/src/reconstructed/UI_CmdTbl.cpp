@@ -22,14 +22,7 @@ struct D2StatListStrc;
 struct D2RosterUnitStrc;
 struct Unicode { uint16_t ch; };
 
-struct D2GfxDataStrc
-{
-    uint8_t pad0x00[0x38];
-    uint32_t nDirection;        // +0x38
-    D2CellFileStrc* pCellFile;  // +0x3C
-    uint32_t nFrame;            // +0x40
-    int32_t nMaxFrames;         // +0x44 (total 0x48 = 72 bytes)
-};
+#include "D2ClientReconstructed.h"
 
 struct D2WindowMsgStrc
 {
@@ -200,27 +193,28 @@ extern int32_t gnViewAdjustMode;                // 0x6FBCC1D0
 extern int32_t gnViewAdjustOffset;              // 0x6FBCC1D4
 extern int32_t gbEscMenuOpen;                   // 0x6FBCC008
 extern int32_t gbGoldDialogOpen;                // 0x6FBB5490
-extern int32_t gbSkillSelectOpen;               // 0x6FBB2B64
-extern int32_t gbSkillTreeOpen;                 // 0x6FBB2B68
-extern int32_t gbChatBoxOpen;                   // 0x6FBB2B6C
-extern int32_t gbEscOptionsOpen;                // 0x6FBB2B7C
-extern int32_t gbAutomapActive;                 // 0x6FBB2B80
-extern int32_t gbTradeOpen;                     // 0x6FBB2B88
-extern int32_t gbShowGroundItems;               // 0x6FBB2B8C
-extern int32_t gbStashOpen;                     // 0x6FBB2B94
-extern int32_t gbCubeOpen;                      // 0x6FBB2B98
-extern int32_t gbQuestLogOpen;                  // 0x6FBB2BA8
-extern int32_t gbPartyScreenOpen;               // 0x6FBB2BB0
-extern int32_t gbNpcMenuOpen;                   // 0x6FBB2BB4
-extern int32_t gbMessageLogOpen;                // 0x6FBB2BB8
-extern int32_t gbVendorInteractOpen;            // 0x6FBB2BBC
-extern int32_t gbBeltShowOpen;                  // 0x6FBB2BD4
-extern int32_t gbHelpScreenOpen;                // 0x6FBB2BDC
-extern int32_t gbHireableScreenOpen;            // 0x6FBB2BE8
-extern int32_t gbWaypointMenuOpen;              // 0x6FBB2BEC
-extern int32_t gbInventoryOpen;                 // 0x6FBB2B5C
-extern int32_t gbCharacterScreenOpen;           // 0x6FBB2B60
-extern int32_t gabPanelStates[38];              // 0x6FBB2B58
+extern int32_t gaPanelStates[38];               // 0x6FBB2B58
+#define gabPanelStates        gaPanelStates
+#define gbInventoryOpen       (gaPanelStates[1])
+#define gbCharacterScreenOpen (gaPanelStates[2])
+#define gbSkillSelectOpen     (gaPanelStates[3])
+#define gbSkillTreeOpen       (gaPanelStates[4])
+#define gbChatBoxOpen         (gaPanelStates[5])
+#define gbEscOptionsOpen      (gaPanelStates[9])
+#define gbAutomapActive       (gaPanelStates[10])
+#define gbTradeOpen           (gaPanelStates[12])
+#define gbShowGroundItems     (gaPanelStates[13])
+#define gbStashOpen           (gaPanelStates[15])
+#define gbCubeOpen            (gaPanelStates[16])
+#define gbQuestLogOpen        (gaPanelStates[20])
+#define gbPartyScreenOpen     (gaPanelStates[22])
+#define gbNpcMenuOpen         (gaPanelStates[23])
+#define gbMessageLogOpen      (gaPanelStates[24])
+#define gbVendorInteractOpen  (gaPanelStates[25])
+#define gbBeltShowOpen        (gaPanelStates[31])
+#define gbHelpScreenOpen      (gaPanelStates[33])
+#define gbHireableScreenOpen  (gaPanelStates[36])
+#define gbWaypointMenuOpen    (gaPanelStates[37])
 extern int32_t gnPanelCount;                    // 0x6FB8F368 (0x26 = 38)
 extern void* gapPanelCloseRules[38];            // 0x6FB8F2D0
 
@@ -3684,5 +3678,5 @@ void __fastcall CMDTBL_OnUseBeltSlot1Down(void)
 // 1.12a: 0x6FB535D0 (__fastcall)
 const void* __fastcall CMDTBL_GetCommandCategoryTable(void)
 {
-    return (const void*)0x6FB8D020;
+    return (const void*)gDefaultKeyBindings;
 }
