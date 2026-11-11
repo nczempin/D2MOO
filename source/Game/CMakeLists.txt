@@ -52,6 +52,12 @@ set_target_properties(Game PROPERTIES
   VS_DEBUGGER_ENVIRONMENT "D2MOO_USE_TS_CLIENT=1;D2MOO_USE_ORIGINAL_CLIENT=0"
 )
 
+add_custom_command(TARGET Game POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:Game>" "$<TARGET_FILE_DIR:Game>/Game-NativeClient.exe"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:Game>" "$<TARGET_FILE_DIR:Game>/Game.exe"
+  COMMENT "Syncing Game.D2MOO.exe to Game-NativeClient.exe and Game.exe"
+)
+
 add_custom_target(Game-TSClient DEPENDS Game)
 set_target_properties(Game-TSClient PROPERTIES
   VS_DEBUGGER_COMMAND "$<TARGET_FILE:Game>"
