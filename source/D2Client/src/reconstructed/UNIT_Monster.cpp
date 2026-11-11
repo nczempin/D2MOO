@@ -761,7 +761,18 @@ void __fastcall D2Client_FreeMonsterAuxClientData(D2MonsterDataStrc* pMonsterDat
 // Custom calling convention: EAX = pUnit, ECX = wFlags
 void __fastcall D2Client_InitMonsterDataFields(D2UnitStrc* pUnit, uint16_t wFlags)
 {
-    if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER || !pUnit->pMonsterData)
+    if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
+        return;
+
+    if (!pUnit->pMonsterData)
+    {
+        pUnit->pMonsterData = (D2MonsterDataStrc*)FOG_AllocClientMemory(sizeof(D2MonsterDataStrc), __FILE__, __LINE__, 0);
+        if (pUnit->pMonsterData)
+        {
+            memset(pUnit->pMonsterData, 0, sizeof(D2MonsterDataStrc));
+        }
+    }
+    if (!pUnit->pMonsterData)
         return;
 
     *(uint16_t*)((uint8_t*)pUnit->pMonsterData + 0x28) = wFlags;
@@ -995,7 +1006,7 @@ void __fastcall D2Client_InitMonsterUnitClientSide(D2UnitStrc* pUnit)
     STATLIST_SetUnitStat(pUnit, STAT_ATTACKRATE, 100, 0);
     STATLIST_SetUnitStat(pUnit, STAT_OTHER_ANIMRATE, 100, 0);
 
-    if (!pUnit->pDynamicPath && (pMonStatsTxt->dwMonStatsFlags & MONSTATSFLAG_INTOWN))
+    if (!pUnit->pDynamicPath)
     {
         PATH_AllocDynamicPath(pUnit->pMemoryPool, UNITS_GetRoom(pUnit), UNITS_GetXPosition(pUnit), UNITS_GetYPosition(pUnit), pUnit, FALSE);
     }

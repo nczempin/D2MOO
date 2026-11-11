@@ -20,6 +20,8 @@
 
 #include <Fog.h>
 #include <D2Dungeon.h>
+#include <Drlg/D2DrlgDrlg.h>
+#include <DataTbls/MonsterTbls.h>
 #include <Units/Units.h>
 #include <Path/Path.h>
 #include <D2Collision.h>
@@ -353,8 +355,18 @@ void __fastcall SCMD_Handler07_AddRoom(uint8_t* pPacket)
     const int32_t nTileY   = *reinterpret_cast<uint16_t*>(&pPacket[3]);
     const int32_t nLevelId = pPacket[5];
 
-    // D2Common.#10184: DUNGEON_SetClientIsInSight
+    if (D2DrlgStrc* pDrlg = DUNGEON_GetDrlgFromAct(gpClientAct))
+    {
+        D2DrlgLevelStrc* pLevel = DRLG_GetLevel(pDrlg, nLevelId);
+        if (pLevel != nullptr && pLevel->pFirstRoomEx == nullptr)
+        {
+            DRLG_InitLevel(pLevel);
+        }
+    }
+
+    // D2Common.#10063: DUNGEON_SetClientIsInSight + ensure DT1 tiles & active room are streamed
     DUNGEON_SetClientIsInSight(gpClientAct, nLevelId, nTileX, nTileY, pPlayerRoom);
+    DUNGEON_StreamRoomAtCoords(gpClientAct, nTileX, nTileY);
 }
 
 // 0x6FB148B0 (0x08: S2C_REMOVEROOM - 6 bytes)
@@ -380,22 +392,21 @@ void __fastcall SCMD_Handler08_RemoveRoom(uint8_t* pPacket)
 }
 
 // 0x6FB164E0 (0x09: S2C_ASSIGNWARP - 11 bytes)
-// Layout: [0x09, uint8_t nUnitType(5), uint32_t dwUnitGUID, uint16_t wWarpClassId, uint16_t wX, uint16_t wY]
+// Layout: [0x09, uint8_t nUnitType(5), uint32_t dwUnitGUID, uint8_t nWarpClassId, uint16_t wX, uint16_t wY]
 // Allocates a UNIT_TILE (5) via D2Common.#11157 (UNITS_AllocUnit) and registers it in the room.
 void __fastcall SCMD_Handler09_AssignWarp(uint8_t* pPacket)
 {
     const uint8_t  nUnitType = pPacket[1];
     const uint32_t dwGUID    = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const uint16_t wWarpId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
-    const int32_t  nX        = *reinterpret_cast<uint16_t*>(&pPacket[8]);
-    const int32_t  nY        = *reinterpret_cast<uint16_t*>(&pPacket[9]); // Note: 1.12a reads uint16_t at +9
+    const uint16_t wWarpId   = pPacket[6];
+    const int32_t  nX        = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const int32_t  nY        = *reinterpret_cast<uint16_t*>(&pPacket[9]);
 
     if (nUnitType != UNIT_TILE)
     {
         return;
     }
 
-    // D2Common.#11157: UNITS_AllocUnit
     D2UnitStrc* pWarpUnit = UNITS_AllocUnit(nullptr, UNIT_TILE);
     if (pWarpUnit != nullptr)
     {
@@ -415,32 +426,30 @@ void __fastcall SCMD_Handler0A_RemoveUnit(uint8_t* pPacket)
 }
 
 // 0x6FB17B60 .. 0x6FB17A30 (0x0C .. 0x10: Deferred Unit Event Handlers)
-// Note: 0x0D..0x10 are pre-decoded from packed bitstreams into 32-byte normalized structs
-// by SCMD_DecodeUnitEventBitstream (0x6FB14720) before being queued onto `pUnit->pPacketQueue`.
 void __fastcall SCMD_UnitHandler0C_GameHandshake(D2UnitStrc* pUnit, uint8_t* pPacket)
 {
-    const int32_t nTargetX = *reinterpret_cast<uint16_t*>(&pPacket[8]);
-    const int32_t nTargetY = *reinterpret_cast<uint16_t*>(&pPacket[10]);
-    UNITMODE_DispatchClientEvent(pUnit, pPacket[6], nTargetX, nTargetY, nullptr, 0, 0);
+    const int32_t nTargetX = *reinterpret_cast<uint16_t*>(&pPacket[6]);
+    const int32_t nTargetY = 0;
+    UNITMODE_DispatchClientEvent(pUnit, pPacket[8], nTargetX, nTargetY, nullptr, 0, 0);
 }
 
 void __fastcall SCMD_UnitHandler0D_PlayerStop(D2UnitStrc* pUnit, uint8_t* pPacket)
 {
-    const int32_t nX = *reinterpret_cast<int32_t*>(&pPacket[8]);
-    const int32_t nY = *reinterpret_cast<int32_t*>(&pPacket[12]);
-    const int32_t nCurX = *reinterpret_cast<int32_t*>(&pPacket[20]);
-    const int32_t nCurY = *reinterpret_cast<int32_t*>(&pPacket[24]);
+    // D2GSPacketSrv0D (13B): [0]=0x0D, [1]=nUnitType, [2..5]=dwGUID, [6]=nHitClass, [7..8]=wX, [9..10]=wY, [11]=nHitType, [12]=nLifePct
+    const int32_t nX = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const int32_t nY = *reinterpret_cast<uint16_t*>(&pPacket[9]);
 
-    UNITMODE_CheckPositionDrift(pUnit, nCurX, nCurY);
+    UNITMODE_CheckPositionDrift(pUnit, nX, nY);
     UNITMODE_DispatchClientEvent(pUnit, 0x0D, nX, nY, nullptr, 0, 0);
 }
 
 void __fastcall SCMD_UnitHandler0F_PlayerMove(D2UnitStrc* pUnit, uint8_t* pPacket)
 {
-    const int32_t nTargetX = *reinterpret_cast<int32_t*>(&pPacket[8]);
-    const int32_t nTargetY = *reinterpret_cast<int32_t*>(&pPacket[12]);
-    const int32_t nServerX = *reinterpret_cast<int32_t*>(&pPacket[20]);
-    const int32_t nServerY = *reinterpret_cast<int32_t*>(&pPacket[24]);
+    // D2GSPacketSrv0F (16B): [0]=0x0F, [1]=nUnitType, [2..5]=dwGUID, [6]=nMoveType, [7..8]=wTargetX, [9..10]=wTargetY, [11]=unk, [12..13]=wCurX, [14..15]=wCurY
+    const int32_t nTargetX = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const int32_t nTargetY = *reinterpret_cast<uint16_t*>(&pPacket[9]);
+    const int32_t nServerX = *reinterpret_cast<uint16_t*>(&pPacket[12]);
+    const int32_t nServerY = *reinterpret_cast<uint16_t*>(&pPacket[14]);
 
     UNITMODE_CheckPositionDrift(pUnit, nServerX, nServerY);
     UNITMODE_DispatchClientEvent(pUnit, pPacket[6], nTargetX, nTargetY, nullptr, 0, 0);
@@ -448,10 +457,11 @@ void __fastcall SCMD_UnitHandler0F_PlayerMove(D2UnitStrc* pUnit, uint8_t* pPacke
 
 void __fastcall SCMD_UnitHandler10_PlayerToTarget(D2UnitStrc* pUnit, uint8_t* pPacket)
 {
+    // D2GSPacketSrv10 (16B): [0]=0x10, [1]=nUnitType, [2..5]=dwGUID, [6]=nMoveType, [7]=nTargetType, [8..11]=dwTargetGUID, [12..13]=wCurX, [14..15]=wCurY
     const uint32_t dwTargetType = pPacket[7];
     const uint32_t dwTargetGUID = *reinterpret_cast<uint32_t*>(&pPacket[8]);
-    const int32_t  nServerX     = *reinterpret_cast<int32_t*>(&pPacket[20]);
-    const int32_t  nServerY     = *reinterpret_cast<int32_t*>(&pPacket[24]);
+    const int32_t  nServerX     = *reinterpret_cast<uint16_t*>(&pPacket[12]);
+    const int32_t  nServerY     = *reinterpret_cast<uint16_t*>(&pPacket[14]);
 
     D2UnitStrc* pTarget = UNIT_FindClientUnit(dwTargetGUID, dwTargetType);
     UNITMODE_CheckPositionDrift(pUnit, nServerX, nServerY);
@@ -505,10 +515,10 @@ void __fastcall SCMD_Handler15_ReassignPlayer(uint8_t* pPacket)
 }
 
 // 0x6FB172E0 / 0x6FB17220 / 0x6FB15EC0 (0x18, 0x95, 0x96: Bitstream HP/Mana/Stamina/Position Sync)
-// Note: Pre-decoded by 0x6FB14690 / 0x6FB14620 using D2CommonBitStream (BitManip.h).
-//   - 0x18 (15 bytes): 15-bit HP, 15-bit Mana, 15-bit Stamina, 7-bit Regen, 7-bit Gold, 16-bit dX, 16-bit dY
-//   - 0x95 (13 bytes): 15-bit HP, 15-bit Mana, 15-bit Stamina, 7-bit X-offset, 7-bit Y-offset, 16-bit dX, 16-bit dY
-//   - 0x96 (9 bytes):  15-bit Stamina, 16-bit X, 16-bit Y, 16-bit dX, 16-bit dY
+// Wire format verified against D2Game/src/GAME/SCmd.cpp (lines 905-960):
+//   - 0x18 (15 bytes): 8b hdr, 15b HP, 15b Mana, 15b Stamina, 7b HPRegen, 7b ManaRegen, 16b X, 16b Y, 8b vX, 8b vY
+//   - 0x95 (13 bytes): 8b hdr, 15b HP, 15b Mana, 15b Stamina, 16b X, 16b Y, 8b vX, 8b vY
+//   - 0x96 (9 bytes):  8b hdr, 15b Stamina, 16b X, 16b Y, 8b vX, 8b vY
 void __fastcall SCMD_Handler18_PlayerHPMP(uint8_t* pPacket)
 {
     D2UnitStrc* pPlayer = UNIT_GetClientPlayer();
@@ -517,13 +527,24 @@ void __fastcall SCMD_Handler18_PlayerHPMP(uint8_t* pPacket)
         return;
     }
 
-    const int32_t nHP      = *reinterpret_cast<int32_t*>(&pPacket[4])  << 8;
-    const int32_t nMana    = *reinterpret_cast<int32_t*>(&pPacket[8])  << 8;
-    const int32_t nStamina = *reinterpret_cast<int32_t*>(&pPacket[12]) << 8;
+    D2BitBufferStrc bitBuf = {};
+    BITMANIP_Initialize(&bitBuf, pPacket, 15);
+    BITMANIP_Read(&bitBuf, 8);
+    const int32_t nHP      = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nMana    = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nStamina = BITMANIP_Read(&bitBuf, 15) << 8;
+    BITMANIP_Read(&bitBuf, 7);
+    BITMANIP_Read(&bitBuf, 7);
+    const int32_t nServerX = BITMANIP_Read(&bitBuf, 16);
+    const int32_t nServerY = BITMANIP_Read(&bitBuf, 16);
 
     STATLIST_SetUnitStat(pPlayer, STAT_HITPOINTS, nHP, 0);
     STATLIST_SetUnitStat(pPlayer, STAT_MANA, nMana, 0);
     STATLIST_SetUnitStat(pPlayer, STAT_STAMINA, nStamina, 0);
+    if (nServerX > 0 && nServerY > 0)
+    {
+        UNITMODE_CheckPositionDrift(pPlayer, nServerX, nServerY);
+    }
 }
 
 void __fastcall SCMD_Handler95_PlayerLifeManaChange(uint8_t* pPacket)
@@ -534,16 +555,22 @@ void __fastcall SCMD_Handler95_PlayerLifeManaChange(uint8_t* pPacket)
         return;
     }
 
-    const int32_t nHP      = *reinterpret_cast<int32_t*>(&pPacket[4])  << 8;
-    const int32_t nMana    = *reinterpret_cast<int32_t*>(&pPacket[8])  << 8;
-    const int32_t nStamina = *reinterpret_cast<int32_t*>(&pPacket[12]) << 8;
-    const int32_t nServerX = *reinterpret_cast<int32_t*>(&pPacket[16]);
-    const int32_t nServerY = *reinterpret_cast<int32_t*>(&pPacket[20]);
+    D2BitBufferStrc bitBuf = {};
+    BITMANIP_Initialize(&bitBuf, pPacket, 13);
+    BITMANIP_Read(&bitBuf, 8);
+    const int32_t nHP      = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nMana    = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nStamina = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nServerX = BITMANIP_Read(&bitBuf, 16);
+    const int32_t nServerY = BITMANIP_Read(&bitBuf, 16);
 
     STATLIST_SetUnitStat(pPlayer, STAT_HITPOINTS, nHP, 0);
     STATLIST_SetUnitStat(pPlayer, STAT_MANA, nMana, 0);
     STATLIST_SetUnitStat(pPlayer, STAT_STAMINA, nStamina, 0);
-    UNITMODE_CheckPositionDrift(pPlayer, nServerX, nServerY);
+    if (nServerX > 0 && nServerY > 0)
+    {
+        UNITMODE_CheckPositionDrift(pPlayer, nServerX, nServerY);
+    }
 }
 
 void __fastcall SCMD_Handler96_WalkVerify(uint8_t* pPacket)
@@ -554,12 +581,18 @@ void __fastcall SCMD_Handler96_WalkVerify(uint8_t* pPacket)
         return;
     }
 
-    const int32_t nStamina = *reinterpret_cast<int32_t*>(&pPacket[4]) << 8;
-    const int32_t nServerX = *reinterpret_cast<int32_t*>(&pPacket[8]);
-    const int32_t nServerY = *reinterpret_cast<int32_t*>(&pPacket[12]);
+    D2BitBufferStrc bitBuf = {};
+    BITMANIP_Initialize(&bitBuf, pPacket, 9);
+    BITMANIP_Read(&bitBuf, 8);
+    const int32_t nStamina = BITMANIP_Read(&bitBuf, 15) << 8;
+    const int32_t nServerX = BITMANIP_Read(&bitBuf, 16);
+    const int32_t nServerY = BITMANIP_Read(&bitBuf, 16);
 
     STATLIST_SetUnitStat(pPlayer, STAT_STAMINA, nStamina, 0);
-    UNITMODE_CheckPositionDrift(pPlayer, nServerX, nServerY);
+    if (nServerX > 0 && nServerY > 0)
+    {
+        UNITMODE_CheckPositionDrift(pPlayer, nServerX, nServerY);
+    }
 }
 
 // 0x6FB170C0
@@ -819,12 +852,63 @@ void __fastcall SCMD_HandlerAC_AssignNPC(uint8_t* pPacket)
     const uint8_t  nLifePct    = pPacket[11];
     const uint8_t  nPacketSize = pPacket[12];
 
-    D2BitBufferStrc bitStream = { 0 };
-    BITMANIP_Initialize(&bitStream, &pPacket[13], static_cast<int32_t>(nPacketSize) - 13);
-
-    const uint8_t nAnimMode = static_cast<uint8_t>(BITMANIP_Read(&bitStream, 4));
+    uint8_t nAnimMode       = MONMODE_NEUTRAL;
     uint8_t abCompInfo[16]  = { 0 };
     uint8_t abBossMods[10]  = { 0 };
+    int32_t nMonFlags       = 0;
+    uint16_t wBossHcIdx     = 0;
+
+    if (nPacketSize > 13)
+    {
+        D2BitBufferStrc bitStream = { 0 };
+        BITMANIP_Initialize(&bitStream, &pPacket[13], static_cast<int32_t>(nPacketSize) - 13);
+
+        nAnimMode = static_cast<uint8_t>(BITMANIP_Read(&bitStream, 4));
+        if (BITMANIP_Read(&bitStream, 1) != 0)
+        {
+            D2MonStats2Txt* pMonStats2 = UNITS_GetMonStats2TxtRecordFromMonsterId(wClassId);
+            if (pMonStats2 != nullptr)
+            {
+                for (int32_t c = 0; c < 16; ++c)
+                {
+                    uint8_t nChoices = pMonStats2->nComponentChoiceCounts[c];
+                    if (nChoices <= 2)
+                    {
+                        abCompInfo[c] = (nChoices > 0) ? 0 : 0;
+                    }
+                    else
+                    {
+                        int32_t nBits = 1;
+                        uint32_t v = static_cast<uint32_t>(nChoices - 1);
+                        while ((v >>= 1) != 0) { ++nBits; }
+                        abCompInfo[c] = static_cast<uint8_t>(BITMANIP_Read(&bitStream, nBits));
+                    }
+                }
+            }
+        }
+
+        if (BITMANIP_Read(&bitStream, 1) != 0)
+        {
+            if (BITMANIP_Read(&bitStream, 1)) nMonFlags |= 0x04; // Champion
+            if (BITMANIP_Read(&bitStream, 1)) nMonFlags |= 0x08; // Unique
+            if (BITMANIP_Read(&bitStream, 1)) nMonFlags |= 0x02; // SuperUnique
+            if (BITMANIP_Read(&bitStream, 1)) nMonFlags |= 0x10; // Minion
+            if (BITMANIP_Read(&bitStream, 1)) nMonFlags |= 0x20; // Ghostly/Possessed
+            if (nMonFlags & 0x02)
+            {
+                wBossHcIdx = static_cast<uint16_t>(BITMANIP_Read(&bitStream, 16));
+            }
+            for (int32_t m = 0; m < 9; ++m)
+            {
+                uint8_t nMod = static_cast<uint8_t>(BITMANIP_Read(&bitStream, 8));
+                abBossMods[m] = nMod;
+                if (nMod == 0)
+                {
+                    break;
+                }
+            }
+        }
+    }
 
     D2UnitStrc* pMonster = UNIT_AssignClientMonster(
         dwGUID,
@@ -833,14 +917,15 @@ void __fastcall SCMD_HandlerAC_AssignNPC(uint8_t* pPacket)
         nY,
         nAnimMode,
         abCompInfo,
-        0,
+        nMonFlags,
         abBossMods,
         nullptr,
-        0);
+        static_cast<int32_t>(wBossHcIdx));
 
     if (pMonster != nullptr)
     {
-        STATLIST_SetUnitStat(pMonster, STAT_HITPOINTS, nLifePct, 0);
+        STATLIST_SetUnitStat(pMonster, STAT_MAXHP, 128 << 8, 0);
+        STATLIST_SetUnitStat(pMonster, STAT_HITPOINTS, static_cast<int32_t>(nLifePct) << 8, 0);
     }
 }
 
@@ -855,7 +940,7 @@ static void __fastcall SCMD_Handler0E_ObjectState(uint8_t* pPacket)
 {
     const uint8_t  nUnitType  = pPacket[1];
     const uint32_t dwObjGUID  = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const uint8_t  nAnimMode  = pPacket[7];
+    const int32_t  nAnimMode  = *reinterpret_cast<int32_t*>(&pPacket[8]);
 
     D2UnitStrc* pObj = UNIT_FindClientUnit(static_cast<int32_t>(dwObjGUID), nUnitType);
     if (pObj != nullptr)
@@ -902,10 +987,11 @@ static void __fastcall SCMD_Handler_NoOp(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
 {
+    // D2GSPacketSrv21 (12B): [0]=0x21, [1]=nUnitType, [2]=unk, [3..6]=dwGUID, [7..8]=wSkillId, [9]=nBaseLvl, [10]=nBonusLvl
     const uint8_t  nUnitType  = pPacket[1];
-    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
-    const uint8_t  nBaseLevel = pPacket[8];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[3]);
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const uint8_t  nBaseLevel = pPacket[9];
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit == nullptr)
@@ -920,10 +1006,11 @@ static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler22_UpdateItemSkill(uint8_t* pPacket)
 {
-    const uint8_t  nUnitType  = pPacket[2];
-    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[3]);
-    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
-    const uint8_t  nAmount    = pPacket[9];
+    // D2GSPacketSrv22 (12B): [0]=0x22, [1]=nUnitType, [2..5]=dwGUID, [6..7]=wSkillId, [8]=nAmount
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
+    const uint8_t  nAmount    = pPacket[8];
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit != nullptr)
@@ -1116,14 +1203,16 @@ static void __fastcall SCMD_Handler75_PlayerPartyInfo(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler7A_PetAction(uint8_t* pPacket)
 {
+    // D2GSPacketSrv7A (13B): [0]=0x7A, [1]=bAdd, [2]=nPetType, [3..4]=wClassId, [5..8]=dwPetGUID, [9..12]=dwOwnerGUID
     const uint8_t  bAdd        = pPacket[1];
-    const uint8_t  nPetType    = pPacket[3];
-    const uint32_t dwPetGUID   = *reinterpret_cast<uint32_t*>(&pPacket[4]);
-    const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[8]);
+    const uint8_t  nPetType    = pPacket[2];
+    const uint16_t wClassId    = *reinterpret_cast<uint16_t*>(&pPacket[3]);
+    const uint32_t dwPetGUID   = *reinterpret_cast<uint32_t*>(&pPacket[5]);
+    const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[9]);
 
     if (bAdd != 0)
     {
-        ROSTERPETS_AddOrUpdateBasicPet(nPetType, dwPetGUID, dwOwnerGUID, 0);
+        ROSTERPETS_AddOrUpdateBasicPet(nPetType, dwPetGUID, dwOwnerGUID, wClassId);
     }
     else
     {
@@ -1142,11 +1231,12 @@ static void __fastcall SCMD_Handler7B_AssignSkillHotkey(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler7F_AllyPartyInfo(uint8_t* pPacket)
 {
-    const uint8_t  bIsPet   = pPacket[1];
-    const uint16_t wLifePct = *reinterpret_cast<uint16_t*>(&pPacket[2]);
-    const uint32_t dwUnitId = *reinterpret_cast<uint32_t*>(&pPacket[4]);
-    const uint16_t wLevelId = *reinterpret_cast<uint16_t*>(&pPacket[8]);
-    if (bIsPet == 0)
+    // D2GSPacketSrv7F (10B): [1]=bIsPlayer (1=player, 0=pet), [2..3]=wLifePct, [4..7]=dwUnitId, [8..9]=wLevelId
+    const uint8_t  bIsPlayer = pPacket[1];
+    const uint16_t wLifePct  = *reinterpret_cast<uint16_t*>(&pPacket[2]);
+    const uint32_t dwUnitId  = *reinterpret_cast<uint32_t*>(&pPacket[4]);
+    const uint16_t wLevelId  = *reinterpret_cast<uint16_t*>(&pPacket[8]);
+    if (bIsPlayer != 0)
     {
         ROSTER_UpdatePlayerLifeAndLevelId(dwUnitId, wLifePct, wLevelId);
     }

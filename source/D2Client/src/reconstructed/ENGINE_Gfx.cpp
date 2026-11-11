@@ -1402,8 +1402,8 @@ void __fastcall GFX_UpdateMonsterCompositeComponents(D2UnitStrc* pUnit)
         return;
     }
     if (!MONSTER_HasComponents(pUnit)) {
-        FOG_DisplayAssert("MONSTER_HasComponents(ptMonster)", "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 687);
-        exit(-1);
+        GFX_InitMonsterCofLayers(pUnit);
+        return;
     }
     D2UnitGfxDataStrc* pGfxData = *(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54);
     if (!pGfxData) {
@@ -1432,6 +1432,9 @@ void __fastcall GFX_InitUnitCompositeGfx(D2UnitStrc* pUnit)
 {
     if (!pUnit) {
         return;
+    }
+    if (*(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54) == NULL) {
+        *(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54) = GFX_AllocUnitGfxData();
     }
     int nUnitType = *(int*)pUnit;
     if (nUnitType == 0) {

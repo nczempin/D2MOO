@@ -1152,15 +1152,9 @@ int32_t __stdcall D2Client_HitTestWarpTileBox(
 // Calling convention: custom (eax = pUnit)
 int32_t __fastcall D2Client_GetUnitGfxField38(D2UnitStrc* pUnit /*eax*/)
 {
-    if (pUnit == nullptr)
+    if (pUnit == nullptr || pUnit->pGfxData == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 1406);
-        exit(-1);
-    }
-    if (pUnit->pGfxData == nullptr)
-    {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 3338);
-        exit(-1);
+        return 0;
     }
     return *reinterpret_cast<int32_t*>(reinterpret_cast<uint8_t*>(pUnit->pGfxData) + 0x38);
 }
@@ -1169,15 +1163,9 @@ int32_t __fastcall D2Client_GetUnitGfxField38(D2UnitStrc* pUnit /*eax*/)
 // Calling convention: custom (eax = pUnit, 1 stack arg: nValue)
 void __stdcall D2Client_SetUnitGfxField38(D2UnitStrc* pUnit /*eax*/, int32_t nValue)
 {
-    if (pUnit == nullptr)
+    if (pUnit == nullptr || pUnit->pGfxData == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 1397);
-        exit(-1);
-    }
-    if (pUnit->pGfxData == nullptr)
-    {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 3325);
-        exit(-1);
+        return;
     }
     *reinterpret_cast<int32_t*>(reinterpret_cast<uint8_t*>(pUnit->pGfxData) + 0x38) = nValue;
 }
@@ -1186,15 +1174,9 @@ void __stdcall D2Client_SetUnitGfxField38(D2UnitStrc* pUnit /*eax*/, int32_t nVa
 // Calling convention: custom (eax = pUnit)
 int32_t __fastcall D2Client_GetUnitGfxField34(D2UnitStrc* pUnit /*eax*/)
 {
-    if (pUnit == nullptr)
+    if (pUnit == nullptr || pUnit->pGfxData == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 1388);
-        exit(-1);
-    }
-    if (pUnit->pGfxData == nullptr)
-    {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 3313);
-        exit(-1);
+        return 0;
     }
     return *reinterpret_cast<int32_t*>(reinterpret_cast<uint8_t*>(pUnit->pGfxData) + 0x34);
 }
@@ -1203,15 +1185,9 @@ int32_t __fastcall D2Client_GetUnitGfxField34(D2UnitStrc* pUnit /*eax*/)
 // Calling convention: custom (eax = pUnit, 1 stack arg: nValue)
 void __stdcall D2Client_SetUnitGfxField34(D2UnitStrc* pUnit /*eax*/, int32_t nValue)
 {
-    if (pUnit == nullptr)
+    if (pUnit == nullptr || pUnit->pGfxData == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 1379);
-        exit(-1);
-    }
-    if (pUnit->pGfxData == nullptr)
-    {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 3300);
-        exit(-1);
+        return;
     }
     *reinterpret_cast<int32_t*>(reinterpret_cast<uint8_t*>(pUnit->pGfxData) + 0x34) = nValue;
 }
@@ -1247,29 +1223,32 @@ void __stdcall D2Client_OnMonsterAlignmentChanged(D2UnitStrc* pUnit /*esi*/, uin
 // Calling convention: custom (esi = pUnit, edi = pRoom, ebx = nY, 1 stack arg: nX)
 void __stdcall D2Client_InitializeTileUnitInRoom(D2UnitStrc* pUnit /*esi*/, D2ActiveRoomStrc* pRoom /*edi*/, int32_t nY /*ebx*/, int32_t nX)
 {
-    if (pUnit != nullptr)
+    if (pUnit == nullptr)
     {
-        pUnit->dwFlags |= (UNITFLAG_DRAWSHADOW | UNITFLAG_TARGETABLE);
+        return;
     }
 
-    UNITS_InitializeStaticPath(pUnit, pRoom, nX, nY);
-    UNITS_BlockCollisionPath(pUnit, pRoom, nX, nY);
-    UNITROOM_AddUnitToRoom(pUnit, pRoom);
+    pUnit->dwFlags |= (UNITFLAG_DRAWSHADOW | UNITFLAG_TARGETABLE);
+    if (pRoom != nullptr)
+    {
+        UNITS_InitializeStaticPath(pUnit, pRoom, nX, nY);
+        UNITS_BlockCollisionPath(pUnit, pRoom, nX, nY);
+        UNITROOM_AddUnitToRoom(pUnit, pRoom);
+    }
+    else
+    {
+        UNITS_SetXForStaticUnit(pUnit, nX);
+        UNITS_SetYForStaticUnit(pUnit, nY);
+    }
 }
 
 // 1.12a: 0x6FACF0E0
 // Calling convention: custom (ecx = nX, eax = nY)
 D2ActiveRoomStrc* __fastcall D2Client_FindRoomForSubtileCoords(int32_t nX /*ecx*/, int32_t nY /*eax*/)
 {
-    if (nX == 0 && nY == 0)
+    if ((nX == 0 && nY == 0) || gpClientAct == nullptr)
     {
         return nullptr;
-    }
-
-    D2ActiveRoomStrc* pPlayerRoom = nullptr;
-    if (gpPlayerUnit != nullptr)
-    {
-        pPlayerRoom = UNITS_GetRoom(gpPlayerUnit);
     }
 
     D2ActiveRoomStrc* pRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nX, nY);
@@ -1278,18 +1257,13 @@ D2ActiveRoomStrc* __fastcall D2Client_FindRoomForSubtileCoords(int32_t nX /*ecx*
         return pRoom;
     }
 
-    char szBuffer[512];
-    SStrPrintf(
-        szBuffer,
-        sizeof(szBuffer),
-        "Unable to find room for unit...  hControlUnit:%8x  hUnitRoom:%8x  ghAct:%8x  nX:%d  nY:%d",
-        gpPlayerUnit,
-        pPlayerRoom,
-        gpClientAct,
-        nX,
-        nY);
-    FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 316);
-    exit(-1);
+    pRoom = DUNGEON_StreamRoomAtCoords(gpClientAct, nX / 5, nY / 5);
+    if (pRoom != nullptr)
+    {
+        return pRoom;
+    }
+
+    return DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nX, nY);
 }
 
 // 1.12a: 0x6FACF180
@@ -2384,12 +2358,12 @@ D2UnitStrc* __stdcall D2Client_InitializeUnitInstance(
 
     case UNIT_ITEM:
         UNITS_AllocStaticPath(pUnit);
-        ITEM_InitClientItem(pUnit, nX, nMode, 1, nObjMode);
+        ITEM_InitClientItem(pUnit, nX, nY, nMode, nObjMode);
         break;
 
     case UNIT_TILE:
         UNITS_AllocStaticPath(pUnit);
-        D2Client_InitializeTileUnitInRoom(pUnit, pRoom, nMode, nX);
+        D2Client_InitializeTileUnitInRoom(pUnit, pRoom, nY, nX);
         break;
 
     default:
@@ -2767,6 +2741,11 @@ void __fastcall D2Client_ResetPlayerNeutralModeInRoom(D2UnitStrc* pUnit /*edi*/)
 // Calling convention: custom (eax = pUnit, 3 stack args: nX, nY, bTeleportEffect)
 void __stdcall D2Client_TeleportUnitToCoordinates(D2UnitStrc* pUnit /*eax*/, int32_t nX, int32_t nY, int32_t bTeleportEffect)
 {
+    if (pUnit == nullptr)
+    {
+        return;
+    }
+
     if (pUnit == gpPlayerUnit)
     {
         gnSelectedTargetA = 0;
@@ -2776,13 +2755,15 @@ void __stdcall D2Client_TeleportUnitToCoordinates(D2UnitStrc* pUnit /*eax*/, int
     D2ActiveRoomStrc* pDestRoom = D2Client_FindRoomForSubtileCoords(nX, nY);
     if (pUnit->pDynamicPath == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 358);
-        exit(-1);
+        PATH_AllocDynamicPath(pUnit->pMemoryPool, pDestRoom, nX, nY, pUnit, FALSE);
+        if (pUnit->pDynamicPath == nullptr)
+        {
+            return;
+        }
     }
     if (nX != 0 && nY != 0 && pDestRoom == nullptr)
     {
-        FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 360);
-        exit(-1);
+        return;
     }
 
     if (D2Client_IsUnitDeadOrDying(pUnit))
@@ -2794,11 +2775,10 @@ void __stdcall D2Client_TeleportUnitToCoordinates(D2UnitStrc* pUnit /*eax*/, int
     {
         D2CoordStrc freeCoord = { nX, nY };
         const int32_t nSizeX = UNITS_GetUnitSizeX(pUnit);
-        COLLISION_GetFreeCoordinates(pDestRoom, &freeCoord, nSizeX, 0x1C09, 1);
-        if (!D2Common_10231(pUnit->pDynamicPath, pUnit, pDestRoom, freeCoord.nX, freeCoord.nY))
+        if (pDestRoom != nullptr)
         {
-            FOG_DisplayHalt("Halt", "..\\Source\\D2Client\\UNIT\\CUnit.cpp", 425);
-            exit(-1);
+            COLLISION_GetFreeCoordinates(pDestRoom, &freeCoord, nSizeX, 0x1C09, 1);
+            D2Common_10231(pUnit->pDynamicPath, pUnit, pDestRoom, freeCoord.nX, freeCoord.nY);
         }
     }
 
