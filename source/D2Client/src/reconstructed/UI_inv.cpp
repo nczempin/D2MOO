@@ -3480,7 +3480,10 @@ int32_t __fastcall INV_HandleStandardBodySlotClick(
     }
     else if (pCursorItem && !pSlotItem)
     {
-        if (!ITEMS_IsItemLockedInInventory(pCursorItem) && INV_CheckCursorItemClear(pPlayer))
+        if (!ITEMS_IsItemLockedInInventory(pCursorItem) &&
+            INV_CheckCursorItemClear(pPlayer) &&
+            INV_CanCursorItemEquipToBodyLoc(pPlayer->pInventory, nBodyLoc) &&
+            ITEMS_CheckRequirements(pCursorItem, pPlayer, TRUE, NULL, NULL, NULL))
         {
             NET_SendByteAndTwoDwords(0x1A, pCursorItem->dwUnitId, (uint32_t)nBodyLoc);
             ITEMS_LockItemInInventory(pCursorItem);
@@ -3492,7 +3495,9 @@ int32_t __fastcall INV_HandleStandardBodySlotClick(
     {
         if (!ITEMS_IsItemLockedInInventory(pCursorItem) &&
             !ITEMS_IsItemLockedInInventory(pSlotItem) &&
-            INV_CheckCursorItemClear(pPlayer))
+            INV_CheckCursorItemClear(pPlayer) &&
+            INV_CanCursorItemEquipToBodyLoc(pPlayer->pInventory, nBodyLoc) &&
+            ITEMS_CheckRequirements(pCursorItem, pPlayer, TRUE, NULL, NULL, NULL))
         {
             NET_SendByteAndTwoDwords(0x1D, pCursorItem->dwUnitId, (uint32_t)nBodyLoc);
             ITEMS_LockItemInInventory(pCursorItem);

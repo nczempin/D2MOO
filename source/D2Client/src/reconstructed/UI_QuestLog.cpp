@@ -78,7 +78,7 @@ void __stdcall GFX_PlayUnitOverlayOnPlayer(int32_t bLoop);                      
 void __fastcall CUNIT_IterateClientUnitsOfType(int32_t nUnitType, void(__fastcall* pfCallback)(D2UnitStrc*)); // 0x6FACEA20
 void __fastcall MSG_SendBytePacket(uint8_t nOpcode);                                                       // 0x6FB29900
 void __fastcall MSG_SendByteWordPacket(uint8_t nOpcode, uint16_t wValue);                                  // 0x6FB298E0
-void __stdcall MSG_SendRawPacket(const void* pPacket);                                                     // 0x6FB291A0 (ebx = nSize)
+int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize);                                        // 0x6FB291A0
 void __stdcall TEXT_DisplaySystemMessage(const Unicode* wszText, uint8_t nColor);                          // 0x6FB21740
 void __stdcall TEXT_PlayQuestSpeechBox(uint16_t wStringId, int32_t nZero);                                 // 0x6FB21340
 void __stdcall TEXT_CloseQuestSpeechBox(void);                                                             // 0x6FB22E40
@@ -746,10 +746,10 @@ void __stdcall QUESTLOG_SendCompletedAnimationAcks(void)
             int32_t nQuestBitIdx = g_aActiveQuestSockets[i].nQuestBitIndex;
             QUESTRECORD_SetQuestState(g_pPlayerQuestRecord, nQuestBitIdx, 0x0C);
 
-            uint8_t aPacket[4];
+            uint8_t aPacket[3];
             aPacket[0] = 0x58; // C2S_QUESTCOMPLETED
             *(uint16_t*)&aPacket[1] = (uint16_t)nQuestBitIdx;
-            MSG_SendRawPacket(aPacket);
+            MSG_SendPacket(aPacket, sizeof(aPacket));
         }
     }
 }

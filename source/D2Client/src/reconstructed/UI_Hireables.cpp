@@ -196,16 +196,18 @@ struct D2RosterUnitStrc
 
 struct D2PetInfoStrc
 {
-    int32_t nNameStrId;         // +0x00
+    int32_t nClassId;           // +0x00
     int32_t nPetType;           // +0x04
     int32_t nUnitGuid;          // +0x08
     int32_t nOwnerGuid;         // +0x0C
-    int32_t nUnk10;             // +0x10
-    int32_t nUnk14;             // +0x14
-    int32_t nUnk18;             // +0x18
+    int32_t nPetNameStringId;   // +0x10
+    int32_t nScreenIconX;       // +0x14
+    int32_t nScreenIconY;       // +0x18
     int32_t nLifePercent;       // +0x1C
     int32_t nOmitDraw;          // +0x20
-    int32_t aUnk24[3];          // +0x24
+    uint32_t dwMonSeed;         // +0x24
+    uint32_t dwNameIdx;         // +0x28
+    uint32_t dwSpecialFlag;     // +0x2C
     D2PetInfoStrc* pNext;       // +0x30
 };
 
@@ -345,7 +347,8 @@ extern D2CellFileStrc* __fastcall UI_LoadPanelCellFile(const char* szPath);     
 extern D2RosterUnitStrc* __fastcall ROSTER_FindByUnitGuid(int32_t nUnitGuid);                  // 0x6FB281C0
 extern uint16_t __fastcall ROSTER_GetPartyId(D2RosterUnitStrc* pRoster);                       // 0x6FB27A10
 extern void __stdcall MSG_SendLeavePartyPacket();                                              // 0x6FB29160
-extern void __stdcall MSG_SendPacket(const void* pData);                                       // 0x6FB291A0 (ebx = len)
+extern int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize);                     // 0x6FB291A0
+extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
 
 // ============================================================================
 // PART 1: Party Screen UI (..\Source\D2Client\UI\Party.cpp)
@@ -985,7 +988,7 @@ void __stdcall PARTY_SendPartyActionPacket(uint8_t nAction, int32_t nTargetUnitG
         int32_t nTargetGuid;
     } tPacket = { 0x5E, nAction, nTargetUnitGuid };
     #pragma pack(pop)
-    MSG_SendPacket(&tPacket);
+    MSG_SendPacket(&tPacket, sizeof(tPacket));
 }
 
 // 1.12a: 0x6FB11FE0
@@ -1000,7 +1003,7 @@ void __stdcall PARTY_SendRelationActionPacket(uint8_t nAction, uint8_t bState, i
         int32_t nTargetGuid;
     } tPacket = { 0x5D, nAction, bState, nTargetUnitGuid };
     #pragma pack(pop)
-    MSG_SendPacket(&tPacket);
+    MSG_SendPacket(&tPacket, sizeof(tPacket));
 }
 
 // 1.12a: 0x6FB12010
@@ -2554,12 +2557,32 @@ D2CellFileStrc* __stdcall HIREABLES_GetOrLoadPetPortraitCellFile(
 // Calling convention: __userpurge (ebx = pMercUnit, [esp+4] = nX, [esp+8] = nY)
 void __stdcall HIREABLES_DrawMercenaryName(D2UnitStrc* pMercUnit, int32_t nX, int32_t nY)
 {
-    if (!pMercUnit)
+    const Unicode* pName = nullptr;
+    int32_t nMercGuid = pMercUnit ? *(int32_t*)((uint8_t*)pMercUnit + 0x0C) : -1;
+    for (D2PetInfoStrc* pPet = g_pPetInfoList; pPet; pPet = pPet->pNext)
     {
-        return;
+        if (pPet->nPetType == 7 && (nMercGuid == -1 || pPet->nUnitGuid == nMercGuid))
+        {
+            if (pPet->dwNameIdx != 0)
+            {
+                pName = D2LANG_GetStringFromTblIndex((uint16_t)pPet->dwNameIdx);
+            }
+            break;
+        }
     }
-    Unicode wszName[32] = { 0 };
-    HIREABLES_DrawPortraitLabel(wszName, nX, nY, 0);
+    if (!pName && pMercUnit)
+    {
+        pName = D2Client_GetNpcDisplayName(pMercUnit);
+    }
+    if (pName)
+    {
+        Unicode wszName[32] = { 0 };
+        for (int i = 0; i < 31 && pName[i].wChar != 0; ++i)
+        {
+            wszName[i] = pName[i];
+        }
+        HIREABLES_DrawPortraitLabel(wszName, nX, nY, 0);
+    }
 }
 
 // 1.12a: 0x6FB6D590
@@ -2727,6 +2750,23 @@ int32_t __stdcall HIREABLES_DrawMercenaryPortrait(
         return 0;
     }
     HIREABLES_DrawPortraitLifeBar(7, nMercGuid, *pX);
+    for (D2PetInfoStrc* pPet = g_pPetInfoList; pPet; pPet = pPet->pNext)
+    {
+        if (pPet->nPetType == 7 && pPet->nUnitGuid == nMercGuid && pPet->dwNameIdx != 0)
+        {
+            const Unicode* pMercName = D2LANG_GetStringFromTblIndex((uint16_t)pPet->dwNameIdx);
+            if (pMercName)
+            {
+                Unicode wszName[32] = { 0 };
+                for (int i = 0; i < 31 && pMercName[i].wChar != 0; ++i)
+                {
+                    wszName[i] = pMercName[i];
+                }
+                HIREABLES_DrawPortraitLabel(wszName, *pX, *pLabelY, 0);
+            }
+            break;
+        }
+    }
     HIREABLES_AlternateLabelStagger(pLabelY, pStaggerOffset);
     g_nMercPortraitX = *pX;
     g_nMercPortraitLabelY = *pLabelY;
@@ -2864,7 +2904,7 @@ void __stdcall HIREABLES_OnLeftMouseDown(D2WindowMsgStrc* pMsg)
     if (HIREABLES_CanMercUseCursorItem(1))
     {
         uint8_t abPacket[3] = { 0x61, 0, 0 };
-        MSG_SendPacket(abPacket);
+        MSG_SendPacket(abPacket, sizeof(abPacket));
         pMsg->bHandled = 1;
         pMsg->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);

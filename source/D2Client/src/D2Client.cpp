@@ -2926,7 +2926,7 @@ static bool IsSubtileWalkableForBfs(int32_t sx, int32_t sy, bool bRequireClearMa
 	{
 		pRoom = SafeStreamClientRoomAtTile(sx / 5, sy / 5);
 	}
-	if (!pRoom || COLLISION_CheckMask(pRoom, sx, sy, COLLIDE_WALL | COLLIDE_NOPLAYER | COLLIDE_OBJECT | COLLIDE_DOOR | COLLIDE_BLANK))
+	if (!pRoom || COLLISION_CheckMaskWithSize(pRoom, sx, sy, COLLISION_UNIT_SIZE_SMALL, COLLIDE_WALL | COLLIDE_NOPLAYER | COLLIDE_OBJECT | COLLIDE_DOOR | COLLIDE_BLANK))
 	{
 		return false;
 	}

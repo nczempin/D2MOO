@@ -1261,14 +1261,15 @@ static void __fastcall SCMD_Handler7F_AllyPartyInfo(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler81_AssignMerc(uint8_t* pPacket)
 {
-    const uint16_t wPetType    = *reinterpret_cast<uint16_t*>(&pPacket[2]);
+    const uint8_t  nPetType    = pPacket[1];
+    const uint16_t wClassId    = *reinterpret_cast<uint16_t*>(&pPacket[2]);
     const uint32_t dwOwnerGUID = *reinterpret_cast<uint32_t*>(&pPacket[4]);
     const uint32_t dwMercGUID  = *reinterpret_cast<uint32_t*>(&pPacket[8]);
     const uint32_t dwMonSeed   = *reinterpret_cast<uint32_t*>(&pPacket[12]);
     const uint16_t wNameIdx    = *reinterpret_cast<uint16_t*>(&pPacket[16]);
 
     D2RosterPetCreateDataStrc tCreate = { dwMonSeed, wNameIdx, 0 };
-    ROSTERPETS_AddOrUpdateFullPet(wPetType, dwMercGUID, &tCreate, dwOwnerGUID, 7);
+    ROSTERPETS_AddOrUpdateFullPet(nPetType, dwMercGUID, &tCreate, dwOwnerGUID, wClassId);
 }
 
 static void __fastcall SCMD_Handler8B_PlayerPartyRelationship(uint8_t* pPacket)

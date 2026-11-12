@@ -2175,6 +2175,29 @@ struct Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc *
     if (!a0) return nullptr;
     if (a0->dwUnitType == UNIT_MONSTER)
     {
+        struct BridgeRosterPetNode
+        {
+            int32_t              nClassId;
+            int32_t              nPetType;
+            uint32_t             dwUnitId;
+            uint32_t             dwOwnerId;
+            int32_t              aStats[5];
+            uint32_t             dwMonSeed;
+            uint32_t             dwNameIdx;
+            uint32_t             dwSpecialFlag;
+            BridgeRosterPetNode* pNext;
+        };
+        for (const BridgeRosterPetNode* pPet = reinterpret_cast<const BridgeRosterPetNode*>(gpRosterPetList); pPet != nullptr; pPet = pPet->pNext)
+        {
+            if (pPet->nPetType == 7 && pPet->dwUnitId == a0->dwUnitId && pPet->dwNameIdx != 0)
+            {
+                const Unicode* pMercName = D2LANG_GetStringFromTblIndex(static_cast<uint16_t>(pPet->dwNameIdx));
+                if (pMercName)
+                {
+                    return pMercName;
+                }
+            }
+        }
         D2MonStatsTxt* pMon = DATATBLS_GetMonStatsTxtRecord(a0->dwClassId);
         if (pMon && pMon->wNameStr != 0)
             return D2LANG_GetStringFromTblIndex(pMon->wNameStr);
@@ -2975,13 +2998,47 @@ void __stdcall MSG_SendLeavePartyPacket(void)
 {
     MSG_SendByte(0x5E);
 }
+static size_t Bridge_ComputeC2SPacketSize(const uint8_t* pPkt)
+{
+    static const uint8_t s_abC2SPacketSizes[0x70] = {
+        /* 0x00 */ 0,  5,  9,  5,  9,  5,  9,  9,  5,  9,  9,  1,  5,  9,  9,  5,
+        /* 0x10 */ 9,  9,  1,  9,  0,  0, 13,  5, 17,  5,  9,  9,  3,  9,  9, 17,
+        /* 0x20 */ 13, 9,  5,  9,  5,  9, 13,  9,  9,  9,  9, 35,  0,  1,  3,  9,
+        /* 0x30 */ 9,  9, 17, 17,  5, 17,  9,  5, 13,  5,  3,  3,  9,  5,  5,  3,
+        /* 0x40 */ 1,  1,  1,  1, 17,  9, 13, 13,  1,  9,  0,  9,  5,  3,  0,  7,
+        /* 0x50 */ 9,  9,  5,  1,  1,  0,  0,  0,  3, 17,  0,  0,  0,  7,  6,  5,
+        /* 0x60 */ 1,  3,  5,  5,  9, 17, 46, 37,  1,  1,  1,  0, 13,  1,  0,  1
+    };
+    const uint8_t bOp = pPkt[0];
+    if (bOp == 0x14 || bOp == 0x15)
+    {
+        const char* szMsg = reinterpret_cast<const char*>(pPkt + 3);
+        size_t nMsgLen = strnlen(szMsg, 256);
+        const char* szTarget = szMsg + nMsgLen + 1;
+        size_t nTargetLen = strnlen(szTarget, 64);
+        return 3 + nMsgLen + 1 + nTargetLen + 2;
+    }
+    if (bOp < 0x70 && s_abC2SPacketSizes[bOp] > 0)
+    {
+        return s_abC2SPacketSizes[bOp];
+    }
+    return 1;
+}
 void __stdcall MSG_SendPacket(void const * a0)
 {
-    if (a0) MSG_SendByte(*(const uint8_t*)a0);
+    if (a0)
+    {
+        const uint8_t* pBytes = static_cast<const uint8_t*>(a0);
+        MSG_SendPacket(const_cast<void*>(a0), Bridge_ComputeC2SPacketSize(pBytes));
+    }
 }
 void __stdcall MSG_SendRawPacket(void const * a0)
 {
-    if (a0) MSG_SendByte(*(const uint8_t*)a0);
+    if (a0)
+    {
+        const uint8_t* pBytes = static_cast<const uint8_t*>(a0);
+        MSG_SendPacket(const_cast<void*>(a0), Bridge_ComputeC2SPacketSize(pBytes));
+    }
 }
 void __fastcall MSG_SendSingleBytePacket(unsigned char a0)
 {
