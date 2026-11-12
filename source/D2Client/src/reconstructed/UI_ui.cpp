@@ -353,7 +353,7 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
         return;
     }
 
-    int32_t nBeltStartX = gnScreenWidth / 2 + 102;
+    int32_t nBeltStartX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 23) : (gnScreenWidth / 2 + 102);
     if (nMouseX < nBeltStartX || nMouseX > nBeltStartX + 123) {
         return;
     }
@@ -631,7 +631,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg /*eax*/)
 
     int32_t nMouseX = (int32_t)*(uint16_t*)((uint8_t*)pMsg + 0x0C);
     int32_t nMouseY = (int32_t)*(uint16_t*)((uint8_t*)pMsg + 0x0E);
-    int32_t nBeltStartX = gnScreenWidth / 2 + 102;
+    int32_t nBeltStartX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 23) : (gnScreenWidth / 2 + 102);
     if (nMouseX < nBeltStartX || nMouseX > nBeltStartX + 123) {
         return;
     }
@@ -1948,6 +1948,9 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
 
 static D2CellFileStrc* s_pWaygateBgCel   = nullptr;
 static D2CellFileStrc* s_pWaygateTabsCel = nullptr;
+int32_t g_nSelectedWaypointTab = 0;
+uint64_t g_qwUnlockedWaypointsMask = 1ULL;
+uint32_t g_dwActiveWaypointGuid = 0u;
 
 static void WAYPOINT_DrawPanel()
 {
@@ -1984,10 +1987,15 @@ static void WAYPOINT_DrawPanel()
         UI_DrawBoxPiecesFrame(&rFallback);
     }
 
+    const int32_t nMaxActs = gbIsExpansion ? 5 : 4;
+    if (g_nSelectedWaypointTab < 0 || g_nSelectedWaypointTab >= nMaxActs) {
+        g_nSelectedWaypointTab = 0;
+    }
+
     if (s_pWaygateTabsCel) {
         const int32_t nTabMax = D2CMP_CelFileGetCelsPerDirection(s_pWaygateTabsCel);
-        for (int32_t t = 0; t < 5; ++t) {
-            int32_t nFrame = (t == 0) ? (t * 2 + 1) : (t * 2);
+        for (int32_t t = 0; t < nMaxActs; ++t) {
+            int32_t nFrame = (t == g_nSelectedWaypointTab) ? (t * 2 + 1) : (t * 2);
             if (nFrame < nTabMax) {
                 D2GfxDataStrc tTab = {};
                 tTab.pCellFile = s_pWaygateTabsCel;
@@ -1997,14 +2005,34 @@ static void WAYPOINT_DrawPanel()
         }
     }
 
-    static const int32_t kAct1WpLevels[9] = { 1, 3, 4, 5, 6, 27, 29, 32, 35 };
-    D2WIN_SetFont(1);
-    D2WIN_DrawText(L"Waypoints - Act I", nBaseX + 160, nBaseY + 64, 4, 1);
+    static const int32_t kActWpLevels[5][9] = {
+        { 1, 3, 4, 5, 6, 27, 29, 32, 35 },
+        { 40, 48, 42, 57, 43, 44, 52, 74, 46 },
+        { 75, 76, 77, 78, 79, 80, 81, 83, 101 },
+        { 103, 106, 107, 0, 0, 0, 0, 0, 0 },
+        { 109, 111, 112, 113, 115, 123, 117, 118, 129 }
+    };
+    static const int32_t kActWpCounts[5]  = { 9, 9, 9, 3, 9 };
+    static const int32_t kActWpBitBase[5] = { 0, 9, 18, 27, 30 };
+    static const wchar_t* const kActWpHeaders[5] = {
+        L"Waypoints - Act I",
+        L"Waypoints - Act II",
+        L"Waypoints - Act III",
+        L"Waypoints - Act IV",
+        L"Waypoints - Act V"
+    };
 
-    for (int32_t i = 0; i < 9; ++i) {
+    const int32_t nActIdx = g_nSelectedWaypointTab;
+    D2WIN_SetFont(1);
+    D2WIN_DrawText(kActWpHeaders[nActIdx], nBaseX + 104, nBaseY + 75, 4, 0);
+
+    const int32_t nCount = kActWpCounts[nActIdx];
+    const int32_t nBitBase = kActWpBitBase[nActIdx];
+    for (int32_t i = 0; i < nCount; ++i) {
         const int32_t nRowY = nBaseY + 92 + i * 34;
-        const bool bUnlocked = (i == 0);
-        D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(kAct1WpLevels[i]);
+        const int32_t nWpBit = nBitBase + i;
+        const bool bUnlocked = ((g_qwUnlockedWaypointsMask >> nWpBit) & 1ULL) != 0ULL || (nActIdx == 0 && i == 0);
+        D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(kActWpLevels[nActIdx][i]);
         const wchar_t* wszName = (pLvlTxt && pLvlTxt->wszLevelName[0])
             ? reinterpret_cast<const wchar_t*>(pLvlTxt->wszLevelName)
             : L"Waypoint";

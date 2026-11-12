@@ -170,6 +170,9 @@ extern int32_t               g_nInteractingNpcClassId;
 extern D2UnitStrc*           g_pTradeNpcUnit;
 extern D2BitBufferStrc*      g_pPlayerQuestRecord;
 extern D2BitBufferStrc*      g_pGameQuestRecord;
+extern int32_t               g_nSelectedWaypointTab;
+extern uint64_t              g_qwUnlockedWaypointsMask;
+extern uint32_t              g_dwActiveWaypointGuid;
 
 struct D2ClientItemStatDescInfoStrc
 {

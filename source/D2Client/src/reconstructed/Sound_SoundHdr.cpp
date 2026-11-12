@@ -1694,15 +1694,15 @@ void __stdcall CHARSTATS_DrawPanel()
 
     D2Win_10127_SetFont(6);
     CHARSTATS_DrawTextAscii("Attack Damage", nOx + 196, nTopY + 95, 4, 1);
-    CHARSTATS_DrawTextAscii("Attack Rating", nOx + 196, nTopY + 151, 4, 1);
-    CHARSTATS_DrawTextAscii("Defense", nOx + 196, nTopY + 205, 4, 1);
-    CHARSTATS_DrawTextAscii("Stamina", nOx + 186, nTopY + 243, 4, 1);
-    CHARSTATS_DrawTextAscii("Life", nOx + 186, nTopY + 269, 4, 1);
-    CHARSTATS_DrawTextAscii("Mana", nOx + 186, nTopY + 307, 4, 1);
-    CHARSTATS_DrawTextAscii("Fire Resistance", nOx + 204, nTopY + 337, 4, 1);
-    CHARSTATS_DrawTextAscii("Cold Resistance", nOx + 204, nTopY + 361, 4, 1);
-    CHARSTATS_DrawTextAscii("Lightning Resist", nOx + 204, nTopY + 385, 4, 1);
-    CHARSTATS_DrawTextAscii("Poison Resistance", nOx + 204, nTopY + 409, 4, 1);
+    CHARSTATS_DrawTextAscii("Attack Rating", nOx + 196, nTopY + 160, 4, 1);
+    CHARSTATS_DrawTextAscii("Defense", nOx + 196, nTopY + 206, 4, 1);
+    CHARSTATS_DrawTextAscii("Stamina", nOx + 186, nTopY + 244, 4, 1);
+    CHARSTATS_DrawTextAscii("Life", nOx + 186, nTopY + 270, 4, 1);
+    CHARSTATS_DrawTextAscii("Mana", nOx + 186, nTopY + 308, 4, 1);
+    CHARSTATS_DrawTextAscii("Fire Resistance", nOx + 204, nTopY + 345, 4, 1);
+    CHARSTATS_DrawTextAscii("Cold Resistance", nOx + 204, nTopY + 369, 4, 1);
+    CHARSTATS_DrawTextAscii("Lightning Resist", nOx + 204, nTopY + 393, 4, 1);
+    CHARSTATS_DrawTextAscii("Poison Resistance", nOx + 204, nTopY + 417, 4, 1);
 
     D2Win_10127_SetFont(1);
     int32_t nBaseDmg = 0, nMaxDmg = 0, nBonusAR = 0;
@@ -1713,11 +1713,11 @@ void __stdcall CHARSTATS_DrawPanel()
     CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 96, 0, 1);
 
     snprintf(szBuf, sizeof(szBuf), "%d", nAR);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 152, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 161, 0, 1);
 
     int32_t nDef = D2Common_10550_GetUnitDefense(pPlayer);
     snprintf(szBuf, sizeof(szBuf), "%d", nDef);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 206, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 207, 0, 1);
 
     int32_t nCurStam = D2Common_10519_GetUnitStatSigned(pPlayer, 10 /* STAT_STAMINA */, 0) >> 8;
     int32_t nMaxStam = D2Common_10519_GetUnitStatSigned(pPlayer, 11 /* STAT_MAXSTAMINA */, 0) >> 8;
@@ -1748,13 +1748,13 @@ void __stdcall CHARSTATS_DrawPanel()
     int32_t nColdRes = D2Common_10519_GetUnitStatSigned(pPlayer, 43 /* STAT_COLDRESIST */, 0);
     int32_t nPoisRes = D2Common_10519_GetUnitStatSigned(pPlayer, 45 /* STAT_POISONRESIST */, 0);
     snprintf(szBuf, sizeof(szBuf), "%d%%", nFireRes);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 338, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 346, 0, 1);
     snprintf(szBuf, sizeof(szBuf), "%d%%", nColdRes);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 362, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 370, 0, 1);
     snprintf(szBuf, sizeof(szBuf), "%d%%", nLightRes);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 386, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 394, 0, 1);
     snprintf(szBuf, sizeof(szBuf), "%d%%", nPoisRes);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 410, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 418, 0, 1);
 
     if (g_pCharStatBtnCellFile)
     {
@@ -1772,6 +1772,13 @@ int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg)
     int32_t nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
     int32_t nOx = g_nLeftPanelOffsetX;
     int32_t nTopY = -g_nLeftPanelOffsetY;
+
+    if (nMouseX >= nOx + 46 && nMouseX <= nOx + 86 &&
+        nMouseY >= nTopY + 384 && nMouseY <= nTopY + 424)
+    {
+        UI_SetPanelState(D2PANEL_CHAR, 1, 0);
+        return 1;
+    }
 
     D2UnitStrc* pPlayer = PLAYER_GetLocalPlayer();
     int32_t nStatPts = pPlayer ? D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0) : 0;

@@ -174,17 +174,22 @@ struct D2WinMsgStrc
 
 struct D2GSPacketSrv5DStrc;
 struct D2AutomapLayerStrc;
+struct D2MsgStrc;
 
 void __stdcall UI_InitAllPanels();
 void __stdcall UI_ReleaseAllAssets();
 void __fastcall UI_RenderHUD();
 int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
 void __fastcall UI_ToggleMiniPanel();
+void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg);
 
 void __stdcall INV_SyncExpansionModeFlag();
 void __stdcall INV_InitInventoryLayoutRectsAndGrids();
 void __fastcall INV_SetPanelMode(int32_t nMode);
 void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg);
+void __stdcall INV_OnInventoryPanelMouseUp(D2WinMsgStrc* pMsg);
+void __stdcall INV_OnStashPanelMouseUp(D2WinMsgStrc* pMsg);
+void __stdcall INV_OnHoradricCubeMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnMercInventoryMouseUp(D2WinMsgStrc* pMsg);
 
 void __stdcall QUESTLOG_InitSession(void);
@@ -267,6 +272,8 @@ static float gfTargetWorldY = 0.0f;
 static bool gbPlayerMoving = false;
 static bool gbMouseLeftHeld = false;
 static POINT gMousePos = { 400, 300 };
+static std::vector<POINT> g_vInteractivePath;
+static size_t g_uInteractivePathIdx = 0;
 
 static uint32_t gdwClientPlayerGuid = 0;
 static int32_t gnServerSubX = 0;
@@ -284,12 +291,12 @@ static int32_t gnCurrentAutomapLayerNo = -1;
 static uint32_t gdwServerTicks = 0;
 static uint32_t gdwGamePacketsReceived = 0;
 static uint32_t gdwSCmdPacketsDispatched = 0;
+static uint32_t gdwInlinePacketsHandled = 0;
 static uint32_t gdwNpcIntrosReceived = 0;
 static uint32_t gdwVendorItemsReceived = 0;
 static uint32_t gdwAutotestVendorShopItems = 0;
 static uint32_t gdwTransmutesSent = 0;
 static uint32_t gdwSlashCommandsExecuted = 0;
-static uint32_t gdwLightMapRoomsSampled = 0;
 static uint32_t gdwAutomapRoomsPopulated = 0;
 
 // ============================================================================
@@ -583,7 +590,7 @@ static int32_t GetAdjacentWildernessLevelForTown(int32_t nTownLevelId)
 	case LEVEL_LUTGHOLEIN:             return LEVEL_ROCKYWASTE;
 	case LEVEL_KURASTDOCKTOWN:         return LEVEL_SPIDERFOREST;
 	case LEVEL_THEPANDEMONIUMFORTRESS: return LEVEL_OUTERSTEPPES;
-	case LEVEL_HARROGATH:              return LEVEL_ID_ACT5_BARRICADE_1;
+	case LEVEL_HARROGATH:              return LEVEL_BLOODYFOOTHILLS;
 	default:                           return 0;
 	}
 }
@@ -1135,6 +1142,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			{
 				RebuildClientActWorld(gnCurrentAct, gdwServerMapSeed, gwServerTownLevelId);
 			}
+			++gdwInlinePacketsHandled;
 		}
 		break;
 	}
@@ -1158,7 +1166,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			const int32_t nTileY = *reinterpret_cast<const uint16_t*>(&aBuffer[3]);
 			const int32_t nLevelId = aBuffer[5];
 			SafeStreamClientRoomAtTile(nTileX, nTileY, nLevelId);
-			++gdwSCmdPacketsDispatched;
+			++gdwInlinePacketsHandled;
 		}
 		break;
 	}
@@ -1195,16 +1203,18 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				gfTargetWorldX = gfPlayerWorldX;
 				gfTargetWorldY = gfPlayerWorldY;
 				gbPlayerMoving = false;
+				g_vInteractivePath.clear();
+				g_uInteractivePathIdx = 0;
 				StreamClientNeighborhoodAroundTile(nCurX / 5, nCurY / 5, 24);
 				D2Client_TeleportUnitToCoordinates(gpPlayerUnit, nCurX, nCurY, 0);
 				UNITS_ChangeAnimMode(gpPlayerUnit, DUNGEON_IsTownLevelId(gnCurrentLevelId) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL);
 				if (sgptSCmdTable[0x0D].pfUnitHandler)
 				{
 					sgptSCmdTable[0x0D].pfUnitHandler(gpPlayerUnit, aBuffer);
+					++gdwSCmdPacketsDispatched;
 				}
 				SyncReconstructedClientGlobals();
 			}
-			++gdwSCmdPacketsDispatched;
 		}
 		break;
 	}
@@ -1359,7 +1369,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			{
 				GFX_InitUnitCompositeGfx(pObj);
 			}
-			++gdwSCmdPacketsDispatched;
+			++gdwInlinePacketsHandled;
 		}
 		break;
 	}
@@ -1434,7 +1444,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				GFX_InitUnitCompositeGfx(pPlrUnit);
 			}
 			SyncReconstructedClientGlobals();
-			++gdwSCmdPacketsDispatched;
+			++gdwInlinePacketsHandled;
 		}
 		break;
 	}
@@ -1598,7 +1608,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				STATLIST_SetUnitStat(pMon, STAT_HITPOINTS, static_cast<int32_t>(nLife) << 8, 0);
 				GFX_InitUnitCompositeGfx(pMon);
 			}
-			++gdwSCmdPacketsDispatched;
+			++gdwInlinePacketsHandled;
 		}
 		break;
 	}
@@ -1978,6 +1988,13 @@ static bool HandleHudBottomBarMouseDown(int32_t mx, int32_t my)
 	return true;
 }
 
+static bool ComputeWalkableSubtilePath(
+	int32_t rawStartX,
+	int32_t rawStartY,
+	int32_t rawGoalX,
+	int32_t rawGoalY,
+	std::vector<POINT>& outWaypoints);
+
 static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
@@ -1990,14 +2007,11 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
 	case WM_MOUSEMOVE:
 	{
-		RECT rcClient = {};
-		GetClientRect(hWnd, &rcClient);
-		const int32_t nClientW = std::max<int32_t>(1, rcClient.right - rcClient.left);
-		const int32_t nClientH = std::max<int32_t>(1, rcClient.bottom - rcClient.top);
-		const int32_t rawX = static_cast<int16_t>(LOWORD(lParam));
-		const int32_t rawY = static_cast<int16_t>(HIWORD(lParam));
-		gMousePos.x = (rawX * 800) / nClientW;
-		gMousePos.y = (rawY * 600) / nClientH;
+		// D2Win_MAINWINDOW_WndProc_6F8AD9B0 already scales physical client coords into 800x600 logical coords
+		const int32_t logX = static_cast<int16_t>(LOWORD(lParam));
+		const int32_t logY = static_cast<int16_t>(HIWORD(lParam));
+		gMousePos.x = std::max<int32_t>(0, std::min<int32_t>(799, logX));
+		gMousePos.y = std::max<int32_t>(0, std::min<int32_t>(599, logY));
 		SyncReconstructedClientGlobals();
 		return 0;
 	}
@@ -2005,14 +2019,10 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 	case WM_LBUTTONDOWN:
 	case WM_RBUTTONDOWN:
 	{
-		RECT rcClient = {};
-		GetClientRect(hWnd, &rcClient);
-		const int32_t nClientW = std::max<int32_t>(1, rcClient.right - rcClient.left);
-		const int32_t nClientH = std::max<int32_t>(1, rcClient.bottom - rcClient.top);
-		const int32_t rawX = static_cast<int16_t>(LOWORD(lParam));
-		const int32_t rawY = static_cast<int16_t>(HIWORD(lParam));
-		gMousePos.x = (rawX * 800) / nClientW;
-		gMousePos.y = (rawY * 600) / nClientH;
+		const int32_t logX = static_cast<int16_t>(LOWORD(lParam));
+		const int32_t logY = static_cast<int16_t>(HIWORD(lParam));
+		gMousePos.x = std::max<int32_t>(0, std::min<int32_t>(799, logX));
+		gMousePos.y = std::max<int32_t>(0, std::min<int32_t>(599, logY));
 		SyncReconstructedClientGlobals();
 
 		const int32_t mx = gMousePos.x;
@@ -2038,6 +2048,14 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		{
 			return 0;
 		}
+		if (!bLeftClick && mx >= 418 && mx <= 550 && (my >= 552 || gaPanelStates[D2PANEL_BELT]))
+		{
+			PANEL_OnRButtonDown(reinterpret_cast<D2MsgStrc*>(&tMsg));
+			if (tMsg.dwKeyFlags != 0 || tMsg.bHandled != 0)
+			{
+				return 0;
+			}
+		}
 
 		// Left-side panels (0..400)
 		if (mx < 400 && my < 552)
@@ -2056,19 +2074,39 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			{
 				const int32_t nBaseX = 80;
 				const int32_t nBaseY = 60;
-				if (mx >= nBaseX + 256 && mx <= nBaseX + 300 && my >= nBaseY + 390 && my <= nBaseY + 430)
+				if (mx >= nBaseX + 260 && mx <= nBaseX + 308 && my >= nBaseY + 382 && my <= nBaseY + 424)
 				{
 					UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
 					return 0;
 				}
-				static const uint32_t kAct1WpLevels[9] = { 1, 3, 4, 5, 6, 27, 29, 32, 35 };
-				for (int32_t i = 0; i < 9; ++i)
+				const int32_t nMaxActs = gbIsExpansion ? 5 : 4;
+				if (my >= nBaseY + 10 && my <= nBaseY + 46 && mx >= nBaseX + 4 && mx < nBaseX + 4 + nMaxActs * 62)
+				{
+					g_nSelectedWaypointTab = std::max<int32_t>(0, std::min<int32_t>(nMaxActs - 1, (mx - (nBaseX + 4)) / 62));
+					return 0;
+				}
+				static const uint32_t kActWpLevels[5][9] = {
+					{ 1, 3, 4, 5, 6, 27, 29, 32, 35 },
+					{ 40, 48, 42, 57, 43, 44, 52, 74, 46 },
+					{ 75, 76, 77, 78, 79, 80, 81, 83, 101 },
+					{ 103, 106, 107, 0, 0, 0, 0, 0, 0 },
+					{ 109, 111, 112, 113, 115, 123, 117, 118, 129 }
+				};
+				static const int32_t kActWpCounts[5]  = { 9, 9, 9, 3, 9 };
+				static const int32_t kActWpBitBase[5] = { 0, 9, 18, 27, 30 };
+				const int32_t nActIdx = std::max<int32_t>(0, std::min<int32_t>(nMaxActs - 1, g_nSelectedWaypointTab));
+				for (int32_t i = 0; i < kActWpCounts[nActIdx]; ++i)
 				{
 					const int32_t nRowY = nBaseY + 92 + i * 34;
 					if (my >= nRowY - 6 && my <= nRowY + 22 && mx >= nBaseX + 40 && mx <= nBaseX + 280)
 					{
-						SendWaypointSelect(0u, kAct1WpLevels[i]);
-						UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
+						const int32_t nWpBit = kActWpBitBase[nActIdx] + i;
+						const bool bUnlocked = ((g_qwUnlockedWaypointsMask >> nWpBit) & 1ULL) != 0ULL || (nActIdx == 0 && i == 0);
+						if (bUnlocked)
+						{
+							SendWaypointSelect(g_dwActiveWaypointGuid, kActWpLevels[nActIdx][i]);
+							UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
+						}
 						return 0;
 					}
 				}
@@ -2077,9 +2115,9 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			if (gaPanelStates[D2PANEL_NPCSHOP] || gaPanelStates[D2PANEL_STASH] ||
 				gaPanelStates[D2PANEL_CUBE] || gaPanelStates[D2PANEL_MERCINV])
 			{
-				if (gaPanelStates[D2PANEL_CUBE] && mx >= 220 && mx <= 276 && my >= 380 && my <= 430)
+				if (bLeftClick && gaPanelStates[D2PANEL_CUBE] && mx >= 218 && mx <= 278 && my >= 298 && my <= 356)
 				{
-					SendUIButtonAction(0x18u, 0u, 0u); // Horadric Cube Transmute
+					SendUIButtonAction(0x18u, 0u, 0u); // Horadric Cube Transmute (Panel\miniconvert at 224,352)
 					++gdwTransmutesSent;
 					return 0;
 				}
@@ -2110,12 +2148,14 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			}
 		}
 
-		// World viewport click -> unit interaction or walk/cast
+		// World viewport click -> unit interaction or collision-avoiding BFS walk / cast
 		if (bLeftClick)
 		{
 			gbMouseLeftHeld = true;
 			if (D2UnitStrc* pHovered = FindHoveredWorldUnitAtScreenPos(mx, my))
 			{
+				g_vInteractivePath.clear();
+				g_uInteractivePathIdx = 0;
 				if (pHovered->dwUnitType == UNIT_ITEM)
 				{
 					SendWalkOrRunToUnit(UNIT_ITEM, pHovered->dwUnitId);
@@ -2147,10 +2187,21 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			ScreenPointToSubtile(mx, my, &nClickSubX, &nClickSubY);
 			if (nClickSubX > 0 && nClickSubY > 0)
 			{
-				StreamClientNeighborhoodAroundTile(nClickSubX / 5, nClickSubY / 5, 24);
-				SubtileToWorldIso(nClickSubX, nClickSubY, &gfTargetWorldX, &gfTargetWorldY);
+				const int32_t nStartX = (gnServerSubX > 0) ? gnServerSubX : gnAuthServerSubX;
+				const int32_t nStartY = (gnServerSubY > 0) ? gnServerSubY : gnAuthServerSubY;
+				g_vInteractivePath.clear();
+				g_uInteractivePathIdx = 0;
+				int32_t nStepX = nClickSubX;
+				int32_t nStepY = nClickSubY;
+				if (nStartX > 0 && nStartY > 0 && ComputeWalkableSubtilePath(nStartX, nStartY, nClickSubX, nClickSubY, g_vInteractivePath) && !g_vInteractivePath.empty())
+				{
+					nStepX = g_vInteractivePath[0].x;
+					nStepY = g_vInteractivePath[0].y;
+				}
+				StreamClientNeighborhoodAroundTile(nStepX / 5, nStepY / 5, 24);
+				SubtileToWorldIso(nStepX, nStepY, &gfTargetWorldX, &gfTargetWorldY);
 				gbPlayerMoving = true;
-				SendWalkOrRunToLocation(static_cast<uint16_t>(nClickSubX), static_cast<uint16_t>(nClickSubY));
+				SendWalkOrRunToLocation(static_cast<uint16_t>(nStepX), static_cast<uint16_t>(nStepY));
 			}
 		}
 		else
@@ -2181,6 +2232,18 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		if (gaPanelStates[D2PANEL_QUEST])
 		{
 			QUESTLOG_OnPanelMouseUp(&tMsg);
+		}
+		if (gaPanelStates[D2PANEL_INVENTORY])
+		{
+			INV_OnInventoryPanelMouseUp(&tMsg);
+		}
+		if (gaPanelStates[D2PANEL_STASH])
+		{
+			INV_OnStashPanelMouseUp(&tMsg);
+		}
+		if (gaPanelStates[D2PANEL_CUBE])
+		{
+			INV_OnHoradricCubeMouseUp(&tMsg);
 		}
 		if (gaPanelStates[D2PANEL_MERCINV])
 		{
@@ -2486,12 +2549,12 @@ static void InitInGameAssets()
 	gnCurrentLevelId = LEVEL_ROGUEENCAMPMENT;
 
 	gdwSCmdPacketsDispatched = 0;
+	gdwInlinePacketsHandled = 0;
 	gdwNpcIntrosReceived = 0;
 	gdwVendorItemsReceived = 0;
 	gdwAutotestVendorShopItems = 0;
 	gdwTransmutesSent = 0;
 	gdwSlashCommandsExecuted = 0;
-	gdwLightMapRoomsSampled = 0;
 	gdwAutomapRoomsPopulated = 0;
 
 	INV_SyncExpansionModeFlag();
@@ -2586,7 +2649,7 @@ static void UpdatePlayerMovement()
 		{
 			int32_t nMoveSubX = 0, nMoveSubY = 0;
 			ScreenPointToSubtile(gMousePos.x, gMousePos.y, &nMoveSubX, &nMoveSubY);
-			if (nMoveSubX > 0 && nMoveSubY > 0)
+			if (nMoveSubX > 0 && nMoveSubY > 0 && g_vInteractivePath.size() <= 1)
 			{
 				SubtileToWorldIso(nMoveSubX, nMoveSubY, &gfTargetWorldX, &gfTargetWorldY);
 				gbPlayerMoving = true;
@@ -2635,6 +2698,8 @@ static void UpdatePlayerMovement()
 		if (bBlocked && (nCurSubX != gnServerSubX || nCurSubY != gnServerSubY))
 		{
 			gbPlayerMoving = false;
+			g_vInteractivePath.clear();
+			g_uInteractivePathIdx = 0;
 			nCurSubX = gnServerSubX;
 			nCurSubY = gnServerSubY;
 		}
@@ -2644,7 +2709,21 @@ static void UpdatePlayerMovement()
 			gfPlayerWorldY = fNextWorldY;
 			if (bReachedTarget)
 			{
-				gbPlayerMoving = false;
+				if (!g_vInteractivePath.empty() && g_uInteractivePathIdx + 1 < g_vInteractivePath.size())
+				{
+					++g_uInteractivePathIdx;
+					const POINT ptNext = g_vInteractivePath[g_uInteractivePathIdx];
+					StreamClientNeighborhoodAroundTile(ptNext.x / 5, ptNext.y / 5, 24);
+					SubtileToWorldIso(ptNext.x, ptNext.y, &gfTargetWorldX, &gfTargetWorldY);
+					gbPlayerMoving = true;
+					SendWalkOrRunToLocation(static_cast<uint16_t>(ptNext.x), static_cast<uint16_t>(ptNext.y));
+				}
+				else
+				{
+					g_vInteractivePath.clear();
+					g_uInteractivePathIdx = 0;
+					gbPlayerMoving = false;
+				}
 			}
 			const bool bTileChanged = (nCurSubX / 5 != gnServerSubX / 5) || (nCurSubY / 5 != gnServerSubY / 5);
 			gnServerSubX = nCurSubX;
@@ -2662,8 +2741,14 @@ static void UpdatePlayerMovement()
 	}
 }
 
+static bool gbAutotestModeActive = false;
+
 static void PollLiveHardwareCursorPosition()
 {
+	if (gbAutotestModeActive)
+	{
+		return;
+	}
 	HWND hWnd = WINDOW_GetWindow();
 	if (!hWnd || GetForegroundWindow() != hWnd)
 	{
@@ -2694,17 +2779,6 @@ static void RenderInGameFrame()
 
 	D2GFX_ClearScreen(0);
 	SyncReconstructedClientGlobals();
-
-	if (gpPlayerUnit)
-	{
-		if (D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(gpPlayerUnit))
-		{
-			int32_t nRoomIntensity = 0;
-			uint8_t nR = 0xFF, nG = 0xFF, nB = 0xFF;
-			LIGHTMAP_GetRoomAmbientLight(TRUE, pPlayerRoom, &nRoomIntensity, &nR, &nG, &nB);
-			++gdwLightMapRoomsSampled;
-		}
-	}
 
 	// 1. Reconstructed 1.12a Isometric World Renderer (View.cpp -> GAME_Wall2 / Floor / Env / ENGINE_Gfx)
 	GAME_RenderFrame(0);
@@ -2921,7 +2995,7 @@ static bool ComputeWalkableSubtilePath(
 		return false;
 	}
 
-	PrestreamTownAndAdjacentWilderness(LEVEL_ROGUEENCAMPMENT);
+	PrestreamTownAndAdjacentWilderness(gwServerTownLevelId);
 	StreamClientNeighborhoodAroundTile(rawStartX / 5, rawStartY / 5, 24);
 	StreamClientNeighborhoodAroundTile(rawGoalX / 5, rawGoalY / 5, 28);
 
@@ -3239,6 +3313,25 @@ static void CaptureAutotestFrameBmp(const char* szOutDir, const char* szFileName
 	}
 }
 
+static void SimulateClientLeftClick800x600(int32_t x800, int32_t y600)
+{
+	HWND hWnd = WINDOW_GetWindow();
+	if (!hWnd)
+	{
+		return;
+	}
+	RECT rcClient = {};
+	GetClientRect(hWnd, &rcClient);
+	const int32_t nClientW = std::max<int32_t>(1, rcClient.right - rcClient.left);
+	const int32_t nClientH = std::max<int32_t>(1, rcClient.bottom - rcClient.top);
+	const int32_t rawX = (x800 * nClientW + 400) / 800;
+	const int32_t rawY = (y600 * nClientH + 300) / 600;
+	const LPARAM lParam = MAKELPARAM(rawX, rawY);
+	SendMessageA(hWnd, WM_MOUSEMOVE, 0, lParam);
+	SendMessageA(hWnd, WM_LBUTTONDOWN, MK_LBUTTON, lParam);
+	SendMessageA(hWnd, WM_LBUTTONUP, 0, lParam);
+}
+
 static void WriteNativeAutotestReportJson(const char* szOutDir)
 {
 	int32_t nHashUnits = 0;
@@ -3400,10 +3493,8 @@ static void WriteNativeAutotestReportJson(const char* szOutDir)
 			"  \"statMana\": %d,\n"
 			"  \"serverMapSeed\": %u,\n"
 			"  \"scmdPacketsDispatched\": %u,\n"
-			"  \"lightMapRoomsSampled\": %u,\n"
+			"  \"inlineBootstrapPacketsHandled\": %u,\n"
 			"  \"automapRoomsPopulated\": %u,\n"
-			"  \"customShadowStateRemaining\": 0,\n"
-			"  \"rawMemoryCastsRemaining\": 0,\n"
 			"  \"zeroOriginalBlizzardDlls\": %s,\n"
 			"  \"storm112BackendLoaded\": %s,\n"
 			"  \"d2mooCompiledModulesLoaded\": %d\n"
@@ -3443,7 +3534,7 @@ static void WriteNativeAutotestReportJson(const char* szOutDir)
 			nStatMp,
 			gdwServerMapSeed,
 			gdwSCmdPacketsDispatched,
-			gdwLightMapRoomsSampled,
+			gdwInlinePacketsHandled,
 			gdwAutomapRoomsPopulated,
 			bZeroOriginalDlls ? "true" : "false",
 			bStorm112Loaded ? "true" : "false",
@@ -3476,10 +3567,18 @@ static void RunNativeClientAutotestStep()
 			(szCmdLine && std::strstr(szCmdLine, "--autotest-native") != nullptr))
 		{
 			s_bAutotestEnabled = true;
-			GetModuleFileNameA(nullptr, s_szOutDir, sizeof(s_szOutDir));
-			if (char* pSlash = std::strrchr(s_szOutDir, '\\'))
+			gbAutotestModeActive = true;
+			if (GetEnvironmentVariableA("D2MOO_AUTOTEST_DIR", s_szOutDir, sizeof(s_szOutDir)) == 0 || s_szOutDir[0] == '\0')
 			{
-				*pSlash = '\0';
+				GetModuleFileNameA(nullptr, s_szOutDir, sizeof(s_szOutDir));
+				if (char* pSlash = std::strrchr(s_szOutDir, '\\'))
+				{
+					*pSlash = '\0';
+				}
+			}
+			else
+			{
+				CreateDirectoryA(s_szOutDir, nullptr);
 			}
 		}
 	}
@@ -3636,6 +3735,7 @@ static void RunNativeClientAutotestStep()
 				}
 			}
 			gdwAutotestVendorShopItems = dwShopCount;
+			SimulateClientLeftClick800x600(120, 102); // Click Armor tab in NPC Shop via D2Client_WndProc
 			CaptureAutotestFrameBmp(s_szOutDir, "native_step3_vendor_trade.bmp");
 			CloseActiveNpcSession();
 			s_dwPhaseTick = gdwServerTicks;
@@ -3672,7 +3772,7 @@ static void RunNativeClientAutotestStep()
 		}
 		break;
 	}
-	case 6: // Step 6: Stash + 4x4 Belt Popup + Inventory
+	case 6: // Step 6: Stash + Belt Popup + Inventory
 	{
 		if ((gdwServerTicks - s_dwPhaseTick) >= 2u)
 		{
@@ -3682,7 +3782,6 @@ static void RunNativeClientAutotestStep()
 			INV_SetPanelMode(11);
 			UI_SetPanelState(D2PANEL_STASH, 0, 0);
 			UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
-			g_nEquippedBeltRows = 4;
 			UI_SetPanelState(D2PANEL_BELT, 0, 0);
 			CaptureAutotestFrameBmp(s_szOutDir, "native_step6_stash_belt.bmp");
 			s_dwPhaseTick = gdwServerTicks;
@@ -3690,18 +3789,16 @@ static void RunNativeClientAutotestStep()
 		}
 		break;
 	}
-	case 7: // Step 7: Horadric Cube + Transmute Action
+	case 7: // Step 7: Horadric Cube + Interactive Transmute Button Click
 	{
 		if ((gdwServerTicks - s_dwPhaseTick) >= 2u)
 		{
-			g_nEquippedBeltRows = 1;
 			UI_SetPanelState(D2PANEL_BELT, 1, 0);
 			UI_SetPanelState(D2PANEL_STASH, 1, 0);
 			INV_SetPanelMode(12);
 			UI_SetPanelState(D2PANEL_CUBE, 0, 0);
 			UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
-			SendUIButtonAction(0x18u, 0u, 0u);
-			++gdwTransmutesSent;
+			SimulateClientLeftClick800x600(248, 326); // Click Panel\miniconvert button via D2Client_WndProc
 			CaptureAutotestFrameBmp(s_szOutDir, "native_step7_horadric_cube.bmp");
 			s_dwPhaseTick = gdwServerTicks;
 			s_nPhase = 8;
@@ -3837,6 +3934,8 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	gbWindowClosed = 0;
 	gbSaveAndExitRequested = 0;
 	gdwGamePacketsReceived = 0;
+	gdwSCmdPacketsDispatched = 0;
+	gdwInlinePacketsHandled = 0;
 	gdwServerTicks = 0;
 
 	char szConnectHost[128] = {};

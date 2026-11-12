@@ -1171,9 +1171,19 @@ static void __fastcall SCMD_Handler5C_PlayerLeftGame(uint8_t* pPacket)
     ROSTER_RemovePlayerFromRoster(dwUnitId);
 }
 
+extern int32_t  g_nSelectedWaypointTab;
+extern uint64_t g_qwUnlockedWaypointsMask;
+extern uint32_t g_dwActiveWaypointGuid;
+
 static void __fastcall SCMD_Handler63_WaypointMenu(uint8_t* pPacket)
 {
-    (void)pPacket;
+    if (pPacket != nullptr)
+    {
+        g_dwActiveWaypointGuid = *reinterpret_cast<const uint32_t*>(&pPacket[1]);
+        uint64_t qwMask = 0ULL;
+        memcpy(&qwMask, &pPacket[7], sizeof(uint64_t));
+        g_qwUnlockedWaypointsMask = (qwMask & 0x7FFFFFFFFFULL) | 1ULL;
+    }
     UI_SetPanelState(D2PANEL_WAYPOINT, 0, 0);
 }
 
