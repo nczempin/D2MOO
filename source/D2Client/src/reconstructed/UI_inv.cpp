@@ -3448,6 +3448,43 @@ void __fastcall INV_InitiateShopItemTransaction(
     }
 }
 
+static BOOL INV_CanEquipCursorItemToSlotValidated(D2UnitStrc* pPlayer, D2UnitStrc* pCursorItem, int32_t nBodyLoc)
+{
+    if (!pPlayer || !pPlayer->pInventory || !pCursorItem)
+    {
+        return FALSE;
+    }
+    if (!ITEMS_CheckRequirements(pCursorItem, pPlayer, TRUE, NULL, NULL, NULL))
+    {
+        return FALSE;
+    }
+    if (nBodyLoc == BODYLOC_RARM || nBodyLoc == BODYLOC_LARM)
+    {
+        D2UnitStrc* pRightArm = INVENTORY_GetItemFromBodyLoc(pPlayer->pInventory, BODYLOC_RARM);
+        D2UnitStrc* pLeftArm = INVENTORY_GetItemFromBodyLoc(pPlayer->pInventory, BODYLOC_LARM);
+        if (pRightArm && pLeftArm)
+        {
+            return INV_CanCursorItemEquipToBodyLoc(pPlayer->pInventory, nBodyLoc);
+        }
+        if (!ITEMS_CheckBodyLocation(pCursorItem, nBodyLoc))
+        {
+            return FALSE;
+        }
+        D2UnitStrc* pOppArm = (nBodyLoc == BODYLOC_RARM) ? pLeftArm : pRightArm;
+        if (pOppArm)
+        {
+            int32_t nWieldType = INVENTORY_GetWieldType(pPlayer, pPlayer->pInventory);
+            if (nBodyLoc == BODYLOC_RARM)
+            {
+                return ITEMS_CanItemsBeEquippedSimultaneously(pPlayer, pCursorItem, pOppArm, nWieldType);
+            }
+            return ITEMS_CanItemsBeEquippedSimultaneously(pPlayer, pOppArm, pCursorItem, nWieldType);
+        }
+        return TRUE;
+    }
+    return ITEMS_CheckBodyLocation(pCursorItem, nBodyLoc) != 0;
+}
+
 // 1.12a: 0x6FB5FE40
 // Handles left-clicking an equipment paperdoll body slot (other than right/left weapon arms):
 // - Picks up item to cursor (C2S 0x1C)
@@ -3482,8 +3519,7 @@ int32_t __fastcall INV_HandleStandardBodySlotClick(
     {
         if (!ITEMS_IsItemLockedInInventory(pCursorItem) &&
             INV_CheckCursorItemClear(pPlayer) &&
-            INV_CanCursorItemEquipToBodyLoc(pPlayer->pInventory, nBodyLoc) &&
-            ITEMS_CheckRequirements(pCursorItem, pPlayer, TRUE, NULL, NULL, NULL))
+            INV_CanEquipCursorItemToSlotValidated(pPlayer, pCursorItem, nBodyLoc))
         {
             NET_SendByteAndTwoDwords(0x1A, pCursorItem->dwUnitId, (uint32_t)nBodyLoc);
             ITEMS_LockItemInInventory(pCursorItem);
@@ -3496,8 +3532,7 @@ int32_t __fastcall INV_HandleStandardBodySlotClick(
         if (!ITEMS_IsItemLockedInInventory(pCursorItem) &&
             !ITEMS_IsItemLockedInInventory(pSlotItem) &&
             INV_CheckCursorItemClear(pPlayer) &&
-            INV_CanCursorItemEquipToBodyLoc(pPlayer->pInventory, nBodyLoc) &&
-            ITEMS_CheckRequirements(pCursorItem, pPlayer, TRUE, NULL, NULL, NULL))
+            INV_CanEquipCursorItemToSlotValidated(pPlayer, pCursorItem, nBodyLoc))
         {
             NET_SendByteAndTwoDwords(0x1D, pCursorItem->dwUnitId, (uint32_t)nBodyLoc);
             ITEMS_LockItemInInventory(pCursorItem);

@@ -93,13 +93,14 @@ struct D2RosterPetEntryStrc
     int32_t               nPetType;     // +0x04 (7 = hireling)
     uint32_t              dwUnitGUID;   // +0x08
     uint32_t              dwOwnerGUID;  // +0x0C
-    uint32_t              dwReserved[6];// +0x10..+0x24
+    uint32_t              dwReserved[5];// +0x10..+0x23
     uint32_t              dwSeed;       // +0x24
     uint16_t              wNameId;      // +0x28
     uint16_t              wPad2A;       // +0x2A
     uint32_t              dwUnk2C;      // +0x2C
     D2RosterPetEntryStrc* pNext;        // +0x30
 };
+static_assert(sizeof(D2RosterPetEntryStrc) == 0x34, "D2RosterPetEntryStrc must match 0x34-byte D2RosterPetStrc");
 
 // =============================================================================
 // Client Unit Hash Tables & Globals
