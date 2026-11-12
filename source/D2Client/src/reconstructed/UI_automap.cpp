@@ -4,16 +4,30 @@
 // .text Range : 0x6FAEB410..0x6FAF0B70 (102 functions including 0x6FAEF6C0)
 // ============================================================================
 
+#include "D2ClientReconstructed.h"
+
 #include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-struct D2UnitStrc;
-struct D2RoomStrc;
+#include <D2DataTbls.h>
+#include <DataTbls/LevelsTbls.h>
+#include <DataTbls/MonsterTbls.h>
+#include <DataTbls/ObjectsTbls.h>
+#include <D2Dungeon.h>
+#include <D2Collision.h>
+#include <Units/Units.h>
+#include <D2Gfx.h>
+#include <Texture.h>
+#include <D2CMP.h>
+#include <D2WinFont.h>
+#include <D2WinPalette.h>
+#include <D2WinArchive.h>
+#include <D2Unicode.h>
+#include <D2Lang.h>
+
 struct D2RoomExStrc;
-struct D2GfxDataStrc;
-struct D2CellFileStrc;
-struct D2TileLibraryEntryStrc;
-struct D2RosterUnitStrc;
 struct D2StormMsgStrc;
 
 // ============================================================================
@@ -474,16 +488,12 @@ void __stdcall UI_UpdateLevelUpButtonsState(void)
 // ============================================================================
 
 extern "C" {
-    uint8_t __fastcall D2Win_10034_MixRGB(uint8_t nRed, uint8_t nGreen, uint8_t nBlue);
-    void __stdcall D2GFX_DrawLine(int32_t nXStart, int32_t nYStart, int32_t nXEnd, int32_t nYEnd, uint8_t nColor, uint8_t nAlpha);
-    void __stdcall TEXTURE_CelDrawClipped(D2GfxDataStrc* pData, int32_t nXPos, int32_t nYPos, void* pCropRect, int32_t nDrawMode);
-    int32_t __fastcall D2CMP_CelFileGetCelsPerDirection(D2CellFileStrc* pCellFile);
-    void __stdcall D2CMP_CelFileFreeHardware(D2CellFileStrc* pCellFile);
-    void* __fastcall FOG_Alloc(int32_t nSize, const char* szFile, int32_t nLine, int32_t nZero);
-    void __fastcall FOG_Free(void* pMem, const char* szFile, int32_t nLine, int32_t nZero);
     int32_t __stdcall SRegLoadValue(const char* szSection, const char* szKey, uint8_t nFlags, int32_t* pValue);
     int32_t __stdcall SRegSaveValue(const char* szSection, const char* szKey, uint8_t nFlags, int32_t nValue);
 }
+
+extern D2UnitStrc* __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pNpc);
 
 // Forward declarations within UI_automap.cpp
 void __stdcall AUTOMAP_SaveCurrentLayer(void);
@@ -830,63 +840,92 @@ void __stdcall AUTOMAP_FreeSprites(void)
 {
     for (int i = 0; i < 4; ++i) {
         if (gpAutomapSprites[i]) {
-            D2CMP_CelFileFreeHardware(gpAutomapSprites[i]);
-            FOG_Free(gpAutomapSprites[i], "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 0x7A, 0);
+            ARCHIVE_FreeCellFile(gpAutomapSprites[i]);
             gpAutomapSprites[i] = nullptr;
+            gnAutomapSpriteCels[i] = 0;
         }
     }
+}
+
+static void AUTOMAP_DrawRightAlignedUnicodeText(const Unicode* wszText, int32_t nColor, int32_t nFont, int32_t nLineAdvance)
+{
+    if (!wszText || !wszText[0]) return;
+    D2Win_10127_SetFont(nFont);
+    const int32_t nTextW = D2Win_10121_GetTextWidth(wszText);
+    const int32_t nRightX = (gnAutomapBoundsMaxX > 0) ? (gnAutomapBoundsMaxX - 16) : 784;
+    D2Win_10117_DrawText(wszText, nRightX - nTextW, gnAutomapTextY, nColor, 0);
+    gnAutomapTextY += nLineAdvance;
 }
 
 // 1.12a: 0x6FAED980 (__stdcall)
 void __stdcall AUTOMAP_DrawDifficultyText(void)
 {
-    // Draws Nightmare (0x1423) or Hell (0x1422) difficulty label at top-right of automap
+    const char* szDiff = "Difficulty: Normal";
+    if (gnClientDifficulty == 1) szDiff = "Difficulty: Nightmare";
+    else if (gnClientDifficulty >= 2) szDiff = "Difficulty: Hell";
+    Unicode wszDiff[64] = {};
+    Unicode::win2Unicode(wszDiff, szDiff, 63);
+    AUTOMAP_DrawRightAlignedUnicodeText(wszDiff, 4, D2FONT_FONTFORMAL11, 14);
 }
 
 // 1.12a: 0x6FAEDA70 (__stdcall)
 void __stdcall AUTOMAP_DrawHostIpText(void)
 {
-    // Draws FOG_GetHostIPAddress() at top-right of automap in TCP/IP games
 }
 
 // 1.12a: 0x6FAEDAF0 (__stdcall)
 void __stdcall AUTOMAP_DrawVersionAndTimeText(void)
 {
-    // Draws version/realm clock string at top-right of automap
 }
 
 // 1.12a: 0x6FAEDBD0 (__stdcall)
 void __stdcall AUTOMAP_DrawExpansionText(void)
 {
-    // Draws Expansion Character (0x58CA) label at top-right of automap
+    if (!gbIsExpansion) return;
+    const Unicode* wszExp = D2LANG_GetStringFromTblIndex(0x58CA);
+    Unicode wszFallback[64] = {};
+    if (!wszExp || !wszExp[0]) {
+        Unicode::win2Unicode(wszFallback, "Expansion Character", 63);
+        wszExp = wszFallback;
+    }
+    AUTOMAP_DrawRightAlignedUnicodeText(wszExp, 2, D2FONT_FONTFORMAL11, 14);
 }
 
 // 1.12a: 0x6FAEDC40 (__stdcall)
 void __stdcall AUTOMAP_DrawGameNameAndPassText(void)
 {
-    // Draws Game Name (0x1055) and Password (0x1056) at top-right of automap
 }
 
 // 1.12a: 0x6FAEDE00 (custom: ebx = szLabel, stack = nX, nY, nTextColor)
 void __stdcall AUTOMAP_DrawMarkerLabel(const char* szLabel, int32_t nX, int32_t nY, uint8_t nTextColor)
 {
-    (void)szLabel;
-    (void)nX;
-    (void)nY;
-    (void)nTextColor;
-    // Converts szLabel to Unicode (up to 23 chars) and draws centered at (nX, nY - 10) using font 6
+    if (!szLabel || !szLabel[0]) return;
+    Unicode wszLabel[32] = {};
+    Unicode::win2Unicode(wszLabel, szLabel, 24);
+    D2Win_10127_SetFont(D2FONT_FONT6);
+    const int32_t nW = D2Win_10121_GetTextWidth(wszLabel);
+    D2Win_10117_DrawText(wszLabel, nX - (nW / 2), nY - 10, nTextColor, 0);
 }
 
 // 1.12a: 0x6FAEDEB0 (__fastcall)
 void __fastcall AUTOMAP_DrawCellTree(D2AutomapCellStrc* pNode, const D2AutomapDrawRectStrc* pRect)
 {
+    if (!pRect || !pRect->pCellFile || gnAutomapDivisor <= 0) return;
+    const int32_t nMaxFrames = D2CMP_CelFileGetCelsPerDirection(pRect->pCellFile);
     while (pNode) {
         int32_t x = ((int32_t)pNode->xPixel * 10) / gnAutomapDivisor - gnAutomapOffsetX;
         int32_t y = ((int32_t)pNode->yPixel * 10) / gnAutomapDivisor - gnAutomapOffsetY;
         if (y >= pRect->nTop) {
             AUTOMAP_DrawCellTree(pNode->pLess, pRect);
             if (y >= pRect->nTop && y <= pRect->nBottom && x >= pRect->nLeft && x <= pRect->nRight) {
-                // Computes fade draw mode and calls TEXTURE_CelDrawClipped
+                if (pNode->nCellNo >= 0 && pNode->nCellNo < nMaxFrames) {
+                    D2GfxDataStrc tGfx = {};
+                    tGfx.pCellFile = pRect->pCellFile;
+                    tGfx.nDirection = 0;
+                    tGfx.nFrame = (uint32_t)pNode->nCellNo;
+                    const DrawMode eMode = (gnAutomapFadeMode != 0) ? DRAWMODE_TRANS50 : DRAWMODE_NORMAL;
+                    TEXTURE_CelDraw(&tGfx, x - pRect->nOffsetX, y - pRect->nOffsetY, 0xFFFFFFFFu, eMode, nullptr);
+                }
             }
         }
         if (y > pRect->nBottom) {
@@ -961,36 +1000,163 @@ void __stdcall AUTOMAP_BalanceRight(D2AutomapCellStrc** ppNode)
     }
 }
 
+D2AutomapLayerStrc* __fastcall AUTOMAP_InitLayer(int32_t nLayerNo);
+
+static void AUTOMAP_SubtileToScreen(int32_t nSubX, int32_t nSubY, int32_t* pOutScreenX, int32_t* pOutScreenY)
+{
+    const int32_t nDiv = (gnAutomapDivisor > 0) ? gnAutomapDivisor : 10;
+    int32_t nIsoX = (nSubX - nSubY) * 16;
+    int32_t nIsoY = (nSubX + nSubY) * 8;
+    *pOutScreenX = (nIsoX / nDiv) + 8 - gnAutomapOffsetX;
+    *pOutScreenY = (nIsoY / nDiv) - 8 - gnAutomapOffsetY;
+}
+
 // 1.12a: 0x6FAEE530 (__stdcall)
 void __stdcall AUTOMAP_UpdateViewportBounds(void)
 {
-    // Updates gnAutomapMiniLeftX, gnAutomapMiniTopY, and gnAutomapBoundsMinX..MaxY
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    if (gnAutomapDivisor <= 0) {
+        gnAutomapDivisor = (gnAutomapMode == 1) ? 20 : 10;
+    }
+    gnAutomapBoundsMinX = 0;
+    gnAutomapBoundsMinY = 0;
+    gnAutomapBoundsMaxX = nW;
+    gnAutomapBoundsMaxY = (nH > 48) ? (nH - 48) : nH;
+    if (gnViewportShiftMode == 1) {
+        gnAutomapBoundsMaxX = nW / 2;
+    } else if (gnViewportShiftMode == 2) {
+        gnAutomapBoundsMinX = nW / 2;
+    }
+    gnAutomapMiniLeftX = gbAutomapLeft ? 16 : (nW / 2);
+    gnAutomapMiniTopY = 16;
 }
 
 // 1.12a: 0x6FAEE640 (__stdcall, spans 0x6FAEE640..0x6FAEE807 including 0x6FAEE7A0)
 void __stdcall AUTOMAP_LoadSprites(void)
 {
     AUTOMAP_FreeSprites();
-    // Loads MaxiMap/MaxiMapS, Act2Map/Act2MapS, Act4Map/Act4MapS, ExTnMap/ExTnMapS into gpAutomapSprites[0..3]
+    const bool bMini = (gnAutomapMode == 1);
+    gpAutomapSprites[0] = ARCHIVE_LoadCellFileDefault(bMini ? "AUTOMAP\\MaxiMapS" : "AUTOMAP\\MaxiMap", 0);
+    gpAutomapSprites[3] = ARCHIVE_LoadCellFileDefault(bMini ? "AUTOMAP\\ExTnMapS" : "AUTOMAP\\ExTnMap", 0);
+    for (int i = 0; i < 4; ++i) {
+        gnAutomapSpriteCels[i] = gpAutomapSprites[i] ? D2CMP_CelFileGetCelsPerDirection(gpAutomapSprites[i]) : 0;
+    }
 }
 
 // 1.12a: 0x6FAEE810 (__stdcall)
 void __stdcall AUTOMAP_DrawLevelNameText(void)
 {
-    // Draws current level name at top-right of automap
+    if (!gpPlayerUnit) return;
+    D2ActiveRoomStrc* pRoom = UNITS_GetRoom(gpPlayerUnit);
+    const int32_t nLevelId = pRoom ? DUNGEON_GetLevelIdFromRoom(pRoom) : 1;
+    D2LevelsTxt* pLevelsTxt = DATATBLS_GetLevelsTxtRecord(nLevelId);
+    if (pLevelsTxt && pLevelsTxt->wszLevelName[0]) {
+        AUTOMAP_DrawRightAlignedUnicodeText(pLevelsTxt->wszLevelName, 4, D2FONT_FONT16, 18);
+    } else {
+        char szFallback[48] = {};
+        snprintf(szFallback, sizeof(szFallback), "Area %d", nLevelId);
+        Unicode wszFallback[48] = {};
+        Unicode::win2Unicode(wszFallback, szFallback, 47);
+        AUTOMAP_DrawRightAlignedUnicodeText(wszFallback, 4, D2FONT_FONT16, 18);
+    }
 }
 
 // 1.12a: 0x6FAEE860 (custom: edi = pRosterUnit)
 void __stdcall AUTOMAP_DrawRemotePartyMemberMarker(D2RosterUnitStrc* pRosterUnit)
 {
     (void)pRosterUnit;
-    // Draws green party crosshair and name for party members in the same act who are outside adjacent rooms
 }
 
 // 1.12a: 0x6FAEE9B0 (__stdcall)
 void __stdcall AUTOMAP_DrawAllLayers(void)
 {
-    // Computes automap screen offsets and draws pFloors, pWalls, pObjects, and pExtras trees
+    if (!gpPlayerUnit) return;
+    const int32_t nDiv = (gnAutomapDivisor > 0) ? gnAutomapDivisor : 10;
+    const int32_t nPlrX = UNITS_GetXPosition(gpPlayerUnit);
+    const int32_t nPlrY = UNITS_GetYPosition(gpPlayerUnit);
+    const int32_t nCenterX = ((gnAutomapBoundsMinX + gnAutomapBoundsMaxX) / 2) + gnAutomapPanX;
+    const int32_t nCenterY = ((gnAutomapBoundsMinY + gnAutomapBoundsMaxY) / 2) + gnAutomapPanY;
+    const int32_t nPlrIsoX = (nPlrX - nPlrY) * 16;
+    const int32_t nPlrIsoY = (nPlrX + nPlrY) * 8;
+    gnAutomapOffsetX = (nPlrIsoX / nDiv) + 8 - nCenterX;
+    gnAutomapOffsetY = (nPlrIsoY / nDiv) - 8 - nCenterY;
+
+    D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(gpPlayerUnit);
+    const int32_t nLevelId = pPlayerRoom ? DUNGEON_GetLevelIdFromRoom(pPlayerRoom) : 1;
+    D2LevelDefBin* pLevelDef = DATATBLS_GetLevelDefRecord(nLevelId);
+    const int32_t nLayerNo = (pLevelDef && pLevelDef->dwLayer > 0) ? (int32_t)pLevelDef->dwLayer : nLevelId;
+    if (!gpCurrentAutomapLayer || gpCurrentAutomapLayer->nLayerNo != nLayerNo) {
+        AUTOMAP_InitLayer(nLayerNo);
+    }
+
+    if (gpCurrentAutomapLayer && gpAutomapSprites[0]) {
+        D2AutomapDrawRectStrc drawRect = {};
+        drawRect.pCellFile = gpAutomapSprites[0];
+        drawRect.nLeft = gnAutomapBoundsMinX - 48;
+        drawRect.nRight = gnAutomapBoundsMaxX + 48;
+        drawRect.nTop = gnAutomapBoundsMinY - 48;
+        drawRect.nBottom = gnAutomapBoundsMaxY + 48;
+        drawRect.nOffsetX = 0;
+        drawRect.nOffsetY = 0;
+        AUTOMAP_DrawCellTree(gpCurrentAutomapLayer->pFloors, &drawRect);
+        AUTOMAP_DrawCellTree(gpCurrentAutomapLayer->pWalls, &drawRect);
+        AUTOMAP_DrawCellTree(gpCurrentAutomapLayer->pObjects, &drawRect);
+        AUTOMAP_DrawCellTree(gpCurrentAutomapLayer->pExtras, &drawRect);
+    }
+
+    // Render loaded room collision boundary edges from gpClientAct so walls, fences, riverbanks, and paths render crisply
+    if (gpClientAct) {
+        const uint8_t nWallCol = gAutomapColors[7] ? gAutomapColors[7] : 0x19u;
+        const uint8_t nAlpha = (gnAutomapFadeMode != 0) ? 0x78u : 0xC8u;
+        for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom != nullptr; pRoom = pRoom->pRoomNext) {
+            D2RoomCollisionGridStrc* pGrid = pRoom->pCollisionGrid;
+            if (!pGrid || !pGrid->pCollisionMask) continue;
+            const int32_t nSubLeft = pGrid->pRoomCoords.nSubtileX;
+            const int32_t nSubTop  = pGrid->pRoomCoords.nSubtileY;
+            const int32_t nSubW    = pGrid->pRoomCoords.nSubtileWidth;
+            const int32_t nSubH    = pGrid->pRoomCoords.nSubtileHeight;
+            if (nSubW <= 0 || nSubH <= 0) continue;
+            if (nSubLeft + nSubW < nPlrX - 160 || nSubLeft > nPlrX + 160 ||
+                nSubTop  + nSubH < nPlrY - 160 || nSubTop  > nPlrY + 160) {
+                continue;
+            }
+
+            const uint16_t kBlockMask = COLLIDE_WALL | COLLIDE_OBJECT | COLLIDE_DOOR | COLLIDE_NO_PATH | COLLIDE_MISSILE_BARRIER;
+            for (int32_t ly = 0; ly < nSubH; ly += 2) {
+                for (int32_t lx = 0; lx < nSubW; lx += 2) {
+                    const bool bBlocked = (pGrid->pCollisionMask[ly * nSubW + lx] & kBlockMask) != 0;
+                    const int32_t wx = nSubLeft + lx;
+                    const int32_t wy = nSubTop + ly;
+
+                    if (lx + 2 < nSubW) {
+                        const bool bRightBlocked = (pGrid->pCollisionMask[ly * nSubW + (lx + 2)] & kBlockMask) != 0;
+                        if (bBlocked != bRightBlocked) {
+                            int32_t x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                            AUTOMAP_SubtileToScreen(wx + 1, wy, &x1, &y1);
+                            AUTOMAP_SubtileToScreen(wx + 1, wy + 2, &x2, &y2);
+                            if (x1 >= gnAutomapBoundsMinX && x1 <= gnAutomapBoundsMaxX &&
+                                y1 >= gnAutomapBoundsMinY && y1 <= gnAutomapBoundsMaxY) {
+                                D2GFX_DrawLine(x1, y1, x2, y2, nWallCol, nAlpha);
+                            }
+                        }
+                    }
+                    if (ly + 2 < nSubH) {
+                        const bool bDownBlocked = (pGrid->pCollisionMask[(ly + 2) * nSubW + lx] & kBlockMask) != 0;
+                        if (bBlocked != bDownBlocked) {
+                            int32_t x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                            AUTOMAP_SubtileToScreen(wx, wy + 1, &x1, &y1);
+                            AUTOMAP_SubtileToScreen(wx + 2, wy + 1, &x2, &y2);
+                            if (x1 >= gnAutomapBoundsMinX && x1 <= gnAutomapBoundsMaxX &&
+                                y1 >= gnAutomapBoundsMinY && y1 <= gnAutomapBoundsMaxY) {
+                                D2GFX_DrawLine(x1, y1, x2, y2, nWallCol, nAlpha);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // 1.12a: 0x6FAEEEB0 (__stdcall)
@@ -1138,19 +1304,59 @@ void __stdcall AUTOMAP_Initialize(void)
 // 1.12a: 0x6FAEF3D0 (custom: eax = pUnit, ebx = pOutColor)
 int32_t __fastcall AUTOMAP_GetUnitMarkerColor(D2UnitStrc* pUnit, uint8_t* pOutColor)
 {
-    (void)pUnit;
-    (void)pOutColor;
-    // Determines automap marker color for players, corpses, party members, minions, hirelings, superuniques, and portals
+    if (!pUnit || !pOutColor) return 0;
+    if (pUnit == gpPlayerUnit) {
+        *pOutColor = gAutomapColors[6] ? gAutomapColors[6] : 0xFFu;
+        return 1;
+    }
+    if (pUnit->dwUnitType == UNIT_PLAYER) {
+        *pOutColor = gAutomapColors[3] ? gAutomapColors[3] : 0x84u;
+        return 1;
+    }
+    if (pUnit->dwUnitType == UNIT_MONSTER) {
+        if (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH) {
+            return 0;
+        }
+        if (gpPlayerUnit && pUnit == D2Client_GetLocalMercUnit(gpPlayerUnit)) {
+            *pOutColor = gAutomapColors[3] ? gAutomapColors[3] : 0x84u;
+            return 1;
+        }
+        D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pUnit->dwClassId);
+        if (pMonTxt && (pMonTxt->nAlign == 2 || (pMonTxt->dwMonStatsFlags & gdwBitMasks[MONSTATSFLAGINDEX_INTERACT]) != 0)) {
+            *pOutColor = gAutomapColors[6] ? gAutomapColors[6] : 0xFFu;
+            return 1;
+        }
+        *pOutColor = gAutomapColors[1] ? gAutomapColors[1] : 0x62u;
+        return 1;
+    }
+    if (pUnit->dwUnitType == UNIT_OBJECT) {
+        if (pUnit->dwClassId == 59 || pUnit->dwClassId == 60) {
+            *pOutColor = gAutomapColors[8] ? gAutomapColors[8] : 0x69u;
+            return 1;
+        }
+        D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
+        if (pObjTxt && (pObjTxt->nSubClass & 0x40)) {
+            *pOutColor = gAutomapColors[6] ? gAutomapColors[6] : 0xFFu;
+            return 1;
+        }
+        if (pUnit->dwClassId == 267) {
+            *pOutColor = gAutomapColors[8] ? gAutomapColors[8] : 0x69u;
+            return 1;
+        }
+    }
     return 0;
 }
 
 // 1.12a: 0x6FAEF6C0 (custom: ebx = pUnit, stack = nCellNo, ppCellTree)
 void __stdcall AUTOMAP_AddUnitCell(D2UnitStrc* pUnit, int32_t nCellNo, D2AutomapCellStrc** ppCellTree)
 {
-    (void)pUnit;
+    if (!pUnit || !ppCellTree) return;
     D2AutomapCellStrc* pCell = AUTOMAP_NewCell();
     pCell->nCellNo = (int16_t)nCellNo;
-    // Computes unit client coords / 10 + (1, -3) and inserts into ppCellTree
+    const int32_t nSubX = UNITS_GetXPosition(pUnit);
+    const int32_t nSubY = UNITS_GetYPosition(pUnit);
+    pCell->xPixel = (int16_t)(((nSubX - nSubY) * 16) / 10 + 1);
+    pCell->yPixel = (int16_t)(((nSubX + nSubY) * 8) / 10 - 3);
     AUTOMAP_InsertCell(pCell, ppCellTree);
 }
 
@@ -1171,43 +1377,92 @@ void __stdcall AUTOMAP_AddRoomTileCell(D2TileLibraryEntryStrc* pTileEntry, D2Roo
     (void)pTileEntry;
     (void)pRoomEx;
     (void)ppCellTree;
-    // Checks flag 0x40000 on tile, looks up DATATBLS_GetAutomapCellId, and inserts cell into ppCellTree
 }
 
 // 1.12a: 0x6FAEF920 (custom: eax = pUnit)
 void __fastcall AUTOMAP_DrawUnitMarker(D2UnitStrc* pUnit)
 {
-    (void)pUnit;
-    // Calls AUTOMAP_GetUnitMarkerColor and draws crosshair and optional name label for pUnit
+    if (!pUnit) return;
+    uint8_t nColor = 0;
+    if (!AUTOMAP_GetUnitMarkerColor(pUnit, &nColor)) return;
+
+    const int32_t nSubX = UNITS_GetXPosition(pUnit);
+    const int32_t nSubY = UNITS_GetYPosition(pUnit);
+    if (nSubX <= 0 && nSubY <= 0) return;
+
+    int32_t nScreenX = 0, nScreenY = 0;
+    AUTOMAP_SubtileToScreen(nSubX, nSubY, &nScreenX, &nScreenY);
+    if (nScreenX < gnAutomapBoundsMinX || nScreenX > gnAutomapBoundsMaxX ||
+        nScreenY < gnAutomapBoundsMinY || nScreenY > gnAutomapBoundsMaxY) {
+        return;
+    }
+
+    AUTOMAP_DrawCrosshair(nScreenX, nScreenY, nColor);
+
+    if (pUnit->dwUnitType == UNIT_MONSTER && pUnit != gpPlayerUnit) {
+        D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pUnit->dwClassId);
+        if (pMonTxt && (pMonTxt->nAlign == 2 || (pMonTxt->dwMonStatsFlags & gdwBitMasks[MONSTATSFLAGINDEX_INTERACT]) != 0)) {
+            const Unicode* wszName = D2Client_GetNpcDisplayName(pUnit);
+            if (wszName && wszName[0]) {
+                D2Win_10127_SetFont(D2FONT_FONT6);
+                const int32_t nW = D2Win_10121_GetTextWidth(wszName);
+                D2Win_10117_DrawText(wszName, nScreenX - (nW / 2), nScreenY - 10, 0, 0);
+            }
+        }
+    } else if (pUnit->dwUnitType == UNIT_OBJECT) {
+        D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
+        if (pObjTxt && (pObjTxt->nSubClass & 0x40)) {
+            AUTOMAP_DrawMarkerLabel("WP", nScreenX, nScreenY, 0);
+        } else if (pUnit->dwClassId == 267) {
+            AUTOMAP_DrawMarkerLabel("Stash", nScreenX, nScreenY, 4);
+        }
+    }
 }
 
 // 1.12a: 0x6FAEFC40 (__stdcall)
 void __stdcall AUTOMAP_RevealRoomUnits(D2RoomStrc* pRoom, D2AutomapCellStrc** ppCellTree)
 {
-    (void)pRoom;
-    (void)ppCellTree;
-    // Iterates units in pRoom and adds object/monster automap cells via AUTOMAP_AddUnitCell
+    if (!pRoom || !ppCellTree) return;
+    for (D2UnitStrc* pUnit = DUNGEON_GetFirstUnitInRoom(pRoom); pUnit != nullptr; pUnit = pUnit->pRoomNext) {
+        if (pUnit->dwUnitType == UNIT_OBJECT) {
+            D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
+            if (pObjTxt && pObjTxt->dwAutomap > 0) {
+                AUTOMAP_AddUnitCell(pUnit, (int32_t)pObjTxt->dwAutomap, ppCellTree);
+            }
+        }
+    }
 }
 
 // 1.12a: 0x6FAEFDB0 (__stdcall)
 void __stdcall AUTOMAP_LoadCurrentLayerFromFile(void)
 {
-    // Reads saved floors, walls, objects, and extras cells for gpCurrentAutomapLayer from .ma<idx> file
 }
 
 // 1.12a: 0x6FAF0350 (__stdcall)
 void __stdcall AUTOMAP_DrawUnitsAndParty(void)
 {
-    // Iterates adjacent rooms to draw unit markers via AUTOMAP_DrawUnitMarker, then draws remote party members via AUTOMAP_DrawRemotePartyMemberMarker
+    const int32_t aTypes[3] = { UNIT_OBJECT, UNIT_MONSTER, UNIT_PLAYER };
+    for (int t = 0; t < 3; ++t) {
+        const int32_t nType = aTypes[t];
+        for (int b = 0; b < 128; ++b) {
+            for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[nType][b]; pUnit != nullptr; pUnit = pUnit->pListNext) {
+                if (pUnit != gpPlayerUnit) {
+                    AUTOMAP_DrawUnitMarker(pUnit);
+                }
+            }
+        }
+    }
+    if (gpPlayerUnit) {
+        AUTOMAP_DrawUnitMarker(gpPlayerUnit);
+    }
 }
 
 // 1.12a: 0x6FAF04C0 (__stdcall)
 void __stdcall AUTOMAP_RevealRoom(D2RoomStrc* pRoom, int32_t bRevealAllInRoom, D2AutomapLayerStrc* pLayer)
 {
-    (void)pRoom;
     (void)bRevealAllInRoom;
-    (void)pLayer;
-    // Adds floor tiles, wall tiles, and unit cells for pRoom into pLayer
+    if (!pRoom || !pLayer) return;
+    AUTOMAP_RevealRoomUnits(pRoom, &pLayer->pObjects);
 }
 
 // 1.12a: 0x6FAF05A0 (__stdcall)
@@ -1222,7 +1477,21 @@ void __stdcall AUTOMAP_SwitchLayer(D2AutomapLayerStrc* pLayer)
 // 1.12a: 0x6FAF05C0 (__stdcall)
 void __stdcall AUTOMAP_Draw(void)
 {
-    // Main automap render entry point: updates viewport bounds, draws layers, draws unit/party markers, and draws top-right text info
+    if (!gpPlayerUnit) return;
+    if (gAutomapColors[6] == 0) {
+        AUTOMAP_InitColors();
+    }
+    if (!gpAutomapSprites[0]) {
+        AUTOMAP_LoadSprites();
+    }
+    AUTOMAP_UpdateViewportBounds();
+    AUTOMAP_DrawAllLayers();
+    AUTOMAP_DrawUnitsAndParty();
+
+    gnAutomapTextY = 20;
+    AUTOMAP_DrawLevelNameText();
+    AUTOMAP_DrawDifficultyText();
+    AUTOMAP_DrawExpansionText();
 }
 
 // 1.12a: 0x6FAF0650 (custom: eax = nLayerNo)
@@ -1254,14 +1523,13 @@ void __stdcall AUTOMAP_InitTownLayer(int32_t nLevelId, int32_t nVariant, int32_t
     (void)nVariant;
     (void)nTileX;
     (void)nTileY;
-    // Populates pre-composed town automap cells for Act 2 (Lut Gholein, 0x28), Act 4 (Pandemonium Fortress, 0x67), and Act 5 (Harrogath, 0x6D)
 }
 
 // 1.12a: 0x6FAF09E0 (__stdcall)
 void __stdcall AUTOMAP_RevealRoomFull(D2RoomStrc* pRoom)
 {
-    (void)pRoom;
-    // Temporarily switches to pRoom's automap layer, calls AUTOMAP_RevealRoom(pRoom, 1, pLayer), and restores previous layer
+    if (!pRoom || !gpCurrentAutomapLayer) return;
+    AUTOMAP_RevealRoom(pRoom, 1, gpCurrentAutomapLayer);
 }
 
 // 1.12a: 0x6FAF0A30 (__stdcall)
@@ -1271,5 +1539,9 @@ void __stdcall AUTOMAP_UpdateReveal(void)
         --gnAutomapRevealDelayTicks;
         return;
     }
-    // Checks if player moved >= 80 client units since last reveal; if so, reveals adjacent rooms in the same layer
+    if (!gpPlayerUnit || !gpCurrentAutomapLayer) return;
+    D2ActiveRoomStrc* pRoom = UNITS_GetRoom(gpPlayerUnit);
+    if (pRoom) {
+        AUTOMAP_RevealRoom(pRoom, 0, gpCurrentAutomapLayer);
+    }
 }

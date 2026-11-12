@@ -340,7 +340,7 @@ uint8_t g_nEnvLightIntensity            = 255;
 uint8_t g_nEnvLightR                    = 255;
 
 // Internal D2Client helpers
-extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szPath, int32_t nFileType); // 0x6FB6EF70
+extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szPath, int32_t nFileType); // 0x6FB6EF70
 extern D2CellFileStrc* __fastcall UI_LoadPanelCellFile(const char* szPath);                    // 0x6FB3C170
 extern D2RosterUnitStrc* __fastcall ROSTER_FindByUnitGuid(int32_t nUnitGuid);                  // 0x6FB281C0
 extern uint16_t __fastcall ROSTER_GetPartyId(D2RosterUnitStrc* pRoster);                       // 0x6FB27A10
@@ -925,22 +925,30 @@ void __stdcall PARTY_DrawPartyScreen()
     {
         return;
     }
+    if (!g_pPartyPanelCel)
+    {
+        PARTY_LoadCellFiles();
+    }
     PARTY_SyncPartyNodePositions();
 
-    D2GfxDataStrc tGfxData = { 0 };
-    tGfxData.pCellFile = g_pPartyPanelCel;
     int32_t nBaseX = g_nPanelOffsetX;
     int32_t nBaseY = g_nPanelOffsetY;
 
-    // 4 quadrant tiles of panel\party
-    tGfxData.nFrame = 0;
-    TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
-    tGfxData.nFrame = 1;
-    TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
-    tGfxData.nFrame = 2;
-    TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
-    tGfxData.nFrame = 3;
-    TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
+    if (g_pPartyPanelCel)
+    {
+        D2GfxDataStrc tGfxData = { 0 };
+        tGfxData.pCellFile = g_pPartyPanelCel;
+
+        // 4 quadrant tiles of panel\party
+        tGfxData.nFrame = 0;
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        tGfxData.nFrame = 1;
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        tGfxData.nFrame = 2;
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        tGfxData.nFrame = 3;
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
+    }
 
     // Draw each party screen player row
     D2RosterUnitStrc* pRoster = g_pRosterHead ? g_pRosterHead->pNext : nullptr;
@@ -1208,11 +1216,11 @@ void __fastcall ENV_DrawArreatSummitBackground(D2UnitStrc* pPlayerUnit)
     }
     if (!g_pSummitCel)
     {
-        g_pSummitCel = ARCHIVE_LoadCellFile("data\\global\\ui\\summit01", 0);
+        g_pSummitCel = ARCHIVE_LoadCellFileDefault("data\\global\\ui\\summit01", 0);
     }
     if (!g_pCloudCel)
     {
-        g_pCloudCel = ARCHIVE_LoadCellFile("data\\global\\ui\\cloud01", 0);
+        g_pCloudCel = ARCHIVE_LoadCellFileDefault("data\\global\\ui\\cloud01", 0);
     }
     int32_t nPosY = UNITS_GetPrecisionY(pPlayerUnit) - g_nSummitBaseY;
     int32_t nScrollX = -((nPosY / 8) % 256);
@@ -2253,7 +2261,7 @@ void* __stdcall SPINNER_Impl_Constructor(int32_t* pThis, int32_t nY, int32_t nX,
     char szPath[260];
     *(const void* const**)pThis = g_aSpinnerImplVtable;
     sprintf(szPath, "%s\\ui\\menu\\spinner", "DATA\\GLOBAL");
-    D2CellFileStrc* pCel = ARCHIVE_LoadCellFile(szPath, 0);
+    D2CellFileStrc* pCel = ARCHIVE_LoadCellFileDefault(szPath, 0);
     pThis[2]  = nX;
     pThis[3]  = nY;
     pThis[11] = bSideBySide;

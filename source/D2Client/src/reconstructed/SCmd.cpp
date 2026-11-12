@@ -42,8 +42,8 @@ typedef D2ActiveRoomStrc D2RoomStrc;
 // =============================================================================
 // D2Net.#10002: int32_t __fastcall SERVER_GetServerPacketSize(const uint8_t* pBuffer, int32_t nBufferSize, int32_t* pOutVarHeader)
 extern "C" int32_t __fastcall SERVER_GetServerPacketSize(const uint8_t* pBuffer, int32_t nBufferSize, int32_t* pOutVarHeader);
-// D2Net.#10036: int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket)
-extern "C" int32_t __stdcall CLIENT_Send(int32_t nSize, int32_t nQueue, const void* pPacket);
+// D2Net.#10005: int32_t __stdcall CLIENT_Send(int32_t nQueue, const void* pPacket, int32_t nSize)
+extern "C" int32_t __stdcall CLIENT_Send(int32_t nQueue, const void* pPacket, int32_t nSize);
 
 // =============================================================================
 // S->C Dispatch Table Entry & Unit Packet Queue Structs
@@ -285,11 +285,11 @@ void __fastcall SCMD_Handler01_GameLogonReceipt(uint8_t* pPacket)
 
 // 0x6FB14FF0 (0x02: S2C_LOADDONE - 1 byte)
 // Replies with C->S 0x6B (C2S_JOINACTCOMPLETE) so the server begins streaming S->C 0x03/0x07/0x15.
+int32_t __fastcall MSG_SendJoinActComplete_6B(void);
 void __fastcall SCMD_Handler02_LoadDone(uint8_t* pPacket)
 {
     (void)pPacket;
-    uint8_t bReply = 0x6B;
-    CLIENT_Send(1, 0, &bReply);
+    MSG_SendJoinActComplete_6B();
 }
 
 // 0x6FB160F0 (0x03: S2C_LOADACT - 12 bytes)
@@ -354,6 +354,10 @@ void __fastcall SCMD_Handler07_AddRoom(uint8_t* pPacket)
     const int32_t nTileX   = *reinterpret_cast<uint16_t*>(&pPacket[1]);
     const int32_t nTileY   = *reinterpret_cast<uint16_t*>(&pPacket[3]);
     const int32_t nLevelId = pPacket[5];
+    if (nLevelId <= 0)
+    {
+        return;
+    }
 
     if (D2DrlgStrc* pDrlg = DUNGEON_GetDrlgFromAct(gpClientAct))
     {
@@ -364,9 +368,8 @@ void __fastcall SCMD_Handler07_AddRoom(uint8_t* pPacket)
         }
     }
 
-    // D2Common.#10063: DUNGEON_SetClientIsInSight + ensure DT1 tiles & active room are streamed
+    // D2Common.#10063: DUNGEON_SetClientIsInSight loads DT1s, preset units, room grids, and D2ActiveRoomStrc
     DUNGEON_SetClientIsInSight(gpClientAct, nLevelId, nTileX, nTileY, pPlayerRoom);
-    DUNGEON_StreamRoomAtCoords(gpClientAct, nTileX, nTileY);
 }
 
 // 0x6FB148B0 (0x08: S2C_REMOVEROOM - 6 bytes)
@@ -662,13 +665,8 @@ void __fastcall SCMD_Handler19_1F_StatUpdate(uint8_t* pPacket)
         return;
     }
 
-    // Fixed-point 24.8 stats: STAT_HITPOINTS(6), STAT_MAXHP(7), STAT_MANA(8),
-    // STAT_MAXMANA(9), STAT_STAMINA(10), STAT_MAXSTAMINA(11)
-    if (nStatId >= STAT_HITPOINTS && nStatId <= STAT_MAXSTAMINA)
-    {
-        nValue <<= 8;
-    }
-
+    // Note: D2Game already transmits STAT_HITPOINTS(6)..STAT_MAXSTAMINA(11) in 24.8 fixed-point
+    // inside S2C 0x1D / 0x1E / 0x1F; shifting again here would double-shift by 16 bits.
     STATLIST_SetUnitStat(pPlayer, nStatId, nValue, 0);
     SCMD_OnPlayerStatUpdated(pPlayer, nStatId, nValue);
 }
@@ -685,11 +683,6 @@ void __fastcall SCMD_Handler20_PlayerAttrUpdate(uint8_t* pPacket)
     if (pUnit == nullptr)
     {
         return;
-    }
-
-    if (nStatId >= STAT_HITPOINTS && nStatId <= STAT_MAXSTAMINA)
-    {
-        nValue <<= 8;
     }
 
     STATLIST_SetUnitStat(pUnit, nStatId, nValue, 0);
@@ -1128,6 +1121,20 @@ static void __fastcall SCMD_Handler4D_UnitCastSkill(uint8_t* pPacket)
     }
 }
 
+struct D2GSPacketSrv5DStrc;
+void __fastcall QUESTLOG_UpdateServerQuestStateArray(const uint8_t* pStateBytes);
+void __stdcall QUESTLOG_HandleQuestAlertPacket(const D2GSPacketSrv5DStrc* pPacket);
+
+static void __fastcall SCMD_Handler52_QuestLogInfo(uint8_t* pPacket)
+{
+    QUESTLOG_UpdateServerQuestStateArray(pPacket);
+}
+
+static void __fastcall SCMD_Handler5D_QuestItemState(uint8_t* pPacket)
+{
+    QUESTLOG_HandleQuestAlertPacket(reinterpret_cast<const D2GSPacketSrv5DStrc*>(pPacket));
+}
+
 static void __fastcall SCMD_Handler58_OpenUIDialog(uint8_t* pPacket)
 {
     const uint8_t nUIType = pPacket[5];
@@ -1502,7 +1509,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x4F */ { SCMD_Handler_NoOp,                      1,  nullptr }, // 0x6FB14C40: ClearMercList
     /* 0x50 */ { SCMD_Handler_NoOp,                     15,  nullptr }, // 0x6FB14BF0: QuestSpecial
     /* 0x51 */ { SCMD_Handler51_AssignObject,           14,  nullptr }, // 0x6FB164B0
-    /* 0x52 */ { SCMD_Handler_NoOp,                     42,  nullptr }, // 0x6FB14D30: QuestLogInfo
+    /* 0x52 */ { SCMD_Handler52_QuestLogInfo,           42,  nullptr }, // 0x6FB14D30: QuestLogInfo
     /* 0x53 */ { SCMD_Handler_NoOp,                     10,  nullptr }, // 0x6FB14840: PlayerSlotRefresh
     /* 0x54 */ { nullptr,                               10,  nullptr }, // 0x54: Unused
     /* 0x55 */ { nullptr,                                3,  nullptr }, // 0x55: Unused
@@ -1513,7 +1520,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x5A */ { SCMD_Handler_NoOp,                     40,  nullptr }, // 0x6FB15D60: EventMessages
     /* 0x5B */ { SCMD_Handler5B_PlayerInGame,           36,  nullptr }, // 0x6FB16030: PlayerInGame
     /* 0x5C */ { SCMD_Handler5C_PlayerLeftGame,          5,  nullptr }, // 0x6FB16010: PlayerLeftGame
-    /* 0x5D */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB14D50: QuestItemState
+    /* 0x5D */ { SCMD_Handler5D_QuestItemState,          6,  nullptr }, // 0x6FB14D50: QuestItemState
     /* 0x5E */ { SCMD_Handler_NoOp,                     38,  nullptr }, // 0x6FB14DA0: GameQuestAvailability
     /* 0x5F */ { SCMD_Handler_NoOp,                      5,  nullptr }, // 0x6FB14DC0: Unknown5F
     /* 0x60 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB15320: TownportalState

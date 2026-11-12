@@ -1701,6 +1701,15 @@ void __fastcall GFX_AttachOverlayToUnit(D2UnitStrc* pUnit, int nOverlayId, int b
 // Renders a ground item unit (including gold pile amounts, ethereal translucency, and item color remap).
 void __fastcall GFX_DrawItemUnit(D2UnitStrc* pItem, int nXPos, int nYPos, uint32_t dwGamma, int nScreenMode)
 {
+    if (!pItem) {
+        return;
+    }
+    int nItemMode = *(int*)((uint8_t*)pItem + 0x10);
+    if (nScreenMode != 0 || (nItemMode != 3 && nItemMode != 5)) {
+        if (D2Client_DrawInvItemSprite(pItem, nXPos, nYPos, dwGamma, 5)) {
+            return;
+        }
+    }
     D2GfxDataStrc tGfxData;
     if (!GFX_ValidateUnitGfxData(pItem, &tGfxData)) {
         return;

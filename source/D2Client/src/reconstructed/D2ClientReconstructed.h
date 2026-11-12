@@ -196,3 +196,10 @@ int32_t     __fastcall D2Client_GetItemStatCostCount();
 int32_t     __fastcall D2Client_GetItemStatDescInfo(int32_t nStatId, D2ClientItemStatDescInfoStrc* pOut);
 int         __fastcall D2Client_PopulateUnitComponentGfxNames(D2UnitStrc* pUnit, D2GfxDataStrc* pOutGfxData, int nComponent, const char* szWeaponClass);
 int         __fastcall D2Client_PopulateNonCompositeGfxName(D2UnitStrc* pUnit, D2GfxDataStrc* pOutGfxData);
+
+void            __fastcall D2Client_SyncResolutionMetrics(int32_t nWidth, int32_t nHeight);
+D2CellFileStrc* __fastcall D2Client_GetOrLoadItemInvCell(D2UnitStrc* pItem);
+int32_t         __fastcall D2Client_DrawInvItemSprite(D2UnitStrc* pItem, int32_t nX, int32_t nY, uint32_t dwGamma, int32_t nDrawMode);
+void            __fastcall D2Client_ClearItemInvCellCache();
+D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szFileName, int32_t nFileType, int32_t bNoLocale);
+D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, int32_t nFileType);

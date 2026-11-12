@@ -1243,6 +1243,8 @@ void __stdcall D2Client_InitializeTileUnitInRoom(D2UnitStrc* pUnit /*esi*/, D2Ac
     }
 }
 
+extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nTileX, int32_t nTileY, int32_t nExplicitLevelId);
+
 // 1.12a: 0x6FACF0E0
 // Calling convention: custom (ecx = nX, eax = nY)
 D2ActiveRoomStrc* __fastcall D2Client_FindRoomForSubtileCoords(int32_t nX /*ecx*/, int32_t nY /*eax*/)
@@ -1258,7 +1260,7 @@ D2ActiveRoomStrc* __fastcall D2Client_FindRoomForSubtileCoords(int32_t nX /*ecx*
         return pRoom;
     }
 
-    pRoom = DUNGEON_StreamRoomAtCoords(gpClientAct, nX / 5, nY / 5);
+    pRoom = D2Client_SafeStreamRoomAtTile(nX / 5, nY / 5, 0);
     if (pRoom != nullptr)
     {
         return pRoom;

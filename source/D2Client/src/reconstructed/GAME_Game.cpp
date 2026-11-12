@@ -7,28 +7,31 @@
 // ImageBase: 0x6FAB0000
 // ============================================================================
 
+#include "D2ClientReconstructed.h"
+
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+
+#include <D2DataTbls.h>
+#include <DataTbls/SkillsTbls.h>
+#include <Units/Units.h>
+#include <D2StatList.h>
+#include <D2Skills.h>
+#include <D2States.h>
+#include <D2Lang.h>
+#include <D2Gfx.h>
+#include <Texture.h>
+#include <D2CMP.h>
+#include <D2WinFont.h>
+#include <D2WinTextBox.h>
 
 // ----------------------------------------------------------------------------
 // Forward Declarations & External Types
 // ----------------------------------------------------------------------------
-struct D2UnitStrc;
 struct D2RoomStrc;
 struct D2ActStrc;
-struct D2InventoryStrc;
-struct D2SkillStrc;
-struct D2SkillsTxt;
-struct D2SkillDescTxt;
-struct D2MonStatsTxt;
-struct D2MonStats2Txt;
-struct D2MissilesTxt;
-struct D2CharStatsTxt;
-struct D2BeltsTxt;
-struct D2ItemsTxt;
-struct D2CellFileStrc;
-struct D2GfxDataStrc;
 struct D2GameInfoStrc;
 struct D2ViewStrc;
 struct SMsg;
@@ -394,6 +397,7 @@ int32_t GAME_SetResolutionMode(int32_t nResolutionMode)
     }
 
     int32_t nDisplayMode = (nResolutionMode == 2) ? 2 : nResolutionMode;
+    (void)nDisplayMode;
     // if (!D2Win_10005_SetResolutionMode(nDisplayMode)) return 0;
 
     // D2GFX_GetModeParams(&g_nScreenWidth, &g_nScreenHeight);
@@ -746,17 +750,7 @@ void GAME_LoadAct(uint8_t nAct, uint32_t dwTownLevelId, uint32_t dwInitSeed, uin
 
     GAME_PreloadActTileLibrary(nAct);
 
-    if (g_pClientAct)
-    {
-        // D2Common.dll!#10878 -> DUNGEON_FreeAct(g_pClientAct);
-        g_pClientAct = nullptr;
-    }
-
-    // g_pClientAct = DUNGEON_AllocAct(nAct, dwInitSeed, 1, 0, g_nDifficulty, g_pClientPoolSystem, dwTownLevelId, CLIENT_LoadActCallback, ClientAutomapRoomCallback);
-    // ENVIRONMENT_InitializeEnvironment(g_pClientAct, g_pClientPoolSystem, nAct, 0);
-    // GFX_FreeMonsterCofCache();  // 0x6FB40CF0
-    // GFX_InitMonsterCofCache();  // 0x6FB411D0
-
+    // Preserve active client DRLG act initialized by host / S2C packet stream.
     g_dwActLoadGraceTick = GetTickCount();
 }
 
@@ -983,36 +977,448 @@ int32_t SOUNDCHANNEL_PlayPositionalUnitSound(int32_t nUnitType, uint32_t dwUnitI
     return 0;
 }
 
+extern int32_t g_nRightPanelOffsetX;
+extern int32_t g_nSkillTreeTab_6FBA79FC;
+extern int32_t gbAlwaysRun;
+extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
+
+static D2CellFileStrc* s_pCtrlPnl800Cell   = nullptr;
+static D2CellFileStrc* s_pCtrlPnl640Cell   = nullptr;
+static D2CellFileStrc* s_pHlthManaCell     = nullptr;
+static D2CellFileStrc* s_pOverlapCell      = nullptr;
+static D2CellFileStrc* s_pRunBtnCell       = nullptr;
+static D2CellFileStrc* s_pMenuBtnCell      = nullptr;
+static D2CellFileStrc* s_pMiniPanelCell    = nullptr;
+static D2CellFileStrc* s_pMiniPanelBtnCell = nullptr;
+static D2CellFileStrc* s_apSkillTreeBgCells[7] = {};
+static D2CellFileStrc* s_apClassSkillIconCells[7] = {};
+static D2CellFileStrc* s_pSkillBuySellBtnCell = nullptr;
+
+static void GAME_EnsureCtrlPnlCellsLoaded()
+{
+    if (!s_pCtrlPnl800Cell)   s_pCtrlPnl800Cell   = ARCHIVE_LoadCellFileDefault("PANEL\\800ctrlpnl7", 0);
+    if (!s_pCtrlPnl640Cell)   s_pCtrlPnl640Cell   = ARCHIVE_LoadCellFileDefault("PANEL\\ctrlpnl7", 0);
+    if (!s_pHlthManaCell)     s_pHlthManaCell     = ARCHIVE_LoadCellFileDefault("PANEL\\hlthmana", 0);
+    if (!s_pOverlapCell)      s_pOverlapCell      = ARCHIVE_LoadCellFileDefault("PANEL\\overlap", 0);
+    if (!s_pRunBtnCell)       s_pRunBtnCell       = ARCHIVE_LoadCellFileDefault("PANEL\\runbutton", 0);
+    if (!s_pMenuBtnCell)      s_pMenuBtnCell      = ARCHIVE_LoadCellFileDefault("PANEL\\menubutton", 0);
+    if (!s_pMiniPanelCell)    s_pMiniPanelCell    = ARCHIVE_LoadCellFileDefault("PANEL\\minipanel", 0);
+    if (!s_pMiniPanelBtnCell) s_pMiniPanelBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\minipanelbtn", 0);
+}
+
+static void GAME_DrawSingleCelTopLeft(D2CellFileStrc* pCellFile, int32_t nLeftX, int32_t nTopY, int32_t nFrame)
+{
+    if (!pCellFile) return;
+    int32_t nTotal = D2CMP_CelFileGetCelsPerDirection(pCellFile);
+    if (nFrame < 0 || nFrame >= nTotal) nFrame = 0;
+    D2GfxDataStrc tGfx = {};
+    tGfx.pCellFile = pCellFile;
+    tGfx.nDirection = 0;
+    tGfx.nFrame = nFrame;
+    D2CellFileStrc* pCell = D2CMP_CelGetHandle(&tGfx);
+    int32_t nH = pCell ? D2CMP_CelGetHeight(pCell) : 0;
+    TEXTURE_CelDraw(&tGfx, nLeftX, nTopY + nH, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+}
+
+static void GAME_DrawAsciiText(const char* szAscii, int32_t nX, int32_t nY, int32_t nColor, BOOL bCentered)
+{
+    if (!szAscii) return;
+    Unicode wszBuf[128] = {};
+    Unicode::win2Unicode(wszBuf, szAscii, 127);
+    int32_t nDrawX = nX;
+    if (bCentered)
+    {
+        nDrawX -= D2Win_10121_GetTextWidth(wszBuf) / 2;
+    }
+    D2Win_10117_DrawText(wszBuf, nDrawX, nY, nColor, 0);
+}
+
 // 1.12a: 0x6FB2FB70 (__stdcall)
 void __stdcall SKILLTREE_RenderPanel()
 {
-    // Renders the active character class skill tree tab (0x6FB8FE44), skill icons (0x6FB2F470),
-    // remaining skill points counter, and close button.
+    if (!gaPanelStates[D2PANEL_SKILLTREE] || !gpPlayerUnit)
+    {
+        return;
+    }
+
+    const int32_t nClassId = (gpPlayerUnit->dwClassId < 7) ? (int32_t)gpPlayerUnit->dwClassId : 0;
+    static const char* const kTreeBgPaths[7] = {
+        "SPELLS\\skltree_a_back",
+        "SPELLS\\skltree_s_back",
+        "SPELLS\\skltree_n_back",
+        "SPELLS\\skltree_p_back",
+        "SPELLS\\skltree_b_back",
+        "SPELLS\\skltree_d_back",
+        "SPELLS\\skltree_i_back",
+    };
+    static const char* const kClassIconPaths[7] = {
+        "SPELLS\\AmSkillicon",
+        "SPELLS\\SoSkillicon",
+        "SPELLS\\NeSkillicon",
+        "SPELLS\\PaSkillicon",
+        "SPELLS\\BaSkillicon",
+        "SPELLS\\DrSkillicon",
+        "SPELLS\\AsSkillicon",
+    };
+
+    if (!s_apSkillTreeBgCells[nClassId])
+        s_apSkillTreeBgCells[nClassId] = ARCHIVE_LoadCellFileDefault(kTreeBgPaths[nClassId], 0);
+    if (!s_apClassSkillIconCells[nClassId])
+        s_apClassSkillIconCells[nClassId] = ARCHIVE_LoadCellFileDefault(kClassIconPaths[nClassId], 0);
+    if (!s_pSkillBuySellBtnCell)
+        s_pSkillBuySellBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\buysellbtn", 0);
+
+    const int32_t nPanelLeft = (gnScreenWidth >= 800) ? (320 + g_nRightPanelOffsetX) : 320;
+    const int32_t nPanelTop  = (gnScreenHeight >= 600) ? 60 : 0;
+    int32_t nTab = g_nSkillTreeTab_6FBA79FC;
+    if (nTab < 0 || nTab > 2) nTab = 0;
+
+    D2CellFileStrc* pTreeBg = s_apSkillTreeBgCells[nClassId];
+    if (pTreeBg)
+    {
+        const int32_t aQuadPos[4][2] = {
+            { nPanelLeft,       nPanelTop + 256 },
+            { nPanelLeft + 256, nPanelTop + 256 },
+            { nPanelLeft,       nPanelTop + 432 },
+            { nPanelLeft + 256, nPanelTop + 432 },
+        };
+        const int32_t nTotal = D2CMP_CelFileGetCelsPerDirection(pTreeBg);
+        for (int32_t i = 0; i < 4 && i < nTotal; ++i)
+        {
+            D2GfxDataStrc tBg = {};
+            tBg.pCellFile = pTreeBg;
+            tBg.nFrame = i;
+            TEXTURE_CelDraw(&tBg, aQuadPos[i][0], aQuadPos[i][1], 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+        }
+        const int32_t nTabBase = (nTab + 1) * 4;
+        for (int32_t i = 0; i < 4 && (nTabBase + i) < nTotal; ++i)
+        {
+            D2GfxDataStrc tBg = {};
+            tBg.pCellFile = pTreeBg;
+            tBg.nFrame = nTabBase + i;
+            TEXTURE_CelDraw(&tBg, aQuadPos[i][0], aQuadPos[i][1], 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+        }
+    }
+    else
+    {
+        D2GFX_DrawBox(nPanelLeft, nPanelTop, nPanelLeft + 320, nPanelTop + 432, 0x00u, DRAWMODE_TRANS75);
+    }
+
+    const int32_t aSkillColX[3] = { nPanelLeft + 15, nPanelLeft + 84, nPanelLeft + 153 };
+    const int32_t aSkillRowY[6] = { nPanelTop + 14, nPanelTop + 82, nPanelTop + 150, nPanelTop + 218, nPanelTop + 286, nPanelTop + 354 };
+    char szHoveredTip[128] = {};
+    int32_t nHoverX = nPanelLeft + 120;
+    int32_t nHoverY = nPanelTop + 140;
+    bool bRow6Col1Occupied = false;
+
+    D2CellFileStrc* pIconCel = s_apClassSkillIconCells[nClassId];
+    if (pIconCel && sgptDataTables && sgptDataTables->pSkillsTxt && sgptDataTables->pSkillDescTxt)
+    {
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+        for (int32_t sId = 0; sId < sgptDataTables->nSkillsTxtRecordCount && sId < 512; ++sId)
+        {
+            const D2SkillsTxt& sk = sgptDataTables->pSkillsTxt[sId];
+            if (sk.nCharClass != nClassId || sk.wSkillDesc < 0 || sk.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount)
+                continue;
+            const D2SkillDescTxt& sd = sgptDataTables->pSkillDescTxt[sk.wSkillDesc];
+            if (sd.nSkillPage != (nTab + 1) || sd.nSkillColumn < 1 || sd.nSkillColumn > 3 || sd.nSkillRow < 1 || sd.nSkillRow > 6)
+                continue;
+            if (sd.nSkillRow == 6 && sd.nSkillColumn == 1)
+                bRow6Col1Occupied = true;
+
+            const int32_t nIconX = aSkillColX[sd.nSkillColumn - 1];
+            const int32_t nIconY = aSkillRowY[sd.nSkillRow - 1];
+            D2SkillStrc* pSkill = SKILLS_GetSkillById(gpPlayerUnit, sId, -1);
+            const int32_t nLvl = pSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pSkill, 1) : 0;
+
+            GAME_DrawSingleCelTopLeft(pIconCel, nIconX, nIconY, (nLvl > 0) ? sd.nIconCel : (sd.nIconCel + 1));
+
+            char szLvl[16] = {};
+            snprintf(szLvl, sizeof(szLvl), "%d", nLvl);
+            GAME_DrawAsciiText(szLvl, nIconX + 41, nIconY + 55, (nLvl > 0) ? 4 : 0, TRUE);
+
+            if (gnMouseX >= nIconX && gnMouseX < nIconX + 48 && gnMouseY >= nIconY && gnMouseY < nIconY + 48)
+            {
+                const Unicode* pName = sd.wStrName ? D2LANG_GetStringFromTblIndex(sd.wStrName) : nullptr;
+                char szName[64] = {};
+                if (pName) Unicode::unicode2Win(szName, pName, 63);
+                snprintf(szHoveredTip, sizeof(szHoveredTip), "%s (Level %d, Req Lvl %d)",
+                    szName[0] ? szName : "Skill", nLvl, sk.wReqLevel);
+                nHoverX = nIconX + 24;
+                nHoverY = (nIconY - 8 > nPanelTop + 15) ? (nIconY - 8) : (nPanelTop + 15);
+            }
+        }
+    }
+
+    static const char* const kClassTabLines[7][3][2] = {
+        { { "Bow &", "Crossbow" },       { "Passive &", "Magic" },    { "Javelin &", "Spear" } },
+        { { "Fire", "Spells" },          { "Lightning", "Spells" },   { "Cold", "Spells" } },
+        { { "Curses", "" },              { "Poison &", "Bone" },      { "Summoning", "Spells" } },
+        { { "Defensive", "Auras" },      { "Offensive", "Auras" },    { "Combat", "Skills" } },
+        { { "Warcries", "" },            { "Combat", "Masteries" },   { "Combat", "Skills" } },
+        { { "Elemental", "" },           { "Shape", "Shifting" },     { "Summoning", "" } },
+        { { "Martial", "Arts" },         { "Shadow", "Disciplines" }, { "Traps", "" } },
+    };
+
+    const int32_t nSkillPts = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_SKILLPTS, 0);
+    D2Win_10127_SetFont(D2FONT_FONT6);
+    GAME_DrawAsciiText("REMAINING", nPanelLeft + 277, nPanelTop + 22, 4, TRUE);
+    GAME_DrawAsciiText("SKILL", nPanelLeft + 277, nPanelTop + 34, 4, TRUE);
+    GAME_DrawAsciiText("POINTS", nPanelLeft + 277, nPanelTop + 46, 4, TRUE);
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+    char szPts[16] = {};
+    snprintf(szPts, sizeof(szPts), "%d", (nSkillPts > 0) ? nSkillPts : 0);
+    GAME_DrawAsciiText(szPts, nPanelLeft + 277, nPanelTop + 80, (nSkillPts > 0) ? 4 : 0, TRUE);
+
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+    const int32_t aTabCenterY[3] = { nPanelTop + 376, nPanelTop + 268, nPanelTop + 160 };
+    for (int32_t t = 0; t < 3; ++t)
+    {
+        const uint8_t nCol = (t == nTab) ? 0 : 4;
+        const char* szL1 = kClassTabLines[nClassId][t][0];
+        const char* szL2 = kClassTabLines[nClassId][t][1];
+        if (szL2 && szL2[0])
+        {
+            GAME_DrawAsciiText(szL1, nPanelLeft + 277, aTabCenterY[t] - 6, nCol, TRUE);
+            GAME_DrawAsciiText(szL2, nPanelLeft + 277, aTabCenterY[t] + 10, nCol, TRUE);
+        }
+        else
+        {
+            GAME_DrawAsciiText(szL1, nPanelLeft + 277, aTabCenterY[t] + 2, nCol, TRUE);
+        }
+    }
+
+    if (s_pSkillBuySellBtnCell)
+    {
+        GAME_DrawSingleCelTopLeft(s_pSkillBuySellBtnCell,
+            bRow6Col1Occupied ? (nPanelLeft + 195) : (nPanelLeft + 28),
+            nPanelTop + 388,
+            10);
+    }
+
+    if (szHoveredTip[0])
+    {
+        Unicode wszTip[128] = {};
+        Unicode::win2Unicode(wszTip, szHoveredTip, 127);
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+        D2Win_10129_DrawFramedText(wszTip, nHoverX, nHoverY, 0, 1);
+    }
 }
 
 // 1.12a: 0x6FB319D0 (__stdcall)
 void __stdcall CTRLPNL_RenderLifeManaTooltips()
 {
-    // Renders "Life: X / Y" (string 0x1044) and "Mana: X / Y" framed text tooltips when hovering over orbs.
+    if (!gpPlayerUnit) return;
+    const int32_t nCurHp   = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_HITPOINTS, 0) >> 8;
+    const int32_t nMaxHp   = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MAXHP, 0) >> 8;
+    const int32_t nCurMana = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MANA, 0) >> 8;
+    const int32_t nMaxMana = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MAXMANA, 0) >> 8;
+
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    char szOrb[64] = {};
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+
+    if ((gnMouseX >= 15 && gnMouseX <= 105 && gnMouseY >= nH - 95) || nMaxHp > 0)
+    {
+        snprintf(szOrb, sizeof(szOrb), "Life: %d / %d", (nCurHp > 0) ? nCurHp : 0, (nMaxHp > nCurHp) ? nMaxHp : nCurHp);
+        GAME_DrawAsciiText(szOrb, 54, nH - 94, 0, TRUE);
+    }
+    if ((gnMouseX >= nW - 105 && gnMouseX <= nW - 15 && gnMouseY >= nH - 95) || nMaxMana > 0)
+    {
+        snprintf(szOrb, sizeof(szOrb), "Mana: %d / %d", (nCurMana > 0) ? nCurMana : 0, (nMaxMana > nCurMana) ? nMaxMana : nCurMana);
+        GAME_DrawAsciiText(szOrb, nW - 54, nH - 94, 0, TRUE);
+    }
 }
 
 // 1.12a: 0x6FB31BB0 (__stdcall)
 void __stdcall CTRLPNL_RenderRightManaOrb()
 {
-    // Computes player mana fill height (STAT_MANA / STAT_MAXMANA * 80px), checks Energy Shield state (0x6A),
-    // and draws the mana orb liquid and overlap glass via TEXTURE_CelDrawEx / TEXTURE_CelDraw.
+    if (!gpPlayerUnit) return;
+    GAME_EnsureCtrlPnlCellsLoaded();
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    const int32_t nCurMana = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MANA, 0) >> 8;
+    int32_t nMaxMana = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MAXMANA, 0) >> 8;
+    if (nMaxMana < 1) nMaxMana = 1;
+    int32_t nFillPx = (nCurMana * 80) / nMaxMana;
+    if (nFillPx < 0) nFillPx = 0;
+    if (nFillPx > 80) nFillPx = 80;
+
+    if (s_pHlthManaCell && nFillPx > 0)
+    {
+        D2GfxDataStrc tOrb = {};
+        tOrb.pCellFile = s_pHlthManaCell;
+        tOrb.nFrame = STATES_CheckState(gpPlayerUnit, 0x1E /* STATE_ENERGYSHIELD */) ? 3 : 1;
+        if (D2CMP_CelFileGetCelsPerDirection(s_pHlthManaCell) <= (int32_t)tOrb.nFrame)
+            tOrb.nFrame = 1;
+        TEXTURE_CelDrawEx(&tOrb, nW - 108, nH - 12, 0, nFillPx, DRAWMODE_NORMAL);
+    }
+    if (s_pOverlapCell)
+    {
+        D2GfxDataStrc tOvl = {};
+        tOvl.pCellFile = s_pOverlapCell;
+        tOvl.nFrame = 1;
+        TEXTURE_CelDraw(&tOvl, nW - 110, nH - 6, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+    }
 }
 
 // 1.12a: 0x6FB31CF0 (__stdcall)
 void __stdcall CTRLPNL_RenderLeftLifeOrb()
 {
-    // Computes player life fill height (STAT_HITPOINTS / STAT_MAXHP * 80px), checks Poison state (0x02),
-    // and draws the health orb liquid and overlap glass via TEXTURE_CelDrawEx / TEXTURE_CelDraw.
+    if (!gpPlayerUnit) return;
+    GAME_EnsureCtrlPnlCellsLoaded();
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    const int32_t nCurHp = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_HITPOINTS, 0) >> 8;
+    int32_t nMaxHp = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MAXHP, 0) >> 8;
+    if (nMaxHp < 1) nMaxHp = 1;
+    int32_t nFillPx = (nCurHp * 80) / nMaxHp;
+    if (nFillPx < 0) nFillPx = 0;
+    if (nFillPx > 80) nFillPx = 80;
+
+    if (s_pHlthManaCell && nFillPx > 0)
+    {
+        D2GfxDataStrc tOrb = {};
+        tOrb.pCellFile = s_pHlthManaCell;
+        tOrb.nFrame = STATES_CheckState(gpPlayerUnit, 2 /* STATE_POISON */) ? 2 : 0;
+        if (D2CMP_CelFileGetCelsPerDirection(s_pHlthManaCell) <= (int32_t)tOrb.nFrame)
+            tOrb.nFrame = 0;
+        TEXTURE_CelDrawEx(&tOrb, 30, nH - 12, 0, nFillPx, DRAWMODE_NORMAL);
+    }
+    if (s_pOverlapCell)
+    {
+        D2GfxDataStrc tOvl = {};
+        tOvl.pCellFile = s_pOverlapCell;
+        tOvl.nFrame = 0;
+        TEXTURE_CelDraw(&tOvl, 28, nH - 6, 0xFFFFFFFFu, DRAWMODE_TRANSHIGHLIGHT, nullptr);
+    }
 }
 
 // 1.12a: 0x6FB32230 (__stdcall)
 void __stdcall CTRLPNL_RenderBottomBar()
 {
-    // Draws either 640x480 ('Panel\CtrlPnl7') or 800x600 ('Panel\800CtrlPnl7' + 'Panel\800BorderFrame')
-    // bottom control panel frames, stamina bar, belt slots, mini-panel toggle, and experience bar.
+    if (!gpPlayerUnit) return;
+    GAME_EnsureCtrlPnlCellsLoaded();
+
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+
+    if (nW >= 800 && s_pCtrlPnl800Cell)
+    {
+        const int32_t aCtrlPnlPos[6][2] = {
+            { 0,   nH - 1 },
+            { 165, nH     },
+            { 293, nH     },
+            { 421, nH     },
+            { 549, nH     },
+            { 683, nH - 1 },
+        };
+        const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(s_pCtrlPnl800Cell);
+        for (int32_t f = 0; f < 6 && f < nFrames; ++f)
+        {
+            D2GfxDataStrc tPnl = {};
+            tPnl.pCellFile = s_pCtrlPnl800Cell;
+            tPnl.nFrame = f;
+            TEXTURE_CelDraw(&tPnl, aCtrlPnlPos[f][0], aCtrlPnlPos[f][1], 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+        }
+    }
+    else if (s_pCtrlPnl640Cell)
+    {
+        const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(s_pCtrlPnl640Cell);
+        int32_t nCurX = 0;
+        for (int32_t f = 0; f < nFrames; ++f)
+        {
+            D2GfxDataStrc tPnl = {};
+            tPnl.pCellFile = s_pCtrlPnl640Cell;
+            tPnl.nFrame = f;
+            D2CellFileStrc* pCell = D2CMP_CelGetHandle(&tPnl);
+            TEXTURE_CelDraw(&tPnl, nCurX, nH, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
+            if (pCell) nCurX += D2CMP_CelGetWidth(pCell);
+        }
+    }
+
+    // Stamina bar & Run/Walk toggle button
+    const int32_t nCurStam = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_STAMINA, 0) >> 8;
+    int32_t nMaxStam = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MAXSTAMINA, 0) >> 8;
+    if (nMaxStam < 1) nMaxStam = 1;
+    int32_t nStamW = (nCurStam * 102) / nMaxStam;
+    if (nStamW < 0) nStamW = 0;
+    if (nStamW > 102) nStamW = 102;
+    const int32_t nStamBaseX = (nW / 2) - 127;
+    if (nStamW > 0)
+    {
+        D2GFX_DrawBox(nStamBaseX, nH - 26, nStamBaseX + nStamW, nH - 12, 0x6Au, DRAWMODE_NORMAL);
+    }
+    if (s_pRunBtnCell)
+    {
+        GAME_DrawSingleCelTopLeft(s_pRunBtnCell, nStamBaseX - 18, nH - 27, gbAlwaysRun ? 2 : 0);
+    }
+
+    // Experience bar
+    const int32_t nLvl = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_LEVEL, 0);
+    const uint32_t dwExp = (uint32_t)STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_EXPERIENCE, 0);
+    const uint32_t dwPrevExp = (nLvl > 1) ? DATATBLS_GetLevelThreshold(gpPlayerUnit->dwClassId, nLvl - 1) : 0u;
+    const uint32_t dwNextExp = DATATBLS_GetLevelThreshold(gpPlayerUnit->dwClassId, (nLvl > 0) ? nLvl : 1);
+    if (dwNextExp > dwPrevExp && dwExp > dwPrevExp)
+    {
+        int32_t nExpW = (int32_t)(((uint64_t)(dwExp - dwPrevExp) * 120u) / (uint64_t)(dwNextExp - dwPrevExp));
+        if (nExpW > 120) nExpW = 120;
+        if (nExpW > 0)
+        {
+            D2GFX_DrawBox((nW / 2) - 128, nH - 42, (nW / 2) - 128 + nExpW, nH - 39, 0xFFu, DRAWMODE_NORMAL);
+        }
+    }
+
+    // Central Mini-Panel Toggle & 8-button Mini-Panel
+    const int32_t bMiniOpen = (gaPanelStates[D2PANEL_MINIPANEL] != 0) ? 1 : 0;
+    if (s_pMenuBtnCell)
+    {
+        GAME_DrawSingleCelTopLeft(s_pMenuBtnCell, (nW / 2) - 7, nH - 38, bMiniOpen ? 2 : 0);
+    }
+    if (bMiniOpen)
+    {
+        const int32_t nMiniX = (nW / 2) - 72;
+        const int32_t nMiniY = nH - 74;
+        if (s_pMiniPanelCell)
+        {
+            GAME_DrawSingleCelTopLeft(s_pMiniPanelCell, nMiniX, nMiniY, 0);
+        }
+        if (s_pMiniPanelBtnCell)
+        {
+            const bool aActive[8] = {
+                gaPanelStates[D2PANEL_CHAR] != 0,
+                gaPanelStates[D2PANEL_INVENTORY] != 0,
+                gaPanelStates[D2PANEL_SKILLTREE] != 0,
+                gaPanelStates[D2PANEL_AUTOMAP] != 0,
+                gaPanelStates[D2PANEL_MSGLOG] != 0,
+                gaPanelStates[D2PANEL_QUEST] != 0,
+                gaPanelStates[D2PANEL_PARTY] != 0,
+                gaPanelStates[D2PANEL_ESCMENU] != 0,
+            };
+            for (int32_t i = 0; i < 8; ++i)
+            {
+                GAME_DrawSingleCelTopLeft(s_pMiniPanelBtnCell, nMiniX + 3 + i * 18, nMiniY + 3, i * 2 + (aActive[i] ? 1 : 0));
+            }
+        }
+        if (!gaPanelStates[D2PANEL_ESCMENU] && gnMouseX >= nMiniX && gnMouseX < nMiniX + 144 && gnMouseY >= nMiniY - 4 && gnMouseY < nMiniY + 27)
+        {
+            static const char* const kMiniTooltips[8] = {
+                "Character Screen (C)",
+                "Inventory Screen (I)",
+                "Skill Tree (T)",
+                "Automap (Tab)",
+                "Message Log (M)",
+                "Quest Log (Q)",
+                "Party Screen (P)",
+                "Game Menu (Esc)",
+            };
+            int32_t nIdx = (gnMouseX - (nMiniX + 2)) / 18;
+            if (nIdx < 0) nIdx = 0;
+            if (nIdx > 7) nIdx = 7;
+            Unicode wszTip[64] = {};
+            Unicode::win2Unicode(wszTip, kMiniTooltips[nIdx], 63);
+            D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+            D2Win_10129_DrawFramedText(wszTip, nW / 2, nMiniY - 12, 0, 1);
+        }
+    }
 }

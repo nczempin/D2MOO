@@ -1750,7 +1750,7 @@ void __fastcall D2Client_PacketHandler_ItemAddToShopOrContainer(const uint8_t* p
     int32_t nY = UNITS_GetYPosition(pItem);
     int32_t nStorePage = ITEMS_GetStorePage(pItem);
     uint8_t bPage = ITEMS_GetInvPage(pItem);
-    if (bPage > 4)
+    if (bPage >= 4)
     {
         bPage = (nStorePage >= 0 && nStorePage <= 3) ? (uint8_t)nStorePage : 0;
         ITEMS_SetInvPage(pItem, bPage);

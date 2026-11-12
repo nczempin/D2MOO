@@ -134,7 +134,7 @@ int32_t __stdcall INV_HandleLButtonDown(void);                                  
 int32_t __stdcall GFXUTIL_BuildItemCelContext(D2UnitStrc* pItem, D2CellBufferStrc* pCelBuf, int32_t* pOutColor); // 0x6FB679A0
 void __stdcall  GFXUTIL_GetItemSpriteSize(D2UnitStrc* pItem, int32_t a2, int32_t a3, int32_t* pWidth, int32_t* pHeight); // 0x6FB68010
 void __fastcall VIEW_SetViewportRect(int32_t nLeft, int32_t nTop, int32_t nRight, int32_t nBottom, int32_t nOffsetX); // 0x6FB6A990
-D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szPath, int32_t nType); // 0x6FB6EF70
+D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szPath, int32_t nType); // 0x6FB6EF70
 
 // =============================================================================
 // Module Globals (.data / .bss)
@@ -351,7 +351,7 @@ void __stdcall USEITEM_DrawPanel(void)
         {
             char szBtnPath[260];
             wsprintfA(szBtnPath, "%s\\ui\\panel\\buysellbtn", "DATA\\GLOBAL");
-            gpBuySellBtnCel = ARCHIVE_LoadCellFile(szBtnPath, 0);
+            gpBuySellBtnCel = ARCHIVE_LoadCellFileDefault(szBtnPath, 0);
         }
         sCelBuf.pCelFile = gpBuySellBtnCel;
 

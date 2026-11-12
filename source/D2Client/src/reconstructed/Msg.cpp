@@ -263,7 +263,7 @@ int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize)
     const int32_t nSent = CLIENT_Send(1, abStackCopy, static_cast<int32_t>(nSize));
     if (nSent != 0)
     {
-        g_dwBytesSent += nSent;
+        g_dwBytesSent += (nSent > 1) ? static_cast<uint32_t>(nSent) : static_cast<uint32_t>(nSize);
         g_dwPacketsSent += 1;
     }
     return nSent;

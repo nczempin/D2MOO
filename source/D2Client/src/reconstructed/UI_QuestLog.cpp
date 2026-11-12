@@ -72,7 +72,7 @@ extern "C" void* __stdcall SMemGetHeapByCaller(const char* szFile, int32_t nLine
 extern "C" void __stdcall SMsgBreakHandlerChain(void* pMsg);
 
 // Internal D2Client Cross-Unit Helpers
-void* __fastcall ARCHIVE_LoadCellFile(const char* szPath, int32_t nFileType);                               // 0x6FB6EF70
+struct D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szPath, int32_t nFileType);        // 0x6FB6EF70
 void __stdcall SOUND_PlaySoundEffect(int32_t nUnitType, int32_t nUnitId, int32_t nX, int32_t nY);          // 0x6FAE1FA0 (ebx = nSoundId)
 void __stdcall GFX_PlayUnitOverlayOnPlayer(int32_t bLoop);                                                 // 0x6FB41F40 (ebx = nOverlayId)
 void __fastcall CUNIT_IterateClientUnitsOfType(int32_t nUnitType, void(__fastcall* pfCallback)(D2UnitStrc*)); // 0x6FACEA20
@@ -446,8 +446,8 @@ void __stdcall QUESTLOG_AcknowledgeQuestAlert(void)
 int32_t __fastcall QUESTLOG_GetAlertButtonLayoutIndex(int32_t nViewShiftState)
 {
     extern int32_t gaPanelStates[38];
-    int32_t g_bMiniPanelOpen = gaPanelStates[6];
-    int32_t g_bbeltExpanded  = gaPanelStates[2];
+    int32_t g_bMiniPanelOpen = gaPanelStates[21];
+    int32_t g_bbeltExpanded  = gaPanelStates[31];
 
     if (g_bMiniPanelOpen && !g_bbeltExpanded)
     {
@@ -766,7 +766,7 @@ void __stdcall QUESTLOG_LoadPanelSprites(void)
     if (!g_pCelQuestBackground)
     {
         wsprintfA(szPath, "%s\\ui\\menu\\questbackground", "DATA\\GLOBAL");
-        g_pCelQuestBackground = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelQuestBackground = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
     if (!g_pCelQuestTabs)
     {
@@ -778,27 +778,27 @@ void __stdcall QUESTLOG_LoadPanelSprites(void)
         {
             wsprintfA(szPath, "%s\\ui\\menu\\questtabs", "DATA\\GLOBAL");
         }
-        g_pCelQuestTabs = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelQuestTabs = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
     if (!g_pCelQuestSockets)
     {
         wsprintfA(szPath, "%s\\ui\\menu\\questsockets", "DATA\\GLOBAL");
-        g_pCelQuestSockets = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelQuestSockets = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
     if (!g_pCelQuestDone)
     {
         wsprintfA(szPath, "%s\\ui\\menu\\questdone", "DATA\\GLOBAL");
-        g_pCelQuestDone = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelQuestDone = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
     if (!g_pCelInvPs)
     {
         wsprintfA(szPath, "%s\\ui\\menu\\invps", "DATA\\GLOBAL");
-        g_pCelInvPs = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelInvPs = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
     if (!g_pCelQuestLast)
     {
         wsprintfA(szPath, "%s\\ui\\menu\\questlast", "DATA\\GLOBAL");
-        g_pCelQuestLast = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pCelQuestLast = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
 }
 
@@ -1055,7 +1055,7 @@ void __stdcall QUESTLOG_LoadActIconsAndSelectDefaultSocket(int32_t nActNo, int32
         if (!g_apCelQuestIcons[i])
         {
             wsprintfA(szPath, "%s\\ui\\menu\\%s", "DATA\\GLOBAL", g_apszQuestIconNames[i]);
-            g_apCelQuestIcons[i] = ARCHIVE_LoadCellFile(szPath, 0);
+            g_apCelQuestIcons[i] = ARCHIVE_LoadCellFileDefault(szPath, 0);
         }
     }
 
@@ -1166,7 +1166,11 @@ void __stdcall QUESTLOG_OnAlertButtonMouseDown(void* pMsg)
 // 1.12a: 0x6FB71440 (__fastcall, eax = pStateBytes)
 void __fastcall QUESTLOG_UpdateServerQuestStateArray(const uint8_t* pStateBytes)
 {
-    memcpy((uint8_t*)g_anServerQuestFilterState - 1, pStateBytes, 42);
+    if (!pStateBytes)
+    {
+        return;
+    }
+    memcpy(g_anServerQuestFilterState, pStateBytes + 1, sizeof(g_anServerQuestFilterState));
     g_bAlertBtnPressed = 0;
 
     if (!g_bCutsceneActive)
@@ -1607,7 +1611,7 @@ void __stdcall QUESTLOG_OnPanelMouseUp(void* pMsg)
 void __stdcall QUESTLOG_DrawPanel(void)
 {
     extern int32_t gaPanelStates[38];
-    int32_t& g_bQuestPanelOpenFlag = gaPanelStates[18];
+    int32_t& g_bQuestPanelOpenFlag = gaPanelStates[15];
     extern void*   g_pCelBuySellBtn;      // 0x6FBCBD4C
 
     if (!g_pPlayerUnit || g_pPlayerUnit->dwAnimMode == 17 || !g_bQuestPanelOpenFlag || g_bCutsceneActive)
@@ -1622,13 +1626,16 @@ void __stdcall QUESTLOG_DrawPanel(void)
         QUESTLOG_LoadActIconsAndSelectDefaultSocket(0, 1);
     }
 
+#pragma pack(push, 1)
     struct D2CelDrawDataStrc
     {
-        uint32_t dwPad[14];     // +0x00 .. +0x37
-        void*    pCellFile;     // +0x38
-        int32_t  nFrame;        // +0x3C
-        uint32_t dwPad2[2];     // +0x40 .. +0x47
+        uint32_t dwPad[15];     // +0x00 .. +0x3B
+        void*    pCellFile;     // +0x3C
+        int32_t  nFrame;        // +0x40
+        int32_t  nMaxFrames;    // +0x44
     } sDrawData = {};
+#pragma pack(pop)
+    static_assert(sizeof(D2CelDrawDataStrc) == 0x48, "D2CelDrawDataStrc must match 0x48-byte D2GfxDataStrc");
 
     // 1. Draw 4-quadrant Quest Log background
     if (g_pCelQuestBackground)
@@ -1840,7 +1847,7 @@ void __stdcall QUESTLOG_DrawPanel(void)
     {
         char szBtnPath[260];
         wsprintfA(szBtnPath, "%s\\ui\\panel\\buysellbtn", "DATA\\GLOBAL");
-        g_pCelBuySellBtn = ARCHIVE_LoadCellFile(szBtnPath, 0);
+        g_pCelBuySellBtn = ARCHIVE_LoadCellFileDefault(szBtnPath, 0);
     }
 
     sDrawData.pCellFile = g_pCelBuySellBtn;

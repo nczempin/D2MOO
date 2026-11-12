@@ -1267,17 +1267,63 @@ void __fastcall D2Client_ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile)
     }
 }
 
+static void ARCHIVE_FormatCellFilePath(char* szFullPath, size_t cbFullPath, const char* szFileName, int32_t nFileType)
+{
+    const char* pRel = szFileName;
+    while (*pRel == '\\' || *pRel == '/')
+    {
+        ++pRel;
+    }
+    if (_strnicmp(pRel, "data\\", 5) == 0 || _strnicmp(pRel, "data/", 5) == 0)
+    {
+        strncpy(szFullPath, pRel, cbFullPath - 8);
+        szFullPath[cbFullPath - 8] = '\0';
+    }
+    else
+    {
+        if (_strnicmp(pRel, "ui\\", 3) == 0 || _strnicmp(pRel, "ui/", 3) == 0)
+        {
+            pRel += 3;
+        }
+        if (strchr(pRel, '\\') == nullptr && strchr(pRel, '/') == nullptr)
+        {
+            strcpy(szFullPath, "DATA\\GLOBAL\\UI\\CURSOR\\");
+        }
+        else
+        {
+            strcpy(szFullPath, "DATA\\GLOBAL\\UI\\");
+        }
+        strncat(szFullPath, pRel, cbFullPath - strlen(szFullPath) - 8);
+    }
+    const char* szExt = D2CMP_GetGfxFileExtension(nFileType);
+    if (szExt)
+    {
+        size_t nCurLen = strlen(szFullPath);
+        size_t nExtLen = strlen(szExt);
+        if (nCurLen < nExtLen || _stricmp(szFullPath + nCurLen - nExtLen, szExt) != 0)
+        {
+            strcat(szFullPath, szExt);
+        }
+    }
+}
+
 // 1.12a: 0x6FB6EED0 (usercall: eax = szFileName, [esp+4] = nFileType, [esp+8] = bNoLocale)
 D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szFileName, int32_t nFileType, int32_t bNoLocale)
 {
-    (void)bNoLocale;
-    char szFullPath[260];
-    strcpy(szFullPath, szFileName);
-    strcat(szFullPath, D2CMP_GetGfxFileExtension(nFileType));
+    if (!szFileName || !szFileName[0])
+    {
+        return nullptr;
+    }
+    char szFullPath[260] = {};
+    ARCHIVE_FormatCellFilePath(szFullPath, sizeof(szFullPath), szFileName, nFileType);
 
     HD2ARCHIVE hArchive = D2Win_GetArchive();
     uint32_t dwFileSize = 0;
-    void* pRawBuffer = ARCHIVE_LoadFileToMemory(hArchive, szFullPath, &dwFileSize, 1);
+    void* pRawBuffer = ARCHIVE_LoadFileToMemory(hArchive, szFullPath, &dwFileSize, bNoLocale ? 0 : 1);
+    if (!pRawBuffer)
+    {
+        return nullptr;
+    }
 
     D2CellFileStrc* pCellFile = nullptr;
     D2CMP_CelFileNormalize(
@@ -1294,13 +1340,20 @@ D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szFileName, int32_t 
 // 1.12a: 0x6FB6EF70 (usercall: eax = szFileName, [esp+4] = nFileType)
 D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, int32_t nFileType)
 {
-    char szFullPath[260];
-    strcpy(szFullPath, szFileName);
-    strcat(szFullPath, D2CMP_GetGfxFileExtension(nFileType));
+    if (!szFileName || !szFileName[0])
+    {
+        return nullptr;
+    }
+    char szFullPath[260] = {};
+    ARCHIVE_FormatCellFilePath(szFullPath, sizeof(szFullPath), szFileName, nFileType);
 
     HD2ARCHIVE hArchive = D2Win_GetArchive();
     uint32_t dwFileSize = 0;
     void* pRawBuffer = ARCHIVE_LoadFileToMemory(hArchive, szFullPath, &dwFileSize, 1);
+    if (!pRawBuffer)
+    {
+        return nullptr;
+    }
 
     D2CellFileStrc* pCellFile = nullptr;
     D2CMP_CelFileNormalize(
@@ -1390,13 +1443,20 @@ void __fastcall PALSHIFT_LoadGreenBloodTable(void)
 // 1.12a: 0x6FB6F170 (__fastcall)
 void __fastcall PALSHIFT_InitTables(void)
 {
+    if (!sgptDataTables || sgptDataTables->nMonStatsTxtRecordCount <= 0)
+    {
+        return;
+    }
     const int32_t nMonCount = sgptDataTables->nMonStatsTxtRecordCount;
     const int32_t nAllocBytes = nMonCount * sizeof(D2MonPalShiftIndexEntryStrc);
 
-    D2MonPalShiftIndexEntryStrc* pIndexTable = static_cast<D2MonPalShiftIndexEntryStrc*>(
-        FOG_Alloc(nAllocBytes, "..\\Source\\D2Client\\GAME\\PalShift.cpp", 99, 0));
+    if (gpMonPalShiftIndexTable == nullptr)
+    {
+        gpMonPalShiftIndexTable = static_cast<D2MonPalShiftIndexEntryStrc*>(
+            FOG_Alloc(nAllocBytes, "..\\Source\\D2Client\\GAME\\PalShift.cpp", 99, 0));
+    }
+    D2MonPalShiftIndexEntryStrc* pIndexTable = gpMonPalShiftIndexTable;
     memset(pIndexTable, 0, nAllocBytes);
-    gpMonPalShiftIndexTable = pIndexTable;
 
     for (int32_t i = 0; i < sgptDataTables->nMonStatsTxtRecordCount; ++i)
     {
@@ -1452,6 +1512,14 @@ uint8_t* __fastcall PALSHIFT_GetUnitPaletteTransform(D2UnitStrc* pUnit)
     if (pUnit == nullptr || pUnit->dwUnitType != UNIT_MONSTER)
     {
         return nullptr;
+    }
+    if (gpMonPalShiftIndexTable == nullptr)
+    {
+        PALSHIFT_InitTables();
+        if (gpMonPalShiftIndexTable == nullptr)
+        {
+            return nullptr;
+        }
     }
 
     D2MonPalShiftNodeStrc* pNode = gpMonPalShiftIndexTable[pUnit->dwClassId].pNode;
@@ -1599,11 +1667,18 @@ void __fastcall PALSHIFT_LoadMonsterPalShift(int32_t nMonsterClassId)
     gpMonPalShiftList = pNode;
 
     const int32_t nTotalMonsters = ENGINE_GetMonStatsRecordCount();
-    for (int32_t i = 0; i < nTotalMonsters; ++i)
+    if (gpMonPalShiftIndexTable == nullptr)
     {
-        if (pNode->nMonsterClassId == i)
+        PALSHIFT_InitTables();
+    }
+    if (gpMonPalShiftIndexTable != nullptr)
+    {
+        for (int32_t i = 0; i < nTotalMonsters; ++i)
         {
-            gpMonPalShiftIndexTable[i].pNode = pNode;
+            if (pNode->nMonsterClassId == i)
+            {
+                gpMonPalShiftIndexTable[i].pNode = pNode;
+            }
         }
     }
 }

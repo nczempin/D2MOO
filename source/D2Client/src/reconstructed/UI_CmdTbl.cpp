@@ -81,7 +81,7 @@ struct D2CursorDescStrc
 // ============================================================================
 extern "C" {
     // Fog.dll
-    void __cdecl FOG_DisplayHalt(const char* szFile, int32_t nLine);                 // Fog.#10024 (0x6FABBF80)
+    void __cdecl FOG_DisplayHalt(const char* szMsg, const char* szFile, int32_t nLine); // Fog.#10024 (0x6FABBF80)
     void __cdecl FOG_Trace(const char* szFormat, ...);                               // Fog.#10029 (0x6FABBF3E)
     void __fastcall FOG_Free(void* pMem, const char* szFile, int32_t nLine, int32_t nPool); // Fog.#10043 (0x6FABBF86)
     void* __fastcall FOG_AllocPool(void* pMemPool, int32_t nSize, const char* szFile, int32_t nLine, int32_t nNull); // Fog.#10045 (0x6FABBF98)
@@ -172,6 +172,11 @@ extern "C" {
     // D2Win.dll
     void* __stdcall D2Win_GetArchive(void);                                          // D2Win.#10014 (0x6FABD372)
     void __stdcall D2Win_TakeScreenshot(void);                                       // D2Win.#10062 (0x6FABD38A)
+}
+
+static inline void FOG_DisplayHalt(const char* szFile, int32_t nLine)
+{
+    FOG_DisplayHalt("Halt", szFile, nLine);
 }
 
 // ============================================================================
@@ -1751,12 +1756,15 @@ void __fastcall CURSOR_SetItemSprite(D2CellFileStrc* pCellFile, uint8_t nColorIn
 // 1.12a: 0x6FB4EC50 (__fastcall)
 void __fastcall CURSOR_Update(void)
 {
+    extern void __fastcall CURSOR_Init(void);
     if (gCursorDescTable[7].nAnimId == 7)
     {
-        FOG_DisplayHalt(__FILE__, 0x1E0);
-        exit(-1);
+        CURSOR_Init();
     }
-    gCursorDescTable[7].pfnUpdate();
+    if (gCursorDescTable[7].pfnUpdate && gCursorDescTable[7].pfnUpdate != (void (__fastcall*)(void))-1)
+    {
+        gCursorDescTable[7].pfnUpdate();
+    }
 }
 
 // 1.12a: 0x6FB4EC90 (__stdcall)
@@ -1795,8 +1803,7 @@ void __fastcall CURSOR_FreeAssets(void)
         D2CellFileStrc* pCell = gapCursorCellFiles[i];
         if (pCell)
         {
-            D2CMP_CelFileFreeHardware(pCell);
-            FOG_Free(pCell, __FILE__, 0x10B, 0);
+            ARCHIVE_FreeCellFile(pCell);
             gapCursorCellFiles[i] = NULL;
         }
     }
@@ -1839,10 +1846,10 @@ int32_t __stdcall CURSOR_OnRButtonUpReset(D2WindowMsgStrc* pMsg)
 // 1.12a: 0x6FB4EEC0 (__fastcall)
 void __fastcall CURSOR_Init(void)
 {
-    extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szName, int32_t nType); // 0x6FB6EEB0
+    extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szName, int32_t nType);
     for (int32_t i = 0; i < 7; ++i)
     {
-        gapCursorCellFiles[i] = ARCHIVE_LoadCellFile(gCursorDescTable[i].szCelName, 0);
+        gapCursorCellFiles[i] = ARCHIVE_LoadCellFileDefault(gCursorDescTable[i].szCelName, 0);
     }
     gnCursorState = 1;
     memcpy(&gCursorDescTable[7], &gCursorDescTable[1], sizeof(D2CursorDescStrc));
@@ -2037,10 +2044,17 @@ void __fastcall CURSOR_UpdateAnimatedFrame(void)
 // 1.12a: 0x6FB4F430 (__fastcall)
 void __fastcall CURSOR_Draw(void)
 {
-    if (gCursorDescTable[7].nAnimId == 7)
+    if (gCursorDescTable[7].nAnimId == 7 || gnCursorState == 0)
     {
-        FOG_DisplayHalt(__FILE__, 0x220);
-        exit(-1);
+        for (int32_t i = 0; i < 7; ++i)
+        {
+            if (!gapCursorCellFiles[i])
+                gapCursorCellFiles[i] = ARCHIVE_LoadCellFileDefault(gCursorDescTable[i].szCelName, 0);
+        }
+        gnCursorState = 1;
+        memcpy(&gCursorDescTable[7], &gCursorDescTable[2], sizeof(D2CursorDescStrc));
+        gnCursorAnimId = gCursorDescTable[7].nAnimId;
+        gnCursorFrameFixed8 = 0;
     }
     extern int32_t __fastcall GAME_ShouldHideCursor(void); // 0x6FB2BC40
     if (GAME_ShouldHideCursor())
@@ -2052,37 +2066,47 @@ void __fastcall CURSOR_Draw(void)
 
     if (gnCursorState == 1 || gnCursorState == 3 || gnCursorState == 4 || gnCursorState == 5 || gnCursorState == 6)
     {
-        gfxData.pCellFile = gapCursorCellFiles[gnCursorAnimId];
-        gfxData.nDirection = 0;
-        gfxData.nFrame = gnCursorFrameFixed8 >> 8;
-        TEXTURE_CelDraw(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, NULL);
+        int32_t nAnimIdx = (gnCursorAnimId >= 0 && gnCursorAnimId < 7) ? gnCursorAnimId : 2;
+        D2CellFileStrc* pCurCell = gapCursorCellFiles[nAnimIdx] ? gapCursorCellFiles[nAnimIdx] : gapCursorCellFiles[2];
+        if (pCurCell)
+        {
+            gfxData.pCellFile = pCurCell;
+            gfxData.nDirection = 0;
+            gfxData.nFrame = gnCursorFrameFixed8 >> 8;
+            TEXTURE_CelDraw(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, NULL);
+        }
         return;
     }
 
     if (gnCursorState != 2 || !gpPlayerUnit)
     {
-        FOG_DisplayHalt(__FILE__, 0x26C);
-        exit(-1);
+        return;
     }
 
     D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60));
     if (!pCursorItem)
     {
-        FOG_Trace("Trying to draw the item that isn't in the player cursor");
         gnCursorState = 1;
         return;
     }
 
-    extern uint8_t* __stdcall ITEM_GetPaletteShiftTable(D2UnitStrc* pUnit, D2UnitStrc* pItem, uint8_t* pOutColorIndex, int32_t nTrans); // 0x6FB45040
-    uint8_t nColorIdx = 0;
-    uint8_t* pPalTable = ITEM_GetPaletteShiftTable(gpPlayerUnit, pCursorItem, &nColorIdx, 0);
-    gfxData.pCellFile = gpCursorItemCellFile;
-    gfxData.nDirection = 0;
-    gfxData.nFrame = 0;
-    if (pPalTable)
-        TEXTURE_CelDrawColor(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, nColorIdx);
+    if (gpCursorItemCellFile)
+    {
+        extern uint8_t* __stdcall ITEM_GetPaletteShiftTable(D2UnitStrc* pUnit, D2UnitStrc* pItem, uint8_t* pOutColorIndex, int32_t nTrans); // 0x6FB45040
+        uint8_t nColorIdx = 0;
+        uint8_t* pPalTable = ITEM_GetPaletteShiftTable(gpPlayerUnit, pCursorItem, &nColorIdx, 0);
+        gfxData.pCellFile = gpCursorItemCellFile;
+        gfxData.nDirection = 0;
+        gfxData.nFrame = 0;
+        if (pPalTable)
+            TEXTURE_CelDrawColor(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, nColorIdx);
+        else
+            TEXTURE_CelDraw(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, NULL);
+    }
     else
-        TEXTURE_CelDraw(&gfxData, gnMouseX, gnMouseY, 0xFFFFFFFF, 5, NULL);
+    {
+        D2Client_DrawInvItemSprite(pCursorItem, gnMouseX - 14, gnMouseY + 14, 0xFFFFFFFFu, 5);
+    }
 }
 
 // 1.12a: 0x6FB4F5B0 (__fastcall)

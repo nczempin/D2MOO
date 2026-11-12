@@ -10,6 +10,8 @@
 //   - ..\Source\D2Client\WARDEN\WardenClient.cpp (0x6FB1C3A0..0x6FB1CE20)
 // ============================================================================
 
+#include "D2ClientReconstructed.h"
+
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -305,8 +307,12 @@ extern D2UnitStrc* __stdcall PLAYER_GetLocalPlayer(); // 0x6FB283D0
 extern int32_t __fastcall NET_SendStatButtonPacket(uint8_t nPacketId, uint16_t wStatId, uint16_t wCount); // 0x6FAB7990
 extern void __fastcall NET_SendVariablePacket(uint8_t nPacketId, const void* pData, int32_t nLen); // 0x6FAB7810
 extern void __fastcall SOUND_PlayUiClick(int32_t nSoundId); // 0x6FB17220
-extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFile(const char* szName, int32_t nType); // 0x6FB6EEB0
+extern D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szName, int32_t nType); // 0x6FB6EEB0
 extern void __fastcall ARCHIVE_FreeCellFile(D2CellFileStrc* pCellFile); // 0x6FB6FB50
+extern int32_t g_nLeftPanelOffsetX;
+extern int32_t g_nLeftPanelOffsetY;
+extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
+static D2CellFileStrc* g_pCharStatUpBtnCell = nullptr;
 
 // ============================================================================
 // PART 1: Floor Tile Vertex Grid & Floor Tile Renderer (0x6FB18030..0x6FB19080)
@@ -1354,10 +1360,21 @@ void __stdcall SOUNDHDR_Init()
 // PART 3: Character Stats UI Panel (0x6FB1A760 .. 0x6FB1C3A0)
 // ============================================================================
 
+// 1.12a: 0x6FB1C260 (__stdcall)
+void __stdcall CHARSTATS_LoadButtonCellFiles();
+
 // 1.12a: 0x6FB1A760 (__stdcall)
 void __stdcall CHARSTATS_InitStatPanel()
 {
-    g_pCharStatPanelCell = ARCHIVE_LoadCellFile("Panel\\InvChar6", 0);
+    if (!g_pCharStatPanelCell)
+    {
+        g_pCharStatPanelCell = ARCHIVE_LoadCellFileDefault("Panel\\InvChar6", 0);
+    }
+    if (!g_pCharStatUpBtnCell)
+    {
+        g_pCharStatUpBtnCell = ARCHIVE_LoadCellFileDefault("Panel\\level", 0);
+    }
+    CHARSTATS_LoadButtonCellFiles();
 }
 
 // 1.12a: 0x6FB1A780 (__stdcall)
@@ -1372,6 +1389,11 @@ void __stdcall CHARSTATS_FreeStatPanel()
     {
         ARCHIVE_FreeCellFile(g_pCharStatBtnCellFile);
         g_pCharStatBtnCellFile = nullptr;
+    }
+    if (g_pCharStatUpBtnCell)
+    {
+        ARCHIVE_FreeCellFile(g_pCharStatUpBtnCell);
+        g_pCharStatUpBtnCell = nullptr;
     }
 }
 
@@ -1494,8 +1516,18 @@ int32_t __fastcall CHARSTATS_CalcChanceToHit(D2UnitStrc* pPlayer, int32_t* pnAtt
 // 1.12a: 0x6FB1B100 (__fastcall)
 int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg)
 {
-    int32_t nMouseX = *(int32_t*)((uint8_t*)pMsg + 0x08);
-    int32_t nMouseY = *(int32_t*)((uint8_t*)pMsg + 0x0C);
+    int32_t nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
+    int32_t nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nOx = g_nLeftPanelOffsetX;
+    int32_t nTopY = -g_nLeftPanelOffsetY;
+
+    if (nMouseX >= nOx + 48 && nMouseX <= nOx + 80 &&
+        nMouseY >= nTopY + 388 && nMouseY <= nTopY + 420)
+    {
+        SOUND_PlayUiClick(2);
+        UI_SetPanelState(D2PANEL_CHAR, 0, 0);
+        return 1;
+    }
 
     D2UnitStrc* pPlayer = PLAYER_GetLocalPlayer();
     if (!pPlayer || D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0) <= 0)
@@ -1506,8 +1538,10 @@ int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg)
     for (int32_t i = 0; i < 4; ++i)
     {
         D2StatButtonDescStrc* pBtn = &g_aCharStatButtons[i];
-        if (nMouseX >= pBtn->nX && nMouseX <= pBtn->nX + pBtn->nWidth &&
-            nMouseY >= pBtn->nY - pBtn->nHeight && nMouseY <= pBtn->nY)
+        int32_t nBtnX = nOx + pBtn->nX - 11;
+        int32_t nBtnBottomY = nTopY + pBtn->nY + 5;
+        if (nMouseX >= nBtnX && nMouseX <= nBtnX + pBtn->nWidth &&
+            nMouseY >= nBtnBottomY - pBtn->nHeight && nMouseY <= nBtnBottomY)
         {
             pBtn->nState = 1;
             SOUND_PlayUiClick(4);
@@ -1517,28 +1551,230 @@ int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg)
     return 0;
 }
 
+static void CHARSTATS_DrawTextAscii(const char* szAscii, int32_t nX, int32_t nY, int32_t nColor, int32_t bCentered)
+{
+    if (!szAscii) return;
+    wchar_t wszBuf[128] = {};
+    for (int32_t i = 0; i < 127 && szAscii[i]; ++i)
+    {
+        wszBuf[i] = (uint8_t)szAscii[i];
+    }
+    int32_t nDrawX = nX;
+    if (bCentered)
+    {
+        nDrawX -= D2Win_10121_GetTextPixelWidth(wszBuf) / 2;
+    }
+    D2Win_10117_DrawText(wszBuf, nDrawX, nY, nColor, 0);
+}
+
 // 1.12a: 0x6FB1B280 (__stdcall)
 void __stdcall CHARSTATS_DrawPanel()
 {
+    if (!gaPanelStates[D2PANEL_CHAR])
+    {
+        return;
+    }
+
     D2UnitStrc* pPlayer = PLAYER_GetLocalPlayer();
+    if (!pPlayer)
+    {
+        pPlayer = gpPlayerUnit;
+    }
     if (!pPlayer)
     {
         return;
     }
 
+    if (!g_pCharStatPanelCell || !g_pCharStatBtnCellFile || !g_pCharStatUpBtnCell)
+    {
+        CHARSTATS_InitStatPanel();
+    }
+
+    const int32_t nOx = g_nLeftPanelOffsetX;
+    const int32_t nTopY = -g_nLeftPanelOffsetY; // 60 at 800x600, 0 at 640x480
+
+    if (g_pCharStatPanelCell)
+    {
+        D2GfxDataStrc tGfx = {};
+        tGfx.pCellFile = g_pCharStatPanelCell;
+        tGfx.nDirection = 0;
+        tGfx.nFrame = 0;
+        D2Gfx_10072_DrawCellFile(&tGfx, nOx, nTopY + 256, 0xFFFFFFFFu, 5, nullptr);
+        tGfx.nFrame = 1;
+        D2Gfx_10072_DrawCellFile(&tGfx, nOx + 256, nTopY + 256, 0xFFFFFFFFu, 5, nullptr);
+        tGfx.nFrame = 2;
+        D2Gfx_10072_DrawCellFile(&tGfx, nOx, nTopY + 432, 0xFFFFFFFFu, 5, nullptr);
+        tGfx.nFrame = 3;
+        D2Gfx_10072_DrawCellFile(&tGfx, nOx + 256, nTopY + 432, 0xFFFFFFFFu, 5, nullptr);
+    }
+    else
+    {
+        D2Gfx_10059_DrawBox(nOx, nTopY, nOx + 320, nTopY + 432, 0x00u, 2);
+    }
+
+    const char* szPlrName = "Hero";
+    if (const char* pPlayerData = (const char*)D2Common_10366_GetPlayerData(pPlayer))
+    {
+        if (pPlayerData[0])
+        {
+            szPlrName = pPlayerData;
+        }
+    }
+    const int32_t nClassId = (*(int32_t*)((uint8_t*)pPlayer + 0x04) >= 0 && *(int32_t*)((uint8_t*)pPlayer + 0x04) < 7)
+        ? *(int32_t*)((uint8_t*)pPlayer + 0x04)
+        : 0;
+    static const char* const kClassNames[7] = {
+        "Amazon", "Sorceress", "Necromancer", "Paladin", "Barbarian", "Druid", "Assassin"
+    };
+
     D2Win_10127_SetFont(1);
-    // Draws character name, class, level, experience, strength, dexterity, vitality, energy,
-    // fire/cold/lightning/poison resistances, defense, stamina, life, mana, and stat-up buttons.
+    CHARSTATS_DrawTextAscii(szPlrName, nOx + 95, nTopY + 24, 4, 1);
+    CHARSTATS_DrawTextAscii(kClassNames[nClassId], nOx + 250, nTopY + 24, 4, 1);
+
+    int32_t nLvl = D2Common_10519_GetUnitStatSigned(pPlayer, 12 /* STAT_LEVEL */, 0);
+    if (nLvl < 1) nLvl = 1;
+    uint32_t dwExp = (uint32_t)D2Common_10519_GetUnitStatSigned(pPlayer, 13 /* STAT_EXPERIENCE */, 0);
+    uint32_t dwNextExp = (uint32_t)D2Common_11039_GetExperienceForLevel(nClassId, nLvl);
+
+    char szBuf[64] = {};
+    CHARSTATS_DrawTextAscii("Level", nOx + 32, nTopY + 48, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nLvl);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 32, nTopY + 64, 0, 1);
+
+    CHARSTATS_DrawTextAscii("Experience", nOx + 135, nTopY + 48, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%u", dwExp);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 135, nTopY + 64, 0, 1);
+
+    CHARSTATS_DrawTextAscii("Next Level", nOx + 250, nTopY + 48, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%u", dwNextExp ? dwNextExp : 500u);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 250, nTopY + 64, 0, 1);
+
+    int32_t nStr = D2Common_10519_GetUnitStatSigned(pPlayer, 0 /* STAT_STRENGTH */, 0);
+    int32_t nDex = D2Common_10519_GetUnitStatSigned(pPlayer, 2 /* STAT_DEXTERITY */, 0);
+    int32_t nVit = D2Common_10519_GetUnitStatSigned(pPlayer, 3 /* STAT_VITALITY */, 0);
+    int32_t nEne = D2Common_10519_GetUnitStatSigned(pPlayer, 1 /* STAT_ENERGY */, 0);
+
+    CHARSTATS_DrawTextAscii("Strength", nOx + 45, nTopY + 100, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nStr);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 100, 0, 1);
+
+    CHARSTATS_DrawTextAscii("Dexterity", nOx + 45, nTopY + 162, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nDex);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 162, 0, 1);
+
+    CHARSTATS_DrawTextAscii("Vitality", nOx + 45, nTopY + 248, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nVit);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 248, 0, 1);
+
+    CHARSTATS_DrawTextAscii("Energy", nOx + 45, nTopY + 310, 4, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nEne);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 310, 0, 1);
+
+    int32_t nStatPts = D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0);
+    if (nStatPts > 0)
+    {
+        for (int32_t b = 0; b < 4; ++b)
+        {
+            int32_t nBtnX = nOx + g_aCharStatButtons[b].nX - 11;
+            int32_t nBtnBottomY = nTopY + g_aCharStatButtons[b].nY + 5;
+            if (g_pCharStatUpBtnCell)
+            {
+                D2GfxDataStrc tBtn = {};
+                tBtn.pCellFile = g_pCharStatUpBtnCell;
+                tBtn.nFrame = g_aCharStatButtons[b].nState ? 1 : 0;
+                D2Gfx_10072_DrawCellFile(&tBtn, nBtnX, nBtnBottomY, 0xFFFFFFFFu, 5, nullptr);
+            }
+        }
+        D2Win_10127_SetFont(6);
+        CHARSTATS_DrawTextAscii("Stat Points", nOx + 62, nTopY + 352, 1, 1);
+        D2Win_10127_SetFont(1);
+        snprintf(szBuf, sizeof(szBuf), "%d", nStatPts);
+        CHARSTATS_DrawTextAscii(szBuf, nOx + 132, nTopY + 352, 0, 1);
+    }
+
+    D2Win_10127_SetFont(6);
+    CHARSTATS_DrawTextAscii("Attack Damage", nOx + 196, nTopY + 95, 4, 1);
+    CHARSTATS_DrawTextAscii("Attack Rating", nOx + 196, nTopY + 151, 4, 1);
+    CHARSTATS_DrawTextAscii("Defense", nOx + 196, nTopY + 205, 4, 1);
+    CHARSTATS_DrawTextAscii("Stamina", nOx + 186, nTopY + 243, 4, 1);
+    CHARSTATS_DrawTextAscii("Life", nOx + 186, nTopY + 269, 4, 1);
+    CHARSTATS_DrawTextAscii("Mana", nOx + 186, nTopY + 307, 4, 1);
+    CHARSTATS_DrawTextAscii("Fire Resistance", nOx + 204, nTopY + 337, 4, 1);
+    CHARSTATS_DrawTextAscii("Cold Resistance", nOx + 204, nTopY + 361, 4, 1);
+    CHARSTATS_DrawTextAscii("Lightning Resist", nOx + 204, nTopY + 385, 4, 1);
+    CHARSTATS_DrawTextAscii("Poison Resistance", nOx + 204, nTopY + 409, 4, 1);
+
+    D2Win_10127_SetFont(1);
+    int32_t nBaseDmg = 0, nMaxDmg = 0, nBonusAR = 0;
+    int32_t nAR = D2Common_11026_GetAttackRate(pPlayer, 0, 0, 1, nullptr, &nBaseDmg, &nMaxDmg, &nBonusAR);
+    if (nBaseDmg < 1) nBaseDmg = 1;
+    if (nMaxDmg <= nBaseDmg) nMaxDmg = nBaseDmg + 1;
+    snprintf(szBuf, sizeof(szBuf), "%d - %d", nBaseDmg, nMaxDmg);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 96, 0, 1);
+
+    snprintf(szBuf, sizeof(szBuf), "%d", nAR);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 152, 0, 1);
+
+    int32_t nDef = D2Common_10550_GetUnitDefense(pPlayer);
+    snprintf(szBuf, sizeof(szBuf), "%d", nDef);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 284, nTopY + 206, 0, 1);
+
+    int32_t nCurStam = D2Common_10519_GetUnitStatSigned(pPlayer, 10 /* STAT_STAMINA */, 0) >> 8;
+    int32_t nMaxStam = D2Common_10519_GetUnitStatSigned(pPlayer, 11 /* STAT_MAXSTAMINA */, 0) >> 8;
+    if (nMaxStam < nCurStam) nMaxStam = nCurStam;
+    snprintf(szBuf, sizeof(szBuf), "%d", nMaxStam);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 252, nTopY + 244, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nCurStam);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 244, 0, 1);
+
+    int32_t nCurHp = D2Common_10519_GetUnitStatSigned(pPlayer, 6 /* STAT_HITPOINTS */, 0) >> 8;
+    int32_t nMaxHp = D2Common_10519_GetUnitStatSigned(pPlayer, 7 /* STAT_MAXHP */, 0) >> 8;
+    if (nMaxHp < nCurHp) nMaxHp = nCurHp;
+    snprintf(szBuf, sizeof(szBuf), "%d", nMaxHp);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 252, nTopY + 270, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nCurHp);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 270, 0, 1);
+
+    int32_t nCurMana = D2Common_10519_GetUnitStatSigned(pPlayer, 8 /* STAT_MANA */, 0) >> 8;
+    int32_t nMaxMana = D2Common_10519_GetUnitStatSigned(pPlayer, 9 /* STAT_MAXMANA */, 0) >> 8;
+    if (nMaxMana < nCurMana) nMaxMana = nCurMana;
+    snprintf(szBuf, sizeof(szBuf), "%d", nMaxMana);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 252, nTopY + 308, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d", nCurMana);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 308, 0, 1);
+
+    int32_t nFireRes = D2Common_10519_GetUnitStatSigned(pPlayer, 39 /* STAT_FIRERESIST */, 0);
+    int32_t nLightRes = D2Common_10519_GetUnitStatSigned(pPlayer, 41 /* STAT_LIGHTRESIST */, 0);
+    int32_t nColdRes = D2Common_10519_GetUnitStatSigned(pPlayer, 43 /* STAT_COLDRESIST */, 0);
+    int32_t nPoisRes = D2Common_10519_GetUnitStatSigned(pPlayer, 45 /* STAT_POISONRESIST */, 0);
+    snprintf(szBuf, sizeof(szBuf), "%d%%", nFireRes);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 338, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d%%", nColdRes);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 362, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d%%", nLightRes);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 386, 0, 1);
+    snprintf(szBuf, sizeof(szBuf), "%d%%", nPoisRes);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 291, nTopY + 410, 0, 1);
+
+    if (g_pCharStatBtnCellFile)
+    {
+        D2GfxDataStrc tClose = {};
+        tClose.pCellFile = g_pCharStatBtnCellFile;
+        tClose.nFrame = 10;
+        D2Gfx_10072_DrawCellFile(&tClose, nOx + 48, nTopY + 420, 0xFFFFFFFFu, 5, nullptr);
+    }
 }
 
 // 1.12a: 0x6FB1C0A0 (__fastcall)
 int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg)
 {
-    int32_t nMouseX = *(int32_t*)((uint8_t*)pMsg + 0x08);
-    int32_t nMouseY = *(int32_t*)((uint8_t*)pMsg + 0x0C);
+    int32_t nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
+    int32_t nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nOx = g_nLeftPanelOffsetX;
+    int32_t nTopY = -g_nLeftPanelOffsetY;
 
     D2UnitStrc* pPlayer = PLAYER_GetLocalPlayer();
-    int32_t nStatPts = D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0);
+    int32_t nStatPts = pPlayer ? D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0) : 0;
 
     for (int32_t i = 0; i < 4; ++i)
     {
@@ -1548,10 +1784,10 @@ int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg)
 
         if (nPrevState == 1 && nStatPts > 0)
         {
-            int32_t nBtnX = pBtn->nX;
-            int32_t nBtnY = pBtn->nY;
+            int32_t nBtnX = nOx + pBtn->nX - 11;
+            int32_t nBtnBottomY = nTopY + pBtn->nY + 5;
             if (nMouseX >= nBtnX && nMouseX <= nBtnX + pBtn->nWidth &&
-                nMouseY >= nBtnY - pBtn->nHeight && nMouseY <= nBtnY)
+                nMouseY >= nBtnBottomY - pBtn->nHeight && nMouseY <= nBtnBottomY)
             {
                 NET_SendStatButtonPacket(0x3A, (uint16_t)pBtn->nStatId, 0);
                 return 1;
@@ -1566,7 +1802,7 @@ void __stdcall CHARSTATS_LoadButtonCellFiles()
 {
     if (!g_pCharStatBtnCellFile)
     {
-        g_pCharStatBtnCellFile = ARCHIVE_LoadCellFile("Panel\\buysellbtn", 0);
+        g_pCharStatBtnCellFile = ARCHIVE_LoadCellFileDefault("Panel\\buysellbtn", 0);
     }
 }
 

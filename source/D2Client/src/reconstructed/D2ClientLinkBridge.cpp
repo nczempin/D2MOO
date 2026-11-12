@@ -78,7 +78,7 @@ struct D2ViewportStrc;
 struct D2WallViewportStrc;
 struct D2LightNodeStrc;
 struct D2FloorTileVertexStrc;
-struct D2WinWrappedTextNodeStrc;
+struct D2WinWrappedTextNodeStrc { Unicode* pLineText; D2WinWrappedTextNodeStrc* pNext; };
 
 #pragma pack(push, 1)
 struct D2CharVoiceEntryStrc
@@ -294,6 +294,7 @@ extern D2RosterUnitStrc* __fastcall ROSTER_FindPlayerByUnitId(uint32_t dwUnitId)
 extern uint16_t __fastcall ROSTER_GetActivePartyId(const D2RosterUnitStrc* pRosterUnit);
 extern int32_t __fastcall ROSTER_CanPlayerLootCorpse(uint32_t dwCollectorUnitId, uint32_t dwCorpseUnitId);
 extern uint32_t __fastcall ROSTERPETS_GetPetOwnerId(uint32_t dwPetUnitId);
+extern uint32_t __fastcall ROSTERPETS_FindPlayerPetUnitIdByType(const D2UnitStrc* pOwnerUnit, int32_t nPetType, int32_t bIncludeDeadHireling);
 
 extern void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32_t bSkipUnits);
 extern void __fastcall VIEW_ScreenToWorldCoords(D2ViewportStrc* pViewport, int32_t nScreenX, int32_t nScreenY, int32_t* pWorldX, int32_t* pWorldY);
@@ -518,7 +519,9 @@ extern int32_t __fastcall D2Client_InitMissileUnitDataAndPath(D2UnitStrc* pMissi
 #pragma comment(linker, "/alternatename:_UNITS_TestCollisionWithUnit@12=?UNITS_TestCollisionWithUnit@@YGHPAUD2UnitStrc@@0H@Z")
 #pragma comment(linker, "/alternatename:_WINDOW_GetDimensions@8=?WINDOW_GetDimensions@@YGHPAH0@Z")
 #pragma comment(linker, "/alternatename:_WINDOW_GetWindow@0=?WINDOW_GetWindow@@YGPAUHWND__@@XZ")
-#pragma comment(linker, "/alternatename:?ARCHIVE_LoadCellFile@@YIPAXPBDH@Z=?ARCHIVE_LoadCellFile@@YIPAUD2CellFileStrc@@PBDH@Z")
+#pragma comment(linker, "/alternatename:?ARCHIVE_LoadCellFile@@YIPAXPBDH@Z=?ARCHIVE_LoadCellFileDefault@@YIPAUD2CellFileStrc@@PBDH@Z")
+#pragma comment(linker, "/alternatename:?ARCHIVE_LoadCellFileDefault@@YIPAXPBDH@Z=?ARCHIVE_LoadCellFileDefault@@YIPAUD2CellFileStrc@@PBDH@Z")
+#pragma comment(linker, "/alternatename:?g_pBuySellBtnCell@@3PAUD2CellFileStrc@@A=?g_pBuySellBtnCel@@3PAUD2CellFileStrc@@A")
 #pragma comment(linker, "/alternatename:?AUTOMAP_SetFadeMode@@YIXH@Z=?AUTOMAP_SetFadeMode@@YIHH@Z")
 #pragma comment(linker, "/alternatename:?CMDTBL_GetShortBindingNameString@@YIPBXHH@Z=?CMDTBL_GetShortBindingNameString@@YIPBUUnicode@@HH@Z")
 #pragma comment(linker, "/alternatename:?D2Client_GetLocalPlayer@@YIPAUD2UnitStrc@@XZ=?D2Client_GetLocalPlayer@@YGPAUD2UnitStrc@@XZ")
@@ -709,8 +712,8 @@ int g_nLastMouseDownX = {};
 int g_nLastMouseDownY = {};
 int g_nLastMusicSoundId = {};
 int g_nLastNotifiedMusicLevelId = {};
-int g_nLeftPanelOffsetX = {};
-int g_nLeftPanelOffsetY = {};
+int g_nLeftPanelOffsetX = 80;
+int g_nLeftPanelOffsetY = -60;
 int g_nMercTalkStringId = {};
 int g_nMusicCheckpointTick = {};
 int g_nMusicLastRestartTick = {};
@@ -721,7 +724,7 @@ unsigned char g_nOverrideAmbientBlue = {};
 unsigned char g_nOverrideAmbientGreen = {};
 int g_nOverrideAmbientIntensity = {};
 unsigned char g_nOverrideAmbientRed = {};
-int g_nRightPanelOffsetX = {};
+int g_nRightPanelOffsetX = 80;
 int g_nScreenOffsetX_6FBA79A0 = {};
 unsigned char g_nSelectedShopTab = {};
 int g_nShopPendingCost = {};
@@ -831,6 +834,10 @@ unsigned int gdwSoundDuckStartTick_6FBCC370 = {};
 int gdwaSkillDelayEndFrame = {};
 struct HACCEL__ * ghClientAcceleratorTable = {};
 int gnAutomapAllocatedCells = {};
+int gnAutomapBoundsMaxX = {};
+int gnAutomapBoundsMaxY = {};
+int gnAutomapBoundsMinX = {};
+int gnAutomapBoundsMinY = {};
 int gnAutomapDivisor = 10;
 int gnAutomapFadeDefault = {};
 int gnAutomapFadeMode = {};
@@ -843,6 +850,8 @@ int gnAutomapPanX = {};
 int gnAutomapPanY = {};
 int gnAutomapRevealDelayTicks = {};
 int gnAutomapSavedFadeMode = {};
+int gnAutomapSpriteCels[4] = {};
+int gnAutomapTextY = {};
 int gnCameraScreenSkewX = {};
 int gnCameraScreenSkewY = {};
 int gnClientLoopCount = {};
@@ -1366,6 +1375,11 @@ const Unicode* __fastcall Bridge_D2WIN_GetEditBoxText_63181(D2WinEditBoxStrc* p)
 #pragma comment(linker, "/alternatename:@D2WIN_GetEditBoxText@4=@Bridge_D2WIN_GetEditBoxText_63181@4")
 int32_t __fastcall Bridge_D2WIN_SetFont_73138(int32_t f) { return (int32_t)D2Win_10127_SetFont((Font)f); }
 #pragma comment(linker, "/alternatename:@D2WIN_SetFont@4=@Bridge_D2WIN_SetFont_73138@4")
+int32_t __fastcall Bridge_D2WIN_GetTextWidth_73139(const Unicode* w) { return w ? D2Win_10121_GetTextWidth(w) : 0; }
+#pragma comment(linker, "/alternatename:@D2WIN_GetTextWidth@4=@Bridge_D2WIN_GetTextWidth_73139@4")
+#pragma comment(linker, "/alternatename:?D2WIN_GetTextWidth@@YAHPB_W@Z=@Bridge_D2WIN_GetTextWidth_73139@4")
+int32_t __fastcall Bridge_D2Win_10121_GetTextPixelWidth_73140(const Unicode* w) { return w ? D2Win_10121_GetTextWidth(w) : 0; }
+#pragma comment(linker, "/alternatename:@D2Win_10121_GetTextPixelWidth@4=@Bridge_D2Win_10121_GetTextPixelWidth_73140@4")
 int32_t __fastcall Bridge_D2Win_10005_81947(int32_t a1, int32_t a2, int32_t a3, void* a4) { (void)a2; (void)a3; (void)a4; return D2Win_10005((D2GameResolutionMode)a1); }
 #pragma comment(linker, "/alternatename:@D2Win_10005@16=@Bridge_D2Win_10005_81947@16")
 HD2ARCHIVE __fastcall Bridge_D2Win_10014_48371() { return D2Win_GetArchive(); }
@@ -1376,7 +1390,72 @@ void __fastcall Bridge_D2Win_10124_DrawHoverText_95394(const Unicode* w, int32_t
 #pragma comment(linker, "/alternatename:@D2Win_10124_DrawHoverText@24=@Bridge_D2Win_10124_DrawHoverText_95394@24")
 void __fastcall Bridge_D2Win_10130_DrawFramedTextEx_56376(const Unicode* w, int32_t x, int32_t y, int32_t c, int32_t a) { D2Win_10129_DrawFramedText(w, x, y, c, a); }
 #pragma comment(linker, "/alternatename:@D2Win_10130_DrawFramedTextEx@20=@Bridge_D2Win_10130_DrawFramedTextEx_56376@20")
-void* __fastcall Bridge_D2Win_10199_WrapTextLines_1697(Unicode* pText, int32_t* pOutCnt, int32_t nMaxW) { (void)pText; (void)nMaxW; if (pOutCnt) *pOutCnt = 0; return nullptr; }
+void* __fastcall Bridge_D2Win_10199_WrapTextLines_1697(Unicode* pText, int32_t* pOutCnt, int32_t nMaxW)
+{
+    if (pOutCnt) *pOutCnt = 0;
+    if (!pText || !pText[0]) return nullptr;
+    if (nMaxW <= 0) nMaxW = 240;
+    D2WinWrappedTextNodeStrc* pHead = nullptr;
+    D2WinWrappedTextNodeStrc** ppTail = &pHead;
+    int32_t nLines = 0;
+    const wchar_t* pCur = (const wchar_t*)pText;
+    while (*pCur)
+    {
+        while (*pCur == L' ') ++pCur;
+        if (!*pCur) break;
+        if (*pCur == L'\n' || *pCur == L'\r')
+        {
+            if (*pCur == L'\r' && pCur[1] == L'\n') ++pCur;
+            ++pCur;
+            continue;
+        }
+        wchar_t wszLine[512] = {};
+        int32_t nLineLen = 0;
+        const wchar_t* pLineCommit = pCur;
+        const wchar_t* pScan = pCur;
+        while (*pScan && *pScan != L'\n' && *pScan != L'\r' && nLineLen < 500)
+        {
+            const wchar_t* pWordStart = pScan;
+            while (*pScan && *pScan != L' ' && *pScan != L'\n' && *pScan != L'\r') ++pScan;
+            int32_t nWordLen = (int32_t)(pScan - pWordStart);
+            int32_t nNeedSpace = (nLineLen > 0) ? 1 : 0;
+            if (nLineLen + nNeedSpace + nWordLen >= 500) break;
+            if (nNeedSpace) wszLine[nLineLen] = L' ';
+            memcpy(wszLine + nLineLen + nNeedSpace, pWordStart, (size_t)nWordLen * sizeof(wchar_t));
+            wszLine[nLineLen + nNeedSpace + nWordLen] = 0;
+            int32_t nW = D2Win_10121_GetTextWidth((const Unicode*)wszLine);
+            if (nW > nMaxW && nLineLen > 0)
+            {
+                wszLine[nLineLen] = 0;
+                break;
+            }
+            nLineLen += nNeedSpace + nWordLen;
+            pLineCommit = pScan;
+            while (*pScan == L' ') ++pScan;
+        }
+        if (pLineCommit == pCur)
+        {
+            while (*pLineCommit && *pLineCommit != L' ' && *pLineCommit != L'\n' && *pLineCommit != L'\r' && nLineLen < 500)
+                wszLine[nLineLen++] = *pLineCommit++;
+            wszLine[nLineLen] = 0;
+        }
+        pCur = pLineCommit;
+        if (*pCur == L'\r') ++pCur;
+        if (*pCur == L'\n') ++pCur;
+
+        D2WinWrappedTextNodeStrc* pNode = (D2WinWrappedTextNodeStrc*)FOG_AllocClientMemory(sizeof(D2WinWrappedTextNodeStrc), __FILE__, __LINE__, 0);
+        Unicode* pCopy = (Unicode*)FOG_AllocClientMemory((nLineLen + 1) * (int32_t)sizeof(Unicode), __FILE__, __LINE__, 0);
+        if (!pNode || !pCopy) break;
+        memcpy(pCopy, wszLine, (size_t)(nLineLen + 1) * sizeof(Unicode));
+        pNode->pLineText = pCopy;
+        pNode->pNext = nullptr;
+        *ppTail = pNode;
+        ppTail = &pNode->pNext;
+        ++nLines;
+    }
+    if (pOutCnt) *pOutCnt = nLines;
+    return pHead;
+}
 #pragma comment(linker, "/alternatename:@D2Win_10199_WrapTextLines@12=@Bridge_D2Win_10199_WrapTextLines_1697@12")
 void __fastcall Bridge_FOG_SetMemoryPoolSystemMode_41517(int32_t nMode) { FOG_SetMemoryPoolSystemMode(nullptr, nMode); }
 #pragma comment(linker, "/alternatename:@FOG_SetMemoryPoolSystemMode@4=@Bridge_FOG_SetMemoryPoolSystemMode_41517@4")
@@ -1464,6 +1543,14 @@ void* __stdcall Bridge_D2Common_10085_GetRoomTileGrid_50535(D2ActiveRoomStrc* r)
 #pragma comment(linker, "/alternatename:_D2Common_10085_GetRoomTileGrid@4=_Bridge_D2Common_10085_GetRoomTileGrid_50535@4")
 int32_t __stdcall Bridge_D2Common_10269_COMPOSIT_36305(D2UnitStrc* u, int32_t* pOutWC, int32_t nMode, int32_t bForce, D2InventoryStrc* inv) { int wc = 0; if (u) COMPOSIT_GetWeaponClassId(u, inv ? inv : u->pInventory, &wc, nMode, bForce); if (pOutWC) *pOutWC = wc; return 1; }
 #pragma comment(linker, "/alternatename:_D2Common_10269_COMPOSIT@20=_Bridge_D2Common_10269_COMPOSIT_36305@20")
+void* __stdcall Bridge_D2Common_10366_GetPlayerData_46913(D2UnitStrc* u) { return u ? UNITS_GetPlayerData(u) : nullptr; }
+#pragma comment(linker, "/alternatename:_D2Common_10366_GetPlayerData@4=_Bridge_D2Common_10366_GetPlayerData_46913@4")
+int32_t __stdcall Bridge_D2Common_11039_GetExperienceForLevel_46915(int32_t nClass, int32_t nLvl) { return (int32_t)DATATBLS_GetLevelThreshold(nClass, (uint32_t)(nLvl > 0 ? nLvl : 0)); }
+#pragma comment(linker, "/alternatename:_D2Common_11039_GetExperienceForLevel@8=_Bridge_D2Common_11039_GetExperienceForLevel_46915@8")
+void __stdcall Bridge_D2Gfx_10059_DrawBox_46916(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t c, int32_t tr) { D2GFX_DrawBox(x1, y1, x2, y2, (uint8_t)c, (DrawMode)tr); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10059_DrawBox@24=_Bridge_D2Gfx_10059_DrawBox_46916@24")
+void __stdcall Bridge_D2Gfx_10072_DrawCellFile_46917(D2GfxDataStrc* p, int32_t x, int32_t y, uint32_t g, int32_t m, void* pal) { TEXTURE_CelDraw(p, x, y, g, (DrawMode)m, (uint8_t*)pal); }
+#pragma comment(linker, "/alternatename:_D2Gfx_10072_DrawCellFile@24=_Bridge_D2Gfx_10072_DrawCellFile_46917@24")
 int32_t __stdcall Bridge_D2Common_10519_GetUnitStatSigned_46914(D2UnitStrc* u, int32_t id, int32_t layer) { return u ? STATLIST_UnitGetStatValue(u, id, (uint16_t)layer) : 0; }
 #pragma comment(linker, "/alternatename:_D2Common_10519_GetUnitStatSigned@12=_Bridge_D2Common_10519_GetUnitStatSigned_46914@12")
 int32_t __stdcall Bridge_D2Common_10550_GetUnitDefense_20741(D2UnitStrc* u) { return u ? UNITS_GetDefense(u) : 0; }
@@ -1967,11 +2054,41 @@ int __fastcall D2Client_DispatchUnitModeChange_6FAF1450(int a0, struct D2UnitStr
 }
 void __fastcall D2Client_DrawActiveSkillButtonsTooltip(int a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (!gpPlayerUnit)
+        return;
+    const bool bLeftBtn = (a0 < 200);
+    D2SkillStrc* pSkill = bLeftBtn ? UNITS_GetLeftSkill(gpPlayerUnit) : UNITS_GetRightSkill(gpPlayerUnit);
+    const int32_t nSkillId = pSkill ? SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) : 0;
+    D2SkillsTxt* pSkillsTxt = (sgptDataTables && nSkillId >= 0 && nSkillId < sgptDataTables->nSkillsTxtRecordCount)
+        ? &sgptDataTables->pSkillsTxt[nSkillId]
+        : nullptr;
+    if (!pSkillsTxt)
+        return;
+    D2SkillDescTxt* pDesc = (sgptDataTables && pSkillsTxt->wSkillDesc >= 0 && pSkillsTxt->wSkillDesc < sgptDataTables->nSkillDescTxtRecordCount)
+        ? &sgptDataTables->pSkillDescTxt[pSkillsTxt->wSkillDesc]
+        : nullptr;
+    if (!pDesc || !pDesc->wStrName)
+        return;
+    const Unicode* pName = D2LANG_GetStringFromTblIndex(pDesc->wStrName);
+    if (pName && pName[0].ch != 0)
+    {
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        D2Win_10129_DrawFramedText(pName, a0, a1 - 24, 0, 0);
+    }
 }
 void __stdcall D2Client_DrawBeltItemHoverTooltip(struct D2UnitStrc * a0, int a1, int a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    if (!a0 || a0->dwUnitType != UNIT_ITEM)
+        return;
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(a0->dwClassId);
+    if (!pItemsTxt)
+        return;
+    const Unicode* pName = D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr);
+    if (pName && pName[0].ch != 0)
+    {
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        D2Win_10129_DrawFramedText(pName, a1, a2 - 20, 0, 0);
+    }
 }
 void __fastcall D2Client_DrawSkillQuantityOverlay(struct D2SkillStrc * a0, int a1, int a2)
 {
@@ -2023,7 +2140,27 @@ wchar_t const * __fastcall D2Client_GetLevelNameString(int a0)
 }
 struct D2UnitStrc * __fastcall D2Client_GetLocalMercUnit(struct D2UnitStrc * a0)
 {
-    (void)a0; return nullptr;
+    const D2UnitStrc* pOwner = a0 ? a0 : gpPlayerUnit;
+    if (!pOwner) return nullptr;
+    uint32_t dwMercId = ROSTERPETS_FindPlayerPetUnitIdByType(pOwner, 7, 0);
+    if (dwMercId != 0 && dwMercId != 0xFFFFFFFFu)
+    {
+        D2UnitStrc* pMerc = D2Client_FindServerSideUnit(dwMercId, UNIT_MONSTER);
+        if (pMerc) return pMerc;
+    }
+    for (int32_t b = 0; b < 128; ++b)
+    {
+        for (D2UnitStrc* u = gapServerSideUnitHashTables[UNIT_MONSTER][b]; u; u = u->pListNext)
+        {
+            const int32_t c = u->dwClassId;
+            if ((c == 271 || c == 338 || c == 359 || c == 560 || c == 561) && u->dwAnimMode != MONMODE_DEAD && u->dwAnimMode != MONMODE_DEATH)
+            {
+                if (u->dwOwnerGUID == pOwner->dwUnitId || ROSTERPETS_GetPetOwnerId(u->dwUnitId) == pOwner->dwUnitId)
+                    return u;
+            }
+        }
+    }
+    return nullptr;
 }
 int __cdecl D2Client_GetMouseX_6FB55BC0(void)
 {
@@ -2035,7 +2172,20 @@ int __cdecl D2Client_GetMouseY_6FB55BD0(void)
 }
 struct Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc * a0)
 {
-    (void)a0; return nullptr;
+    if (!a0) return nullptr;
+    if (a0->dwUnitType == UNIT_MONSTER)
+    {
+        D2MonStatsTxt* pMon = DATATBLS_GetMonStatsTxtRecord(a0->dwClassId);
+        if (pMon && pMon->wNameStr != 0)
+            return D2LANG_GetStringFromTblIndex(pMon->wNameStr);
+    }
+    else if (a0->dwUnitType == UNIT_OBJECT)
+    {
+        D2ObjectsTxt* pObj = DATATBLS_GetObjectsTxtRecord(a0->dwClassId);
+        if (pObj && pObj->wszName[0])
+            return (const Unicode*)pObj->wszName;
+    }
+    return nullptr;
 }
 int __fastcall D2Client_GetPlayerSkillActionMode_6FB0B5B0(struct D2UnitStrc * a0)
 {
@@ -2048,6 +2198,120 @@ struct D2UnitStrc * __fastcall D2Client_GetPlayerUnit(void)
 int __fastcall D2Client_GetThrowWeaponIconCel(struct D2UnitStrc * a0)
 {
     (void)a0; return 0;
+}
+
+void __fastcall D2Client_SyncResolutionMetrics(int32_t nWidth, int32_t nHeight)
+{
+    if (nWidth <= 0) nWidth = 800;
+    if (nHeight <= 0) nHeight = 600;
+    gnScreenWidth = nWidth;
+    gnScreenHeight = nHeight;
+    gnViewportWidth = nWidth;
+    gnViewportHeight = (nHeight >= 48) ? (nHeight - 48) : nHeight;
+    if (nWidth >= 800)
+    {
+        g_nLeftPanelOffsetX = (nWidth - 640) / 2;
+        g_nLeftPanelOffsetY = -((nHeight - 480) / 2);
+        g_nRightPanelOffsetX = (nWidth - 640) / 2;
+        g_nPanelOffsetX = (nWidth - 800) / 2;
+        g_nPanelOffsetY = -((nHeight - 480) / 2);
+    }
+    else
+    {
+        g_nLeftPanelOffsetX = 0;
+        g_nLeftPanelOffsetY = 0;
+        g_nRightPanelOffsetX = 0;
+        g_nPanelOffsetX = -80;
+        g_nPanelOffsetY = 0;
+    }
+}
+
+struct D2ItemInvCellCacheEntry
+{
+    char            szKey[36];
+    D2CellFileStrc* pCellFile;
+};
+static D2ItemInvCellCacheEntry s_aItemInvCellCache[256] = {};
+static int32_t s_nItemInvCellCacheCount = 0;
+
+void __fastcall D2Client_ClearItemInvCellCache()
+{
+    for (int32_t i = 0; i < s_nItemInvCellCacheCount; ++i)
+    {
+        if (s_aItemInvCellCache[i].pCellFile)
+        {
+            ARCHIVE_FreeCellFile(s_aItemInvCellCache[i].pCellFile);
+            s_aItemInvCellCache[i].pCellFile = nullptr;
+        }
+        s_aItemInvCellCache[i].szKey[0] = '\0';
+    }
+    s_nItemInvCellCacheCount = 0;
+}
+
+D2CellFileStrc* __fastcall D2Client_GetOrLoadItemInvCell(D2UnitStrc* pItem)
+{
+    if (!pItem || pItem->dwUnitType != UNIT_ITEM)
+        return nullptr;
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(pItem->dwClassId);
+    if (!pItemsTxt)
+        return nullptr;
+
+    const char* szInvName = pItemsTxt->szInvFile;
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_IDENTIFIED, __LINE__, __FILE__))
+    {
+        const int32_t nQual = ITEMS_GetItemQuality(pItem);
+        if (nQual == ITEMQUAL_UNIQUE && pItemsTxt->szUniqueInvFile[0])
+            szInvName = pItemsTxt->szUniqueInvFile;
+        else if (nQual == ITEMQUAL_SET && pItemsTxt->szSetInvFile[0])
+            szInvName = pItemsTxt->szSetInvFile;
+    }
+    else if (ITEMS_GetVarInvGfxCount(pItem) > 0)
+    {
+        char* szVar = ITEMS_GetVarInvGfxString(pItem, ITEMS_GetVarGfxIndex(pItem));
+        if (szVar && szVar[0])
+            szInvName = szVar;
+    }
+    if (!szInvName || !szInvName[0])
+        szInvName = pItemsTxt->szFlippyFile;
+    if (!szInvName || !szInvName[0])
+        return nullptr;
+
+    char szKey[36] = {};
+    strncpy(szKey, szInvName, 32);
+    szKey[32] = '\0';
+    for (int32_t i = 0; i < s_nItemInvCellCacheCount; ++i)
+    {
+        if (_stricmp(s_aItemInvCellCache[i].szKey, szKey) == 0)
+            return s_aItemInvCellCache[i].pCellFile;
+    }
+
+    char szPath[260] = {};
+    snprintf(szPath, sizeof(szPath), "DATA\\GLOBAL\\ITEMS\\%s", szKey);
+    D2CellFileStrc* pCellFile = ARCHIVE_LoadCellFile(szPath, 0, 1);
+    if (s_nItemInvCellCacheCount < 256)
+    {
+        strcpy(s_aItemInvCellCache[s_nItemInvCellCacheCount].szKey, szKey);
+        s_aItemInvCellCache[s_nItemInvCellCacheCount].pCellFile = pCellFile;
+        ++s_nItemInvCellCacheCount;
+    }
+    return pCellFile;
+}
+
+int32_t __fastcall D2Client_DrawInvItemSprite(D2UnitStrc* pItem, int32_t nX, int32_t nY, uint32_t dwGamma, int32_t nDrawMode)
+{
+    D2CellFileStrc* pCellFile = D2Client_GetOrLoadItemInvCell(pItem);
+    if (!pCellFile)
+        return 0;
+    D2GfxDataStrc tGfx = {};
+    tGfx.pCellFile = pCellFile;
+    tGfx.nDirection = 0;
+    tGfx.nFrame = 0;
+    uint8_t nColorIdx = 0;
+    uint8_t* pPal = ITEMS_GetColor(gpPlayerUnit, pItem, &nColorIdx, 1);
+    if (ITEMS_IsEthereal(pItem) && nDrawMode == 5)
+        nDrawMode = 1;
+    TEXTURE_CelDraw(&tGfx, nX, nY, dwGamma, (DrawMode)nDrawMode, pPal);
+    return 1;
 }
 int __fastcall D2Client_GetUniqueClientUnitId(void)
 {
@@ -2075,7 +2339,7 @@ int __fastcall D2Client_IsCommandHeld(int a0)
 }
 int __fastcall D2Client_IsCurrentSkillUsable(void)
 {
-    return 0;
+    return 1;
 }
 int __fastcall D2Client_IsInTownOrTownSkillRestricted_6FB0B900(struct D2UnitStrc * a0, int a1)
 {
@@ -2459,7 +2723,8 @@ int __fastcall GAME_HasThreeButtonMouse(void)
 }
 void __fastcall GAME_LoadAct(unsigned char a0, unsigned int a1, unsigned short a2, unsigned int a3)
 {
-    GAME_LoadAct(a0, a2, a1, a3);
+    void (*pfnLoadAct)(uint8_t, uint32_t, uint32_t, uint32_t) = &GAME_LoadAct;
+    pfnLoadAct(a0, (uint32_t)a2, a1, a3);
 }
 int __fastcall GAME_ShouldHideCursor(void)
 {
@@ -2479,11 +2744,28 @@ void __fastcall GAME_UpdateCursorFromMsg(struct D2StormMsgStrc * a0)
 }
 int __stdcall GFXUTIL_BuildItemCelContext(struct D2UnitStrc * a0, struct D2GfxDataStrc * a1, int * a2)
 {
-    (void)a0; (void)a1; (void)a2; return 0;
+    if (!a0 || !a1) return 0;
+    D2CellFileStrc* pCellFile = D2Client_GetOrLoadItemInvCell(a0);
+    if (!pCellFile) return 0;
+    memset(a1, 0, sizeof(*a1));
+    a1->pCellFile = pCellFile;
+    a1->nDirection = 0;
+    a1->nFrame = 0;
+    if (a2)
+    {
+        uint8_t nCol = 0;
+        ITEMS_GetColor(gpPlayerUnit, a0, &nCol, 1);
+        *a2 = (int)nCol;
+    }
+    return 1;
 }
 void __stdcall GFXUTIL_GetItemSpriteSize(struct D2UnitStrc * a0, int a1, int a2, int * a3, int * a4)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4;
+    (void)a1; (void)a2;
+    uint8_t w = 1, h = 1;
+    if (a0) ITEMS_GetDimensions(a0, &w, &h, __FILE__, __LINE__);
+    if (a3) *a3 = (int)w * 29;
+    if (a4) *a4 = (int)h * 29;
 }
 void __stdcall GFX_DrawItemSprite(int a0, int a1)
 {
@@ -2543,7 +2825,31 @@ void __fastcall ITEMS_LockItemInInventory(struct D2UnitStrc * a0)
 }
 void __fastcall ITEM_BuildGroundLabelText(struct D2UnitStrc * a0, struct Unicode * a1, int a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    if (!a1 || a2 <= 0) return;
+    a1[0] = 0;
+    if (!a0 || a0->dwUnitType != UNIT_ITEM) return;
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(a0->dwClassId);
+    if (!pItemsTxt) return;
+    const Unicode* pBase = pItemsTxt->wNameStr ? D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr) : nullptr;
+    if (pItemsTxt->dwCode == 0x20646C67u) // 'gld '
+    {
+        int32_t nGold = STATLIST_UnitGetStatValue(a0, STAT_GOLD, 0);
+        wchar_t wszBuf[128] = {};
+        if (nGold > 0 && pBase && pBase[0])
+            swprintf(wszBuf, 128, L"%d %ls", nGold, (const wchar_t*)pBase);
+        else if (nGold > 0)
+            swprintf(wszBuf, 128, L"%d Gold", nGold);
+        else if (pBase)
+            wcsncpy(wszBuf, (const wchar_t*)pBase, 127);
+        wcsncpy((wchar_t*)a1, wszBuf, (size_t)(a2 - 1));
+        ((wchar_t*)a1)[a2 - 1] = 0;
+        return;
+    }
+    if (pBase)
+    {
+        wcsncpy((wchar_t*)a1, (const wchar_t*)pBase, (size_t)(a2 - 1));
+        ((wchar_t*)a1)[a2 - 1] = 0;
+    }
 }
 void __fastcall ITEM_FreeClientItem(struct D2UnitStrc * a0)
 {
@@ -2551,11 +2857,11 @@ void __fastcall ITEM_FreeClientItem(struct D2UnitStrc * a0)
 }
 struct D2CellFileStrc * __fastcall ITEM_GetCursorCellFile(struct D2UnitStrc * a0)
 {
-    (void)a0; return nullptr;
+    return D2Client_GetOrLoadItemInvCell(a0);
 }
 unsigned char * __stdcall ITEM_GetPaletteShiftTable(struct D2UnitStrc * a0, struct D2UnitStrc * a1, unsigned char * a2, int a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; return nullptr;
+    return ITEMS_GetColor(a0, a1, a2, a3);
 }
 void __fastcall ITEM_InitClientItem(struct D2UnitStrc * a0, int a1, int a2, int a3, int a4)
 {

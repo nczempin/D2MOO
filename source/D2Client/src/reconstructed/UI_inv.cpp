@@ -30,6 +30,7 @@
 #include <DrawMode.h>
 #include <Texture.h>
 #include <D2Win.h>
+#include <D2WinArchive.h>
 #include <D2WinFont.h>
 #include <D2CMP.h>
 #include <Fog.h>
@@ -139,17 +140,17 @@ extern int32_t gaPanelStates[38];                   // 0x6FBB2B58
 #define g_bSkillSelectOpen  (gaPanelStates[3])
 #define g_bSkillTreeOpen    (gaPanelStates[4])
 #define g_bChatInputOpen    (gaPanelStates[5])
-#define g_bNpcMenuOpen      (gaPanelStates[6])
-#define g_bEscMenuOpen      (gaPanelStates[12])
+#define g_bNpcMenuOpen      (gaPanelStates[8])
+#define g_bEscMenuOpen      (gaPanelStates[9])
+#define g_bNpcShopPanelOpen (gaPanelStates[12])
 #define g_bQuestLogOpen     (gaPanelStates[15])
 #define g_bWaypointOpen     (gaPanelStates[16])
-#define g_bPartyScreenOpen  (gaPanelStates[20])
+#define g_bPartyScreenOpen  (gaPanelStates[22])
 #define g_bGuildStealOpen   (gaPanelStates[22])
-#define g_bTradePanelOpen   (gaPanelStates[24])
-#define g_bHoradricCubeOpen (gaPanelStates[25])
-#define g_bMercInvOpen      (gaPanelStates[26])
-#define g_bStashPanelOpen   (gaPanelStates[27])
-#define g_bNpcShopPanelOpen (gaPanelStates[36])
+#define g_bTradePanelOpen   (gaPanelStates[23])
+#define g_bStashPanelOpen   (gaPanelStates[25])
+#define g_bHoradricCubeOpen (gaPanelStates[26])
+#define g_bMercInvOpen      (gaPanelStates[36])
 #define g_bMercShopPanelOpen (gaPanelStates[37])
 
 extern BOOL g_bExpansionMode;                       // 0x6FBB330C
@@ -266,6 +267,14 @@ D2CellFileStrc* __stdcall UI_GetBuySellBtnCell();                               
 void __stdcall UI_DrawControlPanel7();                                                                  // 0x6FB387F0
 int32_t __stdcall UI_HandleBeltMouseClick(D2WinMsgStrc* pMsg);                                          // 0x6FB308F0
 void __fastcall UI_SetPanelState(int32_t nPanelIdx, int32_t nAction, BOOL bUpdateView);                 // 0x6FB3EF00
+D2CellFileStrc* __fastcall ARCHIVE_LoadCellFileDefault(const char* szFileName, int32_t nFileType);
+D2UnitStrc* __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
+D2CellFileStrc* __fastcall D2Client_GetOrLoadItemInvCell(D2UnitStrc* pItem);
+int32_t __fastcall D2Client_DrawInvItemSprite(D2UnitStrc* pItem, int32_t nX, int32_t nY, uint32_t dwGamma, int32_t nDrawMode);
+extern int32_t g_nLeftPanelOffsetX;
+extern int32_t g_nLeftPanelOffsetY;
+extern D2UnitStrc* g_pTradeNpcUnit;
 
 // Forward declarations within UI_inv.cpp
 int32_t __fastcall INV_HitTestShopSubButtonColumn(int32_t nX);                                          // 0x6FB55790
@@ -511,7 +520,7 @@ void __stdcall INV_DrawEmptyBodyLocSlotBackgrounds(D2InventoryStrc* pInventory)
             {
                 tGfxData.pCellFile = pSlot->pCell;
                 tGfxData.nDirection = 0;
-                tGfxData.nFrame = 0;
+                tGfxData.nFrame = (nBodyLoc == BODYLOC_HEAD || nBodyLoc == BODYLOC_NECK) ? 1 : 0;
                 TEXTURE_CelDraw(&tGfxData, pSlot->nLeft, pSlot->nBottom, -1, DRAW_MODE_NORMAL, 0);
             }
         }
@@ -1143,11 +1152,13 @@ int32_t __stdcall INV_TranslateBodyLocForWeaponSwap(int32_t nBodyLoc)
 // Draws the "I" and "II" Roman numerals on the weapon swap tabs.
 void __fastcall INV_DrawWeaponTabRomanNumerals(int32_t nLeftX, int32_t nRightX, int32_t nY, int32_t nColor)
 {
-    const Unicode* wszOne = D2LANG_GetStringFromTblIndex(0xD43); // "I"
-    D2Win_10117_DrawText(wszOne, nLeftX, nY, nColor, 0);
-
-    const Unicode* wszTwo = D2LANG_GetStringFromTblIndex(0xD44); // "II"
-    D2Win_10117_DrawText(wszTwo, nRightX, nY, nColor, 0);
+    static const Unicode wszOne[2] = { 'I', 0 };
+    static const Unicode wszTwo[3] = { 'I', 'I', 0 };
+    const int32_t nColOne = (nColor == 4) ? 4 : 0;
+    const int32_t nColTwo = (nColor == 4) ? 0 : 4;
+    D2Win_10127_SetFont(D2FONT_FONT16);
+    D2Win_10117_DrawText(wszOne, nLeftX, nY, nColOne, 0);
+    D2Win_10117_DrawText(wszTwo, nRightX, nY, nColTwo, 0);
 }
 
 // 1.12a: 0x6FB55DF0
@@ -1159,26 +1170,29 @@ void __stdcall INV_DrawWeaponSwapTabs(D2GfxDataStrc* pGfxData)
         return;
     }
 
-    int32_t nTopY = g_nPanelOffsetY + g_nScreenHeight - 436;
-    int32_t nLeftBoxX = g_nScreenWidth - g_nRightPanelOffsetX - 303;
-    int32_t nRightBoxX = g_nScreenWidth - g_nRightPanelOffsetX - 117;
+    const int32_t nLeftBoxX = (g_atBodyLocRects[BODYLOC_RARM].nLeft > 0)
+        ? (g_atBodyLocRects[BODYLOC_RARM].nLeft - 2)
+        : (g_nScreenWidth - g_nRightPanelOffsetX - 303);
+    const int32_t nRightBoxX = (g_atBodyLocRects[BODYLOC_LARM].nLeft > 0)
+        ? (g_atBodyLocRects[BODYLOC_LARM].nLeft - 2)
+        : (g_nScreenWidth - g_nRightPanelOffsetX - 117);
+    const int32_t nBottomY = (g_atBodyLocRects[BODYLOC_RARM].nBottom > 0)
+        ? (g_atBodyLocRects[BODYLOC_RARM].nBottom + 2)
+        : (g_nPanelOffsetY + g_nScreenHeight - 320);
+    const int32_t nTabTextY = (g_atBodyLocRects[BODYLOC_RARM].nTop > 0)
+        ? (g_atBodyLocRects[BODYLOC_RARM].nTop - 4)
+        : (g_nPanelOffsetY + g_nScreenHeight - 440);
 
-    if (!g_bWeaponSwapActive)
+    if (pGfxData && pGfxData->pCellFile)
     {
-        pGfxData->nFrame = 0;
-        TEXTURE_CelDraw(pGfxData, nLeftBoxX, nTopY, -1, DRAW_MODE_NORMAL, 0);
-        TEXTURE_CelDraw(pGfxData, nRightBoxX, nTopY, -1, DRAW_MODE_NORMAL, 0);
-        INV_DrawWeaponTabRomanNumerals(nLeftBoxX + 12, nLeftBoxX + 40, nTopY - 4, 4);
-        INV_DrawWeaponTabRomanNumerals(nRightBoxX + 12, nRightBoxX + 40, nTopY - 4, 4);
+        pGfxData->nFrame = g_bWeaponSwapActive ? 1 : 0;
+        TEXTURE_CelDraw(pGfxData, nLeftBoxX, nBottomY, -1, DRAW_MODE_NORMAL, 0);
+        TEXTURE_CelDraw(pGfxData, nRightBoxX, nBottomY, -1, DRAW_MODE_NORMAL, 0);
     }
-    else
-    {
-        pGfxData->nFrame = 1;
-        TEXTURE_CelDraw(pGfxData, nLeftBoxX, nTopY, -1, DRAW_MODE_NORMAL, 0);
-        TEXTURE_CelDraw(pGfxData, nRightBoxX, nTopY, -1, DRAW_MODE_NORMAL, 0);
-        INV_DrawWeaponTabRomanNumerals(nLeftBoxX + 12, nLeftBoxX + 40, nTopY - 4, 0);
-        INV_DrawWeaponTabRomanNumerals(nRightBoxX + 12, nRightBoxX + 40, nTopY - 4, 0);
-    }
+
+    const int32_t nActiveCol = g_bWeaponSwapActive ? 0 : 4;
+    INV_DrawWeaponTabRomanNumerals(nLeftBoxX + 12, nLeftBoxX + 40, nTabTextY, nActiveCol);
+    INV_DrawWeaponTabRomanNumerals(nRightBoxX + 12, nRightBoxX + 40, nTabTextY, nActiveCol);
 }
 
 // 1.12a: 0x6FB55E90
@@ -1514,7 +1528,7 @@ void __stdcall INV_LoadRecipeScrollCell()
 {
     if (!g_pRecipeScrollCell)
     {
-        g_pRecipeScrollCell = ARCHIVE_LoadCellFile("menu\\recipescroll", 0);
+        g_pRecipeScrollCell = ARCHIVE_LoadCellFileDefault("menu\\recipescroll", 0);
     }
 }
 
@@ -2094,14 +2108,27 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
     g_tInvGridLayout.nGridBoxWidth  = tGridInfo.nGridBoxWidth;
     g_tInvGridLayout.nGridBoxHeight = tGridInfo.nGridBoxHeight;
 
+    static const int32_t kCompToBodyLoc[10] = {
+        BODYLOC_RARM,   // 0: INV_COMP_RARM
+        BODYLOC_TORSO,  // 1: INV_COMP_TORSO
+        BODYLOC_LARM,   // 2: INV_COMP_LARM
+        BODYLOC_HEAD,   // 3: INV_COMP_HEAD
+        BODYLOC_NECK,   // 4: INV_COMP_NECK
+        BODYLOC_RRIN,   // 5: INV_COMP_RHAND
+        BODYLOC_LRIN,   // 6: INV_COMP_LHAND
+        BODYLOC_BELT,   // 7: INV_COMP_BELT
+        BODYLOC_FEET,   // 8: INV_COMP_FEET
+        BODYLOC_GLOVES, // 9: INV_COMP_GLOVES
+    };
     for (int32_t i = 0; i < 10; ++i)
     {
         D2InvCompGridStrc tCompGrid = {};
         DATATBLS_GetInventoryComponentGrid(nInvRecId, bHigherRes, &tCompGrid, i);
-        g_atBodyLocRects[i + 1].nLeft   = tCompGrid.rect.nLeft;
-        g_atBodyLocRects[i + 1].nRight  = tCompGrid.rect.nRight;
-        g_atBodyLocRects[i + 1].nTop    = tCompGrid.rect.nTop;
-        g_atBodyLocRects[i + 1].nBottom = tCompGrid.rect.nBottom;
+        const int32_t nBodyLoc = kCompToBodyLoc[i];
+        g_atBodyLocRects[nBodyLoc].nLeft   = tCompGrid.rect.nLeft;
+        g_atBodyLocRects[nBodyLoc].nRight  = tCompGrid.rect.nRight;
+        g_atBodyLocRects[nBodyLoc].nTop    = tCompGrid.rect.nTop;
+        g_atBodyLocRects[nBodyLoc].nBottom = tCompGrid.rect.nBottom;
     }
 
     // 2. Stash (InvPage 4)
@@ -2141,6 +2168,26 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
     g_tTradeTopGridLayout.nBottom        = tGridInfo.nGridBottom;
     g_tTradeTopGridLayout.nGridBoxWidth  = tGridInfo.nGridBoxWidth;
     g_tTradeTopGridLayout.nGridBoxHeight = tGridInfo.nGridBoxHeight;
+
+    // 5. NPC Shop 10x10 Grid (Left Panel)
+    const int32_t nLeftOx = (g_nScreenWidth >= 800) ? ((g_nScreenWidth - 640) / 2) : 0;
+    const int32_t nLeftTop = (g_nScreenHeight >= 600) ? 60 : 0;
+    g_rNpcShopGridRect.left   = nLeftOx + 17;
+    g_rNpcShopGridRect.top    = nLeftTop + 64;
+    g_rNpcShopGridRect.right  = g_rNpcShopGridRect.left + 10 * 29;
+    g_rNpcShopGridRect.bottom = g_rNpcShopGridRect.top + 10 * 29;
+
+    // Map loaded paperdoll background cells onto body location descriptors
+    g_atBodyLocRects[BODYLOC_HEAD].pCell    = g_apInvSlotBackCells[4];
+    g_atBodyLocRects[BODYLOC_NECK].pCell    = g_apInvSlotBackCells[5];
+    g_atBodyLocRects[BODYLOC_TORSO].pCell   = g_apInvSlotBackCells[0];
+    g_atBodyLocRects[BODYLOC_RARM].pCell    = g_apInvSlotBackCells[6];
+    g_atBodyLocRects[BODYLOC_LARM].pCell    = g_apInvSlotBackCells[6];
+    g_atBodyLocRects[BODYLOC_RRIN].pCell    = g_apInvSlotBackCells[5];
+    g_atBodyLocRects[BODYLOC_LRIN].pCell    = g_apInvSlotBackCells[5];
+    g_atBodyLocRects[BODYLOC_BELT].pCell    = g_apInvSlotBackCells[1];
+    g_atBodyLocRects[BODYLOC_FEET].pCell    = g_apInvSlotBackCells[2];
+    g_atBodyLocRects[BODYLOC_GLOVES].pCell  = g_apInvSlotBackCells[3];
 }
 
 // 1.12a: 0x6FB58F60
@@ -2226,6 +2273,41 @@ int32_t __stdcall ITEMDESC_GetItemTitleColor(D2UnitStrc* pItem)
     }
 }
 
+static void INV_DrawAsciiTextHelper(const char* szAscii, int32_t nX, int32_t nY, int32_t nColor, BOOL bCentered)
+{
+    if (!szAscii) return;
+    Unicode wszBuf[128] = {};
+    Unicode::win2Unicode(wszBuf, szAscii, 127);
+    int32_t nDrawX = nX;
+    if (bCentered)
+    {
+        nDrawX -= D2Win_10121_GetTextWidth(wszBuf) / 2;
+    }
+    D2Win_10117_DrawText(wszBuf, nDrawX, nY, nColor, 0);
+}
+
+static void INV_DrawQuadrantsHelper(D2CellFileStrc* pCellFile, int32_t nLeft, int32_t nTop, int32_t nStartFrame)
+{
+    if (!pCellFile) return;
+    const int32_t nTotal = D2CMP_CelFileGetCelsPerDirection(pCellFile);
+    const int32_t aPos[4][2] = {
+        { nLeft,       nTop + 256 },
+        { nLeft + 256, nTop + 256 },
+        { nLeft,       nTop + 432 },
+        { nLeft + 256, nTop + 432 },
+    };
+    for (int32_t i = 0; i < 4 && (nStartFrame + i) < nTotal; ++i)
+    {
+        D2GfxDataStrc tGfx = {};
+        tGfx.pCellFile = pCellFile;
+        tGfx.nFrame = nStartFrame + i;
+        TEXTURE_CelDraw(&tGfx, aPos[i][0], aPos[i][1], 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+    }
+}
+
+static D2CellFileStrc* s_pPlayerInvChar6Cell = nullptr;
+static D2CellFileStrc* s_pBorderFrame800Cell = nullptr;
+
 // 1.12a: 0x6FB59390
 // Renders the Mercenary equipment paperdoll & stats panel ("InvChar6Tab" / hireling screen).
 void __stdcall INV_RenderMercenaryInventoryPanel()
@@ -2235,7 +2317,114 @@ void __stdcall INV_RenderMercenaryInventoryPanel()
         return;
     }
 
-    D2Win_10127_SetFont(D2FONT_FONT16);
+    if (!g_pHireInvPanelCell)
+    {
+        g_pHireInvPanelCell = ARCHIVE_LoadCellFileDefault("Panel\\NPCInv", 0);
+        if (!g_pHireInvPanelCell)
+        {
+            g_pHireInvPanelCell = ARCHIVE_LoadCellFileDefault("PANEL\\Monster", 0);
+        }
+        if (!g_pHireInvPanelCell)
+        {
+            g_pHireInvPanelCell = ARCHIVE_LoadCellFileDefault("PANEL\\hireinv", 0);
+        }
+    }
+    if (!g_pBuySellBtnCell)
+    {
+        g_pBuySellBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\buysellbtn", 0);
+    }
+
+    const int32_t nLeft = (g_nScreenWidth >= 800) ? ((g_nScreenWidth - 640) / 2) : 0;
+    const int32_t nTop  = (g_nScreenHeight >= 600) ? 60 : 0;
+
+    if (g_pHireInvPanelCell)
+    {
+        INV_DrawQuadrantsHelper(g_pHireInvPanelCell, nLeft, nTop, 0);
+    }
+    else
+    {
+        D2GFX_DrawBox(nLeft, nTop, nLeft + 320, nTop + 432, 0x00u, DRAWMODE_TRANS75);
+    }
+
+    D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(g_pPlayerUnit);
+    if (!pMerc)
+    {
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        INV_DrawAsciiTextHelper("No Mercenary Hired", nLeft + 160, nTop + 200, 4, TRUE);
+    }
+    else
+    {
+        const Unicode* pMercName = D2Client_GetNpcDisplayName(pMerc);
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+        if (pMercName && pMercName[0])
+        {
+            int32_t nW = D2Win_10121_GetTextWidth(pMercName);
+            D2Win_10117_DrawText(pMercName, nLeft + 95 - nW / 2, nTop + 24, 4, 0);
+        }
+        else
+        {
+            INV_DrawAsciiTextHelper("Mercenary", nLeft + 95, nTop + 24, 4, TRUE);
+        }
+
+        char szBuf[64] = {};
+        int32_t nLvl = STATLIST_UnitGetStatValue(pMerc, STAT_LEVEL, 0);
+        if (nLvl < 1) nLvl = 1;
+        snprintf(szBuf, sizeof(szBuf), "Level %d", nLvl);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 250, nTop + 24, 0, TRUE);
+
+        int32_t nCurHp = STATLIST_UnitGetStatValue(pMerc, STAT_HITPOINTS, 0) >> 8;
+        int32_t nMaxHp = STATLIST_UnitGetStatValue(pMerc, STAT_MAXHP, 0) >> 8;
+        if (nMaxHp < nCurHp) nMaxHp = nCurHp;
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+        INV_DrawAsciiTextHelper("Life", nLeft + 60, nTop + 265, 4, TRUE);
+        snprintf(szBuf, sizeof(szBuf), "%d / %d", nCurHp, nMaxHp);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 185, nTop + 265, 0, TRUE);
+
+        int32_t nStr = STATLIST_UnitGetStatValue(pMerc, STAT_STRENGTH, 0);
+        int32_t nDex = STATLIST_UnitGetStatValue(pMerc, STAT_DEXTERITY, 0);
+        int32_t nDef = STATLIST_UnitGetStatValue(pMerc, STAT_ARMORCLASS, 0);
+        int32_t nFireRes = STATLIST_UnitGetStatValue(pMerc, STAT_FIRERESIST, 0);
+        int32_t nColdRes = STATLIST_UnitGetStatValue(pMerc, STAT_COLDRESIST, 0);
+        int32_t nLightRes = STATLIST_UnitGetStatValue(pMerc, STAT_LIGHTRESIST, 0);
+        int32_t nPoisRes = STATLIST_UnitGetStatValue(pMerc, STAT_POISONRESIST, 0);
+
+        snprintf(szBuf, sizeof(szBuf), "Str: %d  Dex: %d  Def: %d", nStr, nDex, nDef);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 292, 0, TRUE);
+        snprintf(szBuf, sizeof(szBuf), "Fire %d%%  Cold %d%%  Light %d%%  Pois %d%%", nFireRes, nColdRes, nLightRes, nPoisRes);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 318, 0, TRUE);
+
+        if (pMerc->pInventory)
+        {
+            const int32_t aMercSlots[4][5] = {
+                { BODYLOC_HEAD,  nLeft + 133, nTop + 4,   nLeft + 191, nTop + 62  },
+                { BODYLOC_TORSO, nLeft + 133, nTop + 74,  nLeft + 191, nTop + 161 },
+                { BODYLOC_RARM,  nLeft + 17,  nTop + 46,  nLeft + 75,  nTop + 162 },
+                { BODYLOC_LARM,  nLeft + 249, nTop + 46,  nLeft + 307, nTop + 162 },
+            };
+            for (int32_t s = 0; s < 4; ++s)
+            {
+                D2UnitStrc* pEq = INVENTORY_GetItemFromBodyLoc(pMerc->pInventory, aMercSlots[s][0]);
+                if (pEq)
+                {
+                    uint8_t w = 1, h = 1;
+                    ITEMS_GetDimensions(pEq, &w, &h, __FILE__, __LINE__);
+                    int32_t nSlotW = aMercSlots[s][3] - aMercSlots[s][1];
+                    int32_t nSlotH = aMercSlots[s][4] - aMercSlots[s][2];
+                    int32_t nDrawX = aMercSlots[s][1] + (nSlotW - (int32_t)w * 29) / 2;
+                    int32_t nDrawBottomY = aMercSlots[s][2] + (nSlotH + (int32_t)h * 29) / 2;
+                    D2Client_DrawInvItemSprite(pEq, nDrawX, nDrawBottomY, 0xFFFFFFFFu, 5);
+                }
+            }
+        }
+    }
+
+    if (g_pBuySellBtnCell)
+    {
+        D2GfxDataStrc tClose = {};
+        tClose.pCellFile = g_pBuySellBtnCell;
+        tClose.nFrame = 10;
+        TEXTURE_CelDraw(&tClose, nLeft + 272, nTop + 420, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+    }
 }
 
 // 1.12a: 0x6FB59AB0
@@ -2252,7 +2441,7 @@ void __stdcall INV_StartHoradricTransmuteAnimation()
 {
     char szPath[MAX_PATH] = {};
     SStrPrintf(szPath, sizeof(szPath), "%s\\ui\\menu\\horadric", "DATA\\GLOBAL");
-    g_pHoradricAnimCell = ARCHIVE_LoadCellFile(szPath, 0);
+    g_pHoradricAnimCell = ARCHIVE_LoadCellFileDefault(szPath, 0);
     g_bHoradricAnimPlaying = TRUE;
     g_nHoradricAnimFrame = 0;
     g_dwHoradricAnimTick = GetTickCount();
@@ -2266,7 +2455,19 @@ void __stdcall INV_LoadHoradricCubeCells()
     {
         char szPath[MAX_PATH] = {};
         SStrPrintf(szPath, sizeof(szPath), "%s\\ui\\panel\\supertransmogrifier", "DATA\\GLOBAL");
-        g_pHoradricBoxCell = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pHoradricBoxCell = ARCHIVE_LoadCellFileDefault(szPath, 0);
+        if (!g_pHoradricBoxCell)
+        {
+            g_pHoradricBoxCell = ARCHIVE_LoadCellFileDefault("PANEL\\HoradricCube", 0);
+        }
+    }
+    if (!g_pTransmogrifierBtnCell)
+    {
+        g_pTransmogrifierBtnCell = ARCHIVE_LoadCellFileDefault("Panel\\tradebtn", 0);
+        if (!g_pTransmogrifierBtnCell)
+        {
+            g_pTransmogrifierBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\Transmute", 0);
+        }
     }
 }
 
@@ -2276,14 +2477,12 @@ void __stdcall INV_FreeHoradricCubeCells()
 {
     if (g_pHoradricBoxCell)
     {
-        D2CMP_CelFileFreeHardware(g_pHoradricBoxCell);
-        FOG_Free(g_pHoradricBoxCell, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 142, 0);
+        ARCHIVE_FreeCellFile(g_pHoradricBoxCell);
         g_pHoradricBoxCell = NULL;
     }
     if (g_pTransmogrifierBtnCell)
     {
-        D2CMP_CelFileFreeHardware(g_pTransmogrifierBtnCell);
-        FOG_Free(g_pTransmogrifierBtnCell, "..\\Source\\D2Client\\CORE\\ARCHIVE.CPP", 142, 0);
+        ARCHIVE_FreeCellFile(g_pTransmogrifierBtnCell);
         g_pTransmogrifierBtnCell = NULL;
     }
 }
@@ -2303,7 +2502,7 @@ void __stdcall INV_LoadStashPanelCell()
         {
             SStrPrintf(szPath, sizeof(szPath), "%s\\ui\\panel\\bank", "DATA\\GLOBAL");
         }
-        g_pBankPanelCell = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pBankPanelCell = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
 }
 
@@ -2333,7 +2532,7 @@ void __stdcall INV_LoadShopTabCells()
     {
         char szPath[MAX_PATH] = {};
         SStrPrintf(szPath, sizeof(szPath), "%s\\ui\\panel\\buyselltabs", "DATA\\GLOBAL");
-        g_pBuySellTabsCell = ARCHIVE_LoadCellFile(szPath, 0);
+        g_pBuySellTabsCell = ARCHIVE_LoadCellFileDefault(szPath, 0);
     }
 }
 
@@ -2405,18 +2604,18 @@ void __stdcall INV_LoadBodyLocSlotBackgroundCells()
         "Panel\\inv_armor",
         "Panel\\inv_belt",
         "Panel\\inv_boots",
-        "Panel\\inv_gloves",
-        "Panel\\inv_helm_crown",
+        "Panel\\inv_helm_glove",
+        "Panel\\inv_helm_glove",
         "Panel\\inv_ring_amulet",
         "Panel\\inv_weapons",
-        "Panel\\inv_tab"
+        "Panel\\invchar6Tab"
     };
 
     for (int32_t i = 0; i < 8; ++i)
     {
         if (!g_apInvSlotBackCells[i])
         {
-            g_apInvSlotBackCells[i] = ARCHIVE_LoadCellFile(s_aszSlotBackFiles[i], 0);
+            g_apInvSlotBackCells[i] = ARCHIVE_LoadCellFileDefault(s_aszSlotBackFiles[i], 0);
         }
     }
 }
@@ -2493,7 +2692,7 @@ void __stdcall INV_OpenTradePanel(BOOL bOpen)
         {
             char szPath[MAX_PATH] = {};
             SStrPrintf(szPath, sizeof(szPath), "%s\\ui\\panel\\trade", "DATA\\GLOBAL");
-            g_pTradePanelCell = ARCHIVE_LoadCellFile(szPath, 0);
+            g_pTradePanelCell = ARCHIVE_LoadCellFileDefault(szPath, 0);
         }
         g_bTradePanelOpen = TRUE;
         g_nInvPanelMode = 14;
@@ -2627,7 +2826,101 @@ void __stdcall INV_RenderHoveredItemTooltip(D2UnitStrc* pOwnerUnit, BOOL bIsNpcS
     {
         return;
     }
-    (void)bIsNpcShop;
+
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(g_pHoveredItemUnit->dwClassId);
+    if (!pItemsTxt)
+    {
+        return;
+    }
+
+    const Unicode* pBaseName = pItemsTxt->wNameStr ? D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr) : nullptr;
+    char szName[64] = {};
+    if (pBaseName && pBaseName[0])
+    {
+        Unicode::unicode2Win(szName, pBaseName, 63);
+    }
+    if (!szName[0])
+    {
+        memcpy(szName, pItemsTxt->szCode, 4);
+        szName[4] = '\0';
+    }
+
+    char szTip[512] = {};
+    int32_t nOff = snprintf(szTip, sizeof(szTip), "%s", szName);
+
+    int32_t nDef = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_ARMORCLASS, 0);
+    if (nDef > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nDefense: %d", nDef);
+    }
+    if (pItemsTxt->nMaxDam > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nOne-Hand Damage: %d to %d",
+            (int32_t)pItemsTxt->nMinDam, (int32_t)pItemsTxt->nMaxDam);
+    }
+    else if (pItemsTxt->n2HandMaxDam > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nTwo-Hand Damage: %d to %d",
+            (int32_t)pItemsTxt->n2HandMinDam, (int32_t)pItemsTxt->n2HandMaxDam);
+    }
+
+    int32_t nQty = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_QUANTITY, 0);
+    if (nQty > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nQuantity: %d", nQty);
+    }
+
+    int32_t nMaxDur = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_MAXDURABILITY, 0);
+    if (nMaxDur > 0 && nOff < 460)
+    {
+        int32_t nCurDur = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_DURABILITY, 0);
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nDurability: %d of %d", nCurDur, nMaxDur);
+    }
+
+    if (pItemsTxt->wReqStr > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nRequired Strength: %d", (int32_t)pItemsTxt->wReqStr);
+    }
+    if (pItemsTxt->wReqDex > 0 && nOff < 460)
+    {
+        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nRequired Dexterity: %d", (int32_t)pItemsTxt->wReqDex);
+    }
+
+    if (bIsNpcShop || (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9))
+    {
+        D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+        int32_t nVendorId = pNpc ? (int32_t)pNpc->dwClassId : 148;
+        BOOL bInStore = ITEMS_CheckItemFlag(g_pHoveredItemUnit, IFLAG_INSTORE, __LINE__, __FILE__);
+        int32_t nCost = ITEMS_GetTransactionCost(
+            g_pPlayerUnit,
+            g_pHoveredItemUnit,
+            (D2C_Difficulties)g_nGameDifficulty,
+            nullptr,
+            nVendorId,
+            bInStore ? TRANSACTIONTYPE_BUY : TRANSACTIONTYPE_SELL);
+        if (nCost > 0 && nOff < 480)
+        {
+            nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff,
+                bInStore ? "\nBuy Cost: %d" : "\nSell Value: %d", nCost);
+        }
+    }
+
+    int32_t nColor = 0;
+    int32_t nQual = ITEMS_GetItemQuality(g_pHoveredItemUnit);
+    if (nQual == ITEMQUAL_MAGIC) nColor = 3;
+    else if (nQual == ITEMQUAL_SET) nColor = 2;
+    else if (nQual == ITEMQUAL_RARE) nColor = 9;
+    else if (nQual == ITEMQUAL_UNIQUE) nColor = 4;
+
+    Unicode wszTip[512] = {};
+    Unicode::win2Unicode(wszTip, szTip, 511);
+    int32_t nDrawX = (g_nHoveredItemTooltipX > 0) ? g_nHoveredItemTooltipX : g_nMouseX;
+    int32_t nDrawY = (g_nHoveredItemTooltipTop > 24) ? (g_nHoveredItemTooltipTop - 8) : (g_nMouseY - 12);
+    if (nDrawX < 80) nDrawX = 80;
+    if (nDrawX > g_nScreenWidth - 80) nDrawX = g_nScreenWidth - 80;
+    if (nDrawY < 24) nDrawY = 24;
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+    D2Win_10129_DrawFramedText(wszTip, nDrawX, nDrawY, nColor, 1);
 }
 
 // 1.12a: 0x6FB5E430
@@ -2830,7 +3123,68 @@ void __stdcall INV_RenderPaperdollEquippedItems()
         return;
     }
 
+    INV_LoadBodyLocSlotBackgroundCells();
+    INV_InitInventoryLayoutRectsAndGrids();
+
+    if (g_bExpansionMode)
+    {
+        D2GfxDataStrc tTab = {};
+        tTab.pCellFile = g_apInvSlotBackCells[7];
+        INV_DrawWeaponSwapTabs(&tTab);
+    }
+
     INV_DrawEmptyBodyLocSlotBackgrounds(g_pPlayerUnit->pInventory);
+
+    for (int32_t nBodyLoc = 1; nBodyLoc <= 10; ++nBodyLoc)
+    {
+        const D2InvBodyLocInfoStrc* pSlot = &g_atBodyLocRects[nBodyLoc];
+        if (pSlot->nRight <= pSlot->nLeft || pSlot->nBottom <= pSlot->nTop)
+        {
+            continue;
+        }
+        D2UnitStrc* pItem = INVENTORY_GetItemFromBodyLoc(g_pPlayerUnit->pInventory, nBodyLoc);
+        int32_t nDrawMode = 5;
+        if (!pItem && (nBodyLoc == BODYLOC_LARM || nBodyLoc == BODYLOC_RARM))
+        {
+            D2UnitStrc* pOther = INVENTORY_GetItemFromBodyLoc(
+                g_pPlayerUnit->pInventory,
+                (nBodyLoc == BODYLOC_LARM) ? BODYLOC_RARM : BODYLOC_LARM);
+            if (pOther && ITEMS_CheckWeaponIfTwoHanded(pOther))
+            {
+                pItem = pOther;
+                nDrawMode = 1; // Ghosted off-hand 2H weapon
+            }
+        }
+        if (!pItem)
+        {
+            continue;
+        }
+
+        if (nDrawMode == 5)
+        {
+            RECT rHighlight = { pSlot->nLeft, pSlot->nTop, pSlot->nRight, pSlot->nBottom };
+            INV_DrawItemHighlightBox(&rHighlight, 0x84u, DRAW_MODE_TRANS_25);
+        }
+
+        uint8_t w = 1, h = 1;
+        ITEMS_GetDimensions(pItem, &w, &h, __FILE__, __LINE__);
+        int32_t nSlotW = pSlot->nRight - pSlot->nLeft;
+        int32_t nSlotH = pSlot->nBottom - pSlot->nTop;
+        int32_t nDrawX = pSlot->nLeft + (nSlotW - (int32_t)w * 29) / 2;
+        int32_t nDrawBottomY = pSlot->nTop + (nSlotH + (int32_t)h * 29) / 2;
+        D2Client_DrawInvItemSprite(pItem, nDrawX, nDrawBottomY, 0xFFFFFFFFu, nDrawMode);
+
+        if (nDrawMode == 5 &&
+            g_nMouseX >= pSlot->nLeft && g_nMouseX <= pSlot->nRight &&
+            g_nMouseY >= pSlot->nTop  && g_nMouseY <= pSlot->nBottom)
+        {
+            g_bHoveredItemValid      = TRUE;
+            g_pHoveredItemUnit       = pItem;
+            g_pHoveredSocketHostItem = pItem;
+            g_nHoveredItemTooltipX   = (pSlot->nLeft + pSlot->nRight) / 2;
+            g_nHoveredItemTooltipTop = pSlot->nTop;
+        }
+    }
 }
 
 // 1.12a: 0x6FB5F700
@@ -2843,6 +3197,42 @@ void __stdcall INV_RenderInventoryPageItems(D2UnitStrc* pOwnerUnit)
         return;
     }
 
+    const BOOL bIsShopOwner = (pOwnerUnit != g_pPlayerUnit);
+    int32_t nGridLeft = g_tInvGridLayout.nLeft;
+    int32_t nGridTop  = g_tInvGridLayout.nTop;
+    int32_t nCellW    = (g_tInvGridLayout.nGridBoxWidth > 0) ? g_tInvGridLayout.nGridBoxWidth : 29;
+    int32_t nCellH    = (g_tInvGridLayout.nGridBoxHeight > 0) ? g_tInvGridLayout.nGridBoxHeight : 29;
+
+    if (bIsShopOwner)
+    {
+        nGridLeft = g_rNpcShopGridRect.left;
+        nGridTop  = g_rNpcShopGridRect.top;
+        nCellW    = 29;
+        nCellH    = 29;
+    }
+    else if (g_nCurrentInvPage == INVPAGE_STASH)
+    {
+        nGridLeft = g_tStashGridLayout.nLeft;
+        nGridTop  = g_tStashGridLayout.nTop;
+        if (g_tStashGridLayout.nGridBoxWidth > 0)  nCellW = g_tStashGridLayout.nGridBoxWidth;
+        if (g_tStashGridLayout.nGridBoxHeight > 0) nCellH = g_tStashGridLayout.nGridBoxHeight;
+    }
+    else if (g_nCurrentInvPage == INVPAGE_CUBE)
+    {
+        const D2InvGridLayoutStrc* pCube = g_bExpansionMode ? &g_tCubeLoDGridLayout : &g_tCubeClassicGridLayout;
+        nGridLeft = pCube->nLeft;
+        nGridTop  = pCube->nTop;
+        if (pCube->nGridBoxWidth > 0)  nCellW = pCube->nGridBoxWidth;
+        if (pCube->nGridBoxHeight > 0) nCellH = pCube->nGridBoxHeight;
+    }
+    else if (g_nCurrentInvPage == INVPAGE_TRADE)
+    {
+        nGridLeft = g_tTradeTopGridLayout.nLeft;
+        nGridTop  = g_tTradeTopGridLayout.nTop;
+        if (g_tTradeTopGridLayout.nGridBoxWidth > 0)  nCellW = g_tTradeTopGridLayout.nGridBoxWidth;
+        if (g_tTradeTopGridLayout.nGridBoxHeight > 0) nCellH = g_tTradeTopGridLayout.nGridBoxHeight;
+    }
+
     for (D2UnitStrc* pItem = INVENTORY_GetFirstItem(pOwnerUnit->pInventory);
          pItem != NULL;
          pItem = INVENTORY_GetNextItem(pItem))
@@ -2851,13 +3241,43 @@ void __stdcall INV_RenderInventoryPageItems(D2UnitStrc* pOwnerUnit)
         {
             continue;
         }
-        if (INVENTORY_GetItemNodePage(pItem) != 1)
+        if (!bIsShopOwner && INVENTORY_GetItemNodePage(pItem) != 1)
         {
             continue;
         }
         if (ITEMS_GetInvPage(pItem) != g_nCurrentInvPage)
         {
             continue;
+        }
+
+        int32_t nCellX = UNITS_GetXPosition(pItem);
+        int32_t nCellY = UNITS_GetYPosition(pItem);
+        uint8_t w = 1, h = 1;
+        ITEMS_GetDimensions(pItem, &w, &h, __FILE__, __LINE__);
+
+        RECT rCellBox = {
+            nGridLeft + nCellX * nCellW,
+            nGridTop  + nCellY * nCellH,
+            nGridLeft + (nCellX + (int32_t)w) * nCellW - 1,
+            nGridTop  + (nCellY + (int32_t)h) * nCellH - 1
+        };
+        INV_DrawItemHighlightBox(&rCellBox, 0x84u, DRAW_MODE_TRANS_25);
+
+        D2Client_DrawInvItemSprite(
+            pItem,
+            rCellBox.left,
+            rCellBox.bottom,
+            0xFFFFFFFFu,
+            5);
+
+        if (g_nMouseX >= rCellBox.left && g_nMouseX <= rCellBox.right &&
+            g_nMouseY >= rCellBox.top  && g_nMouseY <= rCellBox.bottom)
+        {
+            g_bHoveredItemValid      = TRUE;
+            g_pHoveredItemUnit       = pItem;
+            g_pHoveredSocketHostItem = pItem;
+            g_nHoveredItemTooltipX   = (rCellBox.left + rCellBox.right) / 2;
+            g_nHoveredItemTooltipTop = rCellBox.top;
         }
     }
 }
@@ -2873,10 +3293,95 @@ void __stdcall INV_RenderNpcShopPanel()
         return;
     }
 
+    INV_LoadStashPanelCell();
+    INV_LoadShopTabCells();
+    if (!g_pBuySellBtnCell)
+    {
+        g_pBuySellBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\buysellbtn", 0);
+    }
+
+    const int32_t nLeft = (g_nScreenWidth >= 800) ? ((g_nScreenWidth - 640) / 2) : 0;
+    const int32_t nTop  = (g_nScreenHeight >= 600) ? 60 : 0;
+
+    if (g_pBankPanelCell)
+    {
+        INV_DrawQuadrantsHelper(g_pBankPanelCell, nLeft, nTop, 0);
+    }
+    else
+    {
+        D2GFX_DrawBox(nLeft, nTop, nLeft + 320, nTop + 432, 0x00u, DRAWMODE_TRANS75);
+    }
+
+    // Auto-select first populated vendor tab if current tab has 0 items
+    if (pNpc->pInventory)
+    {
+        int32_t aTabCounts[4] = {};
+        for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(pNpc->pInventory); pIt; pIt = INVENTORY_GetNextItem(pIt))
+        {
+            uint8_t pg = ITEMS_GetInvPage(pIt);
+            if (pg < 4) ++aTabCounts[pg];
+        }
+        if (g_nSelectedShopTab >= 4 || aTabCounts[g_nSelectedShopTab] == 0)
+        {
+            for (uint8_t t = 0; t < 4; ++t)
+            {
+                if (aTabCounts[t] > 0)
+                {
+                    g_nSelectedShopTab = t;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Draw 4 Shop Category Tabs ("Armor", "Weapons", "Magic", "Misc")
+    static const char* const kShopTabNames[4] = { "Armor", "Weapons", "Magic", "Misc" };
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+    for (int32_t t = 0; t < 4; ++t)
+    {
+        int32_t nTabLeft = nLeft + 14 + t * 73;
+        if (g_pBuySellTabsCell)
+        {
+            D2GfxDataStrc tTab = {};
+            tTab.pCellFile = g_pBuySellTabsCell;
+            tTab.nFrame = (t == (int32_t)g_nSelectedShopTab) ? 0 : 1;
+            if ((int32_t)tTab.nFrame >= D2CMP_CelFileGetCelsPerDirection(g_pBuySellTabsCell))
+                tTab.nFrame = 0;
+            TEXTURE_CelDraw(&tTab, nTabLeft, nTop + 60, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
+        else
+        {
+            D2GFX_DrawBox(nTabLeft, nTop + 34, nTabLeft + 71, nTop + 60,
+                (t == (int32_t)g_nSelectedShopTab) ? 0x62u : 0x00u, DRAWMODE_TRANS75);
+        }
+        INV_DrawAsciiTextHelper(kShopTabNames[t], nTabLeft + 36, nTop + 52,
+            (t == (int32_t)g_nSelectedShopTab) ? 4 : 0, TRUE);
+    }
+
+    // Draw subtle 10x10 vendor shop cell grid lines so empty slots read cleanly
+    for (int32_t r = 0; r <= 10; ++r)
+    {
+        D2GFX_DrawLine(g_rNpcShopGridRect.left, g_rNpcShopGridRect.top + r * 29,
+                       g_rNpcShopGridRect.right, g_rNpcShopGridRect.top + r * 29, 0x15u, 0xFFu);
+    }
+    for (int32_t c = 0; c <= 10; ++c)
+    {
+        D2GFX_DrawLine(g_rNpcShopGridRect.left + c * 29, g_rNpcShopGridRect.top,
+                       g_rNpcShopGridRect.left + c * 29, g_rNpcShopGridRect.bottom, 0x15u, 0xFFu);
+    }
+
     uint8_t nPrevPage = g_nCurrentInvPage;
     g_nCurrentInvPage = g_nSelectedShopTab;
     INV_RenderInventoryPageItems(pNpc);
     g_nCurrentInvPage = nPrevPage;
+
+    if (g_pBuySellBtnCell)
+    {
+        D2GfxDataStrc tClose = {};
+        tClose.pCellFile = g_pBuySellBtnCell;
+        tClose.nFrame = 10;
+        TEXTURE_CelDraw(&tClose, nLeft + 272, nTop + 420, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+    }
 }
 
 // 1.12a: 0x6FB5FDE0
@@ -3256,24 +3761,26 @@ void __stdcall INV_OpenMercSpeechPanel(int32_t nStrId)
 // Looks up and returns the currently interacted NPC or Mercenary unit from the client unit hash table.
 D2UnitStrc* __stdcall INV_GetInteractedNpcUnit()
 {
-    if (!g_bInteractedWithNpc)
+    if (g_bInteractedWithNpc && g_nInteractedNpcGUID != 0)
     {
-        return NULL;
-    }
-
-    int32_t nNpcGUID = g_nInteractedNpcGUID;
-    D2UnitStrc* pUnit = g_apClientUnitHashTable[nNpcGUID & 0x7F];
-    while (pUnit)
-    {
-        if (pUnit->dwUnitId == (uint32_t)nNpcGUID)
+        int32_t nNpcGUID = g_nInteractedNpcGUID;
+        D2UnitStrc* pUnit = g_apClientUnitHashTable[nNpcGUID & 0x7F];
+        while (pUnit)
         {
-            if (pUnit->dwUnitType == UNIT_MONSTER)
+            if (pUnit->dwUnitId == (uint32_t)nNpcGUID)
             {
-                return pUnit;
+                if (pUnit->dwUnitType == UNIT_MONSTER)
+                {
+                    return pUnit;
+                }
+                break;
             }
-            break;
+            pUnit = pUnit->pListNext;
         }
-        pUnit = pUnit->pListNext;
+    }
+    if (g_pTradeNpcUnit && g_pTradeNpcUnit->dwUnitType == UNIT_MONSTER)
+    {
+        return g_pTradeNpcUnit;
     }
     return NULL;
 }
@@ -3529,9 +4036,53 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
 // the right-side Player Inventory & Equipment Paperdoll, Gold boxes, and Item Hover Tooltips.
 void __stdcall INV_RenderAllInventoryPanels()
 {
-    if (g_nInvPanelMode == 10)
+    if (!g_pPlayerUnit || g_nInvPanelMode == 10)
     {
         return;
+    }
+
+    // Synchronize g_nInvPanelMode with canonical gaPanelStates
+    if (g_bNpcShopPanelOpen)
+    {
+        if (g_nInvPanelMode < 1 || g_nInvPanelMode > 9)
+        {
+            g_nInvPanelMode = 1;
+        }
+    }
+    else if (g_bStashPanelOpen)
+    {
+        g_nInvPanelMode = 11;
+    }
+    else if (g_bHoradricCubeOpen)
+    {
+        g_nInvPanelMode = 12;
+    }
+    else if (g_bTradePanelOpen)
+    {
+        g_nInvPanelMode = 14;
+    }
+    else
+    {
+        g_nInvPanelMode = 0;
+    }
+
+    INV_InitInventoryLayoutRectsAndGrids();
+    g_pHoveredItemUnit = NULL;
+    g_bHoveredItemValid = FALSE;
+
+    const int32_t nLeftPanelX = (g_nScreenWidth >= 800) ? ((g_nScreenWidth - 640) / 2) : 0;
+    const int32_t nPanelTop   = (g_nScreenHeight >= 600) ? 60 : 0;
+    const int32_t nRightPanelX = (g_nScreenWidth >= 800) ? (320 + g_nRightPanelOffsetX) : 320;
+
+    if (!g_pBuySellBtnCell)
+    {
+        g_pBuySellBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\buysellbtn", 0);
+    }
+
+    // 0. Render Mercenary Inventory if open
+    if (g_bMercInvOpen)
+    {
+        INV_RenderMercenaryInventoryPanel();
     }
 
     // 1. Render NPC Shop if active (modes 1..9)
@@ -3548,27 +4099,61 @@ void __stdcall INV_RenderAllInventoryPanels()
             g_bShopAutoSelectTabPending = FALSE;
         }
         INV_RenderNpcShopPanel();
-        INV_DrawGoldAmountBox(2);
     }
 
     // 2. Render Horadric Cube (modes 12..13), Stash (mode 11), or Trade (mode 14)
     if (g_nInvPanelMode == 11)
     {
+        INV_LoadStashPanelCell();
+        if (g_pBankPanelCell)
+        {
+            INV_DrawQuadrantsHelper(g_pBankPanelCell, nLeftPanelX, nPanelTop, 0);
+        }
         uint8_t nPrevPage = g_nCurrentInvPage;
         g_nCurrentInvPage = INVPAGE_STASH;
         INV_RenderInventoryPageItems(g_pPlayerUnit);
         g_nCurrentInvPage = nPrevPage;
         INV_DrawGoldAmountBox(2);
+        if (g_pBuySellBtnCell)
+        {
+            D2GfxDataStrc tClose = {};
+            tClose.pCellFile = g_pBuySellBtnCell;
+            tClose.nFrame = 10;
+            TEXTURE_CelDraw(&tClose, nLeftPanelX + 272, nPanelTop + 420, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
     }
     else if (g_nInvPanelMode == 12 || g_nInvPanelMode == 13)
     {
+        INV_LoadHoradricCubeCells();
+        if (g_pHoradricBoxCell)
+        {
+            INV_DrawQuadrantsHelper(g_pHoradricBoxCell, nLeftPanelX, nPanelTop, 0);
+        }
+        if (g_pTransmogrifierBtnCell)
+        {
+            D2GfxDataStrc tTrans = {};
+            tTrans.pCellFile = g_pTransmogrifierBtnCell;
+            tTrans.nFrame = g_bTransmuteBtnPressed ? 1 : 0;
+            TEXTURE_CelDraw(&tTrans, nLeftPanelX + 145, nPanelTop + 372, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
         uint8_t nPrevPage = g_nCurrentInvPage;
         g_nCurrentInvPage = INVPAGE_CUBE;
         INV_RenderInventoryPageItems(g_pPlayerUnit);
         g_nCurrentInvPage = nPrevPage;
+        if (g_pBuySellBtnCell)
+        {
+            D2GfxDataStrc tClose = {};
+            tClose.pCellFile = g_pBuySellBtnCell;
+            tClose.nFrame = 10;
+            TEXTURE_CelDraw(&tClose, nLeftPanelX + 272, nPanelTop + 420, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
     }
     else if (g_nInvPanelMode == 14)
     {
+        if (g_pTradePanelCell)
+        {
+            INV_DrawQuadrantsHelper(g_pTradePanelCell, nLeftPanelX, nPanelTop, 0);
+        }
         uint8_t nPrevPage = g_nCurrentInvPage;
         g_nCurrentInvPage = INVPAGE_TRADE;
         INV_RenderInventoryPageItems(g_pPlayerUnit);
@@ -3578,6 +4163,24 @@ void __stdcall INV_RenderAllInventoryPanels()
     // 3. Render Player Inventory & Equipment Paperdoll
     if (g_bInvPanelOpen)
     {
+        if (!s_pPlayerInvChar6Cell)
+        {
+            s_pPlayerInvChar6Cell = ARCHIVE_LoadCellFileDefault("PANEL\\InvChar6", 0);
+            if (!s_pPlayerInvChar6Cell)
+            {
+                s_pPlayerInvChar6Cell = ARCHIVE_LoadCellFileDefault("PANEL\\invchar6tab", 0);
+            }
+        }
+        if (s_pPlayerInvChar6Cell)
+        {
+            int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(s_pPlayerInvChar6Cell);
+            INV_DrawQuadrantsHelper(s_pPlayerInvChar6Cell, nRightPanelX, nPanelTop, (nFrames >= 8) ? 4 : 0);
+        }
+        else
+        {
+            D2GFX_DrawBox(nRightPanelX, nPanelTop, nRightPanelX + 320, nPanelTop + 432, 0x00u, DRAWMODE_TRANS75);
+        }
+
         uint8_t nPrevPage = g_nCurrentInvPage;
         g_nCurrentInvPage = INVPAGE_INVENTORY;
         INV_RenderInventoryPageItems(g_pPlayerUnit);
@@ -3585,12 +4188,20 @@ void __stdcall INV_RenderAllInventoryPanels()
 
         INV_RenderPaperdollEquippedItems();
         INV_DrawGoldAmountBox(1);
+
+        if (g_pBuySellBtnCell)
+        {
+            D2GfxDataStrc tClose = {};
+            tClose.pCellFile = g_pBuySellBtnCell;
+            tClose.nFrame = 10;
+            TEXTURE_CelDraw(&tClose, nRightPanelX + 18, nPanelTop + 415, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
     }
 
     // 4. Render Hovered Item Tooltip on top of all panels
     if (g_pHoveredItemUnit)
     {
-        INV_RenderHoveredItemTooltip(g_pPlayerUnit, FALSE);
+        INV_RenderHoveredItemTooltip(g_pPlayerUnit, (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9));
     }
 }
 
@@ -3695,6 +4306,64 @@ void __stdcall INV_OnMercInventoryMouseDown(D2WinMsgStrc* pMsg)
 // Renders the 4-quadrant 800x600 background border frame around the open Inventory/Shop panels.
 void __stdcall INV_Render800x600PanelBorderFrame()
 {
+    if (g_nScreenWidth < 800)
+    {
+        return;
+    }
+
+    const BOOL bAnyLeftOpen = g_bCharPanelOpen || g_bQuestLogOpen || g_bWaypointOpen ||
+        g_bPartyScreenOpen || g_bNpcShopPanelOpen || g_bStashPanelOpen || g_bHoradricCubeOpen ||
+        g_bTradePanelOpen || g_bMercInvOpen;
+    const BOOL bAnyRightOpen = g_bInvPanelOpen || g_bSkillTreeOpen;
+    if (!bAnyLeftOpen && !bAnyRightOpen)
+    {
+        return;
+    }
+
+    if (!s_pBorderFrame800Cell)
+    {
+        s_pBorderFrame800Cell = ARCHIVE_LoadCellFileDefault("PANEL\\800borderframe", 0);
+    }
+    if (!s_pBorderFrame800Cell)
+    {
+        return;
+    }
+
+    const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(s_pBorderFrame800Cell);
+    if (bAnyLeftOpen)
+    {
+        const int32_t aLeftBorderPos[5][2] = {
+            { 0,   253 },
+            { 0,   553 },
+            { 80,  60  },
+            { 336, 60  },
+            { 80,  553 },
+        };
+        for (int32_t i = 0; i < 5 && i < nFrames; ++i)
+        {
+            D2GfxDataStrc tGfx = {};
+            tGfx.pCellFile = s_pBorderFrame800Cell;
+            tGfx.nFrame = i;
+            TEXTURE_CelDraw(&tGfx, aLeftBorderPos[i][0], aLeftBorderPos[i][1], 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
+    }
+    if (bAnyRightOpen && nFrames >= 10)
+    {
+        const int32_t aRightBorderPos[5][2] = {
+            { 400, 60  },
+            { 656, 60  },
+            { 720, 253 },
+            { 720, 553 },
+            { 400, 553 },
+        };
+        for (int32_t i = 0; i < 5 && (5 + i) < nFrames; ++i)
+        {
+            D2GfxDataStrc tGfx = {};
+            tGfx.pCellFile = s_pBorderFrame800Cell;
+            tGfx.nFrame = 5 + i;
+            TEXTURE_CelDraw(&tGfx, aRightBorderPos[i][0], aRightBorderPos[i][1], 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
+    }
 }
 
 // 1.12a: 0x6FB64C10

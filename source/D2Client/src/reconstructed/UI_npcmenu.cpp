@@ -34,7 +34,7 @@ extern "C" {
     void* __fastcall FOG_Alloc(int nSize, const char* szFile, int nLine, int nZero); // Fog!#10042
     void __fastcall FOG_Free(void* pMem, const char* szFile, int nLine, int nZero); // Fog!#10043
     const char* __stdcall UnimplementedOrdinal_10265(int nLine); // Fog!#10265
-    void __cdecl FOG_DisplayHalt(const char* szFormat, ...); // Fog!#10024
+    void __cdecl FOG_DisplayHalt(const char* szMsg, const char* szFile, int nLine); // Fog!#10024
     int __stdcall FOG_IsExpansion(); // Fog!#10227
     uint32_t __cdecl FOG_10055_GetSyncTime(); // Fog!#10055
     float __stdcall FOG_10083_Cos_LUT(int nAngle); // Fog!#10083
@@ -163,6 +163,11 @@ extern "C" {
     int __stdcall D2COMMON_11019(D2UnitStrc* pUnit);
     int __stdcall D2Common_11020(D2UnitStrc* pUnit);
     int __stdcall D2COMMON_11021(D2UnitStrc* pUnit);
+}
+
+static inline void FOG_DisplayHalt(const char* szFmt, const char* szLoc)
+{
+    FOG_DisplayHalt(szFmt ? szFmt : "Halt", szLoc ? szLoc : __FILE__, 0);
 }
 
 // ============================================================================
@@ -3146,7 +3151,7 @@ int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit)
         g_nInteractingNpcClassId = *(int32_t*)((uint8_t*)pNpcUnit + 0x04);
     }
     if (!g_pPentagramCel) {
-        g_pPentagramCel = ARCHIVE_LoadCellFileDefault("DATA\\GLOBAL\\UI\\MENU\\pentaspin", 0);
+        g_pPentagramCel = ARCHIVE_LoadCellFileDefault("DATA\\GLOBAL\\UI\\CURSOR\\Pentspin", 0);
     }
     RECT rcNpc = { 0 };
     sub_6FAC8B60(&rcNpc, pNpcUnit);
