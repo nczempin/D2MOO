@@ -1081,8 +1081,12 @@ static void __fastcall SCMD_Handler2C_PlaySound(uint8_t* pPacket)
     D2Client_PlayUnitSound(nUnitType, dwUnitGUID, wSoundId);
 }
 
+extern void __stdcall INV_ClearWaitingForServerCursorSync(void);
+extern void __fastcall INV_SetPanelMode(int32_t nMode);
+
 static void __fastcall SCMD_Handler42_ClearCursor(uint8_t* pPacket)
 {
+    INV_ClearWaitingForServerCursorSync();
     const uint8_t  nUnitType  = pPacket[1];
     const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
@@ -1141,12 +1145,48 @@ static void __fastcall SCMD_Handler58_OpenUIDialog(uint8_t* pPacket)
     switch (nUIType)
     {
     case 2: // Stash
+        INV_SetPanelMode(11);
         UI_SetPanelState(D2PANEL_STASH, 0, 0);
         UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         break;
     case 3: // Horadric Cube
+        INV_SetPanelMode(12);
         UI_SetPanelState(D2PANEL_CUBE, 0, 0);
         UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
+        break;
+    default:
+        break;
+    }
+}
+
+static void __fastcall SCMD_Handler77_UpdateUI(uint8_t* pPacket)
+{
+    if (!pPacket)
+    {
+        return;
+    }
+    const uint8_t nAction = pPacket[1];
+    switch (nAction)
+    {
+    case 0x10: // UPDATEUI_OPENSTASH
+        INV_SetPanelMode(11);
+        UI_SetPanelState(D2PANEL_STASH, 0, 0);
+        UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
+        break;
+    case 0x11: // UPDATEUI_CLOSESTASH
+        UI_SetPanelState(D2PANEL_STASH, 1, 0);
+        INV_SetPanelMode(0);
+        break;
+    case 0x15: // UPDATEUI_OPENCUBE
+        INV_SetPanelMode(12);
+        UI_SetPanelState(D2PANEL_CUBE, 0, 0);
+        UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
+        break;
+    case 0x0C: // UPDATEUI_CLOSETRADE
+        UI_SetPanelState(D2PANEL_STASH, 1, 0);
+        UI_SetPanelState(D2PANEL_CUBE, 1, 0);
+        UI_SetPanelState(D2PANEL_NPCSHOP, 1, 0);
+        INV_SetPanelMode(0);
         break;
     default:
         break;
@@ -1557,7 +1597,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x74 */ { SCMD_Handler74_PlayerCorpseAssign,     10,  nullptr }, // 0x6FB152E0: PlayerCorpseAssign
     /* 0x75 */ { SCMD_Handler75_PlayerPartyInfo,        13,  nullptr }, // 0x6FB15FE0: PlayerPartyInfo
     /* 0x76 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB17C70: PlayerInSight
-    /* 0x77 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14FA0: TradeAction
+    /* 0x77 */ { SCMD_Handler77_UpdateUI,                2,  nullptr }, // 0x6FB14FA0: TradeAction / UpdateUI
     /* 0x78 */ { SCMD_Handler_NoOp,                     21,  nullptr }, // 0x6FB15060: TradeAccepted
     /* 0x79 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB150A0: GoldInTrade
     /* 0x7A */ { SCMD_Handler7A_PetAction,              13,  nullptr }, // 0x6FB15270: PetAction

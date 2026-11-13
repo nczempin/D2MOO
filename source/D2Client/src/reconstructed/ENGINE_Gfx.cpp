@@ -1456,6 +1456,26 @@ void __fastcall GFX_UpdateMonsterCompositeComponents(D2UnitStrc* pUnit)
             }
         }
     }
+    D2CofRecordStrc* pCof = GFX_GetUnitActiveCofRecord(pUnit);
+    if (pCof) {
+        for (int i = 0; i < 16; ++i) {
+            if (pCof->aCompToLayer[i] != 0xFF) {
+                *((uint8_t*)pGfxData + i) = 1;
+            }
+        }
+    }
+    for (D2UnitCofLinkStrc* pCur = pGfxData->pCofList; pCur != nullptr; pCur = pCur->pNext) {
+        if (pCur->pCofNode) {
+            D2CofRecordStrc* pModeCof = pCur->pCofNode->pCofRecord;
+            if (pModeCof) {
+                for (int i = 0; i < 16; ++i) {
+                    if (pModeCof->aCompToLayer[i] != 0xFF) {
+                        *((uint8_t*)pGfxData + i) = 1;
+                    }
+                }
+            }
+        }
+    }
 }
 
 // 1.12a: 0x6FB42000

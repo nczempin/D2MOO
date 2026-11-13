@@ -1322,12 +1322,30 @@ int32_t __fastcall AUTOMAP_GetUnitMarkerColor(D2UnitStrc* pUnit, uint8_t* pOutCo
             return 1;
         }
         D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pUnit->dwClassId);
-        if (pMonTxt && (pMonTxt->nAlign == 2 || (pMonTxt->dwMonStatsFlags & gdwBitMasks[MONSTATSFLAGINDEX_INTERACT]) != 0)) {
+        if (!pMonTxt) {
+            return 0;
+        }
+        const D2MonStats2Txt* pMon2 = (sgptDataTables && pMonTxt->wMonStatsEx < sgptDataTables->nMonStats2TxtRecordCount)
+            ? &sgptDataTables->pMonStats2Txt[pMonTxt->wMonStatsEx]
+            : nullptr;
+        if (pMon2 && (pMon2->dwFlags & (MONSTATS2FLAG_NOMAP | MONSTATS2FLAG_CRITTER)) != 0) {
+            return 0;
+        }
+        if ((pMonTxt->dwMonStatsFlags & MONSTATSFLAG_NPC) != 0 &&
+            (pMonTxt->dwMonStatsFlags & MONSTATSFLAG_INTERACT) != 0) {
+            const Unicode* wszName = D2Client_GetNpcDisplayName(pUnit);
+            if (!wszName || wszName[0].ch == 0 ||
+                _wcsicmp(reinterpret_cast<const wchar_t*>(wszName), L"an evil force") == 0) {
+                return 0;
+            }
             *pOutColor = gAutomapColors[6] ? gAutomapColors[6] : 0xFFu;
             return 1;
         }
-        *pOutColor = gAutomapColors[1] ? gAutomapColors[1] : 0x62u;
-        return 1;
+        if (pMonTxt->nAlign == MONALIGN_EVIL && (!pMon2 || (pMon2->dwFlags & MONSTATS2FLAG_ISATT) != 0)) {
+            *pOutColor = gAutomapColors[1] ? gAutomapColors[1] : 0x62u;
+            return 1;
+        }
+        return 0;
     }
     if (pUnit->dwUnitType == UNIT_OBJECT) {
         if (pUnit->dwClassId == 59 || pUnit->dwClassId == 60) {
@@ -1399,11 +1417,18 @@ void __fastcall AUTOMAP_DrawUnitMarker(D2UnitStrc* pUnit)
 
     AUTOMAP_DrawCrosshair(nScreenX, nScreenY, nColor);
 
+    if (!gbAutomapShowPartyNames) {
+        return;
+    }
+
     if (pUnit->dwUnitType == UNIT_MONSTER && pUnit != gpPlayerUnit) {
         D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pUnit->dwClassId);
-        if (pMonTxt && (pMonTxt->nAlign == 2 || (pMonTxt->dwMonStatsFlags & gdwBitMasks[MONSTATSFLAGINDEX_INTERACT]) != 0)) {
+        if (pMonTxt && pMonTxt->wNameStr != 0 &&
+            (pMonTxt->dwMonStatsFlags & MONSTATSFLAG_NPC) != 0 &&
+            (pMonTxt->dwMonStatsFlags & MONSTATSFLAG_INTERACT) != 0) {
             const Unicode* wszName = D2Client_GetNpcDisplayName(pUnit);
-            if (wszName && wszName[0]) {
+            if (wszName && wszName[0].ch != 0 &&
+                _wcsicmp(reinterpret_cast<const wchar_t*>(wszName), L"an evil force") != 0) {
                 D2Win_10127_SetFont(D2FONT_FONT6);
                 const int32_t nW = D2Win_10121_GetTextWidth(wszName);
                 D2Win_10117_DrawText(wszName, nScreenX - (nW / 2), nScreenY - 10, 0, 0);

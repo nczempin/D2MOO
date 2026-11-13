@@ -78,6 +78,7 @@ void __stdcall GFX_PlayUnitOverlayOnPlayer(int32_t bLoop);                      
 void __fastcall CUNIT_IterateClientUnitsOfType(int32_t nUnitType, void(__fastcall* pfCallback)(D2UnitStrc*)); // 0x6FACEA20
 void __fastcall MSG_SendBytePacket(uint8_t nOpcode);                                                       // 0x6FB29900
 void __fastcall MSG_SendByteWordPacket(uint8_t nOpcode, uint16_t wValue);                                  // 0x6FB298E0
+int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bPlaySound);                // 0x6FB3A700
 int32_t __fastcall MSG_SendPacket(void* pPacketData, size_t nSize);                                        // 0x6FB291A0
 void __stdcall TEXT_DisplaySystemMessage(const Unicode* wszText, uint8_t nColor);                          // 0x6FB21740
 void __stdcall TEXT_PlayQuestSpeechBox(uint16_t wStringId, int32_t nZero);                                 // 0x6FB21340
@@ -1543,6 +1544,7 @@ void __stdcall QUESTLOG_TogglePanel(int32_t bCenterCursor)
     else
     {
         QUESTLOG_ClosePanel(bCenterCursor);
+        UI_SetPanelState(15, 1, 0);
         g_dwLastToggleTick = GetTickCount();
         TEXT_CloseQuestSpeechBox();
     }
@@ -1555,6 +1557,7 @@ void __stdcall QUESTLOG_OnAlertButtonMouseUp(void* pMsg)
     *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
     SMsgBreakHandlerChain(pMsg);
     QUESTLOG_ClosePanel(1);
+    UI_SetPanelState(15, 1, 0);
     g_dwLastToggleTick = GetTickCount();
 }
 

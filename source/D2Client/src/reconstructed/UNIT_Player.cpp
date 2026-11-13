@@ -488,11 +488,19 @@ void __stdcall D2Client_FreeSkillIconCellFiles()
     // Frees class skill icon cell files at 0x6FBCBC6C..0x6FBCBC88 and general skill icons at 0x6FBCBC68.
 }
 
+extern int32_t g_anSkillHotkeyId[16];
+extern int32_t g_abSkillHotkeyLeft[16];
+extern uint32_t g_adwSkillHotkeyOwner[16];
+
 // 1.12a: 0x6FB078A0 (custom: eax = nHotkeySlot, stack arg_0 = nSkillId, arg_4 = bLeftHand, arg_8 = dwOwnerGUID)
-void __stdcall D2Client_AssignSkillHotkey(/*eax*/ int32_t nHotkeySlot, int32_t nSkillId, BOOL bLeftHand, uint32_t dwOwnerGUID)
+void __fastcall D2Client_AssignSkillHotkey(int32_t nHotkeySlot, int32_t nSkillId, BOOL bLeftHand, uint32_t dwOwnerGUID)
 {
-    // Updates hotkey tables at 0x6FBCBB50 / 0x6FBCBB90 (right) or 0x6FBCBB10 / 0x6FBCBCD8 (left)
-    // and sends packet 0x51 (D2Client_SendAssignSkillHotkeyPacket, 0x6FAEC6B0).
+    if (nHotkeySlot >= 0 && nHotkeySlot < 16)
+    {
+        g_anSkillHotkeyId[nHotkeySlot]    = (nSkillId == 0xFFFF || nSkillId < 0) ? -1 : nSkillId;
+        g_abSkillHotkeyLeft[nHotkeySlot]  = bLeftHand ? 1 : 0;
+        g_adwSkillHotkeyOwner[nHotkeySlot] = dwOwnerGUID;
+    }
 }
 
 // 1.12a: 0x6FB07930 (custom: ecx = bLeftHand, edx = nSkillId, stack arg_0 = dwOwnerGUID)

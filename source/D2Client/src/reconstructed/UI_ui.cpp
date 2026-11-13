@@ -24,6 +24,7 @@
 #include <D2CMP.h>
 #include <D2Gfx.h>
 #include <D2WinArchive.h>
+#include <D2WinFont.h>
 
 struct D2RosterUnitStrc;
 struct D2MsgStrc;
@@ -383,6 +384,8 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
     }
 }
 
+extern int32_t __fastcall D2Client_FindBoundHotkeyForSkill(int32_t nSkillId, int32_t bLeftHand);
+
 // 1.12a: 0x6FB33140 (__fastcall)
 // Draws the active Left and Right skill icons on the bottom HUD control panel
 void __fastcall PANEL_DrawLeftAndRightSkillButtons()
@@ -406,6 +409,13 @@ void __fastcall PANEL_DrawLeftAndRightSkillButtons()
         int32_t nLeftDrawY = (g_bLeftSkillPressed != 0) ? gnScreenHeight : (gnScreenHeight - 2);
         PANEL_DrawSkillIcon(nLeftSkillId, nLeftDrawX, nLeftDrawY);
         D2Client_DrawSkillQuantityOverlay(pLeftSkill, nLeftBtnX + 44, gnScreenHeight - 4);
+        int32_t nLeftHk = D2Client_FindBoundHotkeyForSkill(nLeftSkillId, 1);
+        if (nLeftHk >= 0 && nLeftHk < 12) {
+            wchar_t wszHk[8] = { L'F', static_cast<wchar_t>(L'1' + nLeftHk), 0 };
+            if (nLeftHk >= 9) { wszHk[1] = L'1'; wszHk[2] = static_cast<wchar_t>(L'0' + (nLeftHk - 9)); wszHk[3] = 0; }
+            D2WIN_SetFont(6);
+            D2WIN_DrawText(wszHk, nLeftBtnX + 3, gnScreenHeight - 5, 0, 0);
+        }
     }
 
     D2SkillStrc* pRightSkill = D2COMMON_GetRightSkill(gpLocalPlayerUnit);
@@ -415,6 +425,13 @@ void __fastcall PANEL_DrawLeftAndRightSkillButtons()
         int32_t nRightDrawY = (g_bRightSkillPressed != 0) ? gnScreenHeight : (gnScreenHeight - 2);
         PANEL_DrawSkillIcon(nRightSkillId, nRightDrawX, nRightDrawY);
         D2Client_DrawSkillQuantityOverlay(pRightSkill, nRightBtnX + 44, gnScreenHeight - 4);
+        int32_t nRightHk = D2Client_FindBoundHotkeyForSkill(nRightSkillId, 0);
+        if (nRightHk >= 0 && nRightHk < 12) {
+            wchar_t wszHk[8] = { L'F', static_cast<wchar_t>(L'1' + nRightHk), 0 };
+            if (nRightHk >= 9) { wszHk[1] = L'1'; wszHk[2] = static_cast<wchar_t>(L'0' + (nRightHk - 9)); wszHk[3] = 0; }
+            D2WIN_SetFont(6);
+            D2WIN_DrawText(wszHk, nRightBtnX + 3, gnScreenHeight - 5, 0, 0);
+        }
     }
 }
 
@@ -1481,14 +1498,14 @@ extern int32_t g_nLeftPanelOffsetX;
 extern int32_t g_nLeftPanelOffsetY;
 extern D2UnitStrc* g_pTradeNpcUnit;
 
-static bool UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX, int32_t* pOutScreenY)
+int32_t __fastcall UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX, int32_t* pOutScreenY)
 {
-    if (!pUnit || !gpLocalPlayerUnit) return false;
+    if (!pUnit || !gpLocalPlayerUnit) return 0;
     const int32_t nPlrX = UNITS_GetXPosition(gpLocalPlayerUnit);
     const int32_t nPlrY = UNITS_GetYPosition(gpLocalPlayerUnit);
     const int32_t nUnitX = UNITS_GetXPosition(pUnit);
     const int32_t nUnitY = UNITS_GetYPosition(pUnit);
-    if (nUnitX <= 0 && nUnitY <= 0) return false;
+    if (nUnitX <= 0 && nUnitY <= 0) return 0;
     const int32_t dX = nUnitX - nPlrX;
     const int32_t dY = nUnitY - nPlrY;
     const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
@@ -1497,7 +1514,7 @@ static bool UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX, int32_
     const int32_t nCenterY = ((nH - 48) / 2);
     *pOutScreenX = nCenterX + (dX - dY) * 16;
     *pOutScreenY = nCenterY + (dX + dY) * 8;
-    return (*pOutScreenX >= 0 && *pOutScreenX <= nW && *pOutScreenY >= 0 && *pOutScreenY <= nH - 48);
+    return (*pOutScreenX >= 0 && *pOutScreenX <= nW && *pOutScreenY >= 0 && *pOutScreenY <= nH - 48) ? 1 : 0;
 }
 
 // 1.12a: 0x6FB3C9D0 (__fastcall)
@@ -1584,7 +1601,7 @@ void __fastcall UI_DrawMonsterHoverBanner(D2UnitStrc* pMonUnit /*ecx*/)
     if (nFillW > 0) {
         D2GFX_DrawRect(nCenterX - nHalfW, 12, nCenterX - nHalfW + nFillW, 30, 0x62, 1);
     }
-    D2WIN_DrawText(reinterpret_cast<const wchar_t*>(pName), nCenterX, 26, 0, 1);
+    D2WIN_DrawText(reinterpret_cast<const wchar_t*>(pName), nCenterX - (nTextW / 2), 26, 0, 0);
 }
 
 // 1.12a: 0x6FB3D4A0 (__fastcall)
@@ -1740,12 +1757,12 @@ void __fastcall UI_OnPanelOpened(int32_t nPanelId /*eax*/)
             UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         }
     } else if (nPanelId == D2PANEL_CUBE) {
-        g_nInvPanelMode = 3;
+        g_nInvPanelMode = 12;
         if (!gaPanelStates[D2PANEL_INVENTORY]) {
             UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         }
     } else if (nPanelId == D2PANEL_STASH) {
-        g_nInvPanelMode = 5;
+        g_nInvPanelMode = 11;
         if (!gaPanelStates[D2PANEL_INVENTORY]) {
             UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         }
@@ -2086,41 +2103,60 @@ static void NPCMENU_DrawActiveDialog()
     else if (nCls == 155) { bHasTrade = true; wszTradeOpt = L"Travel West"; }
 
     const int32_t nOptCount = bHasTrade ? 3 : 2;
+    const Unicode* pNpcName = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
+    const wchar_t* wszNpcTitle = (pNpcName && pNpcName[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pNpcName) : L"Townsperson";
+    const wchar_t* aOpts[3] = { L"Talk", bHasTrade ? wszTradeOpt : L"Cancel", L"Cancel" };
+
+    D2WIN_SetFont(5);
+    const int32_t nTitleW = D2WIN_GetTextWidth(wszNpcTitle);
+    int32_t nMaxTextW = nTitleW;
+    D2WIN_SetFont(1);
+    for (int32_t i = 0; i < nOptCount; ++i) {
+        const int32_t nOptW = D2WIN_GetTextWidth(aOpts[i]);
+        if (nOptW > nMaxTextW) nMaxTextW = nOptW;
+    }
+
+    const int32_t nHalfBoxW = ((nMaxTextW + 56) > 192) ? ((nMaxTextW + 56) / 2) : 96;
     const int32_t nBoxH = 44 + nOptCount * 22;
-    RECT rMenu = { nBoxCenterX - 96, nBoxTopY, nBoxCenterX + 96, nBoxTopY + nBoxH };
+    RECT rMenu = { nBoxCenterX - nHalfBoxW, nBoxTopY, nBoxCenterX + nHalfBoxW, nBoxTopY + nBoxH };
     UI_DrawBoxPiecesFrame(&rMenu);
 
-    const Unicode* pNpcName = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
     D2WIN_SetFont(5);
     D2WIN_DrawText(
-        (pNpcName && pNpcName[0]) ? reinterpret_cast<const wchar_t*>(pNpcName) : L"Townsperson",
-        nBoxCenterX,
+        wszNpcTitle,
+        nBoxCenterX - (nTitleW / 2),
         nBoxTopY + 24,
         4,
-        1);
+        0);
 
     D2WIN_SetFont(1);
-    const wchar_t* aOpts[3] = { L"Talk", bHasTrade ? wszTradeOpt : L"Cancel", L"Cancel" };
     for (int32_t i = 0; i < nOptCount; ++i) {
         const int32_t nRowY = nBoxTopY + 46 + i * 22;
         const bool bHover = (gnMouseX >= rMenu.left + 8 && gnMouseX <= rMenu.right - 8 &&
                              gnMouseY >= nRowY - 14 && gnMouseY <= nRowY + 6);
-        D2WIN_DrawText(aOpts[i], nBoxCenterX, nRowY, bHover ? 3 : 0, 1);
+        const int32_t nOptW = D2WIN_GetTextWidth(aOpts[i]);
+        D2WIN_DrawText(aOpts[i], nBoxCenterX - (nOptW / 2), nRowY, bHover ? 3 : 0, 0);
         if (bHover && g_pPentSpinCel) {
             const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(g_pPentSpinCel);
             if (nFrames > 0) {
                 D2GfxDataStrc tSpin = {};
                 tSpin.pCellFile = g_pPentSpinCel;
                 tSpin.nFrame = (GetTickCount() / 60) % nFrames;
-                D2GFX_DrawCellContextEx(&tSpin, rMenu.left + 12, nRowY + 4, -1, 5, nullptr);
+                D2GFX_DrawCellContextEx(&tSpin, rMenu.left + 10, nRowY + 4, -1, 5, nullptr);
             }
         }
     }
 }
 
+int32_t g_bEscOptionsSubmenu = 0;
+int32_t g_bClientSoundOption = 1;
+int32_t g_bClientScaledWindowOption = 1;
+extern int32_t gbAutomapShowPartyNames;
+
 static void ESCMENU_DrawPanel()
 {
     if (!gaPanelStates[D2PANEL_ESCMENU]) {
+        g_bEscOptionsSubmenu = 0;
         return;
     }
     if (!g_pPentSpinCel) {
@@ -2131,30 +2167,41 @@ static void ESCMENU_DrawPanel()
     const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
     D2GFX_DrawRect(0, 0, nW, nH - 48, 0, 2);
 
-    static const wchar_t* const kEscLabels[3] = {
-        L"OPTIONS",
-        L"SAVE AND EXIT GAME",
-        L"RETURN TO GAME",
-    };
+    const wchar_t* aLabels[4] = {};
+    int32_t nRowCount = 3;
+    if (g_bEscOptionsSubmenu != 0) {
+        aLabels[0] = g_bClientSoundOption ? L"SOUND: ON" : L"SOUND: OFF";
+        aLabels[1] = g_bClientScaledWindowOption ? L"WINDOW: 1200X900" : L"WINDOW: 800X600";
+        aLabels[2] = gbAutomapShowPartyNames ? L"AUTOMAP NAMES: ON" : L"AUTOMAP NAMES: OFF";
+        aLabels[3] = L"PREVIOUS MENU";
+        nRowCount = 4;
+    } else {
+        aLabels[0] = L"OPTIONS";
+        aLabels[1] = L"SAVE AND EXIT GAME";
+        aLabels[2] = L"RETURN TO GAME";
+        nRowCount = 3;
+    }
+
     const int32_t nCenterX = nW / 2;
-    const int32_t nBaseY = (nH / 2) - 60;
-    int32_t nSelectedRow = 2;
-    for (int32_t i = 0; i < 3; ++i) {
+    const int32_t nBaseY = (nH / 2) - ((nRowCount == 4) ? 80 : 60);
+    int32_t nSelectedRow = nRowCount - 1;
+    for (int32_t i = 0; i < nRowCount; ++i) {
         const int32_t nRowY = nBaseY + i * 46;
         if (gnMouseY >= nRowY - 28 && gnMouseY <= nRowY + 8 &&
-            gnMouseX >= nCenterX - 180 && gnMouseX <= nCenterX + 180) {
+            gnMouseX >= nCenterX - 210 && gnMouseX <= nCenterX + 210) {
             nSelectedRow = i;
         }
     }
 
     D2WIN_SetFont(3);
-    for (int32_t i = 0; i < 3; ++i) {
+    for (int32_t i = 0; i < nRowCount; ++i) {
         const int32_t nRowY = nBaseY + i * 46;
-        D2WIN_DrawText(kEscLabels[i], nCenterX, nRowY, (i == nSelectedRow) ? 4 : 0, 1);
+        const int32_t nTextW = D2WIN_GetTextWidth(aLabels[i]);
+        D2WIN_DrawText(aLabels[i], nCenterX - (nTextW / 2), nRowY, (i == nSelectedRow) ? 4 : 0, 0);
         if (i == nSelectedRow && g_pPentSpinCel) {
             const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(g_pPentSpinCel);
             if (nFrames > 0) {
-                const int32_t nLabelHalfW = (D2WIN_GetTextWidth(kEscLabels[i]) / 2) + 34;
+                const int32_t nLabelHalfW = (nTextW / 2) + 34;
                 D2GfxDataStrc tSpin = {};
                 tSpin.pCellFile = g_pPentSpinCel;
                 tSpin.nFrame = (GetTickCount() / 60) % nFrames;
@@ -2248,6 +2295,8 @@ void __fastcall UI_RenderHUD()
         return;
     }
 
+    D2Win_10130_DrawFramedTextEx(nullptr, 0, 0, 0, 0, 0);
+
     if (gaPanelStates[D2PANEL_AUTOMAP] != 0) {
         AUTOMAP_Draw();
     }
@@ -2279,6 +2328,9 @@ void __fastcall UI_RenderHUD()
     ESCMENU_DrawPanel();
 
     UI_DrawDeferredHoverText();
+    if (!gaPanelStates[D2PANEL_ESCMENU]) {
+        D2Win_10124();
+    }
     CURSOR_Update();
     CURSOR_Draw();
 }

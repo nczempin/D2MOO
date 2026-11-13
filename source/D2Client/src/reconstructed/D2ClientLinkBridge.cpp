@@ -639,8 +639,24 @@ D2ClientSoundChannelStrc gSoundChannelPool_6FBC57D8[200] = {};
 D2MonsterModeCallbackStrc gSpecialMonsterModeCallbacks_6FBA6288[17] = {};
 int (__fastcall* gStateAppliedCallbacks[64])(D2UnitStrc*, int) = {};
 int (__fastcall* gStateRemovedCallbacks[64])(D2UnitStrc*, int) = {};
+extern int __fastcall INV_HandleStandardBodySlotClick(int, D2UnitStrc*, int);
+extern int __fastcall INV_HandleRightWeaponBodySlotClick(int, D2UnitStrc*, int);
+extern int __fastcall INV_HandleTwoHandedLeftBodySlotClick(int, D2UnitStrc*, int);
+
 D2CellFileStrc* g_apInvSlotBackCells[16] = {};
-int (__fastcall* g_apfnBodySlotClickHandlers[16])(int, D2UnitStrc*, int) = {};
+int (__fastcall* g_apfnBodySlotClickHandlers[16])(int, D2UnitStrc*, int) = {
+    nullptr,
+    INV_HandleStandardBodySlotClick,       // 1: BODYLOC_HEAD
+    INV_HandleStandardBodySlotClick,       // 2: BODYLOC_NECK
+    INV_HandleStandardBodySlotClick,       // 3: BODYLOC_TORSO
+    INV_HandleRightWeaponBodySlotClick,    // 4: BODYLOC_RARM
+    INV_HandleTwoHandedLeftBodySlotClick,  // 5: BODYLOC_LARM
+    INV_HandleStandardBodySlotClick,       // 6: BODYLOC_RRIN
+    INV_HandleStandardBodySlotClick,       // 7: BODYLOC_LRIN
+    INV_HandleStandardBodySlotClick,       // 8: BODYLOC_BELT
+    INV_HandleStandardBodySlotClick,       // 9: BODYLOC_FEET
+    INV_HandleStandardBodySlotClick,       // 10: BODYLOC_GLOVES
+};
 void (__fastcall* g_apfnMonUModEvents[64][5])(D2UnitStrc*, int) = {};
 void (__fastcall* g_apfnObjectClientFns[32])(D2UnitStrc*) = {};
 D2InvBodyLocInfoStrc g_atBodyLocRects[12] = {};
@@ -2000,10 +2016,6 @@ int __fastcall D2Client_AreUnitsHostile_6FB08B60(struct D2UnitStrc * a0, struct 
 {
     (void)a0; (void)a1; return 0;
 }
-void __fastcall D2Client_AssignSkillHotkey(int a0, int a1, int a2, unsigned int a3)
-{
-    (void)a0; (void)a1; (void)a2; (void)a3;
-}
 void __fastcall D2Client_AssignSkillHotkeyFromPopup(int a0)
 {
     (void)a0;
@@ -2052,13 +2064,29 @@ int __fastcall D2Client_DispatchUnitModeChange_6FAF1450(int a0, struct D2UnitStr
 {
     (void)a2;(void)a3; if (a1) D2Client_DispatchUnitModeChange(a1, a0); return 1;
 }
-void __fastcall D2Client_DrawActiveSkillButtonsTooltip(int a0, int a1)
+extern void __fastcall PANEL_DrawSkillIcon(int32_t nSkillId, int32_t nX, int32_t nY);
+int32_t g_anSkillHotkeyId[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+int32_t g_abSkillHotkeyLeft[16] = {};
+uint32_t g_adwSkillHotkeyOwner[16] = {
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+};
+
+int32_t __fastcall D2Client_FindBoundHotkeyForSkill(int32_t nSkillId, int32_t bLeftHand)
 {
-    if (!gpPlayerUnit)
-        return;
-    const bool bLeftBtn = (a0 < 200);
-    D2SkillStrc* pSkill = bLeftBtn ? UNITS_GetLeftSkill(gpPlayerUnit) : UNITS_GetRightSkill(gpPlayerUnit);
-    const int32_t nSkillId = pSkill ? SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) : 0;
+    for (int32_t i = 0; i < 16; ++i)
+    {
+        if (g_anSkillHotkeyId[i] == nSkillId && g_abSkillHotkeyLeft[i] == (bLeftHand ? 1 : 0))
+            return i;
+    }
+    return -1;
+}
+
+static void Bridge_FormatSkillTooltip(int32_t nSkillId, int32_t bLeftHand, Unicode* wszOut, int32_t nMaxChars)
+{
+    wszOut[0].ch = 0;
     D2SkillsTxt* pSkillsTxt = (sgptDataTables && nSkillId >= 0 && nSkillId < sgptDataTables->nSkillsTxtRecordCount)
         ? &sgptDataTables->pSkillsTxt[nSkillId]
         : nullptr;
@@ -2070,10 +2098,147 @@ void __fastcall D2Client_DrawActiveSkillButtonsTooltip(int a0, int a1)
     if (!pDesc || !pDesc->wStrName)
         return;
     const Unicode* pName = D2LANG_GetStringFromTblIndex(pDesc->wStrName);
+    char szName[64] = {};
     if (pName && pName[0].ch != 0)
+        Unicode::unicode2Win(szName, pName, 63);
+    if (!szName[0])
+        return;
+    const int32_t nHk = D2Client_FindBoundHotkeyForSkill(nSkillId, bLeftHand);
+    char szFull[96] = {};
+    if (nHk >= 0 && nHk < 12)
+        snprintf(szFull, sizeof(szFull), "%s (F%d)", szName, nHk + 1);
+    else
+        snprintf(szFull, sizeof(szFull), "%s", szName);
+    Unicode::win2Unicode(wszOut, szFull, nMaxChars - 1);
+}
+
+static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
+{
+    g_nSpeedBarCount_6FBC21C8 = 0;
+    g_nSpeedBarHoverIdx_6FBC21CC = -1;
+    if (!gpPlayerUnit || !gpPlayerUnit->pSkills || !sgptDataTables || !sgptDataTables->pSkillsTxt)
+        return;
+
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    const int32_t bHigherRes = (D2GFX_GetResolutionMode() != 0);
+    const int32_t nLeftAnchorX  = 0x74 + (bHigherRes ? 0x13 : 0);
+    const int32_t nRightAnchorX = nW - 0xA4 + (bHigherRes ? 0 : 0x13);
+
+    int32_t aSkillList[64] = {};
+    int32_t nCount = 0;
+
+    // Ensure Attack (0) is always selectable
+    aSkillList[nCount++] = 0;
+
+    for (D2SkillStrc* pSkill = gpPlayerUnit->pSkills ? gpPlayerUnit->pSkills->pFirstSkill : nullptr;
+         pSkill != nullptr && nCount < 64;
+         pSkill = SKILLS_GetNextSkill(pSkill))
     {
-        D2Win_10127_SetFont(D2FONT_FONT16);
-        D2Win_10129_DrawFramedText(pName, a0, a1 - 24, 0, 0);
+        const int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
+        if (nSkillId <= 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+            continue;
+        if (SKILLS_GetSkillLevel(gpPlayerUnit, pSkill, 1) <= 0)
+            continue;
+        const D2SkillsTxt& rTxt = sgptDataTables->pSkillsTxt[nSkillId];
+        if (rTxt.wSkillDesc < 0 || rTxt.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount)
+            continue;
+        if (rTxt.dwAuraFilter != 0 && bLeftSide)
+            continue;
+        // Skip purely passive skills (no icon or passive stat without active mode)
+        if (rTxt.nAnim == 0 && nSkillId > 5 && rTxt.wSrvDoFunc == 0 && rTxt.wCltDoFunc == 0)
+            continue;
+        if (bLeftSide && (rTxt.dwFlags[0] & SKILLSFLAG_LEFTSKILL) == 0 && nSkillId != 2)
+            continue;
+
+        bool bDup = false;
+        for (int32_t k = 0; k < nCount; ++k)
+        {
+            if (aSkillList[k] == nSkillId) { bDup = true; break; }
+        }
+        if (!bDup)
+            aSkillList[nCount++] = nSkillId;
+    }
+
+    g_nSpeedBarCount_6FBC21C8 = nCount;
+    for (int32_t i = 0; i < nCount; ++i)
+    {
+        const int32_t nCol = i % 8;
+        const int32_t nRow = i / 8;
+        const int32_t nCellX = bLeftSide
+            ? (nLeftAnchorX + nCol * 48)
+            : (nRightAnchorX - nCol * 48);
+        const int32_t nCellBottomY = (nH - 54) - nRow * 48;
+
+        g_nSpeedBarSkillIds_6FBC21D8[i] = aSkillList[i];
+        g_nSpeedBarSkillX_6FBC2598[i]   = nCellX;
+        g_nSpeedBarSkillY_6FBC24A8[i]   = nCellBottomY;
+
+        const bool bHovered = (gnMouseX >= nCellX && gnMouseX < nCellX + 48 &&
+                               gnMouseY >= nCellBottomY - 48 && gnMouseY <= nCellBottomY);
+        if (bHovered)
+            g_nSpeedBarHoverIdx_6FBC21CC = i;
+
+        if (bRender)
+        {
+            PANEL_DrawSkillIcon(aSkillList[i], nCellX, nCellBottomY);
+            if (bHovered)
+            {
+                RECT rcHi = { nCellX, nCellBottomY - 48, nCellX + 48, nCellBottomY };
+                D2GFX_UtilRect(&rcHi, 0x62);
+            }
+            const int32_t nHk = D2Client_FindBoundHotkeyForSkill(aSkillList[i], bLeftSide ? 1 : 0);
+            if (nHk >= 0 && nHk < 12)
+            {
+                char szHk[8] = {};
+                snprintf(szHk, sizeof(szHk), "F%d", nHk + 1);
+                Unicode wszHk[8] = {};
+                Unicode::win2Unicode(wszHk, szHk, 7);
+                D2Win_10127_SetFont(D2FONT_FONT6);
+                D2Win_10117_DrawText(wszHk, nCellX + 3, nCellBottomY - 4, 0, 0);
+            }
+        }
+    }
+}
+
+void __fastcall D2Client_DrawActiveSkillButtonsTooltip(int a0, int a1)
+{
+    if (!gpPlayerUnit)
+        return;
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    const int32_t bHigherRes = (D2GFX_GetResolutionMode() != 0);
+    const int32_t nLeftBtnX  = 0x74 + (bHigherRes ? 0x13 : 0);
+    const int32_t nRightBtnX = nW - 0xA4 + (bHigherRes ? 0 : 0x13);
+
+    if (a1 < nH - 50 || a1 >= nH)
+        return;
+
+    bool bLeftBtn = false;
+    int32_t nTipX = a0;
+    if (a0 >= nLeftBtnX && a0 < nLeftBtnX + 48)
+    {
+        bLeftBtn = true;
+        nTipX = nLeftBtnX + 24;
+    }
+    else if (a0 >= nRightBtnX && a0 < nRightBtnX + 48)
+    {
+        bLeftBtn = false;
+        nTipX = nRightBtnX + 24;
+    }
+    else
+    {
+        return;
+    }
+
+    D2SkillStrc* pSkill = bLeftBtn ? UNITS_GetLeftSkill(gpPlayerUnit) : UNITS_GetRightSkill(gpPlayerUnit);
+    const int32_t nSkillId = pSkill ? SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) : 0;
+    Unicode wszTip[96] = {};
+    Bridge_FormatSkillTooltip(nSkillId, bLeftBtn ? 1 : 0, wszTip, 96);
+    if (wszTip[0].ch != 0)
+    {
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+        D2Win_10129_DrawFramedText(wszTip, nTipX, nH - 56, 0, 1);
     }
 }
 void __stdcall D2Client_DrawBeltItemHoverTooltip(struct D2UnitStrc * a0, int a1, int a2)
@@ -2097,10 +2262,32 @@ void __fastcall D2Client_DrawSkillQuantityOverlay(struct D2SkillStrc * a0, int a
 void __fastcall D2Client_DrawSpeedBarLeftTooltip(int a0, int a1)
 {
     (void)a0; (void)a1;
+    if (g_nSpeedBarHoverIdx_6FBC21CC >= 0 && g_nSpeedBarHoverIdx_6FBC21CC < g_nSpeedBarCount_6FBC21C8)
+    {
+        const int32_t idx = g_nSpeedBarHoverIdx_6FBC21CC;
+        Unicode wszTip[96] = {};
+        Bridge_FormatSkillTooltip(g_nSpeedBarSkillIds_6FBC21D8[idx], 1, wszTip, 96);
+        if (wszTip[0].ch != 0)
+        {
+            D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+            D2Win_10129_DrawFramedText(wszTip, g_nSpeedBarSkillX_6FBC2598[idx] + 24, g_nSpeedBarSkillY_6FBC24A8[idx] - 54, 0, 1);
+        }
+    }
 }
 void __fastcall D2Client_DrawSpeedBarRightTooltip(int a0, int a1)
 {
     (void)a0; (void)a1;
+    if (g_nSpeedBarHoverIdx_6FBC21CC >= 0 && g_nSpeedBarHoverIdx_6FBC21CC < g_nSpeedBarCount_6FBC21C8)
+    {
+        const int32_t idx = g_nSpeedBarHoverIdx_6FBC21CC;
+        Unicode wszTip[96] = {};
+        Bridge_FormatSkillTooltip(g_nSpeedBarSkillIds_6FBC21D8[idx], 0, wszTip, 96);
+        if (wszTip[0].ch != 0)
+        {
+            D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+            D2Win_10129_DrawFramedText(wszTip, g_nSpeedBarSkillX_6FBC2598[idx] + 24, g_nSpeedBarSkillY_6FBC24A8[idx] - 54, 0, 1);
+        }
+    }
 }
 struct D2UnitStrc * __fastcall D2Client_FindClientSideUnit(int a0, int a1)
 {
@@ -2526,11 +2713,11 @@ void __fastcall D2Client_RemoveUnitSoundNode_6FAE19F0(struct D2UnitStrc * a0, st
 }
 void __stdcall D2Client_RenderSpeedBarLeft(void)
 {
-    
+    Bridge_PopulateAndRenderSpeedBar(true, true);
 }
 void __stdcall D2Client_RenderSpeedBarRight(void)
 {
-    
+    Bridge_PopulateAndRenderSpeedBar(false, true);
 }
 int __fastcall D2Client_RollRandomRange_6FAB2E60(struct D2SeedStrc * a0, int a1, int a2)
 {
@@ -2540,9 +2727,81 @@ void __fastcall D2Client_ScreenToWorldCoords_6FB23AD0(int a0, int a1, int * a2, 
 {
     VIEW_ScreenToWorldCoords((D2ViewportStrc*)gpClientViewport, a0, a1, a2, a3);
 }
+void __fastcall D2Client_SetLeftSkillForLocalPlayer(int a0, int a1);
+void __fastcall D2Client_SetRightSkillForLocalPlayer(int a0, int a1);
+
 void __fastcall D2Client_SelectHotkeyedSkill(int a0)
 {
-    (void)a0;
+    if (a0 < 0 || a0 >= 16 || !gpPlayerUnit)
+        return;
+    const int32_t nSkillId = g_anSkillHotkeyId[a0];
+    if (nSkillId < 0)
+        return;
+    const uint32_t dwOwner = g_adwSkillHotkeyOwner[a0];
+    if (g_abSkillHotkeyLeft[a0])
+        D2Client_SetLeftSkillForLocalPlayer(nSkillId, (int)dwOwner);
+    else
+        D2Client_SetRightSkillForLocalPlayer(nSkillId, (int)dwOwner);
+}
+
+int32_t __fastcall D2Client_BindSkillHotkeySlot(int32_t nSlot, int32_t bSpeedBarOpen, int32_t bSpeedBarLeft)
+{
+    if (nSlot < 0 || nSlot >= 16 || !gpPlayerUnit)
+        return 0;
+    int32_t nTargetSkill = -1;
+    int32_t bLeft = 0;
+    if (bSpeedBarOpen)
+    {
+        Bridge_PopulateAndRenderSpeedBar(bSpeedBarLeft != 0, false);
+        if (g_nSpeedBarHoverIdx_6FBC21CC >= 0 && g_nSpeedBarHoverIdx_6FBC21CC < g_nSpeedBarCount_6FBC21C8)
+        {
+            nTargetSkill = g_nSpeedBarSkillIds_6FBC21D8[g_nSpeedBarHoverIdx_6FBC21CC];
+            bLeft = (bSpeedBarLeft != 0) ? 1 : 0;
+        }
+    }
+    if (nTargetSkill < 0)
+        return 0;
+
+    for (int32_t i = 0; i < 16; ++i)
+    {
+        if (i != nSlot && g_anSkillHotkeyId[i] == nTargetSkill && g_abSkillHotkeyLeft[i] == bLeft)
+            g_anSkillHotkeyId[i] = -1;
+    }
+    g_anSkillHotkeyId[nSlot]    = nTargetSkill;
+    g_abSkillHotkeyLeft[nSlot]  = bLeft;
+    g_adwSkillHotkeyOwner[nSlot] = 0xFFFFFFFFu;
+
+    uint8_t aPkt51[9] = {};
+    aPkt51[0] = 0x51u;
+    const uint32_t dwPacked =
+        (static_cast<uint32_t>(nSlot & 0xFFFF) << 16) |
+        (static_cast<uint32_t>(bLeft ? 1u : 0u) << 15) |
+        static_cast<uint32_t>(nTargetSkill & 0x7FFF);
+    memcpy(&aPkt51[1], &dwPacked, 4);
+    const uint32_t dwOwner = 0xFFFFFFFFu;
+    memcpy(&aPkt51[5], &dwOwner, 4);
+    MSG_SendPacket(aPkt51, 9);
+    return 1;
+}
+
+int32_t __fastcall D2Client_HandleSpeedBarClick(int32_t mx, int32_t my, int32_t bLeftSide)
+{
+    Bridge_PopulateAndRenderSpeedBar(bLeftSide != 0, false);
+    for (int32_t i = 0; i < g_nSpeedBarCount_6FBC21C8; ++i)
+    {
+        const int32_t cx = g_nSpeedBarSkillX_6FBC2598[i];
+        const int32_t cy = g_nSpeedBarSkillY_6FBC24A8[i];
+        if (mx >= cx && mx < cx + 48 && my >= cy - 48 && my <= cy)
+        {
+            const int32_t nSkillId = g_nSpeedBarSkillIds_6FBC21D8[i];
+            if (bLeftSide)
+                D2Client_SetLeftSkillForLocalPlayer(nSkillId, -1);
+            else
+                D2Client_SetRightSkillForLocalPlayer(nSkillId, -1);
+            return 1;
+        }
+    }
+    return 0;
 }
 void __fastcall D2Client_SendClientPacket0(unsigned char a0)
 {
@@ -2586,7 +2845,16 @@ void __fastcall D2Client_SetDelayedQuestSpeechTicks_6FB08DC0(unsigned int a0)
 }
 void __fastcall D2Client_SetLeftSkillForLocalPlayer(int a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (!gpPlayerUnit || a0 < 0)
+        return;
+    SKILLS_SetLeftActiveSkill(gpPlayerUnit, a0, (uint32_t)a1);
+    uint8_t pkt[9] = {};
+    pkt[0] = 0x3Cu;
+    const uint32_t dwSkillFlag = (uint32_t)a0 | 0x80000000u;
+    const uint32_t dwOwner = (uint32_t)a1;
+    memcpy(&pkt[1], &dwSkillFlag, 4);
+    memcpy(&pkt[5], &dwOwner, 4);
+    MSG_SendPacket(pkt, 9);
 }
 void __fastcall D2Client_SetLightMapRadius_6FB0EAB0(void * a0, int a1)
 {
@@ -2594,7 +2862,16 @@ void __fastcall D2Client_SetLightMapRadius_6FB0EAB0(void * a0, int a1)
 }
 void __fastcall D2Client_SetRightSkillForLocalPlayer(int a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (!gpPlayerUnit || a0 < 0)
+        return;
+    SKILLS_SetRightActiveSkill(gpPlayerUnit, a0, (uint32_t)a1);
+    uint8_t pkt[9] = {};
+    pkt[0] = 0x3Cu;
+    const uint32_t dwSkillFlag = (uint32_t)a0 & 0x7FFFFFFFu;
+    const uint32_t dwOwner = (uint32_t)a1;
+    memcpy(&pkt[1], &dwSkillFlag, 4);
+    memcpy(&pkt[5], &dwOwner, 4);
+    MSG_SendPacket(pkt, 9);
 }
 void __stdcall D2Client_SetUnitOverlay_6FB430E0(int a0, struct D2UnitStrc * a1, int a2, int a3, int a4, int a5, int a6, int a7)
 {

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <intrin.h>
 #include <queue>
 #include <vector>
 #include <tlhelp32.h>
@@ -39,7 +40,9 @@
 #include <D2Items.h>
 #include <D2Inventory.h>
 #include <D2StatList.h>
+#include <D2Monsters.h>
 #include <Units/Units.h>
+#include <Units/Monster.h>
 #include <Units/UnitRoom.h>
 #include <Path/Path.h>
 #include <D2Dungeon.h>
@@ -185,12 +188,17 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg);
 
 void __stdcall INV_SyncExpansionModeFlag();
 void __stdcall INV_InitInventoryLayoutRectsAndGrids();
+void __stdcall INV_ClearWaitingForServerCursorSync();
 void __fastcall INV_SetPanelMode(int32_t nMode);
 void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnInventoryPanelMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnStashPanelMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnHoradricCubeMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnMercInventoryMouseUp(D2WinMsgStrc* pMsg);
+D2UnitStrc* __fastcall SHOWITEMS_HitTestGroundItemLabel(int32_t nClickX, int32_t nClickY);
+void __fastcall D2Client_SelectHotkeyedSkill(int32_t nSlot);
+int32_t __fastcall D2Client_BindSkillHotkeySlot(int32_t nSlot, int32_t bSpeedBarOpen, int32_t bSpeedBarLeft);
+int32_t __fastcall D2Client_HandleSpeedBarClick(int32_t mx, int32_t my, int32_t bLeftSide);
 
 void __stdcall QUESTLOG_InitSession(void);
 void __stdcall QUESTLOG_TogglePanel(int32_t bCenterCursor);
@@ -227,6 +235,14 @@ extern BOOL g_bEscMenuActive;
 extern BOOL g_bSkillTreeOrSelectOpen;
 extern int32_t g_nSkillTreeTab_6FBA79FC;
 extern int32_t g_nEquippedBeltRows;
+extern int32_t g_nSpeedBarSide;
+extern int32_t g_bEscOptionsSubmenu;
+extern int32_t g_bClientSoundOption;
+extern int32_t g_bClientScaledWindowOption;
+extern int32_t gbAutomapShowPartyNames;
+extern int32_t gnMouseScreenX;
+extern int32_t gnMouseScreenY;
+extern int32_t g_anSkillHotkeyId[16];
 
 // ============================================================================
 // Session & Client Loop State (Zero Shadow World/Item/Stat/UI Arrays)
@@ -343,6 +359,10 @@ static void SyncReconstructedClientGlobals()
 	g_bEscMenuActive = (gaPanelStates[D2PANEL_ESCMENU] != 0) ? TRUE : FALSE;
 	g_bSkillTreeOrSelectOpen =
 		(gaPanelStates[D2PANEL_SKILLTREE] != 0 || gaPanelStates[D2PANEL_SKILLSELECT] != 0) ? TRUE : FALSE;
+	gnMouseScreenX = gMousePos.x;
+	gnMouseScreenY = gMousePos.y;
+	g_bClientSoundOption = gbSoundEnabled ? 1 : 0;
+	g_bClientScaledWindowOption = gbScaled1200x900 ? 1 : 0;
 	gnMouseX = gMousePos.x;
 	gnMouseY = gMousePos.y;
 	gdwActiveInteractNpcGUID = g_nInteractingNpcGUID;
@@ -440,6 +460,22 @@ static void SpawnClientRoomPresetUnits(D2ActiveRoomStrc* pRoom)
 	for (D2PresetUnitStrc* pPreset = DUNGEON_GetPresetUnitsFromRoom(pRoom); pPreset != nullptr; pPreset = pPreset->pNext)
 	{
 		if (pPreset->nUnitType != UNIT_OBJECT)
+		{
+			continue;
+		}
+		if (!sgptDataTables || pPreset->nIndex < 0 || pPreset->nIndex >= sgptDataTables->nObjectsTxtRecordCount)
+		{
+			continue;
+		}
+		D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pPreset->nIndex);
+		if (!pObjTxt)
+		{
+			continue;
+		}
+		// Interactive / server-replicated objects (Stash, Waypoints, Shrines, Chests, Portals) arrive via S2C 0x51
+		// with authoritative server GUIDs; never shadow them with synthetic 0x40000000 preset GUIDs.
+		if (pObjTxt->nSelectable[0] != 0 || pObjTxt->nOperateFn != 0 ||
+			(pObjTxt->nSubClass & 0x40) != 0 || pPreset->nIndex == 267)
 		{
 			continue;
 		}
@@ -1436,10 +1472,17 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 
 			if (pPlrUnit)
 			{
+				if (gbIsExpansion)
+				{
+					pPlrUnit->dwFlags |= UNITFLAG_ISEXPANSION;
+					pPlrUnit->dwFlagEx |= UNITFLAGEX_ISEXPANSION;
+				}
 				if (bIsLocal)
 				{
 					D2Client_SetLocalPlayerUnit(pPlrUnit);
 					SeedDefaultPlayerCharStats(pPlrUnit, gnCharClass);
+					SyncReconstructedClientGlobals();
+					INV_InitInventoryLayoutRectsAndGrids();
 				}
 				GFX_InitUnitCompositeGfx(pPlrUnit);
 			}
@@ -1556,6 +1599,11 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				++gdwVendorItemsReceived;
 			}
 			D2Client_PacketHandler_ItemAction9C(aBuffer);
+			INV_ClearWaitingForServerCursorSync();
+			if (gpPlayerUnit)
+			{
+				GFX_InitUnitCompositeGfx(gpPlayerUnit);
+			}
 			++gdwSCmdPacketsDispatched;
 			SyncReconstructedClientGlobals();
 		}
@@ -1570,6 +1618,11 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				++gdwVendorItemsReceived;
 			}
 			D2Client_PacketHandler_ItemAction9D(aBuffer);
+			INV_ClearWaitingForServerCursorSync();
+			if (gpPlayerUnit)
+			{
+				GFX_InitUnitCompositeGfx(gpPlayerUnit);
+			}
 			++gdwSCmdPacketsDispatched;
 			SyncReconstructedClientGlobals();
 		}
@@ -1604,6 +1657,34 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			}
 			if (pMon)
 			{
+				if (nPacketLen > 13)
+				{
+					D2BitBufferStrc bitBuf = {};
+					BITMANIP_Initialize(&bitBuf, &aBuffer[13], nPacketLen - 13);
+					const int32_t nAnimMode = BITMANIP_Read(&bitBuf, 4);
+					const int32_t bHasComps = BITMANIP_Read(&bitBuf, 1);
+					if (bHasComps && pMon->pMonsterData)
+					{
+						for (int32_t i = 0; i < 16; ++i)
+						{
+							const int32_t nCompInfo = D2COMMON_11068_GetCompInfo(pMon, i);
+							if (nCompInfo >= 3)
+							{
+								unsigned long nBitIdx = 0;
+								_BitScanReverse(&nBitIdx, static_cast<unsigned long>(nCompInfo - 1));
+								pMon->pMonsterData->nComponent[i] = static_cast<uint8_t>(BITMANIP_Read(&bitBuf, static_cast<int>(nBitIdx + 1)));
+							}
+							else
+							{
+								pMon->pMonsterData->nComponent[i] = static_cast<uint8_t>(BITMANIP_Read(&bitBuf, 1));
+							}
+						}
+					}
+					if (nLife == 0 || nAnimMode == MONMODE_DEAD || nAnimMode == MONMODE_DEATH)
+					{
+						UNITS_ChangeAnimMode(pMon, MONMODE_DEAD);
+					}
+				}
 				STATLIST_SetUnitStat(pMon, STAT_MAXHP, 128 << 8, 0);
 				STATLIST_SetUnitStat(pMon, STAT_HITPOINTS, static_cast<int32_t>(nLife) << 8, 0);
 				GFX_InitUnitCompositeGfx(pMon);
@@ -1850,7 +1931,7 @@ static bool HandleNpcDialogMouseDown(int32_t mx, int32_t my)
 	const int32_t nOptCount = bHasTrade ? 3 : 2;
 	const int32_t nBoxH = 44 + nOptCount * 22;
 
-	if (mx < nBoxCenterX - 96 || mx > nBoxCenterX + 96 || my < nBoxTopY || my > nBoxTopY + nBoxH)
+	if (mx < nBoxCenterX - 116 || mx > nBoxCenterX + 116 || my < nBoxTopY || my > nBoxTopY + nBoxH)
 	{
 		CloseActiveNpcSession();
 		return true;
@@ -1900,23 +1981,63 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 	const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
 	const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
 	const int32_t nCenterX = nW / 2;
+	if (g_bEscOptionsSubmenu != 0)
+	{
+		const int32_t nBaseY = (nH / 2) - 80;
+		for (int32_t i = 0; i < 4; ++i)
+		{
+			const int32_t nRowY = nBaseY + i * 46;
+			if (my >= nRowY - 28 && my <= nRowY + 8 && mx >= nCenterX - 210 && mx <= nCenterX + 210)
+			{
+				if (i == 0)
+				{
+					gbSoundEnabled = !gbSoundEnabled;
+					SyncReconstructedClientGlobals();
+				}
+				else if (i == 1)
+				{
+					gbScaled1200x900 = !gbScaled1200x900;
+					SyncReconstructedClientGlobals();
+					if (HWND hMainWnd = WINDOW_GetWindow())
+					{
+						RECT rc = { 0, 0, gbScaled1200x900 ? 1200 : 800, gbScaled1200x900 ? 900 : 600 };
+						AdjustWindowRectEx(&rc, GetWindowLongA(hMainWnd, GWL_STYLE), FALSE, GetWindowLongA(hMainWnd, GWL_EXSTYLE));
+						SetWindowPos(hMainWnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+					}
+				}
+				else if (i == 2)
+				{
+					gbAutomapShowPartyNames = gbAutomapShowPartyNames ? 0 : 1;
+				}
+				else if (i == 3)
+				{
+					g_bEscOptionsSubmenu = 0;
+				}
+				return true;
+			}
+		}
+		return true;
+	}
+
 	const int32_t nBaseY = (nH / 2) - 60;
 	for (int32_t i = 0; i < 3; ++i)
 	{
 		const int32_t nRowY = nBaseY + i * 46;
-		if (my >= nRowY - 28 && my <= nRowY + 8 && mx >= nCenterX - 180 && mx <= nCenterX + 180)
+		if (my >= nRowY - 28 && my <= nRowY + 8 && mx >= nCenterX - 210 && mx <= nCenterX + 210)
 		{
 			if (i == 0)
 			{
-				gbSoundEnabled = !gbSoundEnabled;
+				g_bEscOptionsSubmenu = 1;
 			}
 			else if (i == 1)
 			{
+				g_bEscOptionsSubmenu = 0;
 				UI_SetPanelState(D2PANEL_ESCMENU, 1, 0);
 				gbSaveAndExitRequested = 1;
 			}
 			else if (i == 2)
 			{
+				g_bEscOptionsSubmenu = 0;
 				UI_SetPanelState(D2PANEL_ESCMENU, 1, 0);
 			}
 			return true;
@@ -1931,22 +2052,24 @@ static bool HandleHudBottomBarMouseDown(int32_t mx, int32_t my)
 	const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
 	const int32_t nBarBaseX = (nW / 2) - 400;
 
-	// Mini-panel pop-up buttons (Char, Inv, SkillTree, Automap, QuestLog, EscMenu)
+	// Mini-panel pop-up buttons (8 buttons at 18px stride: Char, Inv, SkillTree, Automap, MsgLog, QuestLog, Party, EscMenu)
 	if (gaPanelStates[D2PANEL_MINIPANEL] != 0)
 	{
 		const int32_t nMiniX = (nW / 2) - 72;
 		const int32_t nMiniY = nH - 72;
-		if (mx >= nMiniX && mx < nMiniX + 144 && my >= nMiniY && my < nMiniY + 24)
+		if (mx >= nMiniX + 3 && mx < nMiniX + 3 + 8 * 18 && my >= nMiniY && my < nMiniY + 26)
 		{
-			const int32_t nBtn = (mx - nMiniX) / 24;
+			const int32_t nBtn = (mx - (nMiniX + 3)) / 18;
 			switch (nBtn)
 			{
 			case 0: UI_SetPanelState(D2PANEL_CHAR, 2, 0); break;
 			case 1: UI_SetPanelState(D2PANEL_INVENTORY, 2, 0); break;
 			case 2: UI_SetPanelState(D2PANEL_SKILLTREE, 2, 0); break;
-			case 3: UI_SetPanelState(D2PANEL_AUTOMAP, 2, 0); break;
-			case 4: QUESTLOG_TogglePanel(0); UI_SetPanelState(D2PANEL_QUEST, gaPanelStates[D2PANEL_QUEST] ? 1 : 0, 0); break;
-			case 5: UI_SetPanelState(D2PANEL_ESCMENU, 2, 0); break;
+			case 3: UI_SetPanelState(D2PANEL_AUTOMAP, 2, 0); if (gaPanelStates[D2PANEL_AUTOMAP]) AUTOMAP_CenterView(1); break;
+			case 4: UI_SetPanelState(D2PANEL_MSGLOG, 2, 0); break;
+			case 5: QUESTLOG_TogglePanel(0); UI_SetPanelState(D2PANEL_QUEST, gaPanelStates[D2PANEL_QUEST] ? 1 : 0, 0); break;
+			case 6: UI_SetPanelState(D2PANEL_PARTY, 2, 0); break;
+			case 7: UI_SetPanelState(D2PANEL_ESCMENU, 2, 0); break;
 			default: break;
 			}
 			return true;
@@ -1956,6 +2079,36 @@ static bool HandleHudBottomBarMouseDown(int32_t mx, int32_t my)
 	if (my < nH - 48)
 	{
 		return false;
+	}
+
+	// Left Active Skill HUD button (135..183, 550..599) -> toggle Left Speedbar
+	if (mx >= nBarBaseX + 135 && mx <= nBarBaseX + 183 && my >= nH - 50)
+	{
+		if (gaPanelStates[D2PANEL_SKILLSELECT] != 0 && g_nSpeedBarSide == 1)
+		{
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+		}
+		else
+		{
+			g_nSpeedBarSide = 1;
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 0, 0);
+		}
+		return true;
+	}
+
+	// Right Active Skill HUD button (636..684, 550..599) -> toggle Right Speedbar
+	if (mx >= nBarBaseX + 636 && mx <= nBarBaseX + 684 && my >= nH - 50)
+	{
+		if (gaPanelStates[D2PANEL_SKILLSELECT] != 0 && g_nSpeedBarSide == 2)
+		{
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+		}
+		else
+		{
+			g_nSpeedBarSide = 2;
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 0, 0);
+		}
+		return true;
 	}
 
 	// Run/Walk button on bottom bar
@@ -2048,6 +2201,12 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		{
 			return 0;
 		}
+		if (bLeftClick && gaPanelStates[D2PANEL_SKILLSELECT] != 0)
+		{
+			D2Client_HandleSpeedBarClick(mx, my, g_nSpeedBarSide == 1 ? 1 : 0);
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+			return 0;
+		}
 		if (!bLeftClick && mx >= 418 && mx <= 550 && (my >= 552 || gaPanelStates[D2PANEL_BELT]))
 		{
 			PANEL_OnRButtonDown(reinterpret_cast<D2MsgStrc*>(&tMsg));
@@ -2136,21 +2295,81 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			}
 			if (gaPanelStates[D2PANEL_SKILLTREE])
 			{
-				if (mx >= 708 && my >= 88 && my < 430)
+				if (mx >= 632 && mx <= 720 && my >= 166 && my <= 490)
 				{
-					g_nSkillTreeTab_6FBA79FC = std::max<int32_t>(0, std::min<int32_t>(2, (my - 88) / 110));
+					if (my < 274)
+					{
+						g_nSkillTreeTab_6FBA79FC = 2;
+					}
+					else if (my < 382)
+					{
+						g_nSkillTreeTab_6FBA79FC = 1;
+					}
+					else
+					{
+						g_nSkillTreeTab_6FBA79FC = 0;
+					}
 				}
-				else if (mx >= 426 && mx <= 462 && my >= 442 && my <= 478)
+				else if (((mx >= 426 && mx <= 462) || (mx >= 592 && mx <= 628)) && my >= 442 && my <= 482)
 				{
 					UI_SetPanelState(D2PANEL_SKILLTREE, 1, 0);
+				}
+				else if (bLeftClick && gpPlayerUnit && sgptDataTables && sgptDataTables->pSkillsTxt && sgptDataTables->pSkillDescTxt)
+				{
+					const int32_t aSkillColX[3] = { 415, 484, 553 };
+					const int32_t aSkillRowY[6] = { 74, 142, 210, 278, 346, 414 };
+					const int32_t nClassId = static_cast<int32_t>(gpPlayerUnit->dwClassId);
+					const int32_t nPage = std::max<int32_t>(0, std::min<int32_t>(2, g_nSkillTreeTab_6FBA79FC)) + 1;
+					for (int32_t sId = 0; sId < sgptDataTables->nSkillsTxtRecordCount && sId < 512; ++sId)
+					{
+						const D2SkillsTxt& sk = sgptDataTables->pSkillsTxt[sId];
+						if (sk.nCharClass != nClassId || sk.wSkillDesc < 0 || sk.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount)
+						{
+							continue;
+						}
+						const D2SkillDescTxt& sd = sgptDataTables->pSkillDescTxt[sk.wSkillDesc];
+						if (sd.nSkillPage != nPage || sd.nSkillColumn < 1 || sd.nSkillColumn > 3 || sd.nSkillRow < 1 || sd.nSkillRow > 6)
+						{
+							continue;
+						}
+						const int32_t nIconX = aSkillColX[sd.nSkillColumn - 1];
+						const int32_t nIconY = aSkillRowY[sd.nSkillRow - 1];
+						if (mx >= nIconX && mx < nIconX + 48 && my >= nIconY && my < nIconY + 48)
+						{
+							if (STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_SKILLPTS, 0) > 0)
+							{
+								MSG_SendByteWord(0x3Bu, static_cast<uint16_t>(sId));
+							}
+							break;
+						}
+					}
 				}
 				return 0;
 			}
 		}
 
-		// World viewport click -> unit interaction or collision-avoiding BFS walk / cast
+		// World viewport click -> drop cursor item, pick up ground label, unit interaction, or BFS walk / cast
 		if (bLeftClick)
 		{
+			if (gpPlayerUnit && gpPlayerUnit->pInventory)
+			{
+				if (D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(gpPlayerUnit->pInventory))
+				{
+					MSG_SendByteDword(0x17u, pCursorItem->dwUnitId);
+					return 0;
+				}
+			}
+			if (gaPanelStates[D2PANEL_SHOWITEMS] != 0)
+			{
+				if (D2UnitStrc* pLabelItem = SHOWITEMS_HitTestGroundItemLabel(mx, my))
+				{
+					g_vInteractivePath.clear();
+					g_uInteractivePathIdx = 0;
+					SendWalkOrRunToUnit(UNIT_ITEM, pLabelItem->dwUnitId);
+					SendPickupGroundItem(pLabelItem->dwUnitId, false);
+					return 0;
+				}
+			}
 			gbMouseLeftHeld = true;
 			if (D2UnitStrc* pHovered = FindHoveredWorldUnitAtScreenPos(mx, my))
 			{
@@ -2308,11 +2527,15 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			gszChatInputBuf[0] = '\0';
 			return 0;
 		case VK_ESCAPE:
-			if (gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP])
+			if (gaPanelStates[D2PANEL_ESCMENU] && g_bEscOptionsSubmenu != 0)
+			{
+				g_bEscOptionsSubmenu = 0;
+			}
+			else if (gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP])
 			{
 				CloseActiveNpcSession();
 			}
-			else if (gnViewportShiftMode != 0 || gaPanelStates[D2PANEL_PARTY] || gaPanelStates[D2PANEL_BELT])
+			else if (gnViewportShiftMode != 0 || gaPanelStates[D2PANEL_PARTY] || gaPanelStates[D2PANEL_BELT] || gaPanelStates[D2PANEL_SKILLSELECT])
 			{
 				for (int32_t p = 1; p < D2PANEL_COUNT; ++p)
 				{
@@ -2324,10 +2547,35 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			}
 			else
 			{
+				g_bEscOptionsSubmenu = 0;
 				UI_SetPanelState(D2PANEL_ESCMENU, 2, 0);
 			}
 			SyncReconstructedClientGlobals();
 			return 0;
+		case 'S':
+			g_nSpeedBarSide = 2;
+			UI_SetPanelState(D2PANEL_SKILLSELECT, 2, 0);
+			return 0;
+		case VK_F1:
+		case VK_F2:
+		case VK_F3:
+		case VK_F4:
+		case VK_F5:
+		case VK_F6:
+		case VK_F7:
+		case VK_F8:
+		{
+			const int32_t nSlot = static_cast<int32_t>(wParam - VK_F1);
+			if (gaPanelStates[D2PANEL_SKILLSELECT] != 0)
+			{
+				D2Client_BindSkillHotkeySlot(nSlot, 1, g_nSpeedBarSide == 1 ? 1 : 0);
+			}
+			else
+			{
+				D2Client_SelectHotkeyedSkill(nSlot);
+			}
+			return 0;
+		}
 		case 'I':
 		case 'B':
 			UI_SetPanelState(D2PANEL_INVENTORY, 2, 0);
@@ -2536,6 +2784,13 @@ static void InitInGameAssets()
 	g_nInteractingNpcClassId = 0;
 	g_pTradeNpcUnit = nullptr;
 	gnCurrentAutomapLayerNo = -1;
+	g_bEscOptionsSubmenu = 0;
+	g_nSpeedBarSide = 2;
+	INV_ClearWaitingForServerCursorSync();
+	for (int32_t i = 0; i < 16; ++i)
+	{
+		g_anSkillHotkeyId[i] = -1;
+	}
 
 	gdwClientPlayerGuid = 0;
 	gnServerSubX = 0;
@@ -2588,8 +2843,15 @@ static void InitInGameAssets()
 		D2UnitStrc* pBootPlr = D2Client_AllocClientPlayerUnit(0x7FFFFFFFu, gnCharClass, nBootSubX, nBootSubY, gszCharName);
 		if (pBootPlr)
 		{
+			if (gbIsExpansion)
+			{
+				pBootPlr->dwFlags |= UNITFLAG_ISEXPANSION;
+				pBootPlr->dwFlagEx |= UNITFLAGEX_ISEXPANSION;
+			}
 			D2Client_SetLocalPlayerUnit(pBootPlr);
 			SeedDefaultPlayerCharStats(pBootPlr, gnCharClass);
+			SyncReconstructedClientGlobals();
+			INV_InitInventoryLayoutRectsAndGrids();
 			GFX_InitUnitCompositeGfx(pBootPlr);
 		}
 	}

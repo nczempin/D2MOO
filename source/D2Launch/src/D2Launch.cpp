@@ -98,8 +98,8 @@ static D2AnimatedImageDescriptor gAnimCharClass[7][5] = {
 	{
 		{ &gpClassNu1[0], nullptr,          DRAWMODE_NORMAL,   2 },
 		{ &gpClassNu2[0], nullptr,          DRAWMODE_NORMAL,   1 },
-		{ &gpClassFw[0],  &gpClassFws[0],   DRAWMODE_MODULATE, 1 },
-		{ &gpClassNu3[0], &gpClassNu3s[0],  DRAWMODE_MODULATE, 1 },
+		{ &gpClassFw[0],  nullptr,          DRAWMODE_NORMAL,   1 },
+		{ &gpClassNu3[0], nullptr,          DRAWMODE_NORMAL,   1 },
 		{ &gpClassBw[0],  nullptr,          DRAWMODE_NORMAL,   1 },
 	},
 	// 1: Sorceress (0x6FA60C70)
@@ -387,13 +387,11 @@ void __fastcall D2LAUNCH_LoadSprites(BOOL bReload)
 	gpLogoFireRight = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\D2LogoFireRight", 0);
 	gpCampfire = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\fire", 0);
 
-	// 0: Amazon
+	// 0: Amazon (retail D2Launch.dll only loads amnu1, amnu2, amnu3, amfw, ambw)
 	gpClassNu1[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu1", 0);
 	gpClassNu2[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu2", 0);
 	gpClassNu3[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu3", 0);
-	gpClassNu3s[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amnu3s", 0);
 	gpClassFw[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amfw", 0);
-	gpClassFws[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\amfws", 0);
 	gpClassBw[0] = ARCHIVE_LoadCellFile("DATA\\GLOBAL\\UI\\FrontEnd\\amazon\\ambw", 0);
 
 	// 1: Sorceress
@@ -1141,13 +1139,16 @@ void __stdcall D2LAUNCH_EnterMainMenu(int32_t nUnused)
 		D2Win_10025_CONTROL_ToggleFirstFlag(pMultiBtn, 0);
 	}
 
-	// Client Mode Toggle: TS Web Client vs. Native C++ Client
 	SyncClientModeEnv();
-	tBtn.nY = 435;
-	tBtn.nStringId = 0;
-	tBtn.field_20 = D2LAUNCH_OnToggleClientMode;
-	gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tBtn)));
-	RefreshClientModeButtonText();
+	char szDevToggle[16] = {};
+	if (GetEnvironmentVariableA("D2MOO_DEV_CLIENT_TOGGLE", szDevToggle, sizeof(szDevToggle)) > 0 && szDevToggle[0] == '1')
+	{
+		tBtn.nY = 435;
+		tBtn.nStringId = 0;
+		tBtn.field_20 = D2LAUNCH_OnToggleClientMode;
+		gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tBtn)));
+		RefreshClientModeButtonText();
+	}
 
 	// Exit Diablo II (5109)
 	tBtn.nY = 500;
@@ -1269,14 +1270,6 @@ static void EnumerateSavedCharacters()
 
 	D2LaunchCharNodeStrc* pTail = nullptr;
 	EnumerateSavedCharactersFromDir(szSaveDir, &pTail);
-
-	static const char* const kFallbackDirs[] = { "..\\..\\Debug\\save\\", "..\\..\\Release\\save\\" };
-	for (const char* szRel : kFallbackDirs)
-	{
-		char szAltDir[MAX_PATH * 2] = {};
-		std::snprintf(szAltDir, sizeof(szAltDir), "%s%s", szSaveDir, szRel);
-		EnumerateSavedCharactersFromDir(szAltDir, &pTail);
-	}
 }
 
 // 1.12a: 0x6FA4CF70 (Populate character slot text & selection visuals)
@@ -1440,7 +1433,7 @@ BOOL __stdcall D2LAUNCH_EnterCharSelect()
 		D2WinControlInitStrc tTitle = {};
 		tTitle.nType = D2WIN_TEXTBOX;
 		tTitle.nX = 85;
-		tTitle.nY = 78;
+		tTitle.nY = 68;
 		tTitle.nWidth = 466;
 		tTitle.nHeight = 42;
 		tTitle.field_14 = 7;
@@ -1491,7 +1484,7 @@ BOOL __stdcall D2LAUNCH_EnterCharSelect()
 		tBox.nX = nCol ? 309 : 37;
 		tBox.nY = 178 + nRow * 93;
 		tBox.nWidth = 200;
-		tBox.nHeight = 92;
+		tBox.nHeight = 82;
 		tBox.field_14 = 0x4C;
 		tBox.nStringId = 3;
 		tBox.field_20 = gapfnCharSlotClick[i];
@@ -1587,19 +1580,22 @@ BOOL __stdcall D2LAUNCH_EnterCharSelect()
 		tMedBtn.field_20 = D2LAUNCH_OnCharSelectOk;
 		gpBtnCharSelectOk = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tMedBtn)));
 
-		// Client Mode Toggle on Character Select (centered between EXIT and OK)
 		SyncClientModeEnv();
-		D2WinControlInitStrc tToggleBtn = {};
-		tToggleBtn.nType = D2WIN_BUTTON;
-		tToggleBtn.nX = 216;
-		tToggleBtn.nY = 572;
-		tToggleBtn.nWidth = 272;
-		tToggleBtn.nHeight = 35;
-		tToggleBtn.ppCellFile = &gpBtnWideBlank;
-		tToggleBtn.nStringId = 0;
-		tToggleBtn.field_20 = D2LAUNCH_OnToggleClientMode;
-		gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tToggleBtn)));
-		RefreshClientModeButtonText();
+		char szDevToggle[16] = {};
+		if (GetEnvironmentVariableA("D2MOO_DEV_CLIENT_TOGGLE", szDevToggle, sizeof(szDevToggle)) > 0 && szDevToggle[0] == '1')
+		{
+			D2WinControlInitStrc tToggleBtn = {};
+			tToggleBtn.nType = D2WIN_BUTTON;
+			tToggleBtn.nX = 216;
+			tToggleBtn.nY = 572;
+			tToggleBtn.nWidth = 272;
+			tToggleBtn.nHeight = 35;
+			tToggleBtn.ppCellFile = &gpBtnWideBlank;
+			tToggleBtn.nStringId = 0;
+			tToggleBtn.field_20 = D2LAUNCH_OnToggleClientMode;
+			gpBtnClientModeToggle = reinterpret_cast<D2WinButtonStrc*>(RegisterControl(CONTROL_Create(&tToggleBtn)));
+			RefreshClientModeButtonText();
+		}
 	}
 
 	RefreshCharSelectUI();

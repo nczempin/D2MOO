@@ -1219,12 +1219,12 @@ void __stdcall CTRLPNL_RenderLifeManaTooltips()
     char szOrb[64] = {};
     D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
 
-    if ((gnMouseX >= 15 && gnMouseX <= 105 && gnMouseY >= nH - 95) || nMaxHp > 0)
+    if (gnMouseX >= 15 && gnMouseX <= 105 && gnMouseY >= nH - 95)
     {
         snprintf(szOrb, sizeof(szOrb), "Life: %d / %d", (nCurHp > 0) ? nCurHp : 0, (nMaxHp > nCurHp) ? nMaxHp : nCurHp);
         GAME_DrawAsciiText(szOrb, 54, nH - 94, 0, TRUE);
     }
-    if ((gnMouseX >= nW - 105 && gnMouseX <= nW - 15 && gnMouseY >= nH - 95) || nMaxMana > 0)
+    if (gnMouseX >= nW - 105 && gnMouseX <= nW - 15 && gnMouseY >= nH - 95)
     {
         snprintf(szOrb, sizeof(szOrb), "Mana: %d / %d", (nCurMana > 0) ? nCurMana : 0, (nMaxMana > nCurMana) ? nMaxMana : nCurMana);
         GAME_DrawAsciiText(szOrb, nW - 54, nH - 94, 0, TRUE);

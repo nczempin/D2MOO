@@ -472,105 +472,85 @@ int32_t __fastcall SHOWITEMS_ResolveLabelOverlap(
     return 1;
 }
 
+extern D2UnitStrc* gapServerSideUnitHashTables[6][128];
+extern int32_t gnMouseX;
+extern int32_t gnMouseY;
+extern int32_t __fastcall UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX, int32_t* pOutScreenY);
+
+D2UnitStrc* __fastcall SHOWITEMS_HitTestGroundItemLabel(int32_t nClickX, int32_t nClickY)
+{
+    for (int32_t i = 0; i < g_nGroundItemLabelCount; ++i)
+    {
+        const D2GroundItemLabelStrc& rLabel = g_aGroundItemLabels[i];
+        if (rLabel.pItem != nullptr &&
+            nClickX >= rLabel.nLeft && nClickX <= rLabel.nRight &&
+            nClickY >= rLabel.nTop  && nClickY <= (rLabel.nBottom + 4))
+        {
+            return rLabel.pItem;
+        }
+    }
+    return nullptr;
+}
+
 // 1.12a: 0x6FB27350 (__stdcall / void)
 // Main entry point for `ALT` ground item label layout, hit-testing, and rendering.
 void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
 {
-    const BOOL bPerspective = D2GFX_CheckPerspective();
-    if (gpClientPlayer == nullptr)
-    {
-        return;
-    }
-
-    D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(gpClientPlayer);
-    if (pPlayerRoom == nullptr)
+    g_nGroundItemLabelCount = 0;
+    if (gpClientPlayer == nullptr || !gapServerSideUnitHashTables[UNIT_ITEM])
     {
         return;
     }
 
     D2UnitStrc* pPrevSelectedUnit = SELECT_GetSelectedUnit();
-    const int32_t nMouseX = gnMouseScreenX;
-    const int32_t nMouseY = gnMouseScreenY;
-
-    D2ActiveRoomStrc** ppAdjacentRooms = nullptr;
-    int32_t nNumRooms = 0;
-    DUNGEON_GetAdjacentRoomsListFromRoom(pPlayerRoom, &ppAdjacentRooms, &nNumRooms);
-
+    const int32_t nMouseX = gnMouseX;
+    const int32_t nMouseY = gnMouseY;
     const uint8_t nHighlightBackColor = D2Win_10034_MixRGB(0x00, 0x40, 0x80);
-
-    g_nGroundItemLabelCount = 0;
     int32_t bHoveredAnyLabel = 0;
 
-    for (int32_t nRoomIdx = 0; nRoomIdx < nNumRooms; ++nRoomIdx)
-    {
-        D2ActiveRoomStrc* pRoom = ppAdjacentRooms[nRoomIdx];
-        if (pRoom == nullptr)
-        {
-            continue;
-        }
+    D2Win_10127_SetFont(D2FONT_FONT16);
 
-        for (D2UnitStrc* pUnit = pRoom->pUnitFirst; pUnit != nullptr; pUnit = pUnit->pRoomNext)
+    for (int32_t nBucket = 0; nBucket < 128; ++nBucket)
+    {
+        for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[UNIT_ITEM][nBucket]; pUnit != nullptr; pUnit = pUnit->pListNext)
         {
-            if ((pUnit->dwFlags & UNITFLAG_SELECTABLE) == 0)
+            if (pUnit->dwUnitType != UNIT_ITEM)
             {
                 continue;
             }
-            if (pUnit->dwUnitType != UNIT_ITEM)
+            if (pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING)
             {
                 continue;
             }
             if (g_nGroundItemLabelCount >= 32)
             {
+                break;
+            }
+
+            int32_t nScreenX = 0;
+            int32_t nScreenY = 0;
+            if (!UI_WorldUnitToScreen(pUnit, &nScreenX, &nScreenY))
+            {
                 continue;
             }
+            nScreenY -= 12;
 
             D2GroundItemLabelStrc* pLabel = &g_aGroundItemLabels[g_nGroundItemLabelCount];
             pLabel->pItem = pUnit;
 
-            int32_t nScreenX = 0;
-            int32_t nScreenY = 0;
-
-            if (bPerspective)
-            {
-                const int32_t nPrecX = UNITS_GetPrecisionX(pUnit);
-                const int32_t nCoordX = UNITS_GetClientCoordX(pUnit);
-                if (!SCALE_CheckPerspectivePosition(nPrecX, nCoordX))
-                {
-                    continue;
-                }
-                SCALE_AdjustPerspectivePosition(nPrecX, nCoordX, 0, &nScreenX, &nScreenY);
-
-                if (gnViewportShiftMode == 1)
-                {
-                    nScreenX -= gnScreenWidth / 4;
-                }
-                else if (gnViewportShiftMode == 2)
-                {
-                    nScreenX += gnScreenWidth / 4;
-                }
-            }
-            else
-            {
-                const int32_t nViewBaseX = gnViewportAnchorX - gnViewportShiftOffsetX;
-                const int32_t nPrecY = UNITS_GetPrecisionY(pUnit);
-                const int32_t nViewBaseY = gnViewportAnchorY - 8;
-                nScreenX = nPrecY - nViewBaseX;
-                nScreenY = UNITS_GetClientCoordY(pUnit) + (-16 - nViewBaseY);
-            }
-
             // Compute horizontal viewport bounds based on open left/right panels
-            int32_t nMinX = 0;
-            int32_t nMaxX = gnScreenWidth;
+            int32_t nMinX = 8;
+            int32_t nMaxX = gnScreenWidth - 8;
             if (gnViewportShiftMode == 1)
             {
-                nMaxX = (gnScreenWidth / 2) - 32;
+                nMaxX = (gnScreenWidth / 2) - 8;
             }
             else if (gnViewportShiftMode == 2)
             {
-                nMinX = gnScreenWidth / 2;
+                nMinX = (gnScreenWidth / 2) + 8;
             }
 
-            if (nScreenX < nMinX || nScreenX > nMaxX || nScreenY < -8 || nScreenY > (gnScreenHeight - 16))
+            if (nScreenX < nMinX || nScreenX > nMaxX || nScreenY < 16 || nScreenY > (gnScreenHeight - 52))
             {
                 continue;
             }
@@ -578,16 +558,34 @@ void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
             // Format localized item label string
             pLabel->wszText[0] = 0;
             ITEM_BuildGroundLabelText(pUnit, pLabel->wszText, 256);
+            if (pLabel->wszText[0] == 0)
+            {
+                continue;
+            }
 
             int32_t nTextWidth = 0;
             int32_t nTextHeight = 0;
             D2Win_10131_GetTextDimensions(pLabel->wszText, &nTextWidth, &nTextHeight);
+            if (nTextHeight < 14)
+            {
+                nTextHeight = 16;
+            }
 
-            const int32_t nBoxWidth = nTextWidth + 8;
+            const int32_t nBoxWidth = nTextWidth + 10;
             int32_t nBoxLeft   = nScreenX - (nBoxWidth >> 1);
             int32_t nBoxRight  = nBoxLeft + nBoxWidth;
             int32_t nBoxBottom = nScreenY;
-            int32_t nBoxTop    = (nScreenY - nTextHeight) + 4;
+            int32_t nBoxTop    = nScreenY - nTextHeight - 2;
+            if (nBoxLeft < nMinX)
+            {
+                nBoxLeft = nMinX;
+                nBoxRight = nBoxLeft + nBoxWidth;
+            }
+            if (nBoxRight > nMaxX)
+            {
+                nBoxRight = nMaxX;
+                nBoxLeft = nBoxRight - nBoxWidth;
+            }
 
             // Up to 12 passes of AABB collision avoidance
             int32_t bPlaced = 0;
@@ -636,9 +634,6 @@ void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
                     pLabel->nBackPalette = nHighlightBackColor;
                     pLabel->nTransLvl    = 5;
                     pLabel->nTextColor   = 0;
-                    D2Win_10130_DrawFramedTextEx(nullptr, 0, 0, 0, 0, 0);
-                    gnTooltipUnitGUID = 0;
-                    gnTooltipUnitType = 0;
                     bHoveredAnyLabel = 1;
                     ++g_nGroundItemLabelCount;
                     continue;
@@ -647,7 +642,7 @@ void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
 
             // Default (non-hovered) ground item label styling
             pLabel->nBackPalette = 0;
-            pLabel->nTransLvl    = 1;
+            pLabel->nTransLvl    = 2;
 
             int32_t nTextColor = 0; // White
             switch (ITEMS_GetItemQuality(pUnit))
@@ -696,20 +691,15 @@ void __stdcall SHOWITEMS_DrawGroundItemLabels(void)
     for (int32_t i = 0; i < g_nGroundItemLabelCount; ++i)
     {
         const D2GroundItemLabelStrc& rLabel = g_aGroundItemLabels[i];
-        D2Win_10132(
+        D2GFX_DrawBox(rLabel.nLeft, rLabel.nTop, rLabel.nRight, rLabel.nBottom + 2, rLabel.nBackPalette, (DrawMode)rLabel.nTransLvl);
+        RECT rcFrame = { rLabel.nLeft, rLabel.nTop, rLabel.nRight, rLabel.nBottom + 2 };
+        D2GFX_UtilRect(&rcFrame, rLabel.nBackPalette ? 0x62 : 0x10);
+        D2Win_10117_DrawText(
             rLabel.wszText,
-            rLabel.nLeft,
-            rLabel.nBottom,
-            rLabel.nBackPalette,
-            rLabel.nTransLvl,
-            rLabel.nTextColor);
-    }
-
-    if (!bHoveredAnyLabel)
-    {
-        gnTooltipUnitGUID = 0;
-        gnTooltipUnitType = 0;
-        D2Win_10130_DrawFramedTextEx(nullptr, 0, 0, 0, 0, 0);
+            rLabel.nLeft + 5,
+            rLabel.nBottom - 1,
+            rLabel.nTextColor,
+            0);
     }
 }
 

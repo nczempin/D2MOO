@@ -522,7 +522,7 @@ void __stdcall INV_DrawEmptyBodyLocSlotBackgrounds(D2InventoryStrc* pInventory)
             {
                 tGfxData.pCellFile = pSlot->pCell;
                 tGfxData.nDirection = 0;
-                tGfxData.nFrame = (nBodyLoc == BODYLOC_HEAD || nBodyLoc == BODYLOC_NECK) ? 1 : 0;
+                tGfxData.nFrame = (nBodyLoc == BODYLOC_HEAD || nBodyLoc == BODYLOC_RRIN || nBodyLoc == BODYLOC_LRIN) ? 1 : 0;
                 TEXTURE_CelDraw(&tGfxData, pSlot->nLeft, pSlot->nBottom, -1, DRAW_MODE_NORMAL, 0);
             }
         }
@@ -2097,7 +2097,12 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
 
     // 1. Player Inventory & Paperdoll (InvPage 0)
     int32_t nInvRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_INVENTORY, g_bExpansionMode);
-    DATATBLS_GetInventoryRect(nInvRecId, bHigherRes, (D2InvRectStrc*)&g_rInvPanelRect);
+    D2InvRectStrc tInvRect = {};
+    DATATBLS_GetInventoryRect(nInvRecId, bHigherRes, &tInvRect);
+    g_rInvPanelRect.left   = tInvRect.nLeft;
+    g_rInvPanelRect.top    = tInvRect.nTop;
+    g_rInvPanelRect.right  = tInvRect.nRight;
+    g_rInvPanelRect.bottom = tInvRect.nBottom;
 
     D2InventoryGridInfoStrc tGridInfo = {};
     DATATBLS_GetInventoryGridInfo(nInvRecId, bHigherRes, &tGridInfo);
@@ -2135,7 +2140,12 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
 
     // 2. Stash (InvPage 4)
     int32_t nStashRecId = UNITS_GetInventoryRecordId(g_pPlayerUnit, INVPAGE_STASH, g_bExpansionMode);
-    DATATBLS_GetInventoryRect(nStashRecId, bHigherRes, (D2InvRectStrc*)&g_rStashPanelRect);
+    D2InvRectStrc tStashRect = {};
+    DATATBLS_GetInventoryRect(nStashRecId, bHigherRes, &tStashRect);
+    g_rStashPanelRect.left   = tStashRect.nLeft;
+    g_rStashPanelRect.top    = tStashRect.nTop;
+    g_rStashPanelRect.right  = tStashRect.nRight;
+    g_rStashPanelRect.bottom = tStashRect.nBottom;
     DATATBLS_GetInventoryGridInfo(nStashRecId, bHigherRes, &tGridInfo);
     g_tStashGridLayout.nGridX         = tGridInfo.nGridX;
     g_tStashGridLayout.nGridY         = tGridInfo.nGridY;
@@ -4429,7 +4439,118 @@ void __stdcall INV_RenderAllInventoryPanels()
         }
     }
 
-    // 4. Render Hovered Item Tooltip on top of all panels
+    // 4. Populate Hovered Item State across active grids & paperdoll slots, then render tooltip
+    if (g_pPlayerUnit && g_pPlayerUnit->pInventory && !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
+    {
+        if (g_bInvPanelOpen)
+        {
+            if (g_nMouseX >= g_tInvGridLayout.nLeft && g_nMouseX < g_tInvGridLayout.nRight &&
+                g_nMouseY >= g_tInvGridLayout.nTop  && g_nMouseY < g_tInvGridLayout.nBottom)
+            {
+                INV_UpdateHoveredGridItem(
+                    g_pPlayerUnit,
+                    g_pPlayerUnit->pInventory,
+                    g_nMouseX,
+                    g_nMouseY,
+                    &g_tInvGridLayout,
+                    INVPAGE_INVENTORY);
+            }
+            else
+            {
+                for (int32_t nBodyLoc = 1; nBodyLoc <= 10; ++nBodyLoc)
+                {
+                    const D2InvBodyLocInfoStrc* pSlot = &g_atBodyLocRects[nBodyLoc];
+                    if (g_nMouseX >= pSlot->nLeft && g_nMouseX <= pSlot->nRight &&
+                        g_nMouseY >= pSlot->nTop  && g_nMouseY <= pSlot->nBottom)
+                    {
+                        D2UnitStrc* pEquipped = INVENTORY_GetItemFromBodyLoc(g_pPlayerUnit->pInventory, nBodyLoc);
+                        if (!pEquipped && (nBodyLoc == BODYLOC_LARM || nBodyLoc == BODYLOC_RARM))
+                        {
+                            int32_t nOtherArm = (nBodyLoc == BODYLOC_LARM) ? BODYLOC_RARM : BODYLOC_LARM;
+                            D2UnitStrc* pOther = INVENTORY_GetItemFromBodyLoc(g_pPlayerUnit->pInventory, nOtherArm);
+                            if (pOther && (ITEMS_CheckWeaponIfTwoHanded(pOther) || ITEMS_Is1Or2Handed(g_pPlayerUnit, pOther) == 2))
+                            {
+                                pEquipped = pOther;
+                            }
+                        }
+                        if (pEquipped)
+                        {
+                            g_pHoveredItemUnit = pEquipped;
+                            g_bHoveredItemValid = TRUE;
+                            g_nHoveredItemTooltipX = (pSlot->nLeft + pSlot->nRight) / 2;
+                            g_nHoveredItemTooltipTop = pSlot->nTop;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!g_pHoveredItemUnit)
+        {
+            if (g_nInvPanelMode == 11)
+            {
+                if (g_nMouseX >= g_tStashGridLayout.nLeft && g_nMouseX < g_tStashGridLayout.nRight &&
+                    g_nMouseY >= g_tStashGridLayout.nTop  && g_nMouseY < g_tStashGridLayout.nBottom)
+                {
+                    INV_UpdateHoveredGridItem(
+                        g_pPlayerUnit,
+                        g_pPlayerUnit->pInventory,
+                        g_nMouseX,
+                        g_nMouseY,
+                        &g_tStashGridLayout,
+                        INVPAGE_STASH);
+                }
+            }
+            else if (g_nInvPanelMode == 12 || g_nInvPanelMode == 13)
+            {
+                const D2InvGridLayoutStrc* pCubeGrid = g_bExpansionMode ? &g_tCubeLoDGridLayout : &g_tCubeClassicGridLayout;
+                if (g_nMouseX >= pCubeGrid->nLeft && g_nMouseX < pCubeGrid->nRight &&
+                    g_nMouseY >= pCubeGrid->nTop  && g_nMouseY < pCubeGrid->nBottom)
+                {
+                    INV_UpdateHoveredGridItem(
+                        g_pPlayerUnit,
+                        g_pPlayerUnit->pInventory,
+                        g_nMouseX,
+                        g_nMouseY,
+                        pCubeGrid,
+                        INVPAGE_CUBE);
+                }
+            }
+            else if (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9)
+            {
+                if (g_nMouseX >= g_rNpcShopGridRect.left && g_nMouseX <= g_rNpcShopGridRect.right &&
+                    g_nMouseY >= g_rNpcShopGridRect.top  && g_nMouseY <= g_rNpcShopGridRect.bottom)
+                {
+                    D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+                    if (pNpc && pNpc->pInventory)
+                    {
+                        for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(pNpc->pInventory); pIt; pIt = INVENTORY_GetNextItem(pIt))
+                        {
+                            if (!INVENTORY_UnitIsItem(pIt) || ITEMS_GetInvPage(pIt) != g_nSelectedShopTab)
+                            {
+                                continue;
+                            }
+                            uint8_t w = 1, h = 1;
+                            ITEMS_GetDimensions(pIt, &w, &h, __FILE__, __LINE__);
+                            int32_t ix = g_rNpcShopGridRect.left + UNITS_GetXPosition(pIt) * 29;
+                            int32_t iy = g_rNpcShopGridRect.top  + UNITS_GetYPosition(pIt) * 29;
+                            if (g_nMouseX >= ix && g_nMouseX < ix + (int32_t)w * 29 &&
+                                g_nMouseY >= iy && g_nMouseY < iy + (int32_t)h * 29)
+                            {
+                                g_pHoveredItemUnit = pIt;
+                                g_bHoveredItemValid = TRUE;
+                                g_nHoveredItemTooltipX = ix + ((int32_t)w * 29) / 2;
+                                g_nHoveredItemTooltipTop = iy;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (g_pHoveredItemUnit)
     {
         INV_RenderHoveredItemTooltip(g_pPlayerUnit, (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9));
