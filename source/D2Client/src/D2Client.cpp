@@ -115,6 +115,7 @@ void __fastcall D2Client_SetLocalPlayerUnit(D2UnitStrc* pPlayerUnit);
 D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
 D2UnitStrc* __fastcall D2Client_FindClientSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
 D2UnitStrc* __fastcall D2Client_RegisterUnitInHashTable(D2UnitStrc* pUnit);
+const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
 void __fastcall D2Client_PacketHandler_ItemAction9C(const uint8_t* pPacket);
 void __fastcall D2Client_PacketHandler_ItemAction9D(const uint8_t* pPacket);
 
@@ -496,7 +497,7 @@ static void SpawnClientRoomPresetUnits(D2ActiveRoomStrc* pRoom)
 				pPreset->nMode,
 				0,
 				0);
-			if (pObj)
+			if (pObj && pObj->dwUnitType <= 2)
 			{
 				GFX_InitUnitCompositeGfx(pObj);
 			}
@@ -893,12 +894,38 @@ static D2UnitStrc* FindHoveredWorldUnitAtScreenPos(int32_t nMouseX, int32_t nMou
 		{
 			for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[nType][b]; pUnit != nullptr; pUnit = pUnit->pListNext)
 			{
-				if (nType == UNIT_MONSTER &&
-					(pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH))
+				if (nType == UNIT_MONSTER)
 				{
-					continue;
+					if (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH)
+					{
+						continue;
+					}
+					D2MonStats2Txt* pMon2 = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
+					if (pMon2 && !(pMon2->dwFlags & (MONSTATS2FLAG_ISSEL | MONSTATS2FLAG_ALSEL)))
+					{
+						continue;
+					}
+					const Unicode* pMonName = D2Client_GetNpcDisplayName(pUnit);
+					if (!pMonName || !pMonName[0] || _wcsicmp(reinterpret_cast<const wchar_t*>(pMonName), L"an evil force") == 0)
+					{
+						continue;
+					}
 				}
-				if (nType == UNIT_ITEM &&
+				else if (nType == UNIT_OBJECT)
+				{
+					D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
+					const uint32_t nModeIdx = (pUnit->dwAnimMode < 8) ? pUnit->dwAnimMode : 0;
+					if (!pObjTxt || !pObjTxt->nSelectable[nModeIdx])
+					{
+						continue;
+					}
+					const Unicode* pObjName = D2Client_GetNpcDisplayName(pUnit);
+					if (!pObjName || !pObjName[0] || _wcsicmp(reinterpret_cast<const wchar_t*>(pObjName), L"an evil force") == 0)
+					{
+						continue;
+					}
+				}
+				else if (nType == UNIT_ITEM &&
 					pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING)
 				{
 					continue;
@@ -1401,7 +1428,7 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 				UNITS_ChangeAnimMode(pObj, nMode);
 				D2Client_TeleportUnitToCoordinates(pObj, nSubX, nSubY, 0);
 			}
-			if (pObj)
+			if (pObj && pObj->dwUnitType <= 2)
 			{
 				GFX_InitUnitCompositeGfx(pObj);
 			}
@@ -1993,6 +2020,8 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 				{
 					gbSoundEnabled = !gbSoundEnabled;
 					SyncReconstructedClientGlobals();
+					D2SOUND_SmpSetMasterVolume(gbSoundEnabled ? 127 : 0);
+					D2SOUND_EnableMusic(gbSoundEnabled ? 1 : 0);
 				}
 				else if (i == 1)
 				{
@@ -4586,6 +4615,14 @@ int32_t __fastcall D2Client_RunGameLoop(D2ConfigStrc* pCfg)
 	(void)STRTABLE_GetLanguage();
 	hArchive = D2Win_GetArchive();
 	DATATBLS_LoadAllTxts(hArchive, 0, 0);
+
+	if (const char* szCmdLine = GetCommandLineA())
+	{
+		if (std::strstr(szCmdLine, "-ns") != nullptr || std::strstr(szCmdLine, "-NS") != nullptr)
+		{
+			gbSoundEnabled = false;
+		}
+	}
 
 	char szHeadlessEnv[16] = {};
 	char szUseNativeEnv[16] = {};

@@ -3588,8 +3588,16 @@ uint16_t __stdcall ITEMS_GetWeaponClassId(D2UnitStrc* pItem)
 	D2ItemsTxt* pItemsTxtRecord = NULL;
 	int nCounter = 0;
 
-	pItemsTxtRecord = DATATBLS_GetItemsTxtRecord(pItem ? pItem->dwClassId : -1);
-	D2_ASSERT(pItemsTxtRecord);
+	if (!pItem)
+	{
+		return WEAPONCLASS_HTH;
+	}
+
+	pItemsTxtRecord = DATATBLS_GetItemsTxtRecord(pItem->dwClassId);
+	if (!pItemsTxtRecord)
+	{
+		return WEAPONCLASS_HTH;
+	}
 
 	while (pItemsTxtRecord->dwWeapClass != stru_6FDE3C08[nCounter].nWeaponClassCode)
 	{

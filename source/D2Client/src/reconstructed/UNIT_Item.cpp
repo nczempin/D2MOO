@@ -282,11 +282,11 @@ void __fastcall D2Client_UpdateEquippedWeaponClassCache(D2UnitStrc* pItem, uint8
 {
     if (bBodyLoc == BODYLOC_RARM)
     {
-        gdwRightHandWeaponClass = ITEMS_GetWeaponClassId(pItem);
+        gdwRightHandWeaponClass = pItem ? ITEMS_GetWeaponClassId(pItem) : WEAPONCLASS_HTH;
     }
     else if (bBodyLoc == BODYLOC_LARM)
     {
-        gdwLeftHandWeaponClass = ITEMS_GetWeaponClassId(pItem);
+        gdwLeftHandWeaponClass = pItem ? ITEMS_GetWeaponClassId(pItem) : WEAPONCLASS_HTH;
     }
 }
 
@@ -605,25 +605,24 @@ void __fastcall D2Client_ApplySocketedOrEquippedItemStats(D2UnitStrc* pTargetUni
         return;
     }
 
-    if (!ITEMS_CheckItemFlag(pItem, ITEMFLAG_IDENTIFIED, __LINE__, __FILE__))
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_BROKEN, __LINE__, __FILE__))
     {
         return;
     }
 
     ITEMS_UpdateSets(pTargetUnit, pItem, 0, 1);
 
-    int32_t bIsSecondaryWeapon = 0;
-    if (ITEMS_CheckIfSocketableByItemId(pItem->dwClassId))
+    int32_t bIsMainWeapon = 1;
+    if (UNITS_CanDualWield(pTargetUnit) && ITEMS_CheckItemTypeId(pItem, ITEMTYPE_WEAPON))
     {
         D2InventoryStrc* pInv = pTargetUnit->pInventory;
         if (pInv && INVENTORY_GetLeftHandWeapon(pInv) != pItem)
         {
-            bIsSecondaryWeapon = 1;
+            bIsMainWeapon = 0;
         }
     }
 
-    STATLIST_SetStatListFlags(pItemStatList, bIsSecondaryWeapon ? 0x800 : 0);
-    STATLIST_MergeStatLists(pTargetUnit, pItem, TRUE);
+    STATLIST_MergeStatLists(pTargetUnit, pItem, bIsMainWeapon);
     D2Client_ClearItemState54AndUpdateAnimRate(pItem);
 }
 
@@ -935,7 +934,7 @@ static void D2Client_InitItemUnitStatListAndSockets(D2UnitStrc* pItem)
     }
 
     ITEMS_SetItemFlag(pItem, IFLAG_IDENTIFIED, TRUE);
-    STATLIST_AllocStatListEx(pItem, 0, nullptr, nullptr);
+    STATLIST_AllocStatListEx(pItem, 1, nullptr, nullptr);
     D2StatListStrc* pBaseStatList = STATLIST_AllocStatList(pItem->pMemoryPool, 0x40, 0, UNIT_ITEM, pItem->dwUnitId);
     D2Common_10475_PostStatToStatList(pItem, pBaseStatList, TRUE);
 
@@ -1376,10 +1375,6 @@ D2UnitStrc* __fastcall D2Client_CreateItemUnitFromPacket13(const uint8_t* pPacke
     }
 
     pItem = D2Client_RegisterUnitInHashTable(pItem);
-    if (pItem)
-    {
-        GFX_InitUnitCompositeGfx(pItem);
-    }
     return pItem;
 }
 

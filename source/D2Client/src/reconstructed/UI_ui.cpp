@@ -299,10 +299,11 @@ void __fastcall PANEL_DrawSkillIcon(int32_t nSkillId /*ecx*/, int32_t nX /*edx*/
     UI_EnsureSkillIconsLoaded();
 
     int8_t nCharClass = pSkillsTxt->nCharClass;
-    int16_t nIconCel = (int16_t)sgptDataTables->pSkillDescTxt[pSkillsTxt->wSkillDesc].nIconCel;
-    if (nIconCel < 0) {
+    const uint8_t uIconCel = sgptDataTables->pSkillDescTxt[pSkillsTxt->wSkillDesc].nIconCel;
+    if (uIconCel == 0xFF) {
         return;
     }
+    int16_t nIconCel = (int16_t)uIconCel;
 
     D2CellFileStrc* pCellFile = (nCharClass < 0)
         ? g_pGeneralSkillsCel
@@ -1631,10 +1632,29 @@ void __fastcall UI_DrawHoveredUnitLabel()
         const int32_t nType = aTypes[t];
         for (int b = 0; b < 128; ++b) {
             for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[nType][b]; pUnit != nullptr; pUnit = pUnit->pListNext) {
-                if (nType == UNIT_MONSTER && (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH)) {
-                    continue;
-                }
-                if (nType == UNIT_ITEM && pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING) {
+                if (nType == UNIT_MONSTER) {
+                    if (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH) {
+                        continue;
+                    }
+                    D2MonStats2Txt* pMon2 = UNITS_GetMonStats2TxtRecordFromMonsterId(pUnit->dwClassId);
+                    if (pMon2 && !(pMon2->dwFlags & (MONSTATS2FLAG_ISSEL | MONSTATS2FLAG_ALSEL))) {
+                        continue;
+                    }
+                    const Unicode* pMonName = D2Client_GetNpcDisplayName(pUnit);
+                    if (!pMonName || !pMonName[0] || _wcsicmp(reinterpret_cast<const wchar_t*>(pMonName), L"an evil force") == 0) {
+                        continue;
+                    }
+                } else if (nType == UNIT_OBJECT) {
+                    D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pUnit->dwClassId);
+                    const uint32_t nModeIdx = (pUnit->dwAnimMode < 8) ? pUnit->dwAnimMode : 0;
+                    if (!pObjTxt || !pObjTxt->nSelectable[nModeIdx]) {
+                        continue;
+                    }
+                    const Unicode* pObjName = D2Client_GetNpcDisplayName(pUnit);
+                    if (!pObjName || !pObjName[0] || _wcsicmp(reinterpret_cast<const wchar_t*>(pObjName), L"an evil force") == 0) {
+                        continue;
+                    }
+                } else if (nType == UNIT_ITEM && pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING) {
                     continue;
                 }
                 int32_t nSx = 0, nSy = 0;
@@ -1783,6 +1803,9 @@ int32_t __fastcall UI_PreparePanelOpen(int32_t nAction /*eax*/, int32_t nPanelId
     }
     if (gaPanelStates[D2PANEL_ESCMENU] && nPanelId != D2PANEL_ESCMENU) {
         gaPanelStates[D2PANEL_ESCMENU] = 0;
+    }
+    if (gaPanelStates[D2PANEL_NPCMENU] && nPanelId != D2PANEL_NPCMENU && nPanelId != D2PANEL_NPCSHOP) {
+        gaPanelStates[D2PANEL_NPCMENU] = 0;
     }
     if (UI_IsLeftSidePanel(nPanelId)) {
         static const int32_t kLeftPanels[] = {

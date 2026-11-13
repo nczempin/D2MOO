@@ -999,16 +999,25 @@ static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler22_UpdateItemSkill(uint8_t* pPacket)
 {
-    // D2GSPacketSrv22 (12B): [0]=0x22, [1]=nUnitType, [2..5]=dwGUID, [6..7]=wSkillId, [8]=nAmount
+    // D2GSPacketSrv22 (12B): [0]=0x22, [1]=nUnitType, [2]=unk0x02, [3..6]=dwGUID, [7..8]=wSkillId, [9]=nAmount
     const uint8_t  nUnitType  = pPacket[1];
-    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[6]);
-    const uint8_t  nAmount    = pPacket[8];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[3]);
+    const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
+    const uint8_t  nAmount    = pPacket[9];
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr && nUnitType == UNIT_PLAYER)
+    {
+        pUnit = UNIT_GetClientPlayer();
+    }
     if (pUnit != nullptr)
     {
         D2SkillStrc* pSkill = SKILLS_GetHighestLevelSkillFromUnitAndId(pUnit, wSkillId);
+        if (pSkill == nullptr && nAmount > 0)
+        {
+            pSkill = SKILLS_AddSkill(pUnit, wSkillId);
+            SKILLS_AssignSkill(pUnit, wSkillId, 1, FALSE, __FILE__, __LINE__);
+        }
         if (pSkill != nullptr)
         {
             SKILLS_SetQuantity(pSkill, nAmount);

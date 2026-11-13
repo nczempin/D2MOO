@@ -2068,6 +2068,7 @@ void __stdcall INV_DrawGridPlacementHighlight(
     rBox.bottom = rBox.top  + nItemH * pGridLayout->nGridBoxHeight;
 
     D2UnitStrc* pExchangedItem = NULL;
+    unsigned int nHoveredItems = 0;
     int32_t nRecordId = UNITS_GetInventoryRecordId(g_pPlayerUnit, nInvPage, g_bExpansionMode);
     BOOL bCanPlace = INVENTORY_CanItemBePlaced(
         pInventory,
@@ -2076,10 +2077,11 @@ void __stdcall INV_DrawGridPlacementHighlight(
         nCellY,
         nRecordId,
         &pExchangedItem,
-        NULL,
+        &nHoveredItems,
         nInvPage);
 
-    INV_DrawItemHighlightBox(&rBox, bCanPlace ? 2 : 1, DRAW_MODE_TRANS_25);
+    const BOOL bCanPlaceOrSwap = bCanPlace || (nHoveredItems == 1 && pExchangedItem != NULL);
+    INV_DrawItemHighlightBox(&rBox, bCanPlaceOrSwap ? 2 : 1, DRAW_MODE_TRANS_25);
 }
 
 // 1.12a: 0x6FB58B70
@@ -3697,51 +3699,50 @@ BOOL __stdcall INV_HandleInventoryGridClick(
     INV_ScreenToClampedGridCoords(nMouseX, nMouseY, pGridLayout, &nCellX, &nCellY, nItemW, nItemH);
 
     D2UnitStrc* pExchangedItem = NULL;
-    if (INVENTORY_CanItemBePlaced(
+    unsigned int nHoveredItems = 0;
+    const BOOL bCanPlace = INVENTORY_CanItemBePlaced(
             pInventory,
             pCursorItem,
             nCellX,
             nCellY,
             nRecordId,
             &pExchangedItem,
-            NULL,
-            nInvPage))
+            &nHoveredItems,
+            nInvPage);
+    if (bCanPlace && !pExchangedItem)
     {
-        if (!pExchangedItem)
+        // Place cursor item into empty grid cells (C2S 0x18)
+        NET_SendByteAndFourDwords(
+            0x18,
+            pCursorItem->dwUnitId,
+            (uint32_t)nCellX,
+            (uint32_t)nCellY,
+            (uint32_t)nInvPage);
+        ITEMS_LockItemInInventory(pCursorItem);
+        g_bWaitingForServerCursorSync = TRUE;
+        return TRUE;
+    }
+    else if (!bCanPlace && nHoveredItems == 1 && pExchangedItem != NULL)
+    {
+        if (INV_CanSocketItemIntoTarget(pCursorItem, pExchangedItem))
         {
-            // Place cursor item into empty grid cells (C2S 0x18)
-            NET_SendByteAndFourDwords(
-                0x18,
-                pCursorItem->dwUnitId,
-                (uint32_t)nCellX,
-                (uint32_t)nCellY,
-                (uint32_t)nInvPage);
+            // Socket item (C2S 0x28)
+            NET_SendByteAndTwoDwords(0x28, pCursorItem->dwUnitId, pExchangedItem->dwUnitId);
             ITEMS_LockItemInInventory(pCursorItem);
-            g_bWaitingForServerCursorSync = TRUE;
             return TRUE;
         }
-        else
-        {
-            if (INV_CanSocketItemIntoTarget(pCursorItem, pExchangedItem))
-            {
-                // Socket item (C2S 0x28)
-                NET_SendByteAndTwoDwords(0x28, pCursorItem->dwUnitId, pExchangedItem->dwUnitId);
-                ITEMS_LockItemInInventory(pCursorItem);
-                return TRUE;
-            }
 
-            // Swap cursor item with grid item (C2S 0x1F)
-            NET_SendByteAndFourDwords(
-                0x1F,
-                pCursorItem->dwUnitId,
-                pExchangedItem->dwUnitId,
-                (uint32_t)nCellX,
-                (uint32_t)nCellY);
-            ITEMS_LockItemInInventory(pCursorItem);
-            ITEMS_LockItemInInventory(pExchangedItem);
-            g_bWaitingForServerCursorSync = TRUE;
-            return TRUE;
-        }
+        // Swap cursor item with grid item (C2S 0x1F)
+        NET_SendByteAndFourDwords(
+            0x1F,
+            pCursorItem->dwUnitId,
+            pExchangedItem->dwUnitId,
+            (uint32_t)nCellX,
+            (uint32_t)nCellY);
+        ITEMS_LockItemInInventory(pCursorItem);
+        ITEMS_LockItemInInventory(pExchangedItem);
+        g_bWaitingForServerCursorSync = TRUE;
+        return TRUE;
     }
 
     return FALSE;

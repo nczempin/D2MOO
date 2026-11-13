@@ -403,7 +403,7 @@ void __fastcall GFX_UpdateUnitCofForCurrentMode(D2UnitStrc* pUnit);
 // 1.12a: 0x6FB40740
 D2CofRecordStrc* __fastcall GFX_GetUnitActiveCofRecord(D2UnitStrc* pUnit)
 {
-    if (!pUnit) {
+    if (!pUnit || *(uint32_t*)pUnit > 2) {
         return NULL;
     }
     D2UnitGfxDataStrc* pGfxData = *(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54);
@@ -1283,7 +1283,7 @@ D2CofHashNodeStrc* __fastcall GFX_LoadCofNode(const char* szFolder, const char* 
 // Resolves and caches the composite COF record for a unit's mode and weapon class.
 void __fastcall GFX_CacheUnitCof(D2UnitStrc* pUnit, int nMode, int nWeaponClass)
 {
-    if (!pUnit) {
+    if (!pUnit || *(uint32_t*)pUnit > 2) {
         return;
     }
     int nUnitType = *(int*)pUnit;
@@ -1327,8 +1327,8 @@ void __fastcall GFX_CacheUnitCof(D2UnitStrc* pUnit, int nMode, int nWeaponClass)
     } else if (nUnitType == 2) {
         szFolder = "DATA\\GLOBAL\\OBJECTS";
     } else {
-        FOG_DisplayHalt(Fog_10265(1409), "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 559);
-        exit(-1);
+        FOG_FreeClientMemory(pNewLink, "..\\Source\\D2Client\\ENGINE\\Gfx.cpp", 559, 0);
+        return;
     }
 
     pNewLink->pCofNode = GFX_LoadCofNode(szFolder, szToken, szMode, szWeap, bIsPlayer);
@@ -1339,7 +1339,7 @@ void __fastcall GFX_CacheUnitCof(D2UnitStrc* pUnit, int nMode, int nWeaponClass)
 // 1.12a: 0x6FB41A90
 void __fastcall GFX_UpdateUnitCofForCurrentMode(D2UnitStrc* pUnit)
 {
-    if (!pUnit) {
+    if (!pUnit || *(uint32_t*)pUnit > 2) {
         return;
     }
     int nMode = *(int*)((uint8_t*)pUnit + 0x10);
@@ -1481,7 +1481,7 @@ void __fastcall GFX_UpdateMonsterCompositeComponents(D2UnitStrc* pUnit)
 // 1.12a: 0x6FB42000
 void __fastcall GFX_InitUnitCompositeGfx(D2UnitStrc* pUnit)
 {
-    if (!pUnit) {
+    if (!pUnit || *(uint32_t*)pUnit > 2) {
         return;
     }
     if (*(D2UnitGfxDataStrc**)((uint8_t*)pUnit + 0x54) == NULL) {
@@ -1507,7 +1507,7 @@ D2CofRecordStrc* __fastcall GFX_GetUnitFrameInfo(D2UnitStrc* pUnit, int* pOutFra
 {
     *pOutFrameCount = 1;
     *pOutAnimRate = 256;
-    if (!pUnit) {
+    if (!pUnit || *(uint32_t*)pUnit > 2) {
         return NULL;
     }
     D2CofRecordStrc* pCof = GFX_FindUnitCofByMode(pUnit, *(int*)((uint8_t*)pUnit + 0x10), UNITS_GetWeaponClass(pUnit));

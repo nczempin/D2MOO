@@ -1116,6 +1116,16 @@ BOOL __fastcall INVENTORY_PlaceItemInGrid(D2InventoryStrc* pInventory, D2UnitStr
 //D2Common.0x6FD8F600 (#10247)
 BOOL __stdcall INVENTORY_CanItemBePlaced(D2InventoryStrc* pInventory, D2UnitStrc* pItem, int nXPos, int nYPos, int nInventoryRecordId, D2UnitStrc** ppExchangeItem, unsigned int* pHoveredItems, uint8_t nPage)
 {
+	unsigned int nLocalHoveredItems = 0;
+	D2UnitStrc* pLocalExchangeItem = NULL;
+	if (!pHoveredItems)
+	{
+		pHoveredItems = &nLocalHoveredItems;
+	}
+	if (!ppExchangeItem)
+	{
+		ppExchangeItem = &pLocalExchangeItem;
+	}
 	*pHoveredItems = 0;
 
 	if (!INVENTORY_GetPtrIfValid(pInventory) || !INVENTORY_UnitIsItem(pItem) || nPage == uint8_t(-1) || nXPos < 0 || nYPos < 0)

@@ -399,7 +399,7 @@ int __stdcall DATATBLS_MapOldItemIndexToCurrent(int nItemId)
 //D2Common.0x6FD57680 (#10600)
 D2ItemsTxt* __stdcall DATATBLS_GetItemsTxtRecord(int nItemId)
 {
-	if (nItemId < sgptDataTables->pItemDataTables.nItemsTxtRecordCount)
+	if (nItemId >= 0 && nItemId < sgptDataTables->pItemDataTables.nItemsTxtRecordCount)
 	{
 		D2_ASSERT(sgptDataTables->pItemDataTables.pItemsTxt);
 		return &sgptDataTables->pItemDataTables.pItemsTxt[nItemId];

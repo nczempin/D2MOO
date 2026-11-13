@@ -2116,7 +2116,7 @@ static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
 {
     g_nSpeedBarCount_6FBC21C8 = 0;
     g_nSpeedBarHoverIdx_6FBC21CC = -1;
-    if (!gpPlayerUnit || !gpPlayerUnit->pSkills || !sgptDataTables || !sgptDataTables->pSkillsTxt)
+    if (!gpPlayerUnit || !gpPlayerUnit->pSkills || !sgptDataTables || !sgptDataTables->pSkillsTxt || !sgptDataTables->pSkillDescTxt)
         return;
 
     const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
@@ -2125,31 +2125,72 @@ static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
     const int32_t nLeftAnchorX  = 0x74 + (bHigherRes ? 0x13 : 0);
     const int32_t nRightAnchorX = nW - 0xA4 + (bHigherRes ? 0 : 0x13);
 
+    bool bHasAnySummonSkill = false;
+    for (D2SkillStrc* pSk = gpPlayerUnit->pSkills->pFirstSkill; pSk != nullptr; pSk = SKILLS_GetNextSkill(pSk))
+    {
+        const int32_t nSid = SKILLS_GetSkillIdFromSkill(pSk, __FILE__, __LINE__);
+        if (nSid > 0 && nSid < sgptDataTables->nSkillsTxtRecordCount &&
+            sgptDataTables->pSkillsTxt[nSid].wSummon > 0 &&
+            SKILLS_GetSkillLevel(gpPlayerUnit, pSk, 1) > 0)
+        {
+            bHasAnySummonSkill = true;
+            break;
+        }
+    }
+
     int32_t aSkillList[64] = {};
+    int32_t aSkillQty[64] = {};
     int32_t nCount = 0;
+    bool bSeenPool[256] = {};
 
     // Ensure Attack (0) is always selectable
-    aSkillList[nCount++] = 0;
+    aSkillList[nCount] = 0;
+    aSkillQty[nCount] = -1;
+    ++nCount;
 
-    for (D2SkillStrc* pSkill = gpPlayerUnit->pSkills ? gpPlayerUnit->pSkills->pFirstSkill : nullptr;
+    for (D2SkillStrc* pSkill = gpPlayerUnit->pSkills->pFirstSkill;
          pSkill != nullptr && nCount < 64;
          pSkill = SKILLS_GetNextSkill(pSkill))
     {
         const int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
         if (nSkillId <= 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
             continue;
-        if (SKILLS_GetSkillLevel(gpPlayerUnit, pSkill, 1) <= 0)
+        if (nSkillId == 3 && !bHasAnySummonSkill) // Hide Unsummon when player knows no summon skill
             continue;
+
         const D2SkillsTxt& rTxt = sgptDataTables->pSkillsTxt[nSkillId];
         if (rTxt.wSkillDesc < 0 || rTxt.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount)
             continue;
-        if (rTxt.dwAuraFilter != 0 && bLeftSide)
+        const D2SkillDescTxt& rDesc = sgptDataTables->pSkillDescTxt[rTxt.wSkillDesc];
+        if (rDesc.nIconCel == 0xFF)
             continue;
-        // Skip purely passive skills (no icon or passive stat without active mode)
-        if (rTxt.nAnim == 0 && nSkillId > 5 && rTxt.wSrvDoFunc == 0 && rTxt.wCltDoFunc == 0)
+
+        D2UnitGUID nOwnerGUID = D2UnitInvalidGUID;
+        int nInfoSkillId = 0, nInfoLvl = 0, nCharges = 0;
+        SKILLS_GetSkillInfo(pSkill, &nOwnerGUID, &nInfoSkillId, &nInfoLvl, &nCharges);
+        const bool bChargedSkill = (nCharges > 0 && nOwnerGUID != D2UnitInvalidGUID);
+        if (!bChargedSkill && static_cast<int8_t>(rDesc.nListRow) < 0)
+            continue;
+
+        const int32_t nUseState = SKILLS_GetUseState(gpPlayerUnit, pSkill);
+        if (nUseState == SKILLUSTATE_DISABLED ||
+            nUseState == SKILLUSTATE_NOLEVEL ||
+            nUseState == SKILLUSTATE_PASSIVE ||
+            nUseState == SKILLUSTATE_NOQUANTITY)
+        {
+            continue;
+        }
+        if (nUseState == SKILLUSTATE_AURA && bLeftSide)
             continue;
         if (bLeftSide && (rTxt.dwFlags[0] & SKILLSFLAG_LEFTSKILL) == 0 && nSkillId != 2)
             continue;
+
+        if (rDesc.nListPool > 0)
+        {
+            if (bSeenPool[rDesc.nListPool])
+                continue;
+            bSeenPool[rDesc.nListPool] = true;
+        }
 
         bool bDup = false;
         for (int32_t k = 0; k < nCount; ++k)
@@ -2157,7 +2198,11 @@ static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
             if (aSkillList[k] == nSkillId) { bDup = true; break; }
         }
         if (!bDup)
-            aSkillList[nCount++] = nSkillId;
+        {
+            aSkillList[nCount] = nSkillId;
+            aSkillQty[nCount] = (rTxt.dwFlags[1] & SKILLSFLAG2_SCROLL) ? SKILLS_GetQuantity(pSkill) : -1;
+            ++nCount;
+        }
     }
 
     g_nSpeedBarCount_6FBC21C8 = nCount;
@@ -2196,6 +2241,16 @@ static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
                 Unicode::win2Unicode(wszHk, szHk, 7);
                 D2Win_10127_SetFont(D2FONT_FONT6);
                 D2Win_10117_DrawText(wszHk, nCellX + 3, nCellBottomY - 4, 0, 0);
+            }
+            if (aSkillQty[i] >= 0)
+            {
+                char szQty[12] = {};
+                snprintf(szQty, sizeof(szQty), "%d", aSkillQty[i]);
+                Unicode wszQty[12] = {};
+                Unicode::win2Unicode(wszQty, szQty, 11);
+                D2Win_10127_SetFont(D2FONT_FONT6);
+                const int32_t nQtyW = D2Win_10121_GetTextWidth(wszQty);
+                D2Win_10117_DrawText(wszQty, nCellX + 45 - nQtyW, nCellBottomY - 4, 3, 0);
             }
         }
     }
@@ -3477,9 +3532,71 @@ struct D2UnitStrc * __stdcall PLAYER_GetLocalPlayer(void)
 {
     return gpPlayerUnit;
 }
+static void __fastcall Bridge_ClientPlayerStatChangeCallback(
+    D2GameStrc* pGame,
+    D2UnitStrc* pOwner,
+    D2UnitStrc* pOther,
+    int32_t nLayer_StatId,
+    int32_t nPreviousValue,
+    int32_t nNewValue)
+{
+    (void)pGame;
+    (void)pOther;
+    (void)nPreviousValue;
+    if (!pOwner || pOwner->dwUnitType != UNIT_PLAYER)
+    {
+        return;
+    }
+
+    const int32_t nStatId = nLayer_StatId >> 16;
+    const int32_t nSkillId = static_cast<uint16_t>(nLayer_StatId);
+    if (nStatId == STAT_ITEM_NONCLASSSKILL || nStatId == STAT_ITEM_SINGLESKILL)
+    {
+        if (nSkillId <= 0 || !sgptDataTables || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+        {
+            return;
+        }
+        const D2SkillsTxt* pSkillsTxt = &sgptDataTables->pSkillsTxt[nSkillId];
+        if (nStatId == STAT_ITEM_SINGLESKILL && static_cast<int32_t>(pOwner->dwClassId) != static_cast<int32_t>(pSkillsTxt->nCharClass))
+        {
+            return;
+        }
+
+        D2SkillStrc* pSkill = SKILLS_GetSkillById(pOwner, nSkillId, D2UnitInvalidGUID);
+        if (nNewValue > 0)
+        {
+            if (!pSkill)
+            {
+                pSkill = SKILLS_AddSkill(pOwner, nSkillId);
+                SKILLS_AssignSkill(pOwner, nSkillId, 0, FALSE, __FILE__, __LINE__);
+            }
+            SKILLS_RefreshSkill(pOwner, nSkillId);
+        }
+        else if (pSkill != nullptr)
+        {
+            SKILLS_RefreshSkill(pOwner, nSkillId);
+            if (!SKILLS_GetSkillLevel(pOwner, pSkill, FALSE))
+            {
+                SKILLS_AssignSkill(pOwner, nSkillId, 0, TRUE, __FILE__, __LINE__);
+            }
+            if (!SKILLS_GetSkillLevel(pOwner, pSkill, TRUE))
+            {
+                if (UNITS_GetLeftSkill(pOwner) == pSkill)
+                {
+                    SKILLS_SetLeftActiveSkill(pOwner, 0, D2UnitInvalidGUID);
+                }
+                if (UNITS_GetRightSkill(pOwner) == pSkill)
+                {
+                    SKILLS_SetRightActiveSkill(pOwner, 0, D2UnitInvalidGUID);
+                }
+            }
+        }
+    }
+}
+
 void __fastcall PLAYER_InitClientPlayer(struct D2UnitStrc * a0, struct D2ActiveRoomStrc * a1, int a2, int a3)
 {
-    if (!a0) return; UNITS_AllocPlayerData(a0); if (!a0->pInventory) a0->pInventory = INVENTORY_AllocInventory(nullptr, a0); if (!a0->pSkills) a0->pSkills = SKILLS_AllocSkillList(a0->pMemoryPool); SKILLS_InitSkillList(a0); if (!STATLIST_GetStatListFromUnitAndFlag(a0, 1)) { STATLIST_AllocStatListEx(a0, 6, nullptr, nullptr); STATLIST_SetUnitStat(a0, STAT_VELOCITYPERCENT, 100, 0); STATLIST_SetUnitStat(a0, STAT_ATTACKRATE, 100, 0); STATLIST_SetUnitStat(a0, STAT_OTHER_ANIMRATE, 100, 0); } if (!a0->pDynamicPath) PATH_AllocDynamicPath(nullptr, a1, a2, a3, a0, FALSE); if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1); a0->dwFlags |= (UNITFLAG_TARGETABLE | UNITFLAG_CANBEATTACKED | UNITFLAG_ISVALIDTARGET); UNITS_ChangeAnimMode(a0, (a1 && DUNGEON_IsRoomInTown(a1)) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL); GFX_InitUnitCompositeGfx(a0);
+    if (!a0) return; UNITS_AllocPlayerData(a0); if (!a0->pInventory) a0->pInventory = INVENTORY_AllocInventory(nullptr, a0); if (!a0->pSkills) a0->pSkills = SKILLS_AllocSkillList(a0->pMemoryPool); SKILLS_InitSkillList(a0); if (!STATLIST_GetStatListFromUnitAndFlag(a0, 1)) { STATLIST_AllocStatListEx(a0, 1, Bridge_ClientPlayerStatChangeCallback, nullptr); STATLIST_SetUnitStat(a0, STAT_VELOCITYPERCENT, 100, 0); STATLIST_SetUnitStat(a0, STAT_ATTACKRATE, 100, 0); STATLIST_SetUnitStat(a0, STAT_OTHER_ANIMRATE, 100, 0); } if (!a0->pDynamicPath) PATH_AllocDynamicPath(nullptr, a1, a2, a3, a0, FALSE); if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1); a0->dwFlags |= (UNITFLAG_TARGETABLE | UNITFLAG_CANBEATTACKED | UNITFLAG_ISVALIDTARGET); UNITS_ChangeAnimMode(a0, (a1 && DUNGEON_IsRoomInTown(a1)) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL); GFX_InitUnitCompositeGfx(a0);
 }
 void __fastcall PLAYER_ResetSkillState(struct D2UnitStrc * a0, int a1)
 {
