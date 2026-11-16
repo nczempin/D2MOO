@@ -206,6 +206,7 @@ extern "C"
     int32_t __stdcall D2Common_10554_GetUnitBlockingPercent(D2UnitStrc* pUnit, int32_t bExpansion);
     int32_t __stdcall D2Common_10564_EvalSkillFormula(D2UnitStrc* pUnit, int32_t nFormula, int32_t nSkillId, int32_t nSkillLvl);
     void* __stdcall D2Common_10576_CompileTxtFile(void* pMemPool, const char* szName, D2BinFieldStrc* pFields, int32_t* pnRecordCount, int32_t nRecordSize);
+    void __stdcall D2Common_10579_UnloadBin(void* pBinFile);
     int32_t __stdcall D2Common_10599_GetCharStatsIdFromName(const char* szName);
     D2CharStatsTxt* __stdcall D2Common_10655_GetCharStatsTxtRecord(int32_t nClassId);
     D2UnitStrc* __stdcall D2Common_10776_GetNextInventoryItem(D2UnitStrc* pItem);
@@ -662,11 +663,15 @@ void __fastcall FLOOR_DrawViewportFloorTiles(D2ActiveRoomStrc* pCenterRoom, int3
 
     if (gpClientAct != nullptr)
     {
+        extern int32_t __fastcall D2Client_ShouldRenderActRoomWithCenter(D2ActiveRoomStrc* pCenterRoom, D2ActiveRoomStrc* pCandidateRoom);
         for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct);
              pRoom != nullptr;
              pRoom = *reinterpret_cast<D2ActiveRoomStrc**>(reinterpret_cast<uint8_t*>(pRoom) + 0x38))
         {
-            fnAddRoom(pRoom);
+            if (D2Client_ShouldRenderActRoomWithCenter(pCenterRoom, pRoom))
+            {
+                fnAddRoom(pRoom);
+            }
         }
     }
 
@@ -916,6 +921,10 @@ D2SoundsTxtStubStrc* __fastcall SOUNDHDR_GetSoundTxtRecord(int32_t nSoundId)
 // 1.12a: 0x6FB190B0 (__fastcall)
 D2SoundEnvironTxtStrc* __fastcall SOUNDHDR_GetSoundEnvironRecord(int32_t nEnvironId)
 {
+    if (!g_pSoundEnvTable || g_nSoundEnvCount <= 0)
+    {
+        return nullptr;
+    }
     if (nEnvironId < 0 || nEnvironId >= g_nSoundEnvCount)
     {
         nEnvironId = 0;
@@ -947,50 +956,56 @@ int32_t __fastcall SOUNDHDR_ParseSoundNameColumn(const char* szSoundName)
 }
 
 // 1.12a: 0x6FB195E0 (includes 0x6FB19660) (__stdcall)
+void __stdcall SOUNDHDR_FreeSoundTxtTables();
 void __stdcall SOUNDHDR_LoadSoundTxtTables()
 {
+    SOUNDHDR_FreeSoundTxtTables();
+
     int32_t nTempSoundsCount = 0;
     uint8_t* pFullSounds = (uint8_t*)D2Common_10576_CompileTxtFile(nullptr, "Sounds", nullptr, &nTempSoundsCount, 0xD0);
-    g_nSoundsTxtCount = nTempSoundsCount;
-    g_pSoundsTxtTable = (D2SoundsTxtStubStrc*)Fog_10042_AllocClientMemory(
-        nTempSoundsCount * sizeof(D2SoundsTxtStubStrc),
-        "..\\Source\\D2Client\\Sound\\SoundHdr.cpp",
-        245,
-        0);
-
-    for (int32_t i = 0; i < g_nSoundsTxtCount; ++i)
+    if (pFullSounds != nullptr && nTempSoundsCount > 0)
     {
-        uint8_t* pSrc = pFullSounds + i * 0xD0;
-        D2SoundsTxtStubStrc* pDst = &g_pSoundsTxtTable[i];
-        memset(pDst, 0, sizeof(D2SoundsTxtStubStrc));
+        g_nSoundsTxtCount = nTempSoundsCount;
+        g_pSoundsTxtTable = (D2SoundsTxtStubStrc*)Fog_10042_AllocClientMemory(
+            nTempSoundsCount * sizeof(D2SoundsTxtStubStrc),
+            "..\\Source\\D2Client\\Sound\\SoundHdr.cpp",
+            245,
+            0);
 
-        pDst->wIndex       = *(uint16_t*)(pSrc + 0x00);
-        Storm_501_SStrCopy(pDst->szFileName, (const char*)(pSrc + 0x02), 60);
-        pDst->dwVolume     = *(uint32_t*)(pSrc + 0x7A);
-        pDst->nGroupSize   = *(uint8_t*)(pSrc + 0x7E);
-        pDst->nLoop        = *(uint8_t*)(pSrc + 0x7F);
-        pDst->dwFadeIn     = *(uint32_t*)(pSrc + 0x80);
-        pDst->dwFadeOut    = *(uint32_t*)(pSrc + 0x84);
-        pDst->bDeferInst   = *(uint8_t*)(pSrc + 0x88);
-        pDst->bStopInst    = *(uint8_t*)(pSrc + 0x89);
-        pDst->dwDuration   = *(uint32_t*)(pSrc + 0x8A);
-        pDst->wCompound    = *(uint16_t*)(pSrc + 0x8E);
-        pDst->dwReverb     = *(uint32_t*)(pSrc + 0x90);
-        pDst->dwFalloff    = *(uint32_t*)(pSrc + 0x94);
-        pDst->bCache       = *(uint8_t*)(pSrc + 0x98);
-        pDst->bAsyncOnly   = *(uint8_t*)(pSrc + 0x99);
-        pDst->nPriority    = *(uint8_t*)(pSrc + 0x9A);
-        pDst->bStream      = *(uint8_t*)(pSrc + 0x9B);
-        pDst->bStereo      = *(uint8_t*)(pSrc + 0x9C);
-        pDst->bTracking    = *(uint8_t*)(pSrc + 0x9D);
-        pDst->bSolo        = *(uint8_t*)(pSrc + 0x9E);
-        pDst->bMusicVol    = *(uint8_t*)(pSrc + 0x9F);
-        pDst->dwBlock1     = *(uint32_t*)(pSrc + 0xA0);
-        pDst->dwBlock2     = *(uint32_t*)(pSrc + 0xA4);
-        pDst->dwBlock3     = *(uint32_t*)(pSrc + 0xA8);
+        for (int32_t i = 0; i < g_nSoundsTxtCount; ++i)
+        {
+            uint8_t* pSrc = pFullSounds + i * 0xD0;
+            D2SoundsTxtStubStrc* pDst = &g_pSoundsTxtTable[i];
+            memset(pDst, 0, sizeof(D2SoundsTxtStubStrc));
+
+            pDst->wIndex       = *(uint16_t*)(pSrc + 0x00);
+            Storm_501_SStrCopy(pDst->szFileName, (const char*)(pSrc + 0x02), 60);
+            pDst->dwVolume     = *(uint32_t*)(pSrc + 0x7A);
+            pDst->nGroupSize   = *(uint8_t*)(pSrc + 0x7E);
+            pDst->nLoop        = *(uint8_t*)(pSrc + 0x7F);
+            pDst->dwFadeIn     = *(uint32_t*)(pSrc + 0x80);
+            pDst->dwFadeOut    = *(uint32_t*)(pSrc + 0x84);
+            pDst->bDeferInst   = *(uint8_t*)(pSrc + 0x88);
+            pDst->bStopInst    = *(uint8_t*)(pSrc + 0x89);
+            pDst->dwDuration   = *(uint32_t*)(pSrc + 0x8A);
+            pDst->wCompound    = *(uint16_t*)(pSrc + 0x8E);
+            pDst->dwReverb     = *(uint32_t*)(pSrc + 0x90);
+            pDst->dwFalloff    = *(uint32_t*)(pSrc + 0x94);
+            pDst->bCache       = *(uint8_t*)(pSrc + 0x98);
+            pDst->bAsyncOnly   = *(uint8_t*)(pSrc + 0x99);
+            pDst->nPriority    = *(uint8_t*)(pSrc + 0x9A);
+            pDst->bStream      = *(uint8_t*)(pSrc + 0x9B);
+            pDst->bStereo      = *(uint8_t*)(pSrc + 0x9C);
+            pDst->bTracking    = *(uint8_t*)(pSrc + 0x9D);
+            pDst->bSolo        = *(uint8_t*)(pSrc + 0x9E);
+            pDst->bMusicVol    = *(uint8_t*)(pSrc + 0x9F);
+            pDst->dwBlock1     = *(uint32_t*)(pSrc + 0xA0);
+            pDst->dwBlock2     = *(uint32_t*)(pSrc + 0xA4);
+            pDst->dwBlock3     = *(uint32_t*)(pSrc + 0xA8);
+        }
+
+        D2Common_10579_UnloadBin(pFullSounds);
     }
-
-    Fog_10046_FreePool(nullptr, pFullSounds, "..\\Source\\D2Client\\Sound\\SoundHdr.cpp", 282);
 
     g_pSoundEnvTable = (D2SoundEnvironTxtStrc*)D2Common_10576_CompileTxtFile(
         nullptr,
@@ -1012,7 +1027,7 @@ void __stdcall SOUNDHDR_FreeSoundTxtTables()
 
     if (g_pSoundEnvTable)
     {
-        Fog_10046_FreePool(nullptr, g_pSoundEnvTable, "..\\Source\\D2Client\\Sound\\SoundHdr.cpp", 306);
+        D2Common_10579_UnloadBin(g_pSoundEnvTable);
         g_pSoundEnvTable = nullptr;
     }
     g_nSoundEnvCount = 0;

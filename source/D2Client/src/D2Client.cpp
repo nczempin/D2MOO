@@ -225,6 +225,15 @@ void __fastcall AUTOMAP_CenterView(int32_t bForceCenter);
 void __fastcall PALSHIFT_InitTables(void);
 void __fastcall PALSHIFT_FreeTables(void);
 void __fastcall PALSHIFT_ResetAndPreloadDefaultMonsters(void);
+void __stdcall SOUNDHDR_LoadSoundTxtTables(void);
+void __stdcall SOUNDHDR_FreeSoundTxtTables(void);
+int32_t __stdcall D2Client_IsLocalPlayerDead(void);
+void __fastcall D2Client_ClearScreenMessages(void);
+void __fastcall D2Client_ClearMercForHireList(void);
+void __fastcall D2Client_ClearPortalInfoTable(void);
+void __fastcall D2Client_UpdateAreaMusic(int32_t nActNo, int32_t nLevelId);
+void __fastcall D2Client_CycleSkillHotkeyByWheel(int32_t nDelta);
+void __fastcall SOUND_PlayUiClick(int32_t nSoundId);
 
 // Additional Cross-Module Reconstructed State Globals
 extern void* g_pClientAct;
@@ -294,6 +303,10 @@ static bool gbMouseLeftHeld = false;
 static POINT gMousePos = { 400, 300 };
 static std::vector<POINT> g_vInteractivePath;
 static size_t g_uInteractivePathIdx = 0;
+static bool g_bHasPendingInteract = false;
+static uint32_t g_dwPendingInteractType = 0;
+static uint32_t g_dwPendingInteractGuid = 0;
+static bool g_bPendingInteractNpcSession = false;
 
 static uint32_t gdwClientPlayerGuid = 0;
 static int32_t gnServerSubX = 0;
@@ -516,12 +529,16 @@ extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nT
 	}
 	if (D2ActiveRoomStrc* pExisting = DUNGEON_FindRoomByTileCoordinates(gpClientAct, nTileX, nTileY))
 	{
-		return pExisting;
+		if (nExplicitLevelId <= 0 || DUNGEON_GetLevelIdFromRoom(pExisting) == nExplicitLevelId)
+		{
+			return pExisting;
+		}
 	}
 
 	D2DrlgStrc* pDrlg = gpClientAct->pDrlg;
 	D2DrlgRoomStrc* pMatchedRoomEx = nullptr;
 	int32_t nMatchedLevelId = 0;
+	D2DrlgLevelStrc* pExplicitInitLvl = nullptr;
 
 	if (nExplicitLevelId > 0)
 	{
@@ -531,6 +548,7 @@ extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nT
 			{
 				DRLG_InitLevel(pExplicitLvl);
 			}
+			pExplicitInitLvl = pExplicitLvl;
 			for (D2DrlgRoomStrc* pRoomEx = pExplicitLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
 			{
 				if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
@@ -547,20 +565,68 @@ extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nT
 
 	if (!pMatchedRoomEx)
 	{
-		// Check all valid DRLG levels; never query DRLG_GetLevel(pDrlg, 0) for out-of-bounds void tiles
+		const int32_t nCurPlrLvl = static_cast<int32_t>(gnCurrentLevelId);
+		const D2LevelsTxt* pCurPlrLvlTxt = (nCurPlrLvl > 0) ? DATATBLS_GetLevelsTxtRecord(nCurPlrLvl) : nullptr;
+		const bool bPreferCurrentIndoor = (pCurPlrLvlTxt != nullptr && pCurPlrLvlTxt->nIsInside != 0);
+
+		// Pass 1: Search all already-initialized DRLG levels directly (maze levels grow outside [nPosX, nPosX + nWidth))
+		for (int32_t pass = 0; pass < 2 && !pMatchedRoomEx; ++pass)
+		{
+			for (D2DrlgLevelStrc* pLvl = pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
+			{
+				if (pLvl->nLevelId <= 0 || !pLvl->pFirstRoomEx)
+				{
+					continue;
+				}
+				if (pass == 0 && bPreferCurrentIndoor && pLvl->nLevelId != nCurPlrLvl)
+				{
+					continue;
+				}
+				if (pass == 0 && !bPreferCurrentIndoor)
+				{
+					const D2LevelsTxt* pCandTxt = DATATBLS_GetLevelsTxtRecord(pLvl->nLevelId);
+					if (pCandTxt && pCandTxt->nIsInside != 0)
+					{
+						continue;
+					}
+				}
+				for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+				{
+					if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
+						nTileX >= pRoomEx->nTileXPos && nTileX < pRoomEx->nTileXPos + pRoomEx->nTileWidth &&
+						nTileY >= pRoomEx->nTileYPos && nTileY < pRoomEx->nTileYPos + pRoomEx->nTileHeight)
+					{
+						pMatchedRoomEx = pRoomEx;
+						nMatchedLevelId = pLvl->nLevelId;
+						break;
+					}
+				}
+				if (pMatchedRoomEx)
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	if (!pMatchedRoomEx)
+	{
+		// Pass 2: Lazily initialize uninitialized outdoor DRLG levels whose bounding box contains (nTileX, nTileY)
 		for (D2DrlgLevelStrc* pLvl = pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
 		{
-			if (pLvl->nLevelId <= 0 || pLvl->nWidth <= 0 || pLvl->nHeight <= 0)
+			if (pLvl->nLevelId <= 0 || pLvl->pFirstRoomEx != nullptr || pLvl->nWidth <= 0 || pLvl->nHeight <= 0)
+			{
+				continue;
+			}
+			const D2LevelsTxt* pCandTxt = DATATBLS_GetLevelsTxtRecord(pLvl->nLevelId);
+			if (pCandTxt && pCandTxt->nIsInside != 0)
 			{
 				continue;
 			}
 			if (nTileX >= pLvl->nPosX && nTileX < pLvl->nPosX + pLvl->nWidth &&
 				nTileY >= pLvl->nPosY && nTileY < pLvl->nPosY + pLvl->nHeight)
 			{
-				if (!pLvl->pFirstRoomEx)
-				{
-					DRLG_InitLevel(pLvl);
-				}
+				DRLG_InitLevel(pLvl);
 				for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
 				{
 					if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
@@ -598,6 +664,27 @@ extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nT
 		AUTOMAP_RevealRoomFull(pStreamed);
 		++gdwAutomapRoomsPopulated;
 	}
+
+	// When an indoor/cave/dungeon level is explicitly entered or streamed via S2C 0x07, pre-stream all its rooms
+	static bool s_bPrestreamingIndoor = false;
+	if (!s_bPrestreamingIndoor && pExplicitInitLvl && pExplicitInitLvl->pFirstRoomEx)
+	{
+		const D2LevelsTxt* pExpTxt = DATATBLS_GetLevelsTxtRecord(nExplicitLevelId);
+		if (pExpTxt && pExpTxt->nIsInside != 0)
+		{
+			s_bPrestreamingIndoor = true;
+			int32_t nSafety = 0;
+			for (D2DrlgRoomStrc* pSubEx = pExplicitInitLvl->pFirstRoomEx; pSubEx != nullptr && nSafety < 96; pSubEx = pSubEx->pDrlgRoomNext, ++nSafety)
+			{
+				if (!pSubEx->pRoom && pSubEx->nTileWidth > 0 && pSubEx->nTileHeight > 0)
+				{
+					D2Client_SafeStreamRoomAtTile(pSubEx->nTileXPos, pSubEx->nTileYPos, nExplicitLevelId);
+				}
+			}
+			s_bPrestreamingIndoor = false;
+		}
+	}
+
 	return pStreamed;
 }
 
@@ -889,14 +976,15 @@ static D2UnitStrc* FindHoveredWorldUnitAtScreenPos(int32_t nMouseX, int32_t nMou
 	}
 
 	D2UnitStrc* pBest = nullptr;
-	int32_t nBestDistSq = 48 * 48;
-	const uint32_t aTypes[3] = { UNIT_MONSTER, UNIT_OBJECT, UNIT_ITEM };
+	int32_t nBestDistSq = 56 * 56;
+	const uint32_t aTypes[5] = { UNIT_MONSTER, UNIT_OBJECT, UNIT_ITEM, UNIT_TILE, UNIT_PLAYER };
 	for (uint32_t nType : aTypes)
 	{
 		for (int32_t b = 0; b < 128; ++b)
 		{
 			for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[nType][b]; pUnit != nullptr; pUnit = pUnit->pListNext)
 			{
+				int32_t nMaxTypeDistSq = 48 * 48;
 				if (nType == UNIT_MONSTER)
 				{
 					if (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH)
@@ -928,21 +1016,39 @@ static D2UnitStrc* FindHoveredWorldUnitAtScreenPos(int32_t nMouseX, int32_t nMou
 						continue;
 					}
 				}
-				else if (nType == UNIT_ITEM &&
-					pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING)
+				else if (nType == UNIT_ITEM)
 				{
-					continue;
+					if (pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING)
+					{
+						continue;
+					}
+				}
+				else if (nType == UNIT_TILE)
+				{
+					const Unicode* pWarpName = D2Client_GetNpcDisplayName(pUnit);
+					if (!pWarpName || !pWarpName[0])
+					{
+						continue;
+					}
+					nMaxTypeDistSq = 56 * 56;
+				}
+				else if (nType == UNIT_PLAYER)
+				{
+					if (pUnit == gpPlayerUnit || pUnit->dwAnimMode != PLRMODE_DEAD)
+					{
+						continue;
+					}
 				}
 				int32_t nSx = 0, nSy = 0;
 				if (!WorldUnitToScreenPos(pUnit, &nSx, &nSy))
 				{
 					continue;
 				}
-				const int32_t nHitY = (nType == UNIT_MONSTER) ? (nSy - 28) : (nSy - 10);
+				const int32_t nHitY = (nType == UNIT_MONSTER) ? (nSy - 28) : ((nType == UNIT_TILE) ? (nSy - 18) : (nSy - 10));
 				const int32_t dx = nMouseX - nSx;
 				const int32_t dy = nMouseY - nHitY;
 				const int32_t d2 = dx * dx + dy * dy;
-				if (d2 < nBestDistSq)
+				if (d2 < nMaxTypeDistSq && d2 < nBestDistSq)
 				{
 					nBestDistSq = d2;
 					pBest = pUnit;
@@ -1109,6 +1215,10 @@ static int32_t GetServerPacketLength112a(const uint8_t* pBuf, int32_t nAvail)
 	const uint8_t op = pBuf[0];
 	switch (op)
 	{
+	case 0x16: // MultiUnitUpdate: [0x16][unk][nSize:u16]...
+		return (nAvail >= 4 && *reinterpret_cast<const uint16_t*>(&pBuf[2]) >= 4)
+			? std::min<int32_t>(nAvail, static_cast<int32_t>(*reinterpret_cast<const uint16_t*>(&pBuf[2])))
+			: nAvail;
 	case 0x26: // Chat message (variable NUL-terminated name + message)
 	{
 		if (nAvail < 12) return nAvail;
@@ -1118,11 +1228,23 @@ static int32_t GetServerPacketLength112a(const uint8_t* pBuf, int32_t nAvail)
 		while (pos < nAvail && pBuf[pos] != 0) ++pos;
 		return std::min<int32_t>(nAvail, pos + 1);
 	}
+	case 0x3E: // UpdateItemStats: [0x3E][pktLen:u8]...
+		return (nAvail >= 2 && pBuf[1] >= 2) ? std::min<int32_t>(nAvail, static_cast<int32_t>(pBuf[1])) : nAvail;
+	case 0x5B: // PlayerInGame: [0x5B][pktLen:u16]...
+		return (nAvail >= 3 && *reinterpret_cast<const uint16_t*>(&pBuf[1]) >= 3)
+			? std::min<int32_t>(nAvail, static_cast<int32_t>(*reinterpret_cast<const uint16_t*>(&pBuf[1])))
+			: nAvail;
 	case 0x94: // BaseSkillLevels: [0x94][count:u8][playerGuid:u32] + count * 3
 		return (nAvail >= 2) ? std::min<int32_t>(nAvail, 6 + static_cast<int32_t>(pBuf[1]) * 3) : nAvail;
 	case 0x9C: // ItemActionWorld: [0x9C][action][pktLen]...
 	case 0x9D: // ItemActionOwned: [0x9D][action][pktLen]...
 		return (nAvail >= 3 && pBuf[2] >= 3) ? std::min<int32_t>(nAvail, static_cast<int32_t>(pBuf[2])) : nAvail;
+	case 0xA6: // UnusedVar: [0xA6][unk][pktLen:u16]
+		return (nAvail >= 4 && *reinterpret_cast<const uint16_t*>(&pBuf[2]) >= 4)
+			? std::min<int32_t>(nAvail, static_cast<int32_t>(*reinterpret_cast<const uint16_t*>(&pBuf[2])))
+			: nAvail;
+	case 0xA8: // SetState bitstream: [0xA8][unitType][guid:u32][pktLen:u8][state]...
+		return (nAvail >= 7 && pBuf[6] >= 7) ? std::min<int32_t>(nAvail, static_cast<int32_t>(pBuf[6])) : nAvail;
 	case 0xAA: // StateInfo: [0xAA][unitType][guid:u32][pktLen]...
 		return (nAvail >= 7 && pBuf[6] >= 7) ? std::min<int32_t>(nAvail, static_cast<int32_t>(pBuf[6])) : nAvail;
 	case 0xAC: // AssignNPC: [0xAC][guid:u32][classId:u16][x:u16][y:u16][life:u8][pktLen:u8]...
@@ -1131,6 +1253,8 @@ static int32_t GetServerPacketLength112a(const uint8_t* pBuf, int32_t nAvail)
 		return (nAvail >= 3) ? std::min<int32_t>(nAvail, 3 + *reinterpret_cast<const uint16_t*>(&pBuf[1])) : nAvail;
 	case 0xAF: // CompressionInfo greeting: [0xAF][bCompression]
 		return std::min<int32_t>(nAvail, 2);
+	case 0xB3: // SaveChunk: [0xB3][chunkLen:u8]...
+		return (nAvail >= 2) ? std::min<int32_t>(nAvail, static_cast<int32_t>(pBuf[1]) + 7) : nAvail;
 	default:
 		break;
 	}
@@ -1234,6 +1358,11 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			SafeStreamClientRoomAtTile(nTileX, nTileY, nLevelId);
 			++gdwInlinePacketsHandled;
 		}
+		break;
+	}
+	case 0x08: // RemoveRoom (6 bytes): keep cached client rooms alive until Act transition/exit
+	{
+		++gdwInlinePacketsHandled;
 		break;
 	}
 	case 0x0A: // RemoveObject (6 bytes): [0x0A][unitType][guid:u32]
@@ -1368,7 +1497,57 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 			const int32_t nSubY = *reinterpret_cast<const uint16_t*>(&aBuffer[8]);
 			if (nUnitType == UNIT_PLAYER && nSubX > 0 && nSubY > 0)
 			{
-				StreamClientNeighborhoodAroundTile(nSubX / 5, nSubY / 5, 24);
+				int32_t nTargetLevelId = 0;
+				if (gpClientAct && gpClientAct->pDrlg)
+				{
+					const int32_t nTileX = nSubX / 5;
+					const int32_t nTileY = nSubY / 5;
+					// Prefer any initialized indoor level containing (nTileX, nTileY) (e.g. after warping into Den of Evil / Cave)
+					for (int32_t pass = 0; pass < 2 && nTargetLevelId <= 0; ++pass)
+					{
+						for (D2DrlgLevelStrc* pLvl = gpClientAct->pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
+						{
+							if (pLvl->nLevelId <= 0 || !pLvl->pFirstRoomEx)
+							{
+								continue;
+							}
+							const D2LevelsTxt* pTxt = DATATBLS_GetLevelsTxtRecord(pLvl->nLevelId);
+							const bool bInside = (pTxt != nullptr && pTxt->nIsInside != 0);
+							if (pass == 0 && !bInside)
+							{
+								continue;
+							}
+							for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+							{
+								if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
+									nTileX >= pRoomEx->nTileXPos && nTileX < pRoomEx->nTileXPos + pRoomEx->nTileWidth &&
+									nTileY >= pRoomEx->nTileYPos && nTileY < pRoomEx->nTileYPos + pRoomEx->nTileHeight)
+								{
+									nTargetLevelId = pLvl->nLevelId;
+									break;
+								}
+							}
+							if (nTargetLevelId > 0)
+							{
+								break;
+							}
+						}
+					}
+				}
+				D2ActiveRoomStrc* pDestRoom = SafeStreamClientRoomAtTile(nSubX / 5, nSubY / 5, nTargetLevelId);
+				if (pDestRoom)
+				{
+					const int32_t nRoomLvl = DUNGEON_GetLevelIdFromRoom(pDestRoom);
+					if (nRoomLvl > 0)
+					{
+						nTargetLevelId = nRoomLvl;
+					}
+				}
+				if (nTargetLevelId <= 0 || !DATATBLS_GetLevelsTxtRecord(nTargetLevelId) || DATATBLS_GetLevelsTxtRecord(nTargetLevelId)->nIsInside == 0)
+				{
+					StreamClientNeighborhoodAroundTile(nSubX / 5, nSubY / 5, 24);
+				}
+
 				if (!gpPlayerUnit || dwGuid == gpPlayerUnit->dwUnitId || gdwClientPlayerGuid == 0)
 				{
 					gdwClientPlayerGuid = dwGuid;
@@ -1376,13 +1555,33 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 					gnServerSubY = nSubY;
 					gnAuthServerSubX = nSubX;
 					gnAuthServerSubY = nSubY;
+					if (nTargetLevelId > 0 && gnCurrentLevelId != static_cast<uint16_t>(nTargetLevelId))
+					{
+						gnCurrentLevelId = static_cast<uint16_t>(nTargetLevelId);
+						D2LevelDefBin* pLvlDef = DATATBLS_GetLevelDefRecord(nTargetLevelId);
+						const int32_t nLayerNo = (pLvlDef && pLvlDef->dwLayer > 0) ? static_cast<int32_t>(pLvlDef->dwLayer) : nTargetLevelId;
+						if (gnCurrentAutomapLayerNo != nLayerNo)
+						{
+							gnCurrentAutomapLayerNo = nLayerNo;
+							AUTOMAP_InitLayer(nLayerNo);
+						}
+						D2Client_UpdateAreaMusic(gnCurrentAct, gnCurrentLevelId);
+					}
 					SubtileToWorldIso(nSubX, nSubY, &gfPlayerWorldX, &gfPlayerWorldY);
 					gfTargetWorldX = gfPlayerWorldX;
 					gfTargetWorldY = gfPlayerWorldY;
 					gbPlayerMoving = false;
+					g_vInteractivePath.clear();
+					g_uInteractivePathIdx = 0;
+					g_bHasPendingInteract = false;
 					if (gpPlayerUnit)
 					{
 						D2Client_TeleportUnitToCoordinates(gpPlayerUnit, nSubX, nSubY, aBuffer[10]);
+						if (gpPlayerUnit->dwAnimMode == PLRMODE_DEAD && DUNGEON_IsTownLevelId(gnCurrentLevelId))
+						{
+							UNITS_ChangeAnimMode(gpPlayerUnit, PLRMODE_TOWNNEUTRAL);
+							GFX_InitUnitCompositeGfx(gpPlayerUnit);
+						}
 					}
 				}
 			}
@@ -1708,6 +1907,43 @@ static void HandleServerPacket112a(uint8_t* aBuffer, int32_t nPacketLen)
 							{
 								pMon->pMonsterData->nComponent[i] = static_cast<uint8_t>(BITMANIP_Read(&bitBuf, 1));
 							}
+						}
+					}
+					const int32_t bHasUModsOrMerc = BITMANIP_Read(&bitBuf, 1);
+					if (bHasUModsOrMerc && pMon->pMonsterData)
+					{
+						uint8_t nTypeFlags = 0;
+						if (BITMANIP_Read(&bitBuf, 1)) nTypeFlags |= 0x04u; // MONTYPEFLAG_CHAMPION
+						if (BITMANIP_Read(&bitBuf, 1)) nTypeFlags |= 0x08u; // MONTYPEFLAG_UNIQUE
+						if (BITMANIP_Read(&bitBuf, 1)) nTypeFlags |= 0x02u; // MONTYPEFLAG_SUPERUNIQUE
+						if (BITMANIP_Read(&bitBuf, 1)) nTypeFlags |= 0x10u; // MONTYPEFLAG_MINION
+						if (BITMANIP_Read(&bitBuf, 1)) nTypeFlags |= 0x20u; // MONTYPEFLAG_GHOSTLY
+						pMon->pMonsterData->nTypeFlag = nTypeFlags;
+						if ((nTypeFlags & 0x02u) != 0)
+						{
+							pMon->pMonsterData->wBossHcIdx = static_cast<uint16_t>(BITMANIP_Read(&bitBuf, 16));
+						}
+						std::memset(pMon->pMonsterData->nMonUMod, 0, sizeof(pMon->pMonsterData->nMonUMod));
+						for (int32_t m = 0; m < 10; ++m)
+						{
+							const uint8_t nMod = static_cast<uint8_t>(BITMANIP_Read(&bitBuf, 8));
+							if (nMod == 0)
+							{
+								break;
+							}
+							if (m < 9)
+							{
+								pMon->pMonsterData->nMonUMod[m] = nMod;
+							}
+						}
+						pMon->pMonsterData->wNameSeed = static_cast<uint16_t>(BITMANIP_Read(&bitBuf, 16));
+						if (BITMANIP_Read(&bitBuf, 1) != 0)
+						{
+							const uint32_t dwMercOwner = static_cast<uint32_t>(BITMANIP_Read(&bitBuf, 32));
+							pMon->dwOwnerGUID = dwMercOwner;
+							pMon->dwOwnerType = UNIT_PLAYER;
+							pMon->dwFlags |= UNITFLAG_ISMERC;
+							pMon->dwFlagEx |= UNITFLAGEX_STOREOWNERINFO;
 						}
 					}
 					if (nLife == 0 || nAnimMode == MONMODE_DEAD || nAnimMode == MONMODE_DEATH)
@@ -2453,6 +2689,10 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		// World viewport click -> drop cursor item, pick up ground label, unit interaction, or BFS walk / cast
 		if (bLeftClick)
 		{
+			if (D2Client_IsLocalPlayerDead() != 0)
+			{
+				return 0;
+			}
 			if (gpPlayerUnit && gpPlayerUnit->pInventory)
 			{
 				if (D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(gpPlayerUnit->pInventory))
@@ -2461,49 +2701,100 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 					return 0;
 				}
 			}
+
+			auto fnStartApproachAndInteract = [&](D2UnitStrc* pTarget, bool bNpcSession) {
+				if (!pTarget)
+				{
+					return;
+				}
+				const int32_t nTx = UNITS_GetXPosition(pTarget);
+				const int32_t nTy = UNITS_GetYPosition(pTarget);
+				const int32_t nSx = (gnServerSubX > 0) ? gnServerSubX : gnAuthServerSubX;
+				const int32_t nSy = (gnServerSubY > 0) ? gnServerSubY : gnAuthServerSubY;
+				const int32_t dx = nTx - nSx;
+				const int32_t dy = nTy - nSy;
+				const int32_t nDistSq = dx * dx + dy * dy;
+				const int32_t nImmediateRadius = (pTarget->dwUnitType == UNIT_TILE) ? 4 : 5;
+
+				if (nTx > 0 && nTy > 0 && nSx > 0 && nSy > 0 && nDistSq > nImmediateRadius * nImmediateRadius)
+				{
+					g_vInteractivePath.clear();
+					g_uInteractivePathIdx = 0;
+					g_bHasPendingInteract = true;
+					g_dwPendingInteractType = pTarget->dwUnitType;
+					g_dwPendingInteractGuid = pTarget->dwUnitId;
+					g_bPendingInteractNpcSession = bNpcSession;
+
+					int32_t nStepX = nTx;
+					int32_t nStepY = nTy;
+					if (ComputeWalkableSubtilePath(nSx, nSy, nTx, nTy, g_vInteractivePath) && !g_vInteractivePath.empty())
+					{
+						nStepX = g_vInteractivePath[0].x;
+						nStepY = g_vInteractivePath[0].y;
+					}
+					SubtileToWorldIso(nStepX, nStepY, &gfTargetWorldX, &gfTargetWorldY);
+					gbPlayerMoving = true;
+					SendWalkOrRunToLocation(static_cast<uint16_t>(nStepX), static_cast<uint16_t>(nStepY));
+					return;
+				}
+
+				g_bHasPendingInteract = false;
+				g_vInteractivePath.clear();
+				g_uInteractivePathIdx = 0;
+				if (pTarget->dwUnitType == UNIT_ITEM)
+				{
+					SendWalkOrRunToUnit(UNIT_ITEM, pTarget->dwUnitId);
+					SendPickupGroundItem(pTarget->dwUnitId, false);
+				}
+				else if (bNpcSession)
+				{
+					SendWalkOrRunToUnit(UNIT_MONSTER, pTarget->dwUnitId);
+					OpenNpcInteractionSession(pTarget);
+				}
+				else
+				{
+					SendWalkOrRunToUnit(pTarget->dwUnitType, pTarget->dwUnitId);
+					SendUnitInteract(pTarget->dwUnitType, pTarget->dwUnitId);
+				}
+			};
+
 			if (gaPanelStates[D2PANEL_SHOWITEMS] != 0)
 			{
 				if (D2UnitStrc* pLabelItem = SHOWITEMS_HitTestGroundItemLabel(mx, my))
 				{
-					g_vInteractivePath.clear();
-					g_uInteractivePathIdx = 0;
-					SendWalkOrRunToUnit(UNIT_ITEM, pLabelItem->dwUnitId);
-					SendPickupGroundItem(pLabelItem->dwUnitId, false);
+					fnStartApproachAndInteract(pLabelItem, false);
 					return 0;
 				}
 			}
 			gbMouseLeftHeld = true;
 			if (D2UnitStrc* pHovered = FindHoveredWorldUnitAtScreenPos(mx, my))
 			{
-				g_vInteractivePath.clear();
-				g_uInteractivePathIdx = 0;
-				if (pHovered->dwUnitType == UNIT_ITEM)
+				if (pHovered->dwUnitType == UNIT_ITEM ||
+					pHovered->dwUnitType == UNIT_OBJECT ||
+					pHovered->dwUnitType == UNIT_TILE ||
+					pHovered->dwUnitType == UNIT_PLAYER)
 				{
-					SendWalkOrRunToUnit(UNIT_ITEM, pHovered->dwUnitId);
-					SendPickupGroundItem(pHovered->dwUnitId, false);
-					return 0;
-				}
-				if (pHovered->dwUnitType == UNIT_OBJECT)
-				{
-					SendWalkOrRunToUnit(UNIT_OBJECT, pHovered->dwUnitId);
-					SendUnitInteract(UNIT_OBJECT, pHovered->dwUnitId);
+					gbMouseLeftHeld = false;
+					fnStartApproachAndInteract(pHovered, false);
 					return 0;
 				}
 				if (pHovered->dwUnitType == UNIT_MONSTER)
 				{
+					gbMouseLeftHeld = false;
 					if (IsTownNpcMonster(pHovered))
 					{
-						SendWalkOrRunToUnit(UNIT_MONSTER, pHovered->dwUnitId);
-						OpenNpcInteractionSession(pHovered);
+						fnStartApproachAndInteract(pHovered, true);
 					}
 					else
 					{
+						g_bHasPendingInteract = false;
 						UNITMODE_SendActionPacket(0x06u, 0, 0, UNIT_MONSTER, pHovered->dwUnitId);
 					}
 					return 0;
 				}
 			}
 
+			g_bHasPendingInteract = false;
 			int32_t nClickSubX = 0, nClickSubY = 0;
 			ScreenPointToSubtile(mx, my, &nClickSubX, &nClickSubY);
 			if (nClickSubX > 0 && nClickSubY > 0)
@@ -2577,6 +2868,16 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		return 0;
 	}
 
+	case WM_MOUSEWHEEL:
+	{
+		const int16_t nWheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+		if (nWheelDelta != 0 && !gbChatInputOpen && !gaPanelStates[D2PANEL_ESCMENU])
+		{
+			D2Client_CycleSkillHotkeyByWheel(nWheelDelta);
+		}
+		return 0;
+	}
+
 	case WM_CHAR:
 	{
 		if (gbChatInputOpen)
@@ -2633,6 +2934,15 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			gszChatInputBuf[0] = '\0';
 			return 0;
 		case VK_ESCAPE:
+			if (D2Client_IsLocalPlayerDead() != 0 && !gaPanelStates[D2PANEL_ESCMENU])
+			{
+				// Softcore resurrect in town (C2S 0x41)
+				if ((gwCharSaveFlags & 0x04u) == 0)
+				{
+					MSG_SendByte(0x41u);
+					return 0;
+				}
+			}
 			if (gaPanelStates[D2PANEL_ESCMENU] && g_bEscOptionsSubmenu != 0)
 			{
 				g_bEscOptionsSubmenu = 0;
@@ -2699,6 +3009,9 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			return 0;
 		case 'P':
 			UI_SetPanelState(D2PANEL_PARTY, 2, 0);
+			return 0;
+		case 'M':
+			UI_SetPanelState(D2PANEL_MSGLOG, 2, 0);
 			return 0;
 		case 'O':
 			UI_SetPanelState(D2PANEL_MERCINV, 2, 0);
@@ -2921,10 +3234,16 @@ static void InitInGameAssets()
 	INV_SyncExpansionModeFlag();
 	PALSHIFT_InitTables();
 	PALSHIFT_ResetAndPreloadDefaultMonsters();
+	SOUNDHDR_LoadSoundTxtTables();
+	D2Client_ClearScreenMessages();
+	D2Client_ClearMercForHireList();
+	D2Client_ClearPortalInfoTable();
+	g_bHasPendingInteract = false;
 	UI_InitAllPanels();
 
 	// Pre-allocate initial Act 1 world and bootstrap player unit until S2C 0x03/0x59 arrive
 	RebuildClientActWorld(0, gdwServerMapSeed, LEVEL_ROGUEENCAMPMENT);
+	D2Client_UpdateAreaMusic(0, LEVEL_ROGUEENCAMPMENT);
 
 	int32_t nBootSubX = 0;
 	int32_t nBootSubY = 0;
@@ -2978,6 +3297,11 @@ static void ShutdownInGameAssets()
 	GFX_FreeMonsterCofCache();
 	GFX_FreePlayerCofCache();
 	PALSHIFT_FreeTables();
+	D2SOUND_StopMusic();
+	SOUNDHDR_FreeSoundTxtTables();
+	D2Client_ClearScreenMessages();
+	D2Client_ClearMercForHireList();
+	D2Client_ClearPortalInfoTable();
 
 	if (gpClientViewport)
 	{
@@ -3100,9 +3424,66 @@ static void UpdatePlayerMovement()
 			gnServerSubY = nCurSubY;
 			if (bTileChanged)
 			{
-				StreamClientNeighborhoodAroundTile(nCurSubX / 5, nCurSubY / 5, 24);
+				const D2LevelsTxt* pCurLvlTxt = DATATBLS_GetLevelsTxtRecord(gnCurrentLevelId);
+				if (!pCurLvlTxt || pCurLvlTxt->nIsInside == 0)
+				{
+					StreamClientNeighborhoodAroundTile(nCurSubX / 5, nCurSubY / 5, 24);
+				}
+				if (pCandRoom)
+				{
+					const int32_t nNewLvl = DUNGEON_GetLevelIdFromRoom(pCandRoom);
+					if (nNewLvl > 0 && gnCurrentLevelId != static_cast<uint16_t>(nNewLvl))
+					{
+						gnCurrentLevelId = static_cast<uint16_t>(nNewLvl);
+						D2LevelDefBin* pLvlDef = DATATBLS_GetLevelDefRecord(nNewLvl);
+						const int32_t nLayerNo = (pLvlDef && pLvlDef->dwLayer > 0) ? static_cast<int32_t>(pLvlDef->dwLayer) : nNewLvl;
+						if (gnCurrentAutomapLayerNo != nLayerNo)
+						{
+							gnCurrentAutomapLayerNo = nLayerNo;
+							AUTOMAP_InitLayer(nLayerNo);
+						}
+						D2Client_UpdateAreaMusic(gnCurrentAct, gnCurrentLevelId);
+					}
+				}
 			}
 			D2Client_TeleportUnitToCoordinates(gpPlayerUnit, nCurSubX, nCurSubY, 0);
+
+			if (g_bHasPendingInteract)
+			{
+				D2UnitStrc* pPend = D2Client_FindServerSideUnit(g_dwPendingInteractGuid, g_dwPendingInteractType);
+				if (!pPend)
+				{
+					g_bHasPendingInteract = false;
+				}
+				else
+				{
+					const int32_t pdx = UNITS_GetXPosition(pPend) - nCurSubX;
+					const int32_t pdy = UNITS_GetYPosition(pPend) - nCurSubY;
+					const int32_t nTrigR = (g_dwPendingInteractType == UNIT_TILE) ? 4 : 5;
+					if (pdx * pdx + pdy * pdy <= nTrigR * nTrigR || !gbPlayerMoving)
+					{
+						g_bHasPendingInteract = false;
+						g_vInteractivePath.clear();
+						g_uInteractivePathIdx = 0;
+						gbPlayerMoving = false;
+						if (g_dwPendingInteractType == UNIT_ITEM)
+						{
+							SendWalkOrRunToUnit(UNIT_ITEM, pPend->dwUnitId);
+							SendPickupGroundItem(pPend->dwUnitId, false);
+						}
+						else if (g_bPendingInteractNpcSession)
+						{
+							SendWalkOrRunToUnit(UNIT_MONSTER, pPend->dwUnitId);
+							OpenNpcInteractionSession(pPend);
+						}
+						else
+						{
+							SendWalkOrRunToUnit(pPend->dwUnitType, pPend->dwUnitId);
+							SendUnitInteract(pPend->dwUnitType, pPend->dwUnitId);
+						}
+					}
+				}
+			}
 		}
 		const int32_t nIdleMode = DUNGEON_IsTownLevelId(gnCurrentLevelId) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL;
 		const int32_t nWalkMode = DUNGEON_IsTownLevelId(gnCurrentLevelId) ? PLRMODE_TOWNWALK : PLRMODE_WALK;

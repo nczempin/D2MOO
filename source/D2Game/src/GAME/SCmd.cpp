@@ -1708,7 +1708,7 @@ void __fastcall D2GAME_PACKETS_SendPacket0x3E_6FC3EC20(D2ClientStrc* pClient, D2
 
     packet3E.nSize = BITMANIP_GetSize(&bitBuffer) + 2;
 
-    D2GAME_PACKETS_SendPacket_6FC3C710(pClient, &packet3E, sizeof(packet3E));
+    D2GAME_PACKETS_SendPacket_6FC3C710(pClient, &packet3E, packet3E.nSize);
 }
 
 //D2Game.0x6FC3EDC0

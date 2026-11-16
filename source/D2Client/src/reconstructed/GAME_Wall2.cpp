@@ -1223,11 +1223,12 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32
     extern D2DrlgActStrc* gpClientAct;
     extern D2UnitStrc* gpPlayerUnit;
     D2UnitStrc* pPlayer = gpClientPlayer ? gpClientPlayer : gpPlayerUnit;
+    D2ActiveRoomStrc* pPlayerRoom = nullptr;
     if (pPlayer != nullptr)
     {
         const int32_t nPlayerSubtileX = WALL2_GetUnitSubtileX(pPlayer);
         const int32_t nPlayerSubtileY = WALL2_GetUnitSubtileY(pPlayer);
-        D2ActiveRoomStrc* pPlayerRoom = UNITS_GetRoom(pPlayer);
+        pPlayerRoom = UNITS_GetRoom(pPlayer);
         if (pPlayerRoom == nullptr && gpClientAct != nullptr && (nPlayerSubtileX != 0 || nPlayerSubtileY != 0))
         {
             pPlayerRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nPlayerSubtileX, nPlayerSubtileY);
@@ -1246,9 +1247,13 @@ void __fastcall WALL2_BuildViewportRoomGrid(D2WallViewportStrc* pViewport, int32
     // Also inspect any streamed active rooms in gpClientAct (e.g. across town/wilderness level seams)
     if (gpClientAct != nullptr)
     {
+        extern int32_t __fastcall D2Client_ShouldRenderActRoomWithCenter(D2ActiveRoomStrc* pCenterRoom, D2ActiveRoomStrc* pCandidateRoom);
         for (D2ActiveRoomStrc* pRoom = DUNGEON_GetRoomFromAct(gpClientAct); pRoom != nullptr; pRoom = pRoom->pRoomNext)
         {
-            WALL2_PopulateSortGridRoomCallback(pRoom, &tCtx);
+            if (D2Client_ShouldRenderActRoomWithCenter(pPlayerRoom, pRoom))
+            {
+                WALL2_PopulateSortGridRoomCallback(pRoom, &tCtx);
+            }
         }
     }
 }

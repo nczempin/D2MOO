@@ -328,7 +328,7 @@ void __fastcall INV_ScreenToClampedGridCoords(
     uint8_t nItemHeight)
 {
     int32_t nCellW = pGridLayout->nGridBoxWidth;
-    int32_t nHalfW = nCellW * (nItemWidth - 1) / 2;
+    int32_t nHalfW = (nCellW * nItemWidth) / 2;
     int32_t nAdjustedX = nMouseX - nHalfW;
     if (nAdjustedX < pGridLayout->nLeft)
     {
@@ -342,7 +342,7 @@ void __fastcall INV_ScreenToClampedGridCoords(
     }
 
     int32_t nCellH = pGridLayout->nGridBoxHeight;
-    int32_t nHalfH = nCellH * (nItemHeight - 1) / 2;
+    int32_t nHalfH = (nCellH * nItemHeight) / 2;
     int32_t nAdjustedY = nMouseY - nHalfH;
     if (nAdjustedY < pGridLayout->nTop)
     {

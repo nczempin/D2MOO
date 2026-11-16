@@ -1576,8 +1576,209 @@ int32_t __stdcall Bridge_D2Common_10552_GetUnitToHitFactor_12922(D2UnitStrc* u) 
 #pragma comment(linker, "/alternatename:_D2Common_10552_GetUnitToHitFactor@4=_Bridge_D2Common_10552_GetUnitToHitFactor_12922@4")
 int32_t __stdcall Bridge_D2Common_10554_GetUnitBlockingPercent_56774(D2UnitStrc* u, int32_t bExp) { return u ? UNITS_GetBlockRate(u, bExp) : 0; }
 #pragma comment(linker, "/alternatename:_D2Common_10554_GetUnitBlockingPercent@8=_Bridge_D2Common_10554_GetUnitBlockingPercent_56774@8")
-void* __stdcall Bridge_D2Common_10576_CompileTxtFile_95015(void* pool, const char* sz, D2BinFieldStrc* f, int32_t* cnt, int32_t rsz) { return DATATBLS_CompileTxt((HD2ARCHIVE)pool, sz, f, cnt, (size_t)rsz); }
+void* __stdcall Bridge_D2Common_10576_CompileTxtFile_95015(void* pool, const char* sz, D2BinFieldStrc* f, int32_t* cnt, int32_t rsz)
+{
+    if (f == nullptr && sz != nullptr)
+    {
+        if (_stricmp(sz, "Sounds") == 0 && rsz == 0xD0)
+        {
+            size_t dwTxtBytes = 0;
+            char* pTxtRaw = static_cast<char*>(ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT((HD2ARCHIVE)pool, "DATA\\GLOBAL\\EXCEL\\Sounds.txt", &dwTxtBytes));
+            if (!pTxtRaw || dwTxtBytes == 0)
+            {
+                if (pTxtRaw) D2_FREE_POOL(nullptr, pTxtRaw);
+                if (cnt) *cnt = 0;
+                return nullptr;
+            }
+
+            // Count lines & parse header column indices dynamically
+            int32_t colIndex = -1, colFile = -1, colVol = -1, colGrp = -1, colLoop = -1;
+            int32_t colFadeIn = -1, colFadeOut = -1, colDefer = -1, colStop = -1, colDur = -1;
+            int32_t colComp = -1, colRev = -1, colFall = -1, colCache = -1, colAsync = -1;
+            int32_t colPrio = -1, colStream = -1, colStereo = -1, colTrack = -1, colSolo = -1, colMusicVol = -1;
+
+            size_t pos = 0;
+            int32_t colIdx = 0;
+            size_t tokStart = 0;
+            while (pos < dwTxtBytes)
+            {
+                const char c = pTxtRaw[pos];
+                if (c == '\t' || c == '\r' || c == '\n')
+                {
+                    char szCol[64] = {};
+                    const size_t tokLen = (pos - tokStart < 63) ? (pos - tokStart) : 63;
+                    memcpy(szCol, pTxtRaw + tokStart, tokLen);
+                    szCol[tokLen] = '\0';
+                    if (_stricmp(szCol, "Index") == 0) colIndex = colIdx;
+                    else if (_stricmp(szCol, "FileName") == 0) colFile = colIdx;
+                    else if (_stricmp(szCol, "Volume") == 0) colVol = colIdx;
+                    else if (_stricmp(szCol, "Group Size") == 0) colGrp = colIdx;
+                    else if (_stricmp(szCol, "Loop") == 0) colLoop = colIdx;
+                    else if (_stricmp(szCol, "Fade In") == 0) colFadeIn = colIdx;
+                    else if (_stricmp(szCol, "Fade Out") == 0) colFadeOut = colIdx;
+                    else if (_stricmp(szCol, "Defer Inst") == 0) colDefer = colIdx;
+                    else if (_stricmp(szCol, "Stop Inst") == 0) colStop = colIdx;
+                    else if (_stricmp(szCol, "Duration") == 0) colDur = colIdx;
+                    else if (_stricmp(szCol, "Compound") == 0) colComp = colIdx;
+                    else if (_stricmp(szCol, "Reverb") == 0) colRev = colIdx;
+                    else if (_stricmp(szCol, "Falloff") == 0) colFall = colIdx;
+                    else if (_stricmp(szCol, "Cache") == 0) colCache = colIdx;
+                    else if (_stricmp(szCol, "Async Only") == 0) colAsync = colIdx;
+                    else if (_stricmp(szCol, "Priority") == 0) colPrio = colIdx;
+                    else if (_stricmp(szCol, "Stream") == 0) colStream = colIdx;
+                    else if (_stricmp(szCol, "Stereo") == 0) colStereo = colIdx;
+                    else if (_stricmp(szCol, "Tracking") == 0) colTrack = colIdx;
+                    else if (_stricmp(szCol, "Solo") == 0) colSolo = colIdx;
+                    else if (_stricmp(szCol, "Music Vol") == 0) colMusicVol = colIdx;
+
+                    ++colIdx;
+                    if (c == '\r' || c == '\n')
+                    {
+                        while (pos < dwTxtBytes && (pTxtRaw[pos] == '\r' || pTxtRaw[pos] == '\n')) ++pos;
+                        break;
+                    }
+                    ++pos;
+                    tokStart = pos;
+                }
+                else
+                {
+                    ++pos;
+                }
+            }
+
+            // Count data rows
+            int32_t nMaxIdx = 0;
+            int32_t nRowOrder = 0;
+            size_t scanPos = pos;
+            while (scanPos < dwTxtBytes)
+            {
+                size_t lineEnd = scanPos;
+                while (lineEnd < dwTxtBytes && pTxtRaw[lineEnd] != '\r' && pTxtRaw[lineEnd] != '\n') ++lineEnd;
+                if (lineEnd > scanPos)
+                {
+                    ++nRowOrder;
+                }
+                scanPos = lineEnd;
+                while (scanPos < dwTxtBytes && (pTxtRaw[scanPos] == '\r' || pTxtRaw[scanPos] == '\n')) ++scanPos;
+            }
+            nMaxIdx = (nRowOrder > 0) ? (nRowOrder + 16) : 5000;
+            if (nMaxIdx < 5000) nMaxIdx = 5000;
+
+            uint8_t* pOutAlloc = static_cast<uint8_t*>(D2_CALLOC_POOL(nullptr, 4 + static_cast<size_t>(nMaxIdx) * 0xD0));
+            if (!pOutAlloc)
+            {
+                D2_FREE_POOL(nullptr, pTxtRaw);
+                if (cnt) *cnt = 0;
+                return nullptr;
+            }
+
+            int32_t nHighestId = 0;
+            int32_t nCurRow = 0;
+            while (pos < dwTxtBytes)
+            {
+                size_t lineEnd = pos;
+                while (lineEnd < dwTxtBytes && pTxtRaw[lineEnd] != '\r' && pTxtRaw[lineEnd] != '\n') ++lineEnd;
+                if (lineEnd > pos)
+                {
+                    // Check Expansion marker row
+                    const size_t firstTab = [&]() {
+                        size_t t = pos;
+                        while (t < lineEnd && pTxtRaw[t] != '\t') ++t;
+                        return t;
+                    }();
+                    const size_t nameLen = firstTab - pos;
+                    if (!(nameLen == 9 && _strnicmp(pTxtRaw + pos, "Expansion", 9) == 0))
+                    {
+                        int32_t nRecId = nCurRow;
+                        char szFileField[64] = {};
+                        int32_t aVals[32] = {};
+                        size_t cStart = pos;
+                        int32_t cIdx = 0;
+                        for (size_t p = pos; p <= lineEnd; ++p)
+                        {
+                            if (p == lineEnd || pTxtRaw[p] == '\t')
+                            {
+                                char szTok[64] = {};
+                                const size_t tl = (p - cStart < 63) ? (p - cStart) : 63;
+                                memcpy(szTok, pTxtRaw + cStart, tl);
+                                szTok[tl] = '\0';
+                                if (cIdx == colIndex && szTok[0]) nRecId = atoi(szTok);
+                                else if (cIdx == colFile) strncpy(szFileField, szTok, 59);
+                                else if (cIdx < 32 && szTok[0]) aVals[cIdx] = atoi(szTok);
+                                ++cIdx;
+                                cStart = p + 1;
+                            }
+                        }
+                        if (nRecId >= 0 && nRecId < nMaxIdx)
+                        {
+                            uint8_t* pDst = pOutAlloc + 4 + static_cast<size_t>(nRecId) * 0xD0;
+                            *reinterpret_cast<uint16_t*>(pDst + 0x00) = static_cast<uint16_t>(nRecId);
+                            strncpy(reinterpret_cast<char*>(pDst + 0x02), szFileField, 59);
+                            if (colVol >= 0 && colVol < 32)       *reinterpret_cast<uint32_t*>(pDst + 0x7A) = static_cast<uint32_t>(aVals[colVol]);
+                            if (colGrp >= 0 && colGrp < 32)       *(pDst + 0x7E) = static_cast<uint8_t>(aVals[colGrp]);
+                            if (colLoop >= 0 && colLoop < 32)     *(pDst + 0x7F) = static_cast<uint8_t>(aVals[colLoop]);
+                            if (colFadeIn >= 0 && colFadeIn < 32) *reinterpret_cast<uint32_t*>(pDst + 0x80) = static_cast<uint32_t>(aVals[colFadeIn]);
+                            if (colFadeOut >= 0 && colFadeOut < 32) *reinterpret_cast<uint32_t*>(pDst + 0x84) = static_cast<uint32_t>(aVals[colFadeOut]);
+                            if (colDefer >= 0 && colDefer < 32)   *(pDst + 0x88) = static_cast<uint8_t>(aVals[colDefer]);
+                            if (colStop >= 0 && colStop < 32)     *(pDst + 0x89) = static_cast<uint8_t>(aVals[colStop]);
+                            if (colDur >= 0 && colDur < 32)       *reinterpret_cast<uint32_t*>(pDst + 0x8A) = static_cast<uint32_t>(aVals[colDur]);
+                            if (colComp >= 0 && colComp < 32)     *reinterpret_cast<uint16_t*>(pDst + 0x8E) = static_cast<uint16_t>(aVals[colComp]);
+                            if (colRev >= 0 && colRev < 32)       *reinterpret_cast<uint32_t*>(pDst + 0x90) = static_cast<uint32_t>(aVals[colRev]);
+                            if (colFall >= 0 && colFall < 32)      *reinterpret_cast<uint32_t*>(pDst + 0x94) = static_cast<uint32_t>(aVals[colFall]);
+                            if (colCache >= 0 && colCache < 32)   *(pDst + 0x98) = static_cast<uint8_t>(aVals[colCache]);
+                            if (colAsync >= 0 && colAsync < 32)   *(pDst + 0x99) = static_cast<uint8_t>(aVals[colAsync]);
+                            if (colPrio >= 0 && colPrio < 32)     *(pDst + 0x9A) = static_cast<uint8_t>(aVals[colPrio]);
+                            if (colStream >= 0 && colStream < 32) *(pDst + 0x9B) = static_cast<uint8_t>(aVals[colStream]);
+                            if (colStereo >= 0 && colStereo < 32) *(pDst + 0x9C) = static_cast<uint8_t>(aVals[colStereo]);
+                            if (colTrack >= 0 && colTrack < 32)   *(pDst + 0x9D) = static_cast<uint8_t>(aVals[colTrack]);
+                            if (colSolo >= 0 && colSolo < 32)     *(pDst + 0x9E) = static_cast<uint8_t>(aVals[colSolo]);
+                            if (colMusicVol >= 0 && colMusicVol < 32) *(pDst + 0x9F) = static_cast<uint8_t>(aVals[colMusicVol]);
+                            if (nRecId + 1 > nHighestId) nHighestId = nRecId + 1;
+                        }
+                        ++nCurRow;
+                    }
+                }
+                pos = lineEnd;
+                while (pos < dwTxtBytes && (pTxtRaw[pos] == '\r' || pTxtRaw[pos] == '\n')) ++pos;
+            }
+
+            D2_FREE_POOL(nullptr, pTxtRaw);
+            *reinterpret_cast<int32_t*>(pOutAlloc) = nHighestId;
+            if (cnt) *cnt = nHighestId;
+            return pOutAlloc + 4;
+        }
+
+        char szBinPath[MAX_PATH] = {};
+        snprintf(szBinPath, sizeof(szBinPath), "DATA\\GLOBAL\\EXCEL\\%s.bin", sz);
+        size_t dwBytes = 0;
+        uint8_t* pRaw = static_cast<uint8_t*>(ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT((HD2ARCHIVE)pool, szBinPath, &dwBytes));
+        if (!pRaw || dwBytes < 4)
+        {
+            if (pRaw) D2_FREE_POOL(nullptr, pRaw);
+            if (cnt) *cnt = 0;
+            return nullptr;
+        }
+        const int32_t nRecs = *reinterpret_cast<const int32_t*>(pRaw);
+        if (nRecs <= 0 || rsz <= 0 || dwBytes < 4 + static_cast<size_t>(nRecs) * static_cast<size_t>(rsz))
+        {
+            D2_FREE_POOL(nullptr, pRaw);
+            if (cnt) *cnt = 0;
+            return nullptr;
+        }
+        if (cnt) *cnt = nRecs;
+        return pRaw + 4;
+    }
+    return DATATBLS_CompileTxt((HD2ARCHIVE)pool, sz, f, cnt, (size_t)rsz);
+}
 #pragma comment(linker, "/alternatename:_D2Common_10576_CompileTxtFile@20=_Bridge_D2Common_10576_CompileTxtFile_95015@20")
+void __stdcall Bridge_D2Common_10579_UnloadBin_95016(void* pBin)
+{
+    if (pBin)
+    {
+        D2_FREE_POOL(nullptr, static_cast<char*>(pBin) - 4);
+    }
+}
+#pragma comment(linker, "/alternatename:_D2Common_10579_UnloadBin@4=_Bridge_D2Common_10579_UnloadBin_95016@4")
 int32_t __stdcall Bridge_D2Common_10611_38978(D2ActiveRoomStrc* r, int32_t x, int32_t y) { return r ? COLLISION_CheckMask(r, x, y, 1) : 0; }
 #pragma comment(linker, "/alternatename:_D2Common_10611@12=_Bridge_D2Common_10611_38978@12")
 D2UnitStrc* __stdcall Bridge_D2Common_10776_GetNextInventoryItem_60394(D2UnitStrc* p) { return p ? INVENTORY_GetNextItem(p) : nullptr; }
@@ -3785,6 +3986,405 @@ int __cdecl D2Client_GetMouseY_6FB55BD0(void)
 {
     return gnMouseY;
 }
+struct D2MercForHireEntryStrc
+{
+    uint16_t wNameIdx;
+    uint16_t wPad;
+    uint32_t dwMercSeed;
+};
+
+D2MercForHireEntryStrc g_aMercForHireEntries[16] = {};
+int32_t g_nMercForHireCount = 0;
+uint16_t g_wMercDeadNameIdx = 0;
+uint32_t g_dwMercReviveCost = 0;
+
+void __fastcall D2Client_ClearMercForHireList(void)
+{
+    memset(g_aMercForHireEntries, 0, sizeof(g_aMercForHireEntries));
+    g_nMercForHireCount = 0;
+    g_wMercDeadNameIdx = 0;
+    g_dwMercReviveCost = 0;
+}
+
+void __fastcall D2Client_AddMercForHireEntry(uint16_t wNameIdx, uint32_t dwMercSeed)
+{
+    for (int32_t i = 0; i < g_nMercForHireCount; ++i)
+    {
+        if (g_aMercForHireEntries[i].dwMercSeed == dwMercSeed)
+        {
+            g_aMercForHireEntries[i].wNameIdx = wNameIdx;
+            return;
+        }
+    }
+    if (g_nMercForHireCount < 16)
+    {
+        g_aMercForHireEntries[g_nMercForHireCount].wNameIdx = wNameIdx;
+        g_aMercForHireEntries[g_nMercForHireCount].dwMercSeed = dwMercSeed;
+        ++g_nMercForHireCount;
+    }
+}
+
+void __fastcall D2Client_SetMercReviveInfo(uint16_t wDeadNameIdx, uint32_t dwReviveCost)
+{
+    g_wMercDeadNameIdx = wDeadNameIdx;
+    g_dwMercReviveCost = dwReviveCost;
+}
+
+struct D2ClientPortalInfoStrc
+{
+    uint32_t dwPortalGUID;
+    uint32_t dwOwnerGUID;
+    uint8_t  nDestLevel;
+    uint8_t  nFlags;
+    char     szOwnerName[18];
+};
+
+static D2ClientPortalInfoStrc s_aPortalInfo[16] = {};
+
+void __fastcall D2Client_ClearPortalInfoTable(void)
+{
+    memset(s_aPortalInfo, 0, sizeof(s_aPortalInfo));
+}
+
+void __fastcall D2Client_UpdatePortalInfo(uint32_t dwPortalGUID, uint8_t nDestLevel, uint8_t nFlags, uint32_t dwOwnerGUID, const char* szOwnerName)
+{
+    if (dwPortalGUID == 0 || dwPortalGUID == 0xFFFFFFFFu)
+    {
+        return;
+    }
+    int32_t nSlot = -1;
+    for (int32_t i = 0; i < 16; ++i)
+    {
+        if (s_aPortalInfo[i].dwPortalGUID == dwPortalGUID)
+        {
+            nSlot = i;
+            break;
+        }
+        if (nSlot < 0 && s_aPortalInfo[i].dwPortalGUID == 0)
+        {
+            nSlot = i;
+        }
+    }
+    if (nSlot < 0)
+    {
+        nSlot = static_cast<int32_t>(dwPortalGUID & 15u);
+        memset(&s_aPortalInfo[nSlot], 0, sizeof(D2ClientPortalInfoStrc));
+    }
+    s_aPortalInfo[nSlot].dwPortalGUID = dwPortalGUID;
+    if (nDestLevel != 0)
+    {
+        s_aPortalInfo[nSlot].nDestLevel = nDestLevel;
+    }
+    if (nFlags != 0)
+    {
+        s_aPortalInfo[nSlot].nFlags = nFlags;
+    }
+    if (dwOwnerGUID != 0)
+    {
+        s_aPortalInfo[nSlot].dwOwnerGUID = dwOwnerGUID;
+    }
+    if (szOwnerName && szOwnerName[0] != '\0')
+    {
+        strncpy(s_aPortalInfo[nSlot].szOwnerName, szOwnerName, 16);
+        s_aPortalInfo[nSlot].szOwnerName[16] = '\0';
+    }
+}
+
+static const D2ClientPortalInfoStrc* FindPortalInfoByGuid(uint32_t dwPortalGUID)
+{
+    for (int32_t i = 0; i < 16; ++i)
+    {
+        if (s_aPortalInfo[i].dwPortalGUID == dwPortalGUID)
+        {
+            return &s_aPortalInfo[i];
+        }
+    }
+    return nullptr;
+}
+
+struct D2ScreenMessageEntryStrc
+{
+    wchar_t  wszText[160];
+    int32_t  nColor;
+    uint32_t dwTickMs;
+};
+
+static D2ScreenMessageEntryStrc s_aScreenMessages[24] = {};
+static int32_t s_nScreenMessageCount = 0;
+
+void __fastcall D2Client_ClearScreenMessages(void)
+{
+    memset(s_aScreenMessages, 0, sizeof(s_aScreenMessages));
+    s_nScreenMessageCount = 0;
+}
+
+void __fastcall D2Client_PushScreenMessage(const wchar_t* wszText, int32_t nColor)
+{
+    if (!wszText || !wszText[0])
+    {
+        return;
+    }
+    if (s_nScreenMessageCount >= 24)
+    {
+        memmove(&s_aScreenMessages[0], &s_aScreenMessages[1], 23 * sizeof(D2ScreenMessageEntryStrc));
+        s_nScreenMessageCount = 23;
+    }
+    D2ScreenMessageEntryStrc& dst = s_aScreenMessages[s_nScreenMessageCount++];
+    wcsncpy(dst.wszText, wszText, 159);
+    dst.wszText[159] = 0;
+    dst.nColor = nColor;
+    dst.dwTickMs = GetTickCount();
+}
+
+void __fastcall D2Client_PushScreenMessageUtf8(const char* szText, int32_t nColor)
+{
+    if (!szText || !szText[0])
+    {
+        return;
+    }
+    Unicode wszBuf[160] = {};
+    Unicode::win2Unicode(wszBuf, szText, 159);
+    D2Client_PushScreenMessage(reinterpret_cast<const wchar_t*>(wszBuf), nColor);
+}
+
+void __fastcall D2Client_DrawScreenMessageFeed(void)
+{
+    const uint32_t dwNow = GetTickCount();
+    D2Win_10127_SetFont(D2FONT_FONT16);
+    int32_t nRow = 0;
+    const int32_t nStart = (s_nScreenMessageCount > 6) ? (s_nScreenMessageCount - 6) : 0;
+    for (int32_t i = nStart; i < s_nScreenMessageCount; ++i)
+    {
+        if (dwNow - s_aScreenMessages[i].dwTickMs <= 8000u)
+        {
+            D2Win_10117_DrawText(
+                reinterpret_cast<const Unicode*>(s_aScreenMessages[i].wszText),
+                18,
+                46 + nRow * 16,
+                s_aScreenMessages[i].nColor,
+                0);
+            ++nRow;
+        }
+    }
+
+    if (gaPanelStates[D2PANEL_MSGLOG] != 0)
+    {
+        const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+        const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+        D2GFX_DrawBox(80, 56, nW - 80, nH - 96, 0x00u, DRAWMODE_TRANS75);
+        RECT rcLog = { 80, 56, nW - 80, nH - 96 };
+        D2GFX_UtilRect(&rcLog, 0x0Du);
+
+        Unicode wszTitle[32] = {};
+        Unicode::win2Unicode(wszTitle, "Message Log", 31);
+        D2Win_10127_SetFont(D2FONT_FONT24);
+        const int32_t nTw = D2Win_10121_GetTextWidth(wszTitle);
+        D2Win_10117_DrawText(wszTitle, (nW - nTw) / 2, 82, 4, 0);
+
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        int32_t nLogRow = 0;
+        const int32_t nLogStart = (s_nScreenMessageCount > 18) ? (s_nScreenMessageCount - 18) : 0;
+        for (int32_t i = nLogStart; i < s_nScreenMessageCount; ++i, ++nLogRow)
+        {
+            D2Win_10117_DrawText(
+                reinterpret_cast<const Unicode*>(s_aScreenMessages[i].wszText),
+                100,
+                110 + nLogRow * 18,
+                s_aScreenMessages[i].nColor,
+                0);
+        }
+    }
+}
+
+int32_t __fastcall D2Client_ShouldRenderActRoomWithCenter(D2ActiveRoomStrc* pCenterRoom, D2ActiveRoomStrc* pCandidateRoom)
+{
+    if (pCandidateRoom == nullptr)
+    {
+        return 0;
+    }
+    if (pCenterRoom == nullptr || pCenterRoom == pCandidateRoom)
+    {
+        return 1;
+    }
+    const int32_t nCenterLvl = DUNGEON_GetLevelIdFromRoom(pCenterRoom);
+    const int32_t nCandLvl   = DUNGEON_GetLevelIdFromRoom(pCandidateRoom);
+    if (nCenterLvl <= 0 || nCandLvl <= 0)
+    {
+        return 1;
+    }
+    if (nCenterLvl == nCandLvl)
+    {
+        return 1;
+    }
+    D2LevelsTxt* pCenterTxt = DATATBLS_GetLevelsTxtRecord(nCenterLvl);
+    D2LevelsTxt* pCandTxt   = DATATBLS_GetLevelsTxtRecord(nCandLvl);
+    const bool bCenterInside = (pCenterTxt != nullptr && pCenterTxt->nIsInside != 0);
+    const bool bCandInside   = (pCandTxt != nullptr && pCandTxt->nIsInside != 0);
+    if (bCenterInside)
+    {
+        return 0;
+    }
+    return bCandInside ? 0 : 1;
+}
+
+D2UnitStrc* __fastcall D2Client_FindAnyItemByGUID(uint32_t dwItemGUID)
+{
+    if (dwItemGUID == 0 || dwItemGUID == 0xFFFFFFFFu)
+    {
+        return nullptr;
+    }
+    if (D2UnitStrc* pDirect = D2Client_FindServerSideUnit(dwItemGUID, UNIT_ITEM))
+    {
+        return pDirect;
+    }
+    if (gpPlayerUnit && gpPlayerUnit->pInventory)
+    {
+        if (D2UnitStrc* pCur = INVENTORY_GetCursorItem(gpPlayerUnit->pInventory))
+        {
+            if (pCur->dwUnitId == dwItemGUID)
+            {
+                return pCur;
+            }
+        }
+        for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(gpPlayerUnit->pInventory); pIt != nullptr; pIt = INVENTORY_GetNextItem(pIt))
+        {
+            if (pIt->dwUnitId == dwItemGUID)
+            {
+                return pIt;
+            }
+        }
+    }
+    if (D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(gpPlayerUnit))
+    {
+        if (pMerc->pInventory)
+        {
+            for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(pMerc->pInventory); pIt != nullptr; pIt = INVENTORY_GetNextItem(pIt))
+            {
+                if (pIt->dwUnitId == dwItemGUID)
+                {
+                    return pIt;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+extern int32_t g_bClientSoundOption;
+#pragma pack(push, 1)
+struct D2SoundsTxtStubStrc
+{
+    uint16_t wIndex;
+    char     szFileName[60];
+    uint32_t dwVolume;
+    uint8_t  nGroupSize;
+    uint8_t  nLoop;
+    uint32_t dwFadeIn;
+    uint32_t dwFadeOut;
+    uint8_t  bDeferInst;
+    uint8_t  bStopInst;
+    uint32_t dwDuration;
+    uint16_t wCompound;
+    uint32_t dwReverb;
+    uint32_t dwFalloff;
+    uint8_t  bCache;
+    uint8_t  bAsyncOnly;
+    uint8_t  nPriority;
+    uint8_t  bStream;
+    uint8_t  bStereo;
+    uint8_t  bTracking;
+    uint8_t  bSolo;
+    uint8_t  bMusicVol;
+    uint32_t dwBlock1;
+    uint32_t dwBlock2;
+    uint32_t dwBlock3;
+    uint32_t dwLastPlayTick;
+    uint32_t dwHistoryIdx[4];
+    uint8_t  nHistoryPos;
+    uint8_t  pad85[5];
+    void*    pCacheNode;
+};
+#pragma pack(pop)
+extern D2SoundsTxtStubStrc* __fastcall SOUNDHDR_GetSoundTxtRecord(int32_t nSoundId);
+
+void __fastcall D2Client_PlaySoundById(int32_t nSoundId)
+{
+    if (!g_bClientSoundOption || nSoundId <= 0)
+    {
+        return;
+    }
+    int32_t nResolvedId = SOUNDHDR_ResolveRandomGroupSoundId(nSoundId);
+    if (nResolvedId <= 0)
+    {
+        nResolvedId = nSoundId;
+    }
+    const D2SoundsTxtStubStrc* pRec = SOUNDHDR_GetSoundTxtRecord(nResolvedId);
+    if (!pRec || !pRec->szFileName[0] || _stricmp(pRec->szFileName, "none") == 0)
+    {
+        return;
+    }
+    char szSfxPath[80] = {};
+    snprintf(szSfxPath, sizeof(szSfxPath), "data\\global\\sfx\\%s", pRec->szFileName);
+    if (pRec->bMusicVol || pRec->bStream)
+    {
+        D2SOUND_PlayMusicFile(szSfxPath, pRec->nLoop != 0);
+        return;
+    }
+    if (!D2SOUND_FastIsInitialized())
+    {
+        D2SOUND_FastInit();
+    }
+    if (D2SOUND_FastIsInitialized())
+    {
+        D2SOUND_FastCacheSound(szSfxPath);
+        D2SOUND_FastPlaySound(szSfxPath);
+    }
+}
+
+void __fastcall D2Client_UpdateAreaMusic(int32_t nActNo, int32_t nLevelId)
+{
+    static int32_t s_nLastMusicLevel = -1;
+    if (!g_bClientSoundOption)
+    {
+        s_nLastMusicLevel = -1;
+        return;
+    }
+    if (nLevelId == s_nLastMusicLevel && D2SOUND_IsMusicPlaying())
+    {
+        return;
+    }
+    s_nLastMusicLevel = nLevelId;
+    const char* szTrack = nullptr;
+    if (DUNGEON_IsTownLevelId(nLevelId))
+    {
+        static const char* const kTownTracks[5] = {
+            "data\\global\\music\\Act1\\town1.wav",
+            "data\\global\\music\\Act2\\town2.wav",
+            "data\\global\\music\\Act3\\town3.wav",
+            "data\\global\\music\\Act4\\mesa.wav",
+            "data\\global\\music\\Act5\\xtown.wav"
+        };
+        const int32_t nSafeAct = (nActNo >= 0 && nActNo < 5) ? nActNo : 0;
+        szTrack = kTownTracks[nSafeAct];
+    }
+    else
+    {
+        static const char* const kWildTracks[5] = {
+            "data\\global\\music\\Act1\\wild.wav",
+            "data\\global\\music\\Act2\\desert.wav",
+            "data\\global\\music\\Act3\\jungle.wav",
+            "data\\global\\music\\Act4\\diablo.wav",
+            "data\\global\\music\\Act5\\siege.wav"
+        };
+        const int32_t nSafeAct = (nActNo >= 0 && nActNo < 5) ? nActNo : 0;
+        szTrack = kWildTracks[nSafeAct];
+    }
+    if (szTrack)
+    {
+        D2SOUND_PlayMusicFile(szTrack, TRUE);
+    }
+}
+
 struct Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc * a0)
 {
     if (!a0) return nullptr;
@@ -3813,15 +4413,107 @@ struct Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc *
                 }
             }
         }
+        if (a0->pMonsterData && (a0->pMonsterData->nTypeFlag & 0x02u) != 0) // MONTYPEFLAG_SUPERUNIQUE
+        {
+            if (D2SuperUniquesTxt* pSuper = DATATBLS_GetSuperUniquesTxtRecord(a0->pMonsterData->wBossHcIdx))
+            {
+                if (pSuper->wNameStr != 0)
+                {
+                    const Unicode* pSuperName = D2LANG_GetStringFromTblIndex(pSuper->wNameStr);
+                    if (pSuperName && pSuperName[0].ch != 0)
+                    {
+                        return pSuperName;
+                    }
+                }
+            }
+        }
         D2MonStatsTxt* pMon = DATATBLS_GetMonStatsTxtRecord(a0->dwClassId);
         if (pMon && pMon->wNameStr != 0)
             return D2LANG_GetStringFromTblIndex(pMon->wNameStr);
     }
     else if (a0->dwUnitType == UNIT_OBJECT)
     {
+        if (a0->dwClassId == 59 || a0->dwClassId == 60)
+        {
+            static Unicode s_wszPortalLabel[128] = {};
+            const D2ClientPortalInfoStrc* pPortalInfo = FindPortalInfoByGuid(a0->dwUnitId);
+            int32_t nDestLvl = pPortalInfo ? pPortalInfo->nDestLevel : 0;
+            if (nDestLvl <= 0 && a0->pObjectData)
+            {
+                nDestLvl = a0->pObjectData->InteractType;
+            }
+            const wchar_t* wszDest = L"";
+            if (nDestLvl > 0)
+            {
+                if (D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(nDestLvl))
+                {
+                    wszDest = pLvlTxt->wszLevelWarp[0]
+                        ? reinterpret_cast<const wchar_t*>(pLvlTxt->wszLevelWarp)
+                        : reinterpret_cast<const wchar_t*>(pLvlTxt->wszLevelName);
+                }
+            }
+            wchar_t wszOwner[24] = {};
+            if (pPortalInfo && pPortalInfo->szOwnerName[0] != '\0')
+            {
+                for (int i = 0; i < 16 && pPortalInfo->szOwnerName[i]; ++i)
+                {
+                    wszOwner[i] = static_cast<wchar_t>(static_cast<uint8_t>(pPortalInfo->szOwnerName[i]));
+                }
+            }
+            if (wszOwner[0] && wszDest && wszDest[0])
+            {
+                swprintf(reinterpret_cast<wchar_t*>(s_wszPortalLabel), 127, L"%ls (%ls's Town Portal)", wszDest, wszOwner);
+                return s_wszPortalLabel;
+            }
+            if (wszDest && wszDest[0])
+            {
+                swprintf(reinterpret_cast<wchar_t*>(s_wszPortalLabel), 127, L"Town Portal (%ls)", wszDest);
+                return s_wszPortalLabel;
+            }
+            if (wszOwner[0])
+            {
+                swprintf(reinterpret_cast<wchar_t*>(s_wszPortalLabel), 127, L"%ls's Town Portal", wszOwner);
+                return s_wszPortalLabel;
+            }
+        }
         D2ObjectsTxt* pObj = DATATBLS_GetObjectsTxtRecord(a0->dwClassId);
         if (pObj && pObj->wszName[0])
             return (const Unicode*)pObj->wszName;
+    }
+    else if (a0->dwUnitType == UNIT_TILE)
+    {
+        D2ActiveRoomStrc* pRoom = UNITS_GetRoom(a0);
+        if (!pRoom && gpClientAct)
+        {
+            pRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, UNITS_GetXPosition(a0), UNITS_GetYPosition(a0));
+        }
+        if (pRoom)
+        {
+            const int32_t nDestLvl = DUNGEON_GetWarpDestinationLevel(pRoom, a0->dwClassId);
+            if (nDestLvl > 0)
+            {
+                if (D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(nDestLvl))
+                {
+                    if (pLvlTxt->wszLevelWarp[0])
+                        return reinterpret_cast<const Unicode*>(pLvlTxt->wszLevelWarp);
+                    if (pLvlTxt->wszLevelName[0])
+                        return reinterpret_cast<const Unicode*>(pLvlTxt->wszLevelName);
+                }
+            }
+        }
+    }
+    else if (a0->dwUnitType == UNIT_PLAYER)
+    {
+        static Unicode s_wszPlrCorpse[64] = {};
+        const D2PlayerDataStrc* pPlrData = UNITS_GetPlayerData(a0);
+        const char* szPlrName = (pPlrData && pPlrData->szName[0]) ? pPlrData->szName : "Hero";
+        char szFull[64] = {};
+        if (a0->dwAnimMode == PLRMODE_DEAD)
+            snprintf(szFull, sizeof(szFull), "%s's Corpse", szPlrName);
+        else
+            snprintf(szFull, sizeof(szFull), "%s", szPlrName);
+        Unicode::win2Unicode(s_wszPlrCorpse, szFull, 63);
+        return s_wszPlrCorpse;
     }
     return nullptr;
 }
@@ -4049,7 +4741,7 @@ void __fastcall D2Client_PlayDelayedSound(int a0, int a1)
 }
 void __fastcall D2Client_PlayGlobalSound_6FAE1470(int a0, int a1)
 {
-    (void)a0; (void)a1;
+    (void)a1; D2Client_PlaySoundById(a0);
 }
 void __stdcall D2Client_PlayObjectOperateSound_6FAE8170(struct D2UnitStrc * a0)
 {
@@ -4057,31 +4749,31 @@ void __stdcall D2Client_PlayObjectOperateSound_6FAE8170(struct D2UnitStrc * a0)
 }
 void __fastcall D2Client_PlayPositionalSoundAtCoords_6FAE12B0(int a0, int a1, int a2, int a3, int a4, int a5)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5;
+    (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; D2Client_PlaySoundById(a0);
 }
 void __fastcall D2Client_PlaySoundAtCoords(int a0, int a1, int a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    (void)a1; (void)a2; D2Client_PlaySoundById(a0);
 }
 void __fastcall D2Client_PlaySoundCentered(int a0)
 {
-    (void)a0;
+    D2Client_PlaySoundById(a0);
 }
 int __fastcall D2Client_PlayUnitPositionalSound(struct D2UnitStrc * a0, int a1, unsigned int a2, int a3, int a4)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; return 0;
+    (void)a0; (void)a2; (void)a3; (void)a4; D2Client_PlaySoundById(a1); return 1;
 }
 void __fastcall D2Client_PlayUnitSound(int a0, unsigned int a1, unsigned short a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    (void)a0; (void)a1; D2Client_PlaySoundById((int32_t)a2);
 }
 void __fastcall D2Client_PlayUnitSound(struct D2UnitStrc * a0, int a1)
 {
-    (void)a0; (void)a1;
+    (void)a0; D2Client_PlaySoundById(a1);
 }
 void __stdcall D2Client_PlayUnitSound_6FAE1FA0(int a0, struct D2UnitStrc * a1, int a2, int a3, int a4)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4;
+    (void)a1; (void)a2; (void)a3; (void)a4; D2Client_PlaySoundById(a0);
 }
 void __fastcall D2Client_PreloadSound_6FAE1220(int a0)
 {
@@ -4129,7 +4821,25 @@ void __fastcall D2Client_RemoveUnitFromRoomAndFree(struct D2UnitStrc * a0)
 }
 void __fastcall D2Client_RemoveUnitFromServerHashTable(struct D2UnitStrc * a0)
 {
-    if (a0 && a0->dwUnitType < 6) D2Client_RemoveUnitFromHashTable(gapServerSideUnitHashTables[a0->dwUnitType], a0->dwUnitId & 0x7F, a0->dwUnitId, a0->dwUnitType);
+    if (!a0 || a0->dwUnitType >= 6)
+    {
+        return;
+    }
+    D2UnitStrc** ppHead = &gapServerSideUnitHashTables[a0->dwUnitType][a0->dwUnitId & 0x7F];
+    D2UnitStrc* pPrev = nullptr;
+    for (D2UnitStrc* pCur = *ppHead; pCur != nullptr; pCur = pCur->pListNext)
+    {
+        if (pCur == a0)
+        {
+            if (pPrev == nullptr)
+                *ppHead = pCur->pListNext;
+            else
+                pPrev->pListNext = pCur->pListNext;
+            pCur->pListNext = nullptr;
+            return;
+        }
+        pPrev = pCur;
+    }
 }
 void __fastcall D2Client_RemoveUnitOverlay_6FB41600(struct D2UnitStrc * a0, int a1)
 {
@@ -4157,6 +4867,61 @@ void __fastcall D2Client_ScreenToWorldCoords_6FB23AD0(int a0, int a1, int * a2, 
 }
 void __fastcall D2Client_SetLeftSkillForLocalPlayer(int a0, int a1);
 void __fastcall D2Client_SetRightSkillForLocalPlayer(int a0, int a1);
+
+void __fastcall D2Client_SelectHotkeyedSkill(int a0);
+void __fastcall D2Client_CycleSkillHotkeyByWheel(int32_t nDelta)
+{
+    if (!gpPlayerUnit || nDelta == 0)
+    {
+        return;
+    }
+    int32_t aBoundSlots[16] = {};
+    int32_t nBoundCount = 0;
+    for (int32_t i = 0; i < 16; ++i)
+    {
+        if (g_anSkillHotkeyId[i] >= 0 && !g_abSkillHotkeyLeft[i])
+        {
+            aBoundSlots[nBoundCount++] = i;
+        }
+    }
+    if (nBoundCount == 0)
+    {
+        for (int32_t i = 0; i < 16; ++i)
+        {
+            if (g_anSkillHotkeyId[i] >= 0)
+            {
+                aBoundSlots[nBoundCount++] = i;
+            }
+        }
+    }
+    if (nBoundCount <= 0)
+    {
+        return;
+    }
+
+    D2SkillStrc* pCurRight = UNITS_GetRightSkill(gpPlayerUnit);
+    D2SkillStrc* pCurLeft  = UNITS_GetLeftSkill(gpPlayerUnit);
+    const int32_t nCurRightId = pCurRight ? SKILLS_GetSkillIdFromSkill(pCurRight, __FILE__, __LINE__) : -1;
+    const int32_t nCurLeftId  = pCurLeft  ? SKILLS_GetSkillIdFromSkill(pCurLeft,  __FILE__, __LINE__) : -1;
+
+    int32_t nCurIdx = -1;
+    for (int32_t i = 0; i < nBoundCount; ++i)
+    {
+        const int32_t s = aBoundSlots[i];
+        const int32_t nActiveId = g_abSkillHotkeyLeft[s] ? nCurLeftId : nCurRightId;
+        if (g_anSkillHotkeyId[s] == nActiveId)
+        {
+            nCurIdx = i;
+            break;
+        }
+    }
+
+    const int32_t nStep = (nDelta > 0) ? -1 : 1;
+    const int32_t nNextIdx = (nCurIdx < 0)
+        ? ((nStep > 0) ? 0 : (nBoundCount - 1))
+        : ((nCurIdx + nStep + nBoundCount) % nBoundCount);
+    D2Client_SelectHotkeyedSkill(aBoundSlots[nNextIdx]);
+}
 
 void __fastcall D2Client_SelectHotkeyedSkill(int a0)
 {
@@ -4882,7 +5647,7 @@ void __stdcall PLAYER_AssignSkillHotkeyFromBar(int a0)
 }
 void __stdcall PLAYER_CycleActiveSkillHotkey(int a0)
 {
-    (void)a0;
+    D2Client_CycleSkillHotkeyByWheel(a0 >= 0 ? 1 : -1);
 }
 extern void __fastcall D2Client_StripAndFreeUnitInventoryItems(D2UnitStrc* pUnit);
 void __fastcall PLAYER_FreeClientPlayer(struct D2UnitStrc * a0)
@@ -5074,19 +5839,19 @@ int __fastcall SOUND_PickRandomVariant(int a0)
 }
 void __stdcall SOUND_PlaySoundEffect(int a0, int a1, int a2, int a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3;
+    (void)a1; (void)a2; (void)a3; D2Client_PlaySoundById(a0);
 }
 void __stdcall SOUND_PlaySoundEffect(unsigned int a0, struct D2UnitStrc * a1, int a2, int a3, int a4)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4;
+    (void)a1; (void)a2; (void)a3; (void)a4; D2Client_PlaySoundById((int32_t)a0);
 }
 void __fastcall SOUND_PlayUiClick(int a0)
 {
-    (void)a0;
+    D2Client_PlaySoundById(a0 > 0 ? a0 : 4);
 }
 void __stdcall SOUND_PlayUnitSpeech(struct D2UnitStrc * a0, unsigned int a1)
 {
-    (void)a0; (void)a1;
+    (void)a0; D2Client_PlaySoundById((int32_t)a1);
 }
 void __stdcall TEXT_CloseQuestSpeechBox(void)
 {
@@ -5094,7 +5859,7 @@ void __stdcall TEXT_CloseQuestSpeechBox(void)
 }
 void __stdcall TEXT_DisplaySystemMessage(struct Unicode const * a0, unsigned char a1)
 {
-    (void)a0; (void)a1;
+    if (a0) D2Client_PushScreenMessage(reinterpret_cast<const wchar_t*>(a0), a1);
 }
 void __stdcall TEXT_PlayQuestSpeechBox(unsigned short a0, int a1)
 {
@@ -5194,7 +5959,7 @@ void __fastcall UNITSND_InitMonsterAudio(struct D2UnitStrc * a0)
 }
 void __stdcall UNITSND_PlayUiOrVoiceSound(int a0, int a1, int a2, int a3, int a4)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4;
+    (void)a1; (void)a2; (void)a3; (void)a4; D2Client_PlaySoundById(a0);
 }
 void __fastcall UNITSND_PlayUnitModeSound(struct D2UnitStrc * a0, int a1, int a2)
 {
@@ -5216,9 +5981,12 @@ void __fastcall UNIT_AssignClientPlayer(unsigned char * a0)
 {
     if (!a0) return; uint32_t dwGUID = *(const uint32_t*)(a0 + 1); uint8_t bClass = a0[5]; char szName[17] = {}; memcpy(szName, a0 + 6, 16); int32_t nX = *(const uint16_t*)(a0 + 22); int32_t nY = *(const uint16_t*)(a0 + 24); D2UnitStrc* pPlr = D2Client_FindServerSideUnit(dwGUID, UNIT_PLAYER); if (pPlr) { if (nX || nY) D2Client_TeleportUnitToCoordinates(pPlr, nX, nY, 0); } else { pPlr = D2Client_AllocClientPlayerUnit(dwGUID, bClass, nX, nY, szName); } if (pPlr && (gpPlayerUnit == nullptr || gpPlayerUnit->dwUnitId == dwGUID)) { gpPlayerUnit = pPlr; }
 }
+extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nTileX, int32_t nTileY, int32_t nExplicitLevelId);
 void __fastcall UNIT_AssignClientWarp(struct D2UnitStrc * a0, unsigned short a1, int a2, int a3)
 {
-    if (!a0) return; D2Client_InitializeUnitInstance(a2, a0, a0->dwUnitId, a3, a1, 0, UNIT_TILE, 0);
+    if (!a0) return;
+    if (a2 > 0 || a3 > 0) D2Client_SafeStreamRoomAtTile(a2 / 5, a3 / 5, 0);
+    D2Client_InitializeUnitInstance(a2, a0, a0->dwUnitId, a3, a1, 0, UNIT_TILE, 0);
 }
 struct D2UnitStrc * __fastcall UNIT_FindClientUnit(int a0, int a1)
 {
@@ -5258,7 +6026,7 @@ void __fastcall UNIT_LoadMonsterPaletteAssets(int a0, int a1, unsigned char * a2
 }
 void __fastcall UNIT_PlaySound(struct D2UnitStrc * a0, unsigned short a1)
 {
-    (void)a0; (void)a1;
+    (void)a0; D2Client_PlaySoundById((int32_t)a1);
 }
 void __fastcall UNIT_RemoveClientUnit(unsigned char a0, unsigned int a1)
 {

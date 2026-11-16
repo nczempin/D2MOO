@@ -1600,11 +1600,52 @@ void __fastcall UI_DrawMonsterHoverBanner(D2UnitStrc* pMonUnit /*ecx*/)
     const int32_t nBarW = UI_CalcMonsterLifeBarWidth(pMonUnit);
     const int32_t nFillW = (nBarW * (nHalfW * 2)) / 128;
 
+    int32_t nNameColor = 0;
+    wchar_t wszModsLine[192] = {};
+    if (pMonUnit->pMonsterData != nullptr) {
+        const uint8_t nTypeFlag = pMonUnit->pMonsterData->nTypeFlag;
+        if ((nTypeFlag & 0x0Au) != 0) { // Unique or SuperUnique
+            nNameColor = 4; // Gold
+        } else if ((nTypeFlag & 0x04u) != 0) { // Champion
+            nNameColor = 3; // Blue
+        }
+        for (int m = 0; m < 4 && pMonUnit->pMonsterData->nMonUMod[m] != 0; ++m) {
+            const wchar_t* wszMod = nullptr;
+            switch (pMonUnit->pMonsterData->nMonUMod[m]) {
+            case 5:  wszMod = L"Extra Strong"; break;
+            case 6:  wszMod = L"Extra Fast"; break;
+            case 7:  wszMod = L"Cursed"; break;
+            case 8:  wszMod = L"Magic Resistant"; break;
+            case 9:  wszMod = L"Fire Enchanted"; break;
+            case 17: wszMod = L"Lightning Enchanted"; break;
+            case 18: wszMod = L"Cold Enchanted"; break;
+            case 25: wszMod = L"Mana Burn"; break;
+            case 26: wszMod = L"Teleportation"; break;
+            case 27: wszMod = L"Spectral Hit"; break;
+            case 28: wszMod = L"Stone Skin"; break;
+            case 29: wszMod = L"Multiple Shots"; break;
+            case 30: wszMod = L"Aura Enchanted"; break;
+            default: break;
+            }
+            if (wszMod != nullptr) {
+                if (wszModsLine[0] != 0) {
+                    wcscat(wszModsLine, L" - ");
+                }
+                wcscat(wszModsLine, wszMod);
+            }
+        }
+    }
+
     D2GFX_DrawRect(nCenterX - nHalfW, 12, nCenterX + nHalfW, 30, 0x00, 2);
     if (nFillW > 0) {
         D2GFX_DrawRect(nCenterX - nHalfW, 12, nCenterX - nHalfW + nFillW, 30, 0x62, 1);
     }
-    D2WIN_DrawText(reinterpret_cast<const wchar_t*>(pName), nCenterX - (nTextW / 2), 26, 0, 0);
+    D2WIN_DrawText(reinterpret_cast<const wchar_t*>(pName), nCenterX - (nTextW / 2), 26, nNameColor, 0);
+    if (wszModsLine[0] != 0) {
+        D2WIN_SetFont(6);
+        const int32_t nModW = D2WIN_GetTextWidth(wszModsLine);
+        D2WIN_DrawText(wszModsLine, nCenterX - (nModW / 2), 42, 0, 0);
+    }
 }
 
 // 1.12a: 0x6FB3D4A0 (__fastcall)
@@ -1627,13 +1668,14 @@ void __fastcall UI_DrawHoveredUnitLabel()
     }
 
     D2UnitStrc* pBestUnit = nullptr;
-    int32_t nBestDistSq = 46 * 46;
+    int32_t nBestDistSq = 56 * 56;
 
-    const int32_t aTypes[3] = { UNIT_MONSTER, UNIT_OBJECT, UNIT_ITEM };
-    for (int t = 0; t < 3; ++t) {
+    const int32_t aTypes[5] = { UNIT_MONSTER, UNIT_OBJECT, UNIT_ITEM, UNIT_TILE, UNIT_PLAYER };
+    for (int t = 0; t < 5; ++t) {
         const int32_t nType = aTypes[t];
         for (int b = 0; b < 128; ++b) {
             for (D2UnitStrc* pUnit = gapServerSideUnitHashTables[nType][b]; pUnit != nullptr; pUnit = pUnit->pListNext) {
+                int32_t nMaxTypeDistSq = 46 * 46;
                 if (nType == UNIT_MONSTER) {
                     if (pUnit->dwAnimMode == MONMODE_DEAD || pUnit->dwAnimMode == MONMODE_DEATH) {
                         continue;
@@ -1656,18 +1698,30 @@ void __fastcall UI_DrawHoveredUnitLabel()
                     if (!pObjName || !pObjName[0] || _wcsicmp(reinterpret_cast<const wchar_t*>(pObjName), L"an evil force") == 0) {
                         continue;
                     }
-                } else if (nType == UNIT_ITEM && pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING) {
-                    continue;
+                } else if (nType == UNIT_ITEM) {
+                    if (pUnit->dwAnimMode != IMODE_ONGROUND && pUnit->dwAnimMode != IMODE_DROPPING) {
+                        continue;
+                    }
+                } else if (nType == UNIT_TILE) {
+                    const Unicode* pWarpName = D2Client_GetNpcDisplayName(pUnit);
+                    if (!pWarpName || !pWarpName[0]) {
+                        continue;
+                    }
+                    nMaxTypeDistSq = 56 * 56;
+                } else if (nType == UNIT_PLAYER) {
+                    if (pUnit == gpLocalPlayerUnit || pUnit->dwAnimMode != PLRMODE_DEAD) {
+                        continue;
+                    }
                 }
                 int32_t nSx = 0, nSy = 0;
                 if (!UI_WorldUnitToScreen(pUnit, &nSx, &nSy)) {
                     continue;
                 }
-                const int32_t nHitY = (nType == UNIT_MONSTER) ? (nSy - 28) : (nSy - 10);
+                const int32_t nHitY = (nType == UNIT_MONSTER) ? (nSy - 28) : ((nType == UNIT_TILE) ? (nSy - 18) : (nSy - 10));
                 const int32_t dx = gnMouseX - nSx;
                 const int32_t dy = gnMouseY - nHitY;
                 const int32_t d2 = dx * dx + dy * dy;
-                if (d2 < nBestDistSq) {
+                if (d2 < nMaxTypeDistSq && d2 < nBestDistSq) {
                     nBestDistSq = d2;
                     pBestUnit = pUnit;
                 }
@@ -1682,13 +1736,14 @@ void __fastcall UI_DrawHoveredUnitLabel()
         if (!gaPanelStates[D2PANEL_SHOWITEMS]) {
             UI_DrawGroundItemHoverLabel(pBestUnit);
         }
-    } else if (pBestUnit->dwUnitType == UNIT_OBJECT) {
+    } else if (pBestUnit->dwUnitType == UNIT_OBJECT || pBestUnit->dwUnitType == UNIT_TILE || pBestUnit->dwUnitType == UNIT_PLAYER) {
         const Unicode* pObjName = D2Client_GetNpcDisplayName(pBestUnit);
         if (pObjName && pObjName[0]) {
             int32_t nSx = 0, nSy = 0;
             if (UI_WorldUnitToScreen(pBestUnit, &nSx, &nSy)) {
                 D2WIN_SetFont(1);
-                D2WIN_DrawFramedText(reinterpret_cast<const wchar_t*>(pObjName), nSx, nSy - 32, 0, 1);
+                const int32_t nCol = (pBestUnit->dwUnitType == UNIT_TILE) ? 9 : ((pBestUnit->dwUnitType == UNIT_PLAYER) ? 1 : 0);
+                D2WIN_DrawFramedText(reinterpret_cast<const wchar_t*>(pObjName), nSx, nSy - 32, nCol, 1);
             }
         }
     }
@@ -2351,6 +2406,23 @@ void __fastcall UI_RenderHUD()
 
     NPCMENU_DrawActiveDialog();
     ESCMENU_DrawPanel();
+
+    extern void __fastcall D2Client_DrawScreenMessageFeed(void);
+    D2Client_DrawScreenMessageFeed();
+
+    if (D2Client_IsLocalPlayerDead() != 0 && !gaPanelStates[D2PANEL_ESCMENU]) {
+        const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+        const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+        D2GFX_DrawRect(0, 0, nW, nH - 48, 0, 1);
+        D2WIN_SetFont(3);
+        const wchar_t* wszDied = L"You Have Died";
+        const int32_t nDiedW = D2WIN_GetTextWidth(wszDied);
+        D2WIN_DrawText(wszDied, (nW - nDiedW) / 2, (nH / 2) - 40, 1, 0);
+        D2WIN_SetFont(5);
+        const wchar_t* wszEsc = L"Press ESC to continue";
+        const int32_t nEscW = D2WIN_GetTextWidth(wszEsc);
+        D2WIN_DrawText(wszEsc, (nW - nEscW) / 2, (nH / 2) + 8, 0, 0);
+    }
 
     UI_DrawDeferredHoverText();
     if (!gaPanelStates[D2PANEL_ESCMENU]) {

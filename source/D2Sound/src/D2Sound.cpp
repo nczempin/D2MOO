@@ -1126,10 +1126,21 @@ void __fastcall D2SOUND_FastPlaySound(const char* szFile)
 // 1.12a: 0x6F9B8050 (@10029)
 void __fastcall D2SOUND_FastCacheSound(const char* szFile)
 {
-	if (!gbFastInitialized)
+	if (!gbFastInitialized || szFile == nullptr || szFile[0] == '\0')
 	{
 		return;
 	}
+	EnterCriticalSection(&gcsFastSound);
+	for (D2SoundFastEntryStrc* pCur = gpFastSoundList; pCur != nullptr; pCur = pCur->pNext)
+	{
+		if (_stricmp(pCur->szFileName, szFile) == 0)
+		{
+			LeaveCriticalSection(&gcsFastSound);
+			return;
+		}
+	}
+	LeaveCriticalSection(&gcsFastSound);
+
 	size_t dwBytesRead = 0;
 	uint8_t* pWaveBuf = static_cast<uint8_t*>(ARCHIVE_ALLOC_BUFFER_AND_READ_FILE_TO_IT(nullptr, szFile, &dwBytesRead));
 	if (pWaveBuf == nullptr)
@@ -1142,12 +1153,19 @@ void __fastcall D2SOUND_FastCacheSound(const char* szFile)
 	if (wfx.nSamplesPerSec == 22050)
 	{
 		D2SoundFastEntryStrc* pEntry = D2_ALLOC_STRC(D2SoundFastEntryStrc);
-		pEntry->pNext = gpFastSoundList;
-		gpFastSoundList = pEntry;
 		pEntry->pWaveBuffer = pWaveBuf;
 		pEntry->dwWaveSize = static_cast<uint32_t>(dwBytesRead);
 		pEntry->dwFlags = (wfx.nChannels == 2) ? D2SOUNDSMP_FLAG_STEREO : 0;
-		strcpy(pEntry->szFileName, szFile);
+		strncpy(pEntry->szFileName, szFile, sizeof(pEntry->szFileName) - 1);
+		pEntry->szFileName[sizeof(pEntry->szFileName) - 1] = '\0';
+		EnterCriticalSection(&gcsFastSound);
+		pEntry->pNext = gpFastSoundList;
+		gpFastSoundList = pEntry;
+		LeaveCriticalSection(&gcsFastSound);
+	}
+	else
+	{
+		D2_FREE(pWaveBuf);
 	}
 }
 

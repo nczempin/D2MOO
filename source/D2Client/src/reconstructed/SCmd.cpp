@@ -15,6 +15,7 @@
 // =============================================================================
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <windows.h>
 
@@ -407,6 +408,13 @@ void __fastcall SCMD_Handler09_AssignWarp(uint8_t* pPacket)
 
     if (nUnitType != UNIT_TILE)
     {
+        return;
+    }
+
+    if (D2UnitStrc* pExisting = UNIT_FindClientUnit(static_cast<int32_t>(dwGUID), UNIT_TILE))
+    {
+        pExisting->dwClassId = wWarpId;
+        UNIT_SetClientUnitPosition(pExisting, nX, nY);
         return;
     }
 
@@ -1081,9 +1089,60 @@ static void __fastcall SCMD_Handler23_SetSkill(uint8_t* pPacket)
     }
 }
 
+extern void __stdcall INV_ClearWaitingForServerCursorSync(void);
+extern void __fastcall INV_SetPanelMode(int32_t nMode);
+extern void __fastcall D2Client_PushScreenMessageUtf8(const char* szText, int32_t nColor);
+extern void __fastcall D2Client_ClearMercForHireList(void);
+extern void __fastcall D2Client_AddMercForHireEntry(uint16_t wNameIdx, uint32_t dwMercSeed);
+extern void __fastcall D2Client_SetMercReviveInfo(uint16_t wDeadNameIdx, uint32_t dwReviveCost);
+extern void __fastcall D2Client_UpdatePortalInfo(uint32_t dwPortalGUID, uint8_t nDestLevel, uint8_t nFlags, uint32_t dwOwnerGUID, const char* szOwnerName);
+extern D2UnitStrc* __fastcall D2Client_FindAnyItemByGUID(uint32_t dwItemGUID);
+extern void __fastcall SOUND_PlayUiClick(int32_t nSoundId);
+
 static void __fastcall SCMD_Handler26_GameChat(uint8_t* pPacket)
 {
     sub_6FB23EE0(pPacket);
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint8_t nChatType = pPacket[1];
+    const uint8_t nColor    = pPacket[3];
+    const char* szSpeaker   = reinterpret_cast<const char*>(&pPacket[10]);
+    const size_t nNameLen   = strnlen(szSpeaker, 32);
+    const char* szMsg       = szSpeaker + nNameLen + 1;
+    if (szMsg[0] != '\0')
+    {
+        char szCombined[256] = {};
+        if (nChatType == 5)
+        {
+            // Overhead speech (!text): attach to speaker unit if found, or show in feed
+            snprintf(szCombined, sizeof(szCombined), "%s: %s", szSpeaker[0] ? szSpeaker : "Player", szMsg);
+            D2Client_PushScreenMessageUtf8(szCombined, 0);
+        }
+        else if (szSpeaker[0] != '\0')
+        {
+            snprintf(szCombined, sizeof(szCombined), "%s: %s", szSpeaker, szMsg);
+            D2Client_PushScreenMessageUtf8(szCombined, nColor ? nColor : 0);
+        }
+        else
+        {
+            D2Client_PushScreenMessageUtf8(szMsg, nColor ? nColor : 4);
+        }
+    }
+}
+
+static void __fastcall SCMD_Handler2A_NpcTransaction(uint8_t* pPacket)
+{
+    INV_ClearWaitingForServerCursorSync();
+    if (pPacket != nullptr)
+    {
+        const uint8_t nResult = pPacket[2];
+        if (nResult == 0x00 || nResult == 0x01 || nResult == 0x0C)
+        {
+            SOUND_PlayUiClick(4); // Gold / transaction chime
+        }
+    }
 }
 
 static void __fastcall SCMD_Handler27_NpcInfo(uint8_t* pPacket)
@@ -1118,6 +1177,311 @@ static void __fastcall SCMD_Handler2C_PlaySound(uint8_t* pPacket)
 
 extern void __stdcall INV_ClearWaitingForServerCursorSync(void);
 extern void __fastcall INV_SetPanelMode(int32_t nMode);
+
+static void __fastcall SCMD_Handler3E_UpdateItemStats(uint8_t* pPacket)
+{
+    if (pPacket == nullptr || pPacket[1] < 4)
+    {
+        return;
+    }
+    const int32_t nByteLen = static_cast<int32_t>(pPacket[1]) - 2;
+    D2BitBufferStrc bitBuf = {};
+    BITMANIP_Initialize(&bitBuf, &pPacket[2], nByteLen);
+
+    uint32_t dwItemGUID = 0;
+    if (BITMANIP_Read(&bitBuf, 1) != 0)
+    {
+        if (BITMANIP_Read(&bitBuf, 1) != 0)
+        {
+            dwItemGUID = static_cast<uint32_t>(BITMANIP_Read(&bitBuf, 32));
+        }
+        else
+        {
+            dwItemGUID = static_cast<uint32_t>(BITMANIP_Read(&bitBuf, 16));
+        }
+    }
+    else
+    {
+        dwItemGUID = static_cast<uint32_t>(BITMANIP_Read(&bitBuf, 8));
+    }
+
+    const int32_t bAddFlag = BITMANIP_Read(&bitBuf, 1);
+    const int32_t nStatId  = BITMANIP_Read(&bitBuf, 9);
+
+    int32_t nValue = 0;
+    if (BITMANIP_Read(&bitBuf, 1) != 0)
+    {
+        if (BITMANIP_Read(&bitBuf, 1) != 0)
+        {
+            nValue = BITMANIP_Read(&bitBuf, 32);
+        }
+        else
+        {
+            nValue = BITMANIP_Read(&bitBuf, 16);
+        }
+    }
+    else
+    {
+        nValue = BITMANIP_Read(&bitBuf, 8);
+    }
+
+    uint16_t wLayer = 0;
+    if (BITMANIP_Read(&bitBuf, 1) != 0)
+    {
+        wLayer = static_cast<uint16_t>(BITMANIP_Read(&bitBuf, 16));
+    }
+    else
+    {
+        wLayer = static_cast<uint16_t>(BITMANIP_Read(&bitBuf, 8));
+    }
+
+    D2UnitStrc* pItem = D2Client_FindAnyItemByGUID(dwItemGUID);
+    if (pItem != nullptr && nStatId >= 0 && nStatId < 511)
+    {
+        (void)bAddFlag;
+        STATLIST_SetUnitStat(pItem, nStatId, nValue, wLayer);
+    }
+}
+
+static void __fastcall SCMD_Handler3F_UseStackableItem(uint8_t* pPacket)
+{
+    (void)pPacket;
+    INV_ClearWaitingForServerCursorSync();
+}
+
+static void __fastcall SCMD_Handler4E_MercForHire(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint16_t wNameIdx   = *reinterpret_cast<const uint16_t*>(&pPacket[1]);
+    const uint32_t dwMercSeed = *reinterpret_cast<const uint32_t*>(&pPacket[3]);
+    D2Client_AddMercForHireEntry(wNameIdx, dwMercSeed);
+}
+
+static void __fastcall SCMD_Handler4F_ClearMercList(uint8_t* pPacket)
+{
+    (void)pPacket;
+    D2Client_ClearMercForHireList();
+}
+
+static void __fastcall SCMD_Handler50_QuestSpecial(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint8_t nType = pPacket[1];
+    if (nType == 0)
+    {
+        const uint16_t wRemaining = *reinterpret_cast<const uint16_t*>(&pPacket[3]);
+        if (wRemaining > 0 && wRemaining <= 5)
+        {
+            char szMsg[96] = {};
+            snprintf(szMsg, sizeof(szMsg), (wRemaining == 1) ? "1 Monster Remaining" : "%u Monsters Remaining", static_cast<unsigned>(wRemaining));
+            D2Client_PushScreenMessageUtf8(szMsg, 4);
+        }
+    }
+}
+
+static void __fastcall SCMD_Handler57_MonsterEnchants(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint32_t dwMonGUID = *reinterpret_cast<const uint32_t*>(&pPacket[1]);
+    D2UnitStrc* pMon = UNIT_FindClientUnit(static_cast<int32_t>(dwMonGUID), UNIT_MONSTER);
+    if (pMon != nullptr && pMon->pMonsterData != nullptr)
+    {
+        pMon->pMonsterData->nTypeFlag |= pPacket[5];
+        pMon->pMonsterData->nMonUMod[0] = pPacket[8];
+        pMon->pMonsterData->nMonUMod[1] = pPacket[10];
+        pMon->pMonsterData->nMonUMod[2] = pPacket[12];
+    }
+}
+
+static void __fastcall SCMD_Handler5A_EventMessages(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint8_t  nMsgType = pPacket[1];
+    const uint8_t  nColor   = pPacket[2];
+    const uint32_t dwArg    = *reinterpret_cast<const uint32_t*>(&pPacket[3]);
+    char szName1[17] = {};
+    char szName2[17] = {};
+    memcpy(szName1, &pPacket[8], 16);
+    memcpy(szName2, &pPacket[24], 16);
+
+    char szMsg[192] = {};
+    switch (nMsgType)
+    {
+    case 0x00: snprintf(szMsg, sizeof(szMsg), "%s dropped due to timeout.", szName1); break;
+    case 0x02: snprintf(szMsg, sizeof(szMsg), "%s joined our world. Diablo's minions grow stronger.", szName1); break;
+    case 0x03: snprintf(szMsg, sizeof(szMsg), "%s left our world. Diablo's minions weaken.", szName1); break;
+    case 0x06:
+        if (szName2[0])
+            snprintf(szMsg, sizeof(szMsg), "%s was slain by %s.", szName1, szName2);
+        else
+            snprintf(szMsg, sizeof(szMsg), "%s was slain.", szName1);
+        break;
+    case 0x07: snprintf(szMsg, sizeof(szMsg), "Player relationship updated."); break;
+    case 0x11: snprintf(szMsg, sizeof(szMsg), "%u Stones of Jordan Sold to Merchants", static_cast<unsigned>(dwArg)); break;
+    case 0x12: snprintf(szMsg, sizeof(szMsg), "Diablo Walks the Earth"); break;
+    default:
+        if (szName1[0])
+        {
+            snprintf(szMsg, sizeof(szMsg), "%s", szName1);
+        }
+        break;
+    }
+    if (szMsg[0] != '\0')
+    {
+        D2Client_PushScreenMessageUtf8(szMsg, nColor ? nColor : 4);
+    }
+}
+
+static void __fastcall SCMD_Handler60_TownportalState(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint8_t  nFlags      = pPacket[1];
+    const uint8_t  nDestLvl    = pPacket[2];
+    const uint32_t dwPortalId  = *reinterpret_cast<const uint32_t*>(&pPacket[3]);
+    D2Client_UpdatePortalInfo(dwPortalId, nDestLvl, nFlags, 0, nullptr);
+    D2UnitStrc* pPortal = UNIT_FindClientUnit(static_cast<int32_t>(dwPortalId), UNIT_OBJECT);
+    if (pPortal != nullptr && pPortal->pObjectData != nullptr)
+    {
+        pPortal->pObjectData->InteractType = nDestLvl;
+    }
+}
+
+static void __fastcall SCMD_Handler7D_SetItemFlags(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint32_t dwUnitGUID = *reinterpret_cast<const uint32_t*>(&pPacket[2]);
+    const uint32_t dwItemGUID = *reinterpret_cast<const uint32_t*>(&pPacket[6]);
+    const uint32_t dwFlagMask = *reinterpret_cast<const uint32_t*>(&pPacket[10]);
+    const int32_t  bSet       = *reinterpret_cast<const int32_t*>(&pPacket[14]);
+
+    D2UnitStrc* pItem = D2Client_FindAnyItemByGUID(dwItemGUID);
+    if (pItem == nullptr)
+    {
+        pItem = D2Client_FindAnyItemByGUID(dwUnitGUID);
+    }
+    if (pItem != nullptr)
+    {
+        ITEMS_SetItemFlag(pItem, dwFlagMask, bSet != 0);
+    }
+}
+
+static void __fastcall SCMD_Handler82_PortalOwnership(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint32_t dwOwnerGUID   = *reinterpret_cast<const uint32_t*>(&pPacket[1]);
+    char szOwnerName[17] = {};
+    memcpy(szOwnerName, &pPacket[5], 16);
+    const uint32_t dwPortalGuid0 = *reinterpret_cast<const uint32_t*>(&pPacket[21]);
+    const uint32_t dwPortalGuid1 = *reinterpret_cast<const uint32_t*>(&pPacket[25]);
+    if (dwPortalGuid0 != 0 && dwPortalGuid0 != 0xFFFFFFFFu)
+    {
+        D2Client_UpdatePortalInfo(dwPortalGuid0, 0, 0, dwOwnerGUID, szOwnerName);
+    }
+    if (dwPortalGuid1 != 0 && dwPortalGuid1 != 0xFFFFFFFFu)
+    {
+        D2Client_UpdatePortalInfo(dwPortalGuid1, 0, 0, dwOwnerGUID, szOwnerName);
+    }
+}
+
+static void __fastcall SCMD_Handler9B_MercReviveCost(uint8_t* pPacket)
+{
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint16_t wDeadNameIdx = *reinterpret_cast<const uint16_t*>(&pPacket[1]);
+    const uint32_t dwReviveCost = *reinterpret_cast<const uint32_t*>(&pPacket[3]);
+    D2Client_SetMercReviveInfo(wDeadNameIdx, dwReviveCost);
+}
+
+static void DecodeStateStatListBitstream(D2UnitStrc* pUnit, int32_t nState, D2BitBufferStrc* pBitBuf)
+{
+    if (pUnit == nullptr || pBitBuf == nullptr || !sgptDataTables || !sgptDataTables->pItemStatCostTxt)
+    {
+        return;
+    }
+
+    const int32_t nOldAlign = (pUnit->dwUnitType == UNIT_MONSTER) ? STATLIST_GetUnitAlignment(pUnit) : 0;
+
+    D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, nState);
+    if (pStatList == nullptr)
+    {
+        pStatList = STATLIST_AllocStatList(nullptr, 0x40u, 0, pUnit->dwUnitType, pUnit->dwUnitId);
+        if (pStatList != nullptr)
+        {
+            STATLIST_SetState(pStatList, nState);
+            D2COMMON_10475_PostStatToStatList(pUnit, pStatList, TRUE);
+        }
+    }
+
+    for (int32_t nGuard = 0; nGuard < 64; ++nGuard)
+    {
+        const int32_t nStatId = BITMANIP_Read(pBitBuf, 9);
+        if (nStatId == 0x1FF || nStatId < 0 || nStatId >= sgptDataTables->nItemStatCostTxtRecordCount)
+        {
+            break;
+        }
+        const D2ItemStatCostTxt& rCost = sgptDataTables->pItemStatCostTxt[nStatId];
+        uint16_t wLayer = 0;
+        if (rCost.nSendParamBits > 0)
+        {
+            wLayer = static_cast<uint16_t>(BITMANIP_Read(pBitBuf, rCost.nSendParamBits));
+        }
+        int32_t nValue = 0;
+        if (rCost.nSendBits > 0)
+        {
+            if ((rCost.dwItemStatFlags & (1u << 12)) != 0 && rCost.nSendBits < 32)
+            {
+                nValue = BITMANIP_ReadSigned(pBitBuf, rCost.nSendBits);
+            }
+            else
+            {
+                nValue = BITMANIP_Read(pBitBuf, rCost.nSendBits);
+            }
+        }
+        if (pStatList != nullptr)
+        {
+            STATLIST_SetStatIfListIsValid(pStatList, nStatId, nValue, wLayer);
+        }
+    }
+
+    if (pUnit->dwUnitType == UNIT_MONSTER)
+    {
+        if (D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit))
+        {
+            const int32_t nNewAlign = STATLIST_GetUnitAlignment(pUnit);
+            if (nOldAlign != UNIT_ALIGNMENT_GOOD && nNewAlign == UNIT_ALIGNMENT_GOOD)
+            {
+                DUNGEON_IncreaseAlliedCountOfRoom(pRoom);
+            }
+            else if (nOldAlign == UNIT_ALIGNMENT_GOOD && nNewAlign != UNIT_ALIGNMENT_GOOD && DUNGEON_GetAlliedCountFromRoom(pRoom) > 0)
+            {
+                DUNGEON_DecreaseAlliedCountOfRoom(pRoom);
+            }
+        }
+    }
+}
 
 static void __fastcall SCMD_Handler42_ClearCursor(uint8_t* pPacket)
 {
@@ -1477,11 +1841,18 @@ static void __fastcall SCMD_HandlerA8_SetState(uint8_t* pPacket)
 {
     const uint8_t  nUnitType  = pPacket[1];
     const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nByteSize  = pPacket[6];
     const uint8_t  nState     = pPacket[7];
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit != nullptr)
     {
         STATES_ToggleState(pUnit, nState, TRUE);
+        if (nByteSize > 8)
+        {
+            D2BitBufferStrc bitBuf = {};
+            BITMANIP_Initialize(&bitBuf, &pPacket[8], static_cast<int32_t>(nByteSize) - 8);
+            DecodeStateStatListBitstream(pUnit, nState, &bitBuf);
+        }
     }
 }
 
@@ -1493,7 +1864,56 @@ static void __fastcall SCMD_HandlerA9_EndState(uint8_t* pPacket)
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit != nullptr)
     {
+        const int32_t nOldAlign = (pUnit->dwUnitType == UNIT_MONSTER) ? STATLIST_GetUnitAlignment(pUnit) : 0;
         STATES_ToggleState(pUnit, nState, FALSE);
+        if (D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, nState))
+        {
+            D2Common_10474(pUnit, pStatList);
+            STATLIST_FreeStatList(pStatList);
+        }
+        if (pUnit->dwUnitType == UNIT_MONSTER)
+        {
+            if (D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit))
+            {
+                const int32_t nNewAlign = STATLIST_GetUnitAlignment(pUnit);
+                if (nOldAlign != UNIT_ALIGNMENT_GOOD && nNewAlign == UNIT_ALIGNMENT_GOOD)
+                {
+                    DUNGEON_IncreaseAlliedCountOfRoom(pRoom);
+                }
+                else if (nOldAlign == UNIT_ALIGNMENT_GOOD && nNewAlign != UNIT_ALIGNMENT_GOOD && DUNGEON_GetAlliedCountFromRoom(pRoom) > 0)
+                {
+                    DUNGEON_DecreaseAlliedCountOfRoom(pRoom);
+                }
+            }
+        }
+    }
+}
+
+static void __fastcall SCMD_HandlerAA_StateList(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    const uint8_t  nByteSize  = pPacket[6];
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr || nByteSize <= 7)
+    {
+        return;
+    }
+
+    D2BitBufferStrc bitBuf = {};
+    BITMANIP_Initialize(&bitBuf, &pPacket[7], static_cast<int32_t>(nByteSize) - 7);
+    for (int32_t nGuard = 0; nGuard < 128; ++nGuard)
+    {
+        const int32_t nState = BITMANIP_Read(&bitBuf, 8);
+        if (nState == 0xFF || nState < 0)
+        {
+            break;
+        }
+        STATES_ToggleState(pUnit, nState, TRUE);
+        if (BITMANIP_Read(&bitBuf, 1) != 0)
+        {
+            DecodeStateStatListBitstream(pUnit, nState, &bitBuf);
+        }
     }
 }
 
@@ -1559,7 +1979,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x27 */ { SCMD_Handler27_NpcInfo,                40,  nullptr }, // 0x6FB14C50: NpcInfo
     /* 0x28 */ { SCMD_Handler28_PlayerQuestInfo,       103,  nullptr }, // 0x6FB14CE0: PlayerQuestInfo
     /* 0x29 */ { SCMD_Handler29_GameQuestInfo,          97,  nullptr }, // 0x6FB14D10: GameQuestInfo
-    /* 0x2A */ { SCMD_Handler_NoOp,                     15,  nullptr }, // 0x6FB14F70: NpcTransaction
+    /* 0x2A */ { SCMD_Handler2A_NpcTransaction,         15,  nullptr }, // 0x6FB14F70: NpcTransaction
     /* 0x2B */ { nullptr,                                0,  nullptr }, // 0x2B: Unused
     /* 0x2C */ { SCMD_Handler2C_PlaySound,               8,  nullptr }, // 0x6FB14E10: PlaySound
     /* 0x2D */ { nullptr,                                0,  nullptr }, // 0x2D: Unused
@@ -1579,8 +1999,8 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x3B */ { nullptr,                                0,  nullptr }, // 0x3B: Unused
     /* 0x3C */ { nullptr,                                0,  nullptr }, // 0x3C: Unused
     /* 0x3D */ { nullptr,                                0,  nullptr }, // 0x3D: Unused
-    /* 0x3E */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB16D80: UpdateItemStats
-    /* 0x3F */ { SCMD_Handler_NoOp,                      8,  nullptr }, // 0x6FB17070: UseStackableItem
+    /* 0x3E */ { SCMD_Handler3E_UpdateItemStats,        -1,  nullptr }, // 0x6FB16D80: UpdateItemStats
+    /* 0x3F */ { SCMD_Handler3F_UseStackableItem,        8,  nullptr }, // 0x6FB17070: UseStackableItem
     /* 0x40 */ { SCMD_Handler_NoOp,                     13,  nullptr }, // 0x6FB16D40: ItemTrigger
     /* 0x41 */ { nullptr,                                0,  nullptr }, // 0x41: Unused
     /* 0x42 */ { SCMD_Handler42_ClearCursor,             6,  nullptr }, // 0x6FB157F0: ClearCursor
@@ -1595,25 +2015,25 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x4B */ { nullptr,                                0,  nullptr }, // 0x4B: Unused
     /* 0x4C */ { SCMD_Handler4C_UnitSkillOnTarget,      16,  nullptr }, // 0x6FB153F0: UnitSkillOnTarget
     /* 0x4D */ { SCMD_Handler4D_UnitCastSkill,          17,  nullptr }, // 0x6FB15380: UnitCastSkill
-    /* 0x4E */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14C30: MercForHire
-    /* 0x4F */ { SCMD_Handler_NoOp,                      1,  nullptr }, // 0x6FB14C40: ClearMercList
-    /* 0x50 */ { SCMD_Handler_NoOp,                     15,  nullptr }, // 0x6FB14BF0: QuestSpecial
+    /* 0x4E */ { SCMD_Handler4E_MercForHire,             7,  nullptr }, // 0x6FB14C30: MercForHire
+    /* 0x4F */ { SCMD_Handler4F_ClearMercList,           1,  nullptr }, // 0x6FB14C40: ClearMercList
+    /* 0x50 */ { SCMD_Handler50_QuestSpecial,           15,  nullptr }, // 0x6FB14BF0: QuestSpecial
     /* 0x51 */ { SCMD_Handler51_AssignObject,           14,  nullptr }, // 0x6FB164B0
     /* 0x52 */ { SCMD_Handler52_QuestLogInfo,           42,  nullptr }, // 0x6FB14D30: QuestLogInfo
     /* 0x53 */ { SCMD_Handler_NoOp,                     10,  nullptr }, // 0x6FB14840: PlayerSlotRefresh
     /* 0x54 */ { nullptr,                               10,  nullptr }, // 0x54: Unused
     /* 0x55 */ { nullptr,                                3,  nullptr }, // 0x55: Unused
     /* 0x56 */ { nullptr,                                0,  nullptr }, // 0x56: Unused
-    /* 0x57 */ { SCMD_Handler_NoOp,                     14,  nullptr }, // 0x6FB16530: MonsterEnchants
+    /* 0x57 */ { SCMD_Handler57_MonsterEnchants,        14,  nullptr }, // 0x6FB16530: MonsterEnchants
     /* 0x58 */ { SCMD_Handler58_OpenUIDialog,            7,  nullptr }, // 0x6FB14FB0: OpenUIDialog
     /* 0x59 */ { SCMD_Handler59_AssignPlayer,           26,  nullptr }, // 0x6FB16470
-    /* 0x5A */ { SCMD_Handler_NoOp,                     40,  nullptr }, // 0x6FB15D60: EventMessages
-    /* 0x5B */ { SCMD_Handler5B_PlayerInGame,           36,  nullptr }, // 0x6FB16030: PlayerInGame
+    /* 0x5A */ { SCMD_Handler5A_EventMessages,          40,  nullptr }, // 0x6FB15D60: EventMessages
+    /* 0x5B */ { SCMD_Handler5B_PlayerInGame,           -1,  nullptr }, // 0x6FB16030: PlayerInGame
     /* 0x5C */ { SCMD_Handler5C_PlayerLeftGame,          5,  nullptr }, // 0x6FB16010: PlayerLeftGame
     /* 0x5D */ { SCMD_Handler5D_QuestItemState,          6,  nullptr }, // 0x6FB14D50: QuestItemState
     /* 0x5E */ { SCMD_Handler_NoOp,                     38,  nullptr }, // 0x6FB14DA0: GameQuestAvailability
     /* 0x5F */ { SCMD_Handler_NoOp,                      5,  nullptr }, // 0x6FB14DC0: Unknown5F
-    /* 0x60 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB15320: TownportalState
+    /* 0x60 */ { SCMD_Handler60_TownportalState,         7,  nullptr }, // 0x6FB15320: TownportalState
     /* 0x61 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14DE0: CanGoToAct
     /* 0x62 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB154B0: MakeUnitTargetable
     /* 0x63 */ { SCMD_Handler63_WaypointMenu,           21,  nullptr }, // 0x6FB15F30: WaypointMenu
@@ -1642,12 +2062,12 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x7A */ { SCMD_Handler7A_PetAction,              13,  nullptr }, // 0x6FB15270: PetAction
     /* 0x7B */ { SCMD_Handler7B_AssignSkillHotkey,       8,  nullptr }, // 0x6FB177D0: AssignSkillHotkey
     /* 0x7C */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB15000: UseScroll
-    /* 0x7D */ { SCMD_Handler_NoOp,                     18,  nullptr }, // 0x6FB15220: SetItemFlags
+    /* 0x7D */ { SCMD_Handler7D_SetItemFlags,           18,  nullptr }, // 0x6FB15220: SetItemFlags
     /* 0x7E */ { SCMD_Handler_NoOp,                      5,  nullptr }, // 0x6FB150C0: CMNCOF
     /* 0x7F */ { SCMD_Handler7F_AllyPartyInfo,          10,  nullptr }, // 0x6FB15FA0: AllyPartyInfo
     /* 0x80 */ { nullptr,                                4,  nullptr }, // 0x80: Unused
     /* 0x81 */ { SCMD_Handler81_AssignMerc,             20,  nullptr }, // 0x6FB151D0: AssignMerc
-    /* 0x82 */ { SCMD_Handler_NoOp,                     29,  nullptr }, // 0x6FB15FD0: PortalOwnership
+    /* 0x82 */ { SCMD_Handler82_PortalOwnership,        29,  nullptr }, // 0x6FB15FD0: PortalOwnership
     /* 0x83 */ { nullptr,                                0,  nullptr }, // 0x83..0x88: Unused
     /* 0x84 */ { nullptr,                                0,  nullptr },
     /* 0x85 */ { nullptr,                                0,  nullptr },
@@ -1672,7 +2092,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x98 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14BB0: EvilUrn
     /* 0x99 */ { SCMD_Handler4C_UnitSkillOnTarget,      16,  nullptr }, // 0x6FB153F0: SkillTriggeredAtUnit
     /* 0x9A */ { SCMD_Handler4D_UnitCastSkill,          17,  nullptr }, // 0x6FB15380: SkillTriggeredAtCoord
-    /* 0x9B */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14FC0: MercReviveCost
+    /* 0x9B */ { SCMD_Handler9B_MercReviveCost,          7,  nullptr }, // 0x6FB14FC0: MercReviveCost
     /* 0x9C */ { SCMD_Handler9C_ItemActionWorld,        -1,  nullptr }, // 0x6FB165F0
     /* 0x9D */ { SCMD_Handler9D_ItemActionOwned,        -1,  nullptr }, // 0x6FB16DE0
     /* 0x9E */ { SCMD_Handler9E_A2_MercAttr,             7,  nullptr }, // 0x6FB17330: MercAttrByte
@@ -1687,7 +2107,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0xA7 */ { SCMD_HandlerA7_DelayedState,            7,  nullptr }, // 0x6FB162B0: DelayedState
     /* 0xA8 */ { SCMD_HandlerA8_SetState,               -1,  nullptr }, // 0x6FB162F0: SetState (Bitstream)
     /* 0xA9 */ { SCMD_HandlerA9_EndState,                7,  nullptr }, // 0x6FB16430: EndState
-    /* 0xAA */ { SCMD_Handler_NoOp,                     -1,  nullptr }, // 0x6FB16110: AddUnit / StateList
+    /* 0xAA */ { SCMD_HandlerAA_StateList,              -1,  nullptr }, // 0x6FB16110: AddUnit / StateList
     /* 0xAB */ { SCMD_HandlerAB_NpcHeal,                 7,  nullptr }, // 0x6FB14980: NpcHeal
     /* 0xAC */ { SCMD_HandlerAC_AssignNPC,              -1,  nullptr }, // 0x6FB16990
     /* 0xAD */ { nullptr,                                9,  nullptr }, // 0xAD: Unused
