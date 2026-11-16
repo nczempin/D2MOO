@@ -1829,7 +1829,9 @@ static bool UI_IsRightSidePanel(int32_t nPanelId)
 void __fastcall UI_OnPanelOpened(int32_t nPanelId /*eax*/)
 {
     if (nPanelId == D2PANEL_NPCSHOP) {
-        g_nInvPanelMode = 1;
+        if (g_nInvPanelMode < 1 || g_nInvPanelMode > 9) {
+            g_nInvPanelMode = 1;
+        }
         if (!gaPanelStates[D2PANEL_INVENTORY]) {
             UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         }
@@ -2043,8 +2045,9 @@ int32_t __fastcall UI_SetPanelState(int32_t nPanelId /*ecx*/, int32_t nAction /*
     return 1;
 }
 
-static D2CellFileStrc* s_pWaygateBgCel   = nullptr;
-static D2CellFileStrc* s_pWaygateTabsCel = nullptr;
+static D2CellFileStrc* s_pWaygateBgCel    = nullptr;
+static D2CellFileStrc* s_pWaygateTabsCel  = nullptr;
+static D2CellFileStrc* s_pWaygateIconsCel = nullptr;
 int32_t g_nSelectedWaypointTab = 0;
 uint64_t g_qwUnlockedWaypointsMask = 1ULL;
 uint32_t g_dwActiveWaypointGuid = 0u;
@@ -2059,6 +2062,9 @@ static void WAYPOINT_DrawPanel()
     }
     if (!s_pWaygateTabsCel) {
         s_pWaygateTabsCel = ARCHIVE_LoadCellFileDefault("MENU\\expwaygatetabs", 0);
+    }
+    if (!s_pWaygateIconsCel) {
+        s_pWaygateIconsCel = ARCHIVE_LoadCellFileDefault("MENU\\waygateicons", 0);
     }
     D2CellFileStrc* pCloseCel = UI_GetBuySellBtnCellFile();
 
@@ -2123,17 +2129,41 @@ static void WAYPOINT_DrawPanel()
     D2WIN_SetFont(1);
     D2WIN_DrawText(kActWpHeaders[nActIdx], nBaseX + 104, nBaseY + 75, 4, 0);
 
+    int32_t nCurPlrLevel = 0;
+    if (gpLocalPlayerUnit) {
+        extern int32_t __stdcall DUNGEON_GetLevelIdFromRoom(D2ActiveRoomStrc* pRoom);
+        if (D2ActiveRoomStrc* pPlrRoom = UNITS_GetRoom(gpLocalPlayerUnit)) {
+            nCurPlrLevel = DUNGEON_GetLevelIdFromRoom(pPlrRoom);
+        }
+    }
+
     const int32_t nCount = kActWpCounts[nActIdx];
     const int32_t nBitBase = kActWpBitBase[nActIdx];
+    const int32_t nIconMaxF = s_pWaygateIconsCel ? D2CMP_CelFileGetCelsPerDirection(s_pWaygateIconsCel) : 0;
     for (int32_t i = 0; i < nCount; ++i) {
         const int32_t nRowY = nBaseY + 92 + i * 34;
         const int32_t nWpBit = nBitBase + i;
+        const int32_t nWpLvl = kActWpLevels[nActIdx][i];
         const bool bUnlocked = ((g_qwUnlockedWaypointsMask >> nWpBit) & 1ULL) != 0ULL || (nActIdx == 0 && i == 0);
-        D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(kActWpLevels[nActIdx][i]);
+        const bool bIsCurrent = (nCurPlrLevel > 0 && nWpLvl == nCurPlrLevel);
+        const bool bHovered = bUnlocked &&
+            (gnMouseX >= nBaseX + 32 && gnMouseX <= nBaseX + 280 && gnMouseY >= nRowY - 6 && gnMouseY <= nRowY + 22);
+
+        if (s_pWaygateIconsCel && nIconMaxF > 0) {
+            D2GfxDataStrc tIcon = {};
+            tIcon.pCellFile = s_pWaygateIconsCel;
+            int32_t nIconFrame = bUnlocked ? (bIsCurrent ? 2 : 1) : 0;
+            if (nIconFrame >= nIconMaxF) nIconFrame = nIconMaxF - 1;
+            tIcon.nFrame = nIconFrame;
+            D2GFX_DrawCellContextEx(&tIcon, nBaseX + 36, nRowY + 20, -1, 5, nullptr);
+        }
+
+        D2LevelsTxt* pLvlTxt = DATATBLS_GetLevelsTxtRecord(nWpLvl);
         const wchar_t* wszName = (pLvlTxt && pLvlTxt->wszLevelName[0])
             ? reinterpret_cast<const wchar_t*>(pLvlTxt->wszLevelName)
             : L"Waypoint";
-        D2WIN_DrawText(wszName, nBaseX + 76, nRowY + 14, bUnlocked ? 3 : 5, 0);
+        const int32_t nTextCol = bIsCurrent ? 4 : (bUnlocked ? (bHovered ? 0 : 3) : 5);
+        D2WIN_DrawText(wszName, nBaseX + 76, nRowY + 14, nTextCol, 0);
     }
 
     if (pCloseCel && D2CMP_CelFileGetCelsPerDirection(pCloseCel) > 10) {
@@ -2144,9 +2174,21 @@ static void WAYPOINT_DrawPanel()
     }
 }
 
+struct D2NpcDialogRowStrc
+{
+    int32_t  nAction;
+    uint32_t dwParam;
+    wchar_t  wszLabel[96];
+};
+extern int32_t __fastcall D2Client_BuildNpcDialogRows(D2UnitStrc* pNpc, int32_t nFallbackClassId, D2NpcDialogRowStrc* pOutRows, int32_t nMaxRows);
+extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+extern void    __fastcall D2Client_DrawNpcGossipSpeech(void);
+extern void    __fastcall D2Client_OpenGoldDialog(int32_t nMode);
+extern void    __fastcall D2Client_DrawGoldDialog(void);
+
 static void NPCMENU_DrawActiveDialog()
 {
-    if (!gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP]) {
+    if (!gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP] || D2Client_IsNpcGossipSpeechOpen() != 0) {
         return;
     }
     D2UnitStrc* pNpc = g_pTradeNpcUnit;
@@ -2161,43 +2203,44 @@ static void NPCMENU_DrawActiveDialog()
         }
     }
 
+    D2NpcDialogRowStrc aRows[12] = {};
+    const int32_t nOptCount = D2Client_BuildNpcDialogRows(pNpc, g_nInteractingNpcClassId, aRows, 12);
+    if (nOptCount <= 0) {
+        return;
+    }
+
     const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
     int32_t nBoxCenterX = nW / 2;
     int32_t nBoxTopY = 120;
+    const int32_t nBoxH = 44 + nOptCount * 22;
     if (pNpc) {
         int32_t nSx = 0, nSy = 0;
         if (UI_WorldUnitToScreen(pNpc, &nSx, &nSy)) {
             nBoxCenterX = nSx;
-            nBoxTopY = (nSy > 190) ? (nSy - 165) : 40;
+            nBoxTopY = (nSy > nBoxH + 35) ? (nSy - nBoxH - 30) : 40;
         }
     }
-    if (nBoxCenterX < 120) nBoxCenterX = 120;
-    if (nBoxCenterX > nW - 120) nBoxCenterX = nW - 120;
+    if (nBoxTopY + nBoxH > nH - 56) {
+        nBoxTopY = (nH - 56 - nBoxH > 24) ? (nH - 56 - nBoxH) : 24;
+    }
 
-    const int32_t nCls = pNpc ? (int32_t)pNpc->dwClassId : g_nInteractingNpcClassId;
-    const wchar_t* wszTradeOpt = L"Trade";
-    bool bHasTrade = (nCls == 148 || nCls == 154 || nCls == 147 || nCls == 150);
-    if (nCls == 154) wszTradeOpt = L"Trade / Repair";
-    else if (nCls == 147) wszTradeOpt = L"Gamble";
-    else if (nCls == 150) wszTradeOpt = L"Hire";
-    else if (nCls == 155) { bHasTrade = true; wszTradeOpt = L"Travel West"; }
-
-    const int32_t nOptCount = bHasTrade ? 3 : 2;
     const Unicode* pNpcName = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
     const wchar_t* wszNpcTitle = (pNpcName && pNpcName[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pNpcName) : L"Townsperson";
-    const wchar_t* aOpts[3] = { L"Talk", bHasTrade ? wszTradeOpt : L"Cancel", L"Cancel" };
 
     D2WIN_SetFont(5);
     const int32_t nTitleW = D2WIN_GetTextWidth(wszNpcTitle);
     int32_t nMaxTextW = nTitleW;
     D2WIN_SetFont(1);
     for (int32_t i = 0; i < nOptCount; ++i) {
-        const int32_t nOptW = D2WIN_GetTextWidth(aOpts[i]);
+        const int32_t nOptW = D2WIN_GetTextWidth(aRows[i].wszLabel);
         if (nOptW > nMaxTextW) nMaxTextW = nOptW;
     }
 
-    const int32_t nHalfBoxW = ((nMaxTextW + 56) > 192) ? ((nMaxTextW + 56) / 2) : 96;
-    const int32_t nBoxH = 44 + nOptCount * 22;
+    const int32_t nHalfBoxW = ((nMaxTextW + 64) > 192) ? ((nMaxTextW + 64) / 2) : 96;
+    if (nBoxCenterX < nHalfBoxW + 12) nBoxCenterX = nHalfBoxW + 12;
+    if (nBoxCenterX > nW - nHalfBoxW - 12) nBoxCenterX = nW - nHalfBoxW - 12;
+
     RECT rMenu = { nBoxCenterX - nHalfBoxW, nBoxTopY, nBoxCenterX + nHalfBoxW, nBoxTopY + nBoxH };
     UI_DrawBoxPiecesFrame(&rMenu);
 
@@ -2212,10 +2255,13 @@ static void NPCMENU_DrawActiveDialog()
     D2WIN_SetFont(1);
     for (int32_t i = 0; i < nOptCount; ++i) {
         const int32_t nRowY = nBoxTopY + 46 + i * 22;
-        const bool bHover = (gnMouseX >= rMenu.left + 8 && gnMouseX <= rMenu.right - 8 &&
+        const bool bClickable = (aRows[i].nAction != 0);
+        const bool bHover = bClickable &&
+                            (gnMouseX >= rMenu.left + 8 && gnMouseX <= rMenu.right - 8 &&
                              gnMouseY >= nRowY - 14 && gnMouseY <= nRowY + 6);
-        const int32_t nOptW = D2WIN_GetTextWidth(aOpts[i]);
-        D2WIN_DrawText(aOpts[i], nBoxCenterX - (nOptW / 2), nRowY, bHover ? 3 : 0, 0);
+        const int32_t nOptW = D2WIN_GetTextWidth(aRows[i].wszLabel);
+        const int32_t nCol = !bClickable ? 5 : (bHover ? 3 : 0);
+        D2WIN_DrawText(aRows[i].wszLabel, nBoxCenterX - (nOptW / 2), nRowY, nCol, 0);
         if (bHover && g_pPentSpinCel) {
             const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(g_pPentSpinCel);
             if (nFrames > 0) {
@@ -2230,6 +2276,9 @@ static void NPCMENU_DrawActiveDialog()
 
 int32_t g_bEscOptionsSubmenu = 0;
 int32_t g_bClientSoundOption = 1;
+int32_t g_nClientSoundVolume = 100;
+int32_t g_bClientMusicOption = 1;
+int32_t g_nClientGammaPct    = 100;
 int32_t g_bClientScaledWindowOption = 1;
 extern int32_t gbAutomapShowPartyNames;
 
@@ -2247,14 +2296,26 @@ static void ESCMENU_DrawPanel()
     const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
     D2GFX_DrawRect(0, 0, nW, nH - 48, 0, 2);
 
-    const wchar_t* aLabels[4] = {};
+    wchar_t awszDynamicLabels[7][64] = {};
+    const wchar_t* aLabels[7] = {};
     int32_t nRowCount = 3;
+    int32_t nRowStepY = 46;
     if (g_bEscOptionsSubmenu != 0) {
-        aLabels[0] = g_bClientSoundOption ? L"SOUND: ON" : L"SOUND: OFF";
-        aLabels[1] = g_bClientScaledWindowOption ? L"WINDOW: 1200X900" : L"WINDOW: 800X600";
-        aLabels[2] = gbAutomapShowPartyNames ? L"AUTOMAP NAMES: ON" : L"AUTOMAP NAMES: OFF";
-        aLabels[3] = L"PREVIOUS MENU";
-        nRowCount = 4;
+        _snwprintf(awszDynamicLabels[0], 63, L"SOUND VOLUME: %d%%", g_bClientSoundOption ? g_nClientSoundVolume : 0);
+        _snwprintf(awszDynamicLabels[1], 63, L"MUSIC: %ls", (g_bClientSoundOption && g_bClientMusicOption) ? L"ON" : L"OFF");
+        _snwprintf(awszDynamicLabels[2], 63, L"GAMMA: %d%%", g_nClientGammaPct);
+        aLabels[0] = awszDynamicLabels[0];
+        aLabels[1] = awszDynamicLabels[1];
+        aLabels[2] = awszDynamicLabels[2];
+        int32_t nIdx = 3;
+        if (D2GFX_CheckUnitPerspective() || D2GFX_CheckPerspective()) {
+            aLabels[nIdx++] = D2GFX_CheckPerspective() ? L"PERSPECTIVE: ON" : L"PERSPECTIVE: OFF";
+        }
+        aLabels[nIdx++] = g_bClientScaledWindowOption ? L"WINDOW: 1200X900" : L"WINDOW: 800X600";
+        aLabels[nIdx++] = gbAutomapShowPartyNames ? L"AUTOMAP NAMES: ON" : L"AUTOMAP NAMES: OFF";
+        aLabels[nIdx++] = L"PREVIOUS MENU";
+        nRowCount = nIdx;
+        nRowStepY = 38;
     } else {
         aLabels[0] = L"OPTIONS";
         aLabels[1] = L"SAVE AND EXIT GAME";
@@ -2263,19 +2324,19 @@ static void ESCMENU_DrawPanel()
     }
 
     const int32_t nCenterX = nW / 2;
-    const int32_t nBaseY = (nH / 2) - ((nRowCount == 4) ? 80 : 60);
+    const int32_t nBaseY = ((nH - 48) / 2) - ((nRowCount - 1) * nRowStepY) / 2;
     int32_t nSelectedRow = nRowCount - 1;
     for (int32_t i = 0; i < nRowCount; ++i) {
-        const int32_t nRowY = nBaseY + i * 46;
-        if (gnMouseY >= nRowY - 28 && gnMouseY <= nRowY + 8 &&
-            gnMouseX >= nCenterX - 210 && gnMouseX <= nCenterX + 210) {
+        const int32_t nRowY = nBaseY + i * nRowStepY;
+        if (gnMouseY >= nRowY - 24 && gnMouseY <= nRowY + 8 &&
+            gnMouseX >= nCenterX - 230 && gnMouseX <= nCenterX + 230) {
             nSelectedRow = i;
         }
     }
 
     D2WIN_SetFont(3);
     for (int32_t i = 0; i < nRowCount; ++i) {
-        const int32_t nRowY = nBaseY + i * 46;
+        const int32_t nRowY = nBaseY + i * nRowStepY;
         const int32_t nTextW = D2WIN_GetTextWidth(aLabels[i]);
         D2WIN_DrawText(aLabels[i], nCenterX - (nTextW / 2), nRowY, (i == nSelectedRow) ? 4 : 0, 0);
         if (i == nSelectedRow && g_pPentSpinCel) {
@@ -2306,6 +2367,7 @@ void __stdcall UI_ReleaseAllAssets()
     if (g_pBuySellBtnCel)    { ARCHIVE_FreeCellFile(g_pBuySellBtnCel);    g_pBuySellBtnCel    = nullptr; }
     if (s_pWaygateBgCel)     { ARCHIVE_FreeCellFile(s_pWaygateBgCel);     s_pWaygateBgCel     = nullptr; }
     if (s_pWaygateTabsCel)   { ARCHIVE_FreeCellFile(s_pWaygateTabsCel);   s_pWaygateTabsCel   = nullptr; }
+    if (s_pWaygateIconsCel)  { ARCHIVE_FreeCellFile(s_pWaygateIconsCel);  s_pWaygateIconsCel  = nullptr; }
     CHARSTATS_FreeStatPanel();
     PARTY_FreeNodesAndCellFiles();
     HIREABLES_FreePortraitCellFiles();
@@ -2340,8 +2402,7 @@ void __stdcall UI_CloseMercInteract()
 // 1.12a: 0x6FB3F850 (__fastcall)
 void __fastcall UI_OpenGoldDialog(int32_t nMode /*ecx*/)
 {
-    g_nGoldDialogMode = nMode;
-    g_bGoldDialogOpen = 1;
+    D2Client_OpenGoldDialog(nMode);
 }
 
 // 1.12a: 0x6FB3FCB0 (__stdcall)
@@ -2405,6 +2466,8 @@ void __fastcall UI_RenderHUD()
     CTRLPNL_RenderLifeManaTooltips();
 
     NPCMENU_DrawActiveDialog();
+    D2Client_DrawNpcGossipSpeech();
+    D2Client_DrawGoldDialog();
     ESCMENU_DrawPanel();
 
     extern void __fastcall D2Client_DrawScreenMessageFeed(void);

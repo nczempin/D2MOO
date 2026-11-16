@@ -1172,12 +1172,38 @@ static void SendWeaponSwitch()
 	MSG_SendByte(0x60u);
 }
 
+struct D2NpcDialogRowStrc
+{
+	int32_t  nAction;
+	uint32_t dwParam;
+	wchar_t  wszLabel[96];
+};
+extern int32_t __fastcall D2Client_BuildNpcDialogRows(D2UnitStrc* pNpc, int32_t nFallbackClassId, D2NpcDialogRowStrc* pOutRows, int32_t nMaxRows);
+extern void    __fastcall D2Client_SetNpcHireSubmenu(int32_t bOpen);
+extern int32_t __fastcall D2Client_IsNpcHireSubmenuOpen(void);
+extern void    __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallbackClassId);
+extern void    __fastcall D2Client_CloseNpcGossipSpeech(void);
+extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+extern void    __fastcall D2Client_ScrollNpcGossipSpeech(int32_t nDeltaLines);
+extern int32_t __fastcall D2Client_IsGoldDialogOpen(void);
+extern void    __fastcall D2Client_CloseGoldDialog(void);
+extern int32_t __fastcall D2Client_HandleGoldDialogChar(char ch);
+extern int32_t __fastcall D2Client_HandleGoldDialogKey(uint32_t uVk);
+extern int32_t __fastcall D2Client_HandleGoldDialogClick(int32_t mx, int32_t my);
+extern D2UnitStrc* __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+extern int32_t g_nClientSoundVolume;
+extern int32_t g_bClientMusicOption;
+extern int32_t g_nClientGammaPct;
+
 static void CloseActiveNpcSession()
 {
 	if (g_nInteractingNpcGUID != 0)
 	{
 		SendTownFolkCancel(static_cast<uint32_t>(g_nInteractingNpcGUID));
 	}
+	D2Client_SetNpcHireSubmenu(0);
+	D2Client_CloseNpcGossipSpeech();
+	gnCursorState = 0;
 	UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
 	UI_SetPanelState(D2PANEL_NPCSHOP, 1, 0);
 	g_bInteractingWithNpc = 0;
@@ -1192,6 +1218,9 @@ static void OpenNpcInteractionSession(D2UnitStrc* pNpc)
 	{
 		return;
 	}
+	D2Client_SetNpcHireSubmenu(0);
+	D2Client_CloseNpcGossipSpeech();
+	gnCursorState = 0;
 	g_pTradeNpcUnit = pNpc;
 	g_bInteractingWithNpc = 1;
 	g_nInteractingNpcGUID = static_cast<int32_t>(pNpc->dwUnitId);
@@ -2172,6 +2201,15 @@ static void ExecuteChatOrSlashCommand(const char* szRawText)
 
 static bool HandleNpcDialogMouseDown(int32_t mx, int32_t my)
 {
+	if (D2Client_IsNpcGossipSpeechOpen() != 0)
+	{
+		D2Client_CloseNpcGossipSpeech();
+		if (gaPanelStates[D2PANEL_NPCMENU] && !gaPanelStates[D2PANEL_NPCSHOP])
+		{
+			CloseActiveNpcSession();
+		}
+		return true;
+	}
 	if (!gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP])
 	{
 		return false;
@@ -2181,56 +2219,109 @@ static bool HandleNpcDialogMouseDown(int32_t mx, int32_t my)
 	{
 		pNpc = D2Client_FindServerSideUnit(static_cast<uint32_t>(g_nInteractingNpcGUID), UNIT_MONSTER);
 	}
-	int32_t nBoxCenterX = (gnScreenWidth > 0 ? gnScreenWidth : 800) / 2;
-	int32_t nBoxTopY = 120;
-	if (pNpc)
-	{
-		int32_t nSx = 0, nSy = 0;
-		if (WorldUnitToScreenPos(pNpc, &nSx, &nSy))
-		{
-			nBoxCenterX = std::max<int32_t>(120, std::min<int32_t>((gnScreenWidth > 0 ? gnScreenWidth : 800) - 120, nSx));
-			nBoxTopY = (nSy > 190) ? (nSy - 165) : 40;
-		}
-	}
-	const int32_t nCls = pNpc ? static_cast<int32_t>(pNpc->dwClassId) : g_nInteractingNpcClassId;
-	const bool bHasTrade = (nCls == 148 || nCls == 154 || nCls == 147 || nCls == 150 || nCls == 155);
-	const int32_t nOptCount = bHasTrade ? 3 : 2;
-	const int32_t nBoxH = 44 + nOptCount * 22;
 
-	if (mx < nBoxCenterX - 116 || mx > nBoxCenterX + 116 || my < nBoxTopY || my > nBoxTopY + nBoxH)
+	D2NpcDialogRowStrc aRows[12] = {};
+	const int32_t nOptCount = D2Client_BuildNpcDialogRows(pNpc, g_nInteractingNpcClassId, aRows, 12);
+	if (nOptCount <= 0)
 	{
 		CloseActiveNpcSession();
 		return true;
 	}
 
+	const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+	const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+	int32_t nBoxCenterX = nW / 2;
+	int32_t nBoxTopY = 120;
+	const int32_t nBoxH = 44 + nOptCount * 22;
+	if (pNpc)
+	{
+		int32_t nSx = 0, nSy = 0;
+		if (WorldUnitToScreenPos(pNpc, &nSx, &nSy))
+		{
+			nBoxCenterX = nSx;
+			nBoxTopY = (nSy > nBoxH + 35) ? (nSy - nBoxH - 30) : 40;
+		}
+	}
+	if (nBoxTopY + nBoxH > nH - 56)
+	{
+		nBoxTopY = (nH - 56 - nBoxH > 24) ? (nH - 56 - nBoxH) : 24;
+	}
+
+	const Unicode* pNpcName = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
+	D2Win_10127_SetFont(D2FONT_FONT24);
+	int32_t nMaxTextW = (pNpcName && pNpcName[0].ch != 0) ? D2Win_10121_GetTextWidth(pNpcName) : 120;
+	D2Win_10127_SetFont(D2FONT_FONT16);
+	for (int32_t i = 0; i < nOptCount; ++i)
+	{
+		const int32_t nOptW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(aRows[i].wszLabel));
+		if (nOptW > nMaxTextW) nMaxTextW = nOptW;
+	}
+	const int32_t nHalfBoxW = ((nMaxTextW + 64) > 192) ? ((nMaxTextW + 64) / 2) : 96;
+	if (nBoxCenterX < nHalfBoxW + 12) nBoxCenterX = nHalfBoxW + 12;
+	if (nBoxCenterX > nW - nHalfBoxW - 12) nBoxCenterX = nW - nHalfBoxW - 12;
+
+	if (mx < nBoxCenterX - nHalfBoxW || mx > nBoxCenterX + nHalfBoxW || my < nBoxTopY || my > nBoxTopY + nBoxH)
+	{
+		CloseActiveNpcSession();
+		return true;
+	}
+
+	const uint32_t dwNpcGuid = pNpc ? pNpc->dwUnitId : static_cast<uint32_t>(g_nInteractingNpcGUID);
 	for (int32_t i = 0; i < nOptCount; ++i)
 	{
 		const int32_t nRowY = nBoxTopY + 46 + i * 22;
 		if (my >= nRowY - 14 && my <= nRowY + 6)
 		{
-			const uint32_t dwNpcGuid = pNpc ? pNpc->dwUnitId : static_cast<uint32_t>(g_nInteractingNpcGUID);
-			if (i == 0) // Talk / Gossip
+			switch (aRows[i].nAction)
 			{
+			case 1: // Talk / Gossip
 				SendTownFolkMenuSelect(0u, dwNpcGuid, 0u);
+				D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
+				break;
+			case 2: // Trade / Repair
+				SendTownFolkMenuSelect(1u, dwNpcGuid, 0u);
 				UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
-			}
-			else if (i == 1 && bHasTrade)
-			{
-				if (nCls == 147) // Gamble
-				{
-					SendTownFolkMenuSelect(2u, dwNpcGuid, 0u);
-				}
-				else
-				{
-					SendTownFolkMenuSelect(1u, dwNpcGuid, 0u);
-				}
-				UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
-				INV_SetPanelMode(1);
+				INV_SetPanelMode(static_cast<int32_t>(aRows[i].dwParam ? aRows[i].dwParam : 1u));
 				UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
-			}
-			else // Cancel
-			{
+				break;
+			case 3: // Gamble
+				SendTownFolkMenuSelect(2u, dwNpcGuid, 0u);
+				UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+				INV_SetPanelMode(2);
+				UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
+				break;
+			case 4: // Cain Identify Items
+				MSG_SendByteDword(0x34u, dwNpcGuid);
 				CloseActiveNpcSession();
+				break;
+			case 5: // Open Hire Mercenary Submenu (requests merc list via 0x38 action 3)
+				SendTownFolkMenuSelect(3u, dwNpcGuid, 0u);
+				D2Client_SetNpcHireSubmenu(1);
+				break;
+			case 6: // Resurrect Mercenary (C2S 0x62)
+				MSG_SendByteDword(0x62u, dwNpcGuid);
+				CloseActiveNpcSession();
+				break;
+			case 7: // Act Travel (Warriv / Meshif / Tyrael)
+				UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+				SendTownFolkMenuSelect(0u, dwNpcGuid, 0u);
+				g_bInteractingWithNpc = 0;
+				g_nInteractingNpcGUID = 0;
+				g_nInteractingNpcClassId = 0;
+				gdwActiveInteractNpcGUID = 0;
+				break;
+			case 10: // Hire selected Mercenary candidate (C2S 0x36: dwNpcGuid + wNameIdx)
+				MSG_SendByte2Dwords(0x36u, dwNpcGuid, aRows[i].dwParam);
+				CloseActiveNpcSession();
+				break;
+			case 11: // Back from Hire Submenu
+				D2Client_SetNpcHireSubmenu(0);
+				break;
+			case 99: // Cancel
+				CloseActiveNpcSession();
+				break;
+			default:
+				break;
 			}
 			return true;
 		}
@@ -2249,20 +2340,70 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 	const int32_t nCenterX = nW / 2;
 	if (g_bEscOptionsSubmenu != 0)
 	{
-		const int32_t nBaseY = (nH / 2) - 80;
-		for (int32_t i = 0; i < 4; ++i)
+		const bool bHasPersp = (D2GFX_CheckUnitPerspective() != 0 || D2GFX_CheckPerspective() != 0);
+		const int32_t nRowCount = bHasPersp ? 7 : 6;
+		const int32_t nRowStepY = 38;
+		const int32_t nBaseY = ((nH - 48) / 2) - ((nRowCount - 1) * nRowStepY) / 2;
+		for (int32_t i = 0; i < nRowCount; ++i)
 		{
-			const int32_t nRowY = nBaseY + i * 46;
-			if (my >= nRowY - 28 && my <= nRowY + 8 && mx >= nCenterX - 210 && mx <= nCenterX + 210)
+			const int32_t nRowY = nBaseY + i * nRowStepY;
+			if (my >= nRowY - 24 && my <= nRowY + 8 && mx >= nCenterX - 230 && mx <= nCenterX + 230)
 			{
-				if (i == 0)
+				int32_t nOpt = i;
+				if (!bHasPersp && nOpt >= 3)
 				{
-					gbSoundEnabled = !gbSoundEnabled;
-					SyncReconstructedClientGlobals();
-					D2SOUND_SmpSetMasterVolume(gbSoundEnabled ? 127 : 0);
-					D2SOUND_EnableMusic(gbSoundEnabled ? 1 : 0);
+					++nOpt;
 				}
-				else if (i == 1)
+				if (nOpt == 0) // Sound Volume (cycles 100 -> 75 -> 50 -> 25 -> 0 -> 100)
+				{
+					if (!gbSoundEnabled || g_nClientSoundVolume <= 0)
+					{
+						gbSoundEnabled = true;
+						g_nClientSoundVolume = 100;
+					}
+					else
+					{
+						g_nClientSoundVolume -= 25;
+						if (g_nClientSoundVolume <= 0)
+						{
+							g_nClientSoundVolume = 0;
+							gbSoundEnabled = false;
+						}
+					}
+					SyncReconstructedClientGlobals();
+					D2SOUND_SmpSetMasterVolume(gbSoundEnabled ? ((g_nClientSoundVolume * 127) / 100) : 0);
+					if (!gbSoundEnabled)
+					{
+						D2SOUND_EnableMusic(0);
+					}
+					else if (g_bClientMusicOption)
+					{
+						D2SOUND_EnableMusic(1);
+						D2Client_UpdateAreaMusic(DRLG_GetActNoFromLevelId(gnCurrentLevelId), gnCurrentLevelId);
+					}
+				}
+				else if (nOpt == 1) // Music ON / OFF
+				{
+					g_bClientMusicOption = !g_bClientMusicOption;
+					D2SOUND_EnableMusic((gbSoundEnabled && g_bClientMusicOption) ? 1 : 0);
+					if (gbSoundEnabled && g_bClientMusicOption)
+					{
+						D2Client_UpdateAreaMusic(DRLG_GetActNoFromLevelId(gnCurrentLevelId), gnCurrentLevelId);
+					}
+				}
+				else if (nOpt == 2) // Gamma (cycles 100% -> 125% -> 150% -> 75% -> 100%)
+				{
+					if (g_nClientGammaPct == 100) g_nClientGammaPct = 125;
+					else if (g_nClientGammaPct == 125) g_nClientGammaPct = 150;
+					else if (g_nClientGammaPct == 150) g_nClientGammaPct = 75;
+					else g_nClientGammaPct = 100;
+					D2GFX_SetGamma(static_cast<uint32_t>((g_nClientGammaPct * 150) / 100));
+				}
+				else if (nOpt == 3) // Perspective ON / OFF (Hardware renderer)
+				{
+					D2GFX_TogglePerspective();
+				}
+				else if (nOpt == 4) // Window scale 1200x900 / 800x600
 				{
 					gbScaled1200x900 = !gbScaled1200x900;
 					SyncReconstructedClientGlobals();
@@ -2273,11 +2414,11 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 						SetWindowPos(hMainWnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 					}
 				}
-				else if (i == 2)
+				else if (nOpt == 5) // Automap party names
 				{
 					gbAutomapShowPartyNames = gbAutomapShowPartyNames ? 0 : 1;
 				}
-				else if (i == 3)
+				else if (nOpt == 6) // Previous Menu
 				{
 					g_bEscOptionsSubmenu = 0;
 				}
@@ -2287,11 +2428,11 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 		return true;
 	}
 
-	const int32_t nBaseY = (nH / 2) - 60;
+	const int32_t nBaseY = ((nH - 48) / 2) - 46;
 	for (int32_t i = 0; i < 3; ++i)
 	{
 		const int32_t nRowY = nBaseY + i * 46;
-		if (my >= nRowY - 28 && my <= nRowY + 8 && mx >= nCenterX - 210 && mx <= nCenterX + 210)
+		if (my >= nRowY - 24 && my <= nRowY + 8 && mx >= nCenterX - 230 && mx <= nCenterX + 230)
 		{
 			if (i == 0)
 			{
@@ -2521,8 +2662,21 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		{
 			return 0;
 		}
+		if (bLeftClick && D2Client_HandleGoldDialogClick(mx, my))
+		{
+			return 0;
+		}
 		if (bLeftClick && HandleNpcDialogMouseDown(mx, my))
 		{
+			return 0;
+		}
+		// Drop cursor potion onto top-left HUD Mercenary portrait (C2S 0x61 wArg=0)
+		if (bLeftClick && mx >= 6 && mx <= 68 && my >= 10 && my <= 62 &&
+			gpPlayerUnit && gpPlayerUnit->pInventory &&
+			INVENTORY_GetCursorItem(gpPlayerUnit->pInventory) != nullptr &&
+			D2Client_GetLocalMercUnit(gpPlayerUnit) != nullptr)
+		{
+			MSG_SendByteWord(0x61u, 0u);
 			return 0;
 		}
 		if (HandleBeltMouseClick(mx, my, bLeftClick))
@@ -2553,12 +2707,16 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 				QUESTLOG_OnPanelMouseDown(&tMsg);
 				return 0;
 			}
-			if (gaPanelStates[D2PANEL_WAYPOINT])
+			if (gaPanelStates[D2PANEL_WAYPOINT] || gaPanelStates[0x14])
 			{
 				const int32_t nBaseX = 80;
 				const int32_t nBaseY = 60;
 				if (mx >= nBaseX + 260 && mx <= nBaseX + 308 && my >= nBaseY + 382 && my <= nBaseY + 424)
 				{
+					if (g_dwActiveWaypointGuid != 0)
+					{
+						SendWaypointSelect(g_dwActiveWaypointGuid, 0u);
+					}
 					UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
 					return 0;
 				}
@@ -2871,7 +3029,12 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 	case WM_MOUSEWHEEL:
 	{
 		const int16_t nWheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-		if (nWheelDelta != 0 && !gbChatInputOpen && !gaPanelStates[D2PANEL_ESCMENU])
+		if (nWheelDelta != 0 && D2Client_IsNpcGossipSpeechOpen() != 0)
+		{
+			D2Client_ScrollNpcGossipSpeech(nWheelDelta > 0 ? -2 : 2);
+			return 0;
+		}
+		if (nWheelDelta != 0 && !gbChatInputOpen && !gaPanelStates[D2PANEL_ESCMENU] && D2Client_IsGoldDialogOpen() == 0)
 		{
 			D2Client_CycleSkillHotkeyByWheel(nWheelDelta);
 		}
@@ -2880,6 +3043,11 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
 	case WM_CHAR:
 	{
+		if (D2Client_IsGoldDialogOpen() != 0)
+		{
+			D2Client_HandleGoldDialogChar(static_cast<char>(wParam));
+			return 0;
+		}
 		if (gbChatInputOpen)
 		{
 			const char ch = static_cast<char>(wParam);
@@ -2916,6 +3084,35 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			UI_SetPanelState(D2PANEL_SHOWITEMS, 0, 0);
 			return 0;
 		}
+		if (D2Client_IsGoldDialogOpen() != 0)
+		{
+			if (D2Client_HandleGoldDialogKey(static_cast<uint32_t>(wParam)))
+			{
+				return 0;
+			}
+		}
+		if (D2Client_IsNpcGossipSpeechOpen() != 0)
+		{
+			if (wParam == VK_UP)
+			{
+				D2Client_ScrollNpcGossipSpeech(-1);
+				return 0;
+			}
+			if (wParam == VK_DOWN)
+			{
+				D2Client_ScrollNpcGossipSpeech(1);
+				return 0;
+			}
+			if (wParam == VK_SPACE || wParam == VK_RETURN || wParam == VK_ESCAPE)
+			{
+				D2Client_CloseNpcGossipSpeech();
+				if (gaPanelStates[D2PANEL_NPCMENU] && !gaPanelStates[D2PANEL_NPCSHOP])
+				{
+					CloseActiveNpcSession();
+				}
+				return 0;
+			}
+		}
 		if (gbChatInputOpen)
 		{
 			if (wParam == VK_ESCAPE)
@@ -2951,8 +3148,12 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			{
 				CloseActiveNpcSession();
 			}
-			else if (gnViewportShiftMode != 0 || gaPanelStates[D2PANEL_PARTY] || gaPanelStates[D2PANEL_BELT] || gaPanelStates[D2PANEL_SKILLSELECT])
+			else if (gnViewportShiftMode != 0 || gaPanelStates[D2PANEL_PARTY] || gaPanelStates[D2PANEL_BELT] || gaPanelStates[D2PANEL_SKILLSELECT] || gaPanelStates[D2PANEL_MSGLOG])
 			{
+				if (gaPanelStates[D2PANEL_WAYPOINT] && g_dwActiveWaypointGuid != 0)
+				{
+					SendWaypointSelect(g_dwActiveWaypointGuid, 0u);
+				}
 				for (int32_t p = 1; p < D2PANEL_COUNT; ++p)
 				{
 					if (p != D2PANEL_AUTOMAP && p != D2PANEL_MINIPANEL && gaPanelStates[p] != 0)

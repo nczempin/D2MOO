@@ -1616,12 +1616,24 @@ extern uint32_t g_dwActiveWaypointGuid;
 
 static void __fastcall SCMD_Handler63_WaypointMenu(uint8_t* pPacket)
 {
+    extern int32_t g_nSelectedWaypointTab;
     if (pPacket != nullptr)
     {
         g_dwActiveWaypointGuid = *reinterpret_cast<const uint32_t*>(&pPacket[1]);
         uint64_t qwMask = 0ULL;
         memcpy(&qwMask, &pPacket[7], sizeof(uint64_t));
         g_qwUnlockedWaypointsMask = (qwMask & 0x7FFFFFFFFFULL) | 1ULL;
+    }
+    if (D2UnitStrc* pPlr = UNIT_GetClientPlayer())
+    {
+        if (D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pPlr))
+        {
+            const int32_t nLvl = DUNGEON_GetLevelIdFromRoom(pRoom);
+            if (nLvl > 0)
+            {
+                g_nSelectedWaypointTab = DRLG_GetActNoFromLevelId(nLvl);
+            }
+        }
     }
     UI_SetPanelState(D2PANEL_WAYPOINT, 0, 0);
 }

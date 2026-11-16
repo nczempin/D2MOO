@@ -4030,6 +4030,636 @@ void __fastcall D2Client_SetMercReviveInfo(uint16_t wDeadNameIdx, uint32_t dwRev
     g_dwMercReviveCost = dwReviveCost;
 }
 
+extern Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc * a0);
+extern void __fastcall D2Client_PlaySoundById(int32_t nSoundId);
+
+struct D2NpcDialogRowStrc
+{
+    int32_t  nAction;   // 1=Talk, 2=Trade, 3=Gamble, 4=Identify, 5=HireMenu, 6=Resurrect, 7=Travel, 10=HireMercCandidate, 11=HireBack, 99=Cancel
+    uint32_t dwParam;   // Shop mode (1=Trade+Repair, 2=Gamble, 3=Trade) or wNameIdx for HireMercCandidate
+    wchar_t  wszLabel[96];
+};
+
+static int32_t s_bNpcHireSubmenuOpen = 0;
+
+void __fastcall D2Client_SetNpcHireSubmenu(int32_t bOpen)
+{
+    s_bNpcHireSubmenuOpen = bOpen ? 1 : 0;
+}
+
+int32_t __fastcall D2Client_IsNpcHireSubmenuOpen(void)
+{
+    return s_bNpcHireSubmenuOpen;
+}
+
+int32_t __fastcall D2Client_BuildNpcDialogRows(D2UnitStrc* pNpc, int32_t nFallbackClassId, D2NpcDialogRowStrc* pOutRows, int32_t nMaxRows)
+{
+    if (!pOutRows || nMaxRows <= 0)
+    {
+        return 0;
+    }
+
+    int32_t nCount = 0;
+    auto fnPush = [&](int32_t nAct, uint32_t dwPrm, const wchar_t* wszLbl) {
+        if (nCount < nMaxRows && wszLbl != nullptr)
+        {
+            pOutRows[nCount].nAction = nAct;
+            pOutRows[nCount].dwParam = dwPrm;
+            wcsncpy(pOutRows[nCount].wszLabel, wszLbl, 95);
+            pOutRows[nCount].wszLabel[95] = 0;
+            ++nCount;
+        }
+    };
+
+    if (s_bNpcHireSubmenuOpen != 0)
+    {
+        if (g_nMercForHireCount <= 0)
+        {
+            fnPush(0, 0u, L"No mercenaries available");
+        }
+        else
+        {
+            for (int32_t i = 0; i < g_nMercForHireCount && nCount < nMaxRows - 2; ++i)
+            {
+                const uint16_t wNameIdx = g_aMercForHireEntries[i].wNameIdx;
+                const uint32_t dwSeed   = g_aMercForHireEntries[i].dwMercSeed;
+                const Unicode* pNameUni = wNameIdx ? D2LANG_GetStringFromTblIndex(static_cast<short>(wNameIdx)) : nullptr;
+                const wchar_t* wszName  = (pNameUni && pNameUni[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pNameUni) : L"Mercenary";
+
+                D2HirelingInitStrc tHireInit = {};
+                const int32_t nMercAct = MONSTERS_GetActFromHirelingTxt(gbIsExpansion, 0, wNameIdx);
+                wchar_t wszRow[96] = {};
+                if (gpPlayerUnit && MONSTERS_HirelingInit(gbIsExpansion, gpPlayerUnit, static_cast<int>(dwSeed), nMercAct, gnClientDifficulty, &tHireInit))
+                {
+                    const Unicode* pDescUni = MONSTERS_GetHirelingDescString(tHireInit.nId);
+                    const wchar_t* wszDesc = (pDescUni && pDescUni[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pDescUni) : nullptr;
+                    if (wszDesc && wszDesc[0])
+                    {
+                        _snwprintf(wszRow, 95, L"%ls - Lvl %d (%ls) - %d Gold", wszName, tHireInit.nLevel, wszDesc, tHireInit.nGold);
+                    }
+                    else
+                    {
+                        _snwprintf(wszRow, 95, L"%ls - Lvl %d - %d Gold", wszName, tHireInit.nLevel, tHireInit.nGold);
+                    }
+                }
+                else
+                {
+                    _snwprintf(wszRow, 95, L"Hire %ls", wszName);
+                }
+                wszRow[95] = 0;
+                fnPush(10, static_cast<uint32_t>(wNameIdx), wszRow);
+            }
+        }
+        fnPush(11, 0u, L"Back");
+        fnPush(99, 0u, L"Cancel");
+        return nCount;
+    }
+
+    const int32_t nCls = pNpc ? static_cast<int32_t>(pNpc->dwClassId) : nFallbackClassId;
+    fnPush(1, 0u, L"Talk");
+
+    // 1. Trade / Repair blacksmiths (Acts I-V)
+    if (nCls == MONSTER_CHARSI || nCls == 178 /* Fara */ || nCls == 253 /* Hratli */ ||
+        nCls == 257 /* Halbu */ || nCls == MONSTER_LARZUK)
+    {
+        fnPush(2, 1u, L"Trade / Repair");
+    }
+    // 2. Trade-only vendors (Acts I-V)
+    else if (nCls == 148 /* Akara */ || nCls == 147 /* Gheed */ ||
+             nCls == 177 /* Drognan */ || nCls == 199 /* Elzix */ || nCls == 202 /* Lysander */ ||
+             nCls == 252 /* Asheara */ || nCls == 254 /* Alkor */ || nCls == 255 /* Ormus */ ||
+             nCls == 405 /* Jamella */ || nCls == MONSTER_DREHYA /* Anya */ || nCls == 513 /* Malah */)
+    {
+        fnPush(2, 3u, L"Trade");
+    }
+
+    // 3. Gamblers (Acts I-V)
+    if (nCls == 147 /* Gheed */ || nCls == 199 /* Elzix */ || nCls == 254 /* Alkor */ ||
+        nCls == 405 /* Jamella */ || nCls == MONSTER_DREHYA /* Anya */ || nCls == 514 /* Nihlathak */)
+    {
+        fnPush(3, 2u, L"Gamble");
+    }
+
+    // 4. Deckard Cain Identify Items (Acts I-V)
+    if (nCls == MONSTER_CAIN1 || nCls == MONSTER_CAIN2 || nCls == MONSTER_CAIN3 ||
+        nCls == MONSTER_CAIN4 || nCls == MONSTER_CAIN5 || nCls == MONSTER_CAIN6)
+    {
+        fnPush(4, 0u, L"Identify Items");
+    }
+
+    // 5. Mercenary Captains - Hire & Resurrect (Acts I-V)
+    if (nCls == MONSTER_KASHYA || nCls == 198 /* Greiz */ || nCls == 252 /* Asheara */ || nCls == MONSTER_QUAL_KEHK)
+    {
+        fnPush(5, 0u, L"Hire");
+    }
+    if ((nCls == MONSTER_KASHYA || nCls == 198 /* Greiz */ || nCls == 252 /* Asheara */ ||
+         nCls == MONSTER_TYRAEL2 || nCls == MONSTER_QUAL_KEHK) && g_dwMercReviveCost > 0)
+    {
+        wchar_t wszRes[80] = {};
+        _snwprintf(wszRes, 79, L"Resurrect (%u Gold)", g_dwMercReviveCost);
+        wszRes[79] = 0;
+        fnPush(6, g_dwMercReviveCost, wszRes);
+    }
+
+    // 6. Act Travel NPCs (Acts I-V)
+    if (nCls == MONSTER_WARRIV1)
+    {
+        fnPush(7, 0u, L"Go East");
+    }
+    else if (nCls == MONSTER_WARRIV2)
+    {
+        fnPush(7, 0u, L"Go West");
+    }
+    else if (nCls == MONSTER_MESHIF1)
+    {
+        fnPush(7, 0u, L"Sail East");
+    }
+    else if (nCls == MONSTER_MESHIF2)
+    {
+        fnPush(7, 0u, L"Sail West");
+    }
+    else if (nCls == MONSTER_TYRAEL2 && gbIsExpansion)
+    {
+        fnPush(7, 0u, L"Travel to Harrogath");
+    }
+
+    fnPush(99, 0u, L"Cancel");
+    return nCount;
+}
+
+static int32_t s_bNpcGossipOpen = 0;
+static wchar_t s_wszNpcGossipTitle[64] = {};
+static wchar_t s_awszNpcGossipLines[48][96] = {};
+static int32_t s_nNpcGossipLineCount = 0;
+static int32_t s_nNpcGossipScroll = 0;
+
+static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
+{
+    s_nNpcGossipLineCount = 0;
+    s_nNpcGossipScroll = 0;
+    memset(s_awszNpcGossipLines, 0, sizeof(s_awszNpcGossipLines));
+    if (!wszSrc || !wszSrc[0])
+    {
+        return;
+    }
+
+    wchar_t wszCur[96] = {};
+    int32_t nCurLen = 0;
+    const wchar_t* p = wszSrc;
+    while (*p && s_nNpcGossipLineCount < 48)
+    {
+        if (*p == L'\r')
+        {
+            ++p;
+            continue;
+        }
+        if (*p == L'\n')
+        {
+            wszCur[nCurLen] = 0;
+            if (nCurLen > 0 || (s_nNpcGossipLineCount > 0 && s_awszNpcGossipLines[s_nNpcGossipLineCount - 1][0] != 0))
+            {
+                wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
+            }
+            nCurLen = 0;
+            wszCur[0] = 0;
+            ++p;
+            continue;
+        }
+        while (*p == L' ' && nCurLen == 0)
+        {
+            ++p;
+        }
+        if (!*p || *p == L'\n' || *p == L'\r')
+        {
+            continue;
+        }
+        wchar_t wszWord[64] = {};
+        int32_t nWordLen = 0;
+        while (*p && *p != L' ' && *p != L'\n' && *p != L'\r' && nWordLen < 62)
+        {
+            wszWord[nWordLen++] = *p++;
+        }
+        wszWord[nWordLen] = 0;
+        if (nCurLen > 0 && nCurLen + 1 + nWordLen > 54)
+        {
+            wszCur[nCurLen] = 0;
+            wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
+            nCurLen = 0;
+            wszCur[0] = 0;
+        }
+        if (s_nNpcGossipLineCount >= 48)
+        {
+            break;
+        }
+        if (nCurLen > 0)
+        {
+            wszCur[nCurLen++] = L' ';
+        }
+        wcsncpy(&wszCur[nCurLen], wszWord, static_cast<size_t>(95 - nCurLen));
+        nCurLen += nWordLen;
+        if (nCurLen > 95) nCurLen = 95;
+    }
+    if (nCurLen > 0 && s_nNpcGossipLineCount < 48)
+    {
+        wszCur[nCurLen] = 0;
+        wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
+    }
+}
+
+void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallbackClassId)
+{
+    const int32_t nCls = pNpc ? static_cast<int32_t>(pNpc->dwClassId) : nFallbackClassId;
+    const Unicode* pTitleUni = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
+    if (pTitleUni && pTitleUni[0].ch != 0)
+    {
+        wcsncpy(s_wszNpcGossipTitle, reinterpret_cast<const wchar_t*>(pTitleUni), 63);
+    }
+    else
+    {
+        wcsncpy(s_wszNpcGossipTitle, L"Townsperson", 63);
+    }
+    s_wszNpcGossipTitle[63] = 0;
+
+    const char* szTblKey1 = nullptr;
+    const char* szTblKey2 = nullptr;
+    const wchar_t* wszFallback = L"Greetings, traveler. Stay vigilant against the Prime Evils.";
+
+    switch (nCls)
+    {
+    case 148: szTblKey1 = "AkaraAct1Intro";   szTblKey2 = "AkaraGossip1";   wszFallback = L"I am Akara, High Priestess of the Sisterhood of the Sightless Eye. Welcome to our camp, traveler."; break;
+    case MONSTER_CHARSI: szTblKey1 = "CharsiAct1Intro"; szTblKey2 = "CharsiGossip1"; wszFallback = L"Hi there! I'm Charsi, the blacksmith here in camp. It's good to see some strong adventurers around here."; break;
+    case 147: szTblKey1 = "GheedAct1Intro";   szTblKey2 = "GheedGossip1";   wszFallback = L"Good day to you, partner! I'm Gheed, and I can already tell I'll be your best friend in this forsaken camp."; break;
+    case MONSTER_KASHYA: szTblKey1 = "KashyaAct1Intro"; szTblKey2 = "KashyaGossip1"; wszFallback = L"My Rogue scouts have reported abominations pouring out of the Monastery. Prove your worth in battle, outlander."; break;
+    case MONSTER_WARRIV1:
+    case MONSTER_WARRIV2: szTblKey1 = "WarrivAct1Intro"; szTblKey2 = "WarrivGossip1"; wszFallback = L"Greetings. Once the road through the Monastery gate is clear, my caravan can take you east to Lut Gholein."; break;
+    case MONSTER_CAIN1:
+    case MONSTER_CAIN2:
+    case MONSTER_CAIN3:
+    case MONSTER_CAIN4:
+    case MONSTER_CAIN5:
+    case MONSTER_CAIN6: szTblKey1 = "CainAct1Gossip1"; szTblKey2 = "CainGossip1"; wszFallback = L"Stay awhile and listen! Should you find any items of mysterious origin, bring them to me for identification."; break;
+    case 176: szTblKey1 = "AtmaAct2Intro";    szTblKey2 = "AtmaGossip1";    wszFallback = L"Welcome to Lut Gholein, stranger. Rest here if you are weary from the desert sands."; break;
+    case 177: szTblKey1 = "DrognanAct2Intro"; szTblKey2 = "DrognanGossip1"; wszFallback = L"Dark magic stirs beneath the sands of Aranoch. Prepare your arcane defenses carefully."; break;
+    case 178: szTblKey1 = "FaraAct2Intro";    szTblKey2 = "FaraGossip1";    wszFallback = L"As a former paladin of Zakarum, I tend the wounded and forge weapons for those who fight the darkness."; break;
+    case 198: szTblKey1 = "GreizAct2Intro";   szTblKey2 = "GreizGossip1";   wszFallback = L"My desert mercenaries are the finest spearmen in Lut Gholein—for the right price."; break;
+    case 199: szTblKey1 = "ElzixAct2Intro";   szTblKey2 = "ElzixGossip1";   wszFallback = L"Looking for a bargain, friend? Feel free to browse my wares—or test your luck gambling."; break;
+    case 202: szTblKey1 = "LysanderAct2Intro";szTblKey2 = "LysanderGossip1";wszFallback = L"Speak up! Too many exploding potions have left my hearing worse for wear, but my elixirs are unmatched."; break;
+    case MONSTER_MESHIF1:
+    case MONSTER_MESHIF2: szTblKey1 = "MeshifAct2Intro"; szTblKey2 = "MeshifGossip1"; wszFallback = L"My ship stands ready at the docks whenever you need passage across the Twin Seas."; break;
+    case 255: szTblKey1 = "OrmusAct3Intro";   szTblKey2 = "OrmusGossip1";   wszFallback = L"You now speak to Ormus. Once he was a great mage, and now he lives like a rat in a sinking vessel."; break;
+    case 253: szTblKey1 = "HratliAct3Intro";  szTblKey2 = "HratliGossip1";  wszFallback = L"Welcome to the Kurast Docks. My enchantment keeps the jungle horrors at bay, and my forge keeps blades sharp."; break;
+    case 254: szTblKey1 = "AlkorAct3Intro";   szTblKey2 = "AlkorGossip1";   wszFallback = L"What do you want? Don't touch my alchemical apparatus unless you are buying potions or gambling!"; break;
+    case 252: szTblKey1 = "AshearaAct3Intro"; szTblKey2 = "AshearaGossip1"; wszFallback = L"My Iron Wolves are masters of elemental sorcery and stand ready to fight beside you."; break;
+    case MONSTER_TYRAEL1:
+    case MONSTER_TYRAEL2:
+    case MONSTER_TYRAEL3: szTblKey1 = "TyraelAct4Gossip1"; szTblKey2 = "TyraelGossip1"; wszFallback = L"The hour grows late, mortal. Strike down the Lords of Hell before Sanctuary falls into eternal shadow."; break;
+    case 405: szTblKey1 = "JamellaGossip1";   szTblKey2 = "JamellaIntro";   wszFallback = L"The Light watches over the Pandemonium Fortress. May my healing and scrolls aid your crusade."; break;
+    case 257: szTblKey1 = "HalbuGossip1";     szTblKey2 = "HalbuIntro";     wszFallback = L"Keep your armor sound and your weapons tempered before descending to the River of Flame."; break;
+    case MONSTER_LARZUK:  szTblKey1 = "LarzukIntro";     szTblKey2 = "LarzukGossip1"; wszFallback = L"Harrogath will never kneel to Baal! Check my anvil if you need northern steel."; break;
+    case 513: szTblKey1 = "MalahIntro";       szTblKey2 = "MalahGossip1";   wszFallback = L"Welcome to Harrogath, outlander. Come to me whenever the bitter cold of Mount Arreat wounds you."; break;
+    case MONSTER_DREHYA:  szTblKey1 = "AnyaGossip1";     szTblKey2 = "DrehyaGossip1"; wszFallback = L"Thank you for rescuing me from Nihlathak's icy prison. All of my wares are yours to browse."; break;
+    case MONSTER_QUAL_KEHK: szTblKey1 = "Qual-KehkIntro"; szTblKey2 = "QualKehkGossip1"; wszFallback = L"My Barbarian warriors thirst to avenge their fallen brothers on the slopes of Mount Arreat."; break;
+    default: break;
+    }
+
+    const wchar_t* wszChosen = nullptr;
+    const char* aProbeKeys[2] = { szTblKey1, szTblKey2 };
+    for (int k = 0; k < 2 && !wszChosen; ++k)
+    {
+        if (aProbeKeys[k] != nullptr)
+        {
+            char szMutableKey[64] = {};
+            strncpy(szMutableKey, aProbeKeys[k], 63);
+            const Unicode* pTblStr = nullptr;
+            if (D2LANG_GetTblIndex(szMutableKey, &pTblStr) >= 0 && pTblStr && pTblStr[0].ch != 0)
+            {
+                wszChosen = reinterpret_cast<const wchar_t*>(pTblStr);
+            }
+        }
+    }
+    if (!wszChosen)
+    {
+        wszChosen = wszFallback;
+    }
+
+    WrapNpcSpeechIntoLines(wszChosen);
+    s_bNpcGossipOpen = 1;
+}
+
+void __fastcall D2Client_CloseNpcGossipSpeech(void)
+{
+    s_bNpcGossipOpen = 0;
+    s_nNpcGossipScroll = 0;
+}
+
+int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void)
+{
+    return s_bNpcGossipOpen;
+}
+
+void __fastcall D2Client_ScrollNpcGossipSpeech(int32_t nDeltaLines)
+{
+    if (!s_bNpcGossipOpen)
+    {
+        return;
+    }
+    const int32_t nMaxScroll = (s_nNpcGossipLineCount > 9) ? (s_nNpcGossipLineCount - 9) : 0;
+    s_nNpcGossipScroll += nDeltaLines;
+    if (s_nNpcGossipScroll < 0) s_nNpcGossipScroll = 0;
+    if (s_nNpcGossipScroll > nMaxScroll) s_nNpcGossipScroll = nMaxScroll;
+}
+
+void __fastcall D2Client_DrawNpcGossipSpeech(void)
+{
+    if (!s_bNpcGossipOpen)
+    {
+        return;
+    }
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nVisibleLines = (s_nNpcGossipLineCount > 9) ? 9 : ((s_nNpcGossipLineCount > 2) ? s_nNpcGossipLineCount : 2);
+    const int32_t nBoxW = 440;
+    const int32_t nBoxH = 68 + nVisibleLines * 18;
+    const int32_t nLeft = (nW - nBoxW) / 2;
+    const int32_t nTop  = 74;
+
+    D2GFX_DrawBox(nLeft, nTop, nLeft + nBoxW, nTop + nBoxH, 0x00u, DRAWMODE_TRANS75);
+    RECT rcFrame = { nLeft, nTop, nLeft + nBoxW, nTop + nBoxH };
+    D2GFX_UtilRect(&rcFrame, 0x0Du);
+
+    D2Win_10127_SetFont(D2FONT_FONT24);
+    const int32_t nTitleW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle));
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle), nLeft + (nBoxW - nTitleW) / 2, nTop + 24, 4, 0);
+
+    D2Win_10127_SetFont(D2FONT_FONT16);
+    for (int32_t i = 0; i < nVisibleLines && (s_nNpcGossipScroll + i) < s_nNpcGossipLineCount; ++i)
+    {
+        const Unicode* pLine = reinterpret_cast<const Unicode*>(s_awszNpcGossipLines[s_nNpcGossipScroll + i]);
+        const int32_t nLineW = D2Win_10121_GetTextWidth(pLine);
+        D2Win_10117_DrawText(pLine, nLeft + (nBoxW - nLineW) / 2, nTop + 46 + i * 18, 0, 0);
+    }
+
+    D2Win_10127_SetFont(D2FONT_FONT6);
+    const wchar_t* wszHint = (s_nNpcGossipLineCount > 9)
+        ? L"Wheel/Arrows: Scroll   -   Click or Space: Continue"
+        : L"Click or Space to Continue";
+    const int32_t nHintW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszHint));
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszHint), nLeft + (nBoxW - nHintW) / 2, nTop + nBoxH - 8, 5, 0);
+}
+
+// Interactive Gold Amount Popup (Mode 1 = Drop Gold, Mode 2 = Deposit to Stash, Mode 3 = Withdraw from Stash)
+extern int32_t g_bGoldDialogOpen;
+extern int32_t g_nGoldDialogMode;
+extern int32_t g_nGoldDialogMax;
+extern int32_t __fastcall MSG_SendByte2Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2);
+extern int32_t __fastcall MSG_SendByte3Words(uint8_t bOpcode, uint16_t w1, uint16_t w2, uint16_t w3);
+
+static char    s_szGoldInputBuf[16] = {};
+static int32_t s_nGoldInputLen = 0;
+static int32_t s_bGoldReplaceOnFirstDigit = 0;
+
+void __fastcall D2Client_OpenGoldDialog(int32_t nMode)
+{
+    if (!gpPlayerUnit)
+    {
+        return;
+    }
+    const int32_t nInvGold   = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_GOLD, 0);
+    const int32_t nStashGold = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_GOLDBANK, 0);
+    const int32_t nInvMax    = UNITS_GetInventoryGoldLimit(gpPlayerUnit);
+    const int32_t nStashMax  = UNITS_GetStashGoldLimit(gpPlayerUnit);
+
+    int32_t nMax = 0;
+    if (nMode == 1)
+    {
+        nMax = nInvGold;
+    }
+    else if (nMode == 2)
+    {
+        const int32_t nRoom = (nStashMax > nStashGold) ? (nStashMax - nStashGold) : 0;
+        nMax = (nInvGold < nRoom) ? nInvGold : nRoom;
+    }
+    else if (nMode == 3)
+    {
+        const int32_t nRoom = (nInvMax > nInvGold) ? (nInvMax - nInvGold) : 0;
+        nMax = (nStashGold < nRoom) ? nStashGold : nRoom;
+    }
+    if (nMax <= 0)
+    {
+        D2Client_PlaySoundById(4);
+        return;
+    }
+
+    g_nGoldDialogMode = nMode;
+    g_nGoldDialogMax  = nMax;
+    g_bGoldDialogOpen = 1;
+    snprintf(s_szGoldInputBuf, sizeof(s_szGoldInputBuf), "%d", nMax);
+    s_nGoldInputLen = static_cast<int32_t>(strlen(s_szGoldInputBuf));
+    s_bGoldReplaceOnFirstDigit = 1;
+}
+
+void __fastcall D2Client_CloseGoldDialog(void)
+{
+    g_bGoldDialogOpen = 0;
+    g_nGoldDialogMode = 0;
+    g_nGoldDialogMax  = 0;
+    s_szGoldInputBuf[0] = '\0';
+    s_nGoldInputLen = 0;
+    s_bGoldReplaceOnFirstDigit = 0;
+}
+
+int32_t __fastcall D2Client_IsGoldDialogOpen(void)
+{
+    return g_bGoldDialogOpen;
+}
+
+static void SubmitGoldDialogAmount(void)
+{
+    if (!g_bGoldDialogOpen || !gpPlayerUnit)
+    {
+        D2Client_CloseGoldDialog();
+        return;
+    }
+    int32_t nAmount = atoi(s_szGoldInputBuf);
+    if (nAmount > g_nGoldDialogMax)
+    {
+        nAmount = g_nGoldDialogMax;
+    }
+    if (nAmount > 0)
+    {
+        if (g_nGoldDialogMode == 1)
+        {
+            MSG_SendByte2Dwords(0x50u, gpPlayerUnit->dwUnitId, static_cast<uint32_t>(nAmount));
+        }
+        else if (g_nGoldDialogMode == 2)
+        {
+            MSG_SendByte3Words(0x4Fu, 0x14u, static_cast<uint16_t>(nAmount >> 16), static_cast<uint16_t>(nAmount & 0xFFFF));
+        }
+        else if (g_nGoldDialogMode == 3)
+        {
+            MSG_SendByte3Words(0x4Fu, 0x13u, static_cast<uint16_t>(nAmount >> 16), static_cast<uint16_t>(nAmount & 0xFFFF));
+        }
+        D2Client_PlaySoundById(4);
+    }
+    D2Client_CloseGoldDialog();
+}
+
+int32_t __fastcall D2Client_HandleGoldDialogChar(char ch)
+{
+    if (!g_bGoldDialogOpen)
+    {
+        return 0;
+    }
+    if (ch >= '0' && ch <= '9')
+    {
+        if (s_bGoldReplaceOnFirstDigit)
+        {
+            s_szGoldInputBuf[0] = '\0';
+            s_nGoldInputLen = 0;
+            s_bGoldReplaceOnFirstDigit = 0;
+        }
+        if (s_nGoldInputLen < 9)
+        {
+            s_szGoldInputBuf[s_nGoldInputLen++] = ch;
+            s_szGoldInputBuf[s_nGoldInputLen] = '\0';
+            int32_t nVal = atoi(s_szGoldInputBuf);
+            if (nVal > g_nGoldDialogMax)
+            {
+                snprintf(s_szGoldInputBuf, sizeof(s_szGoldInputBuf), "%d", g_nGoldDialogMax);
+                s_nGoldInputLen = static_cast<int32_t>(strlen(s_szGoldInputBuf));
+            }
+        }
+    }
+    else if (ch == '\b')
+    {
+        s_bGoldReplaceOnFirstDigit = 0;
+        if (s_nGoldInputLen > 0)
+        {
+            s_szGoldInputBuf[--s_nGoldInputLen] = '\0';
+        }
+    }
+    else if (ch == '\r' || ch == '\n')
+    {
+        SubmitGoldDialogAmount();
+    }
+    return 1;
+}
+
+int32_t __fastcall D2Client_HandleGoldDialogKey(uint32_t uVk)
+{
+    if (!g_bGoldDialogOpen)
+    {
+        return 0;
+    }
+    if (uVk == VK_ESCAPE)
+    {
+        D2Client_CloseGoldDialog();
+        return 1;
+    }
+    if (uVk == VK_RETURN)
+    {
+        SubmitGoldDialogAmount();
+        return 1;
+    }
+    if (uVk == VK_UP || uVk == VK_DOWN)
+    {
+        s_bGoldReplaceOnFirstDigit = 0;
+        int32_t nVal = atoi(s_szGoldInputBuf);
+        nVal += (uVk == VK_UP) ? 10 : -10;
+        if (nVal < 0) nVal = 0;
+        if (nVal > g_nGoldDialogMax) nVal = g_nGoldDialogMax;
+        snprintf(s_szGoldInputBuf, sizeof(s_szGoldInputBuf), "%d", nVal);
+        s_nGoldInputLen = static_cast<int32_t>(strlen(s_szGoldInputBuf));
+        return 1;
+    }
+    return 0;
+}
+
+int32_t __fastcall D2Client_HandleGoldDialogClick(int32_t mx, int32_t my)
+{
+    if (!g_bGoldDialogOpen)
+    {
+        return 0;
+    }
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nBoxW = 244;
+    const int32_t nBoxH = 112;
+    const int32_t nLeft = (g_nGoldDialogMode == 3) ? 98 : ((g_nGoldDialogMode == 2) ? (nW - 350) : ((nW - nBoxW) / 2));
+    const int32_t nTop  = 220;
+
+    if (mx < nLeft || mx > nLeft + nBoxW || my < nTop || my > nTop + nBoxH)
+    {
+        D2Client_CloseGoldDialog();
+        return 1;
+    }
+    // [OK] button (nLeft + 26 .. nLeft + 106, nTop + 76 .. nTop + 102)
+    if (mx >= nLeft + 26 && mx <= nLeft + 106 && my >= nTop + 76 && my <= nTop + 102)
+    {
+        SubmitGoldDialogAmount();
+        return 1;
+    }
+    // [Cancel] button (nLeft + 138 .. nLeft + 218, nTop + 76 .. nTop + 102)
+    if (mx >= nLeft + 138 && mx <= nLeft + 218 && my >= nTop + 76 && my <= nTop + 102)
+    {
+        D2Client_CloseGoldDialog();
+        return 1;
+    }
+    return 1;
+}
+
+void __fastcall D2Client_DrawGoldDialog(void)
+{
+    if (!g_bGoldDialogOpen)
+    {
+        return;
+    }
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nBoxW = 244;
+    const int32_t nBoxH = 112;
+    const int32_t nLeft = (g_nGoldDialogMode == 3) ? 98 : ((g_nGoldDialogMode == 2) ? (nW - 350) : ((nW - nBoxW) / 2));
+    const int32_t nTop  = 220;
+
+    D2GFX_DrawBox(nLeft, nTop, nLeft + nBoxW, nTop + nBoxH, 0x00u, DRAWMODE_TRANS75);
+    RECT rcDlg = { nLeft, nTop, nLeft + nBoxW, nTop + nBoxH };
+    D2GFX_UtilRect(&rcDlg, 0x0Du);
+
+    const wchar_t* wszHeader = L"Drop Gold Amount";
+    if (g_nGoldDialogMode == 2) wszHeader = L"Deposit Gold (Stash)";
+    else if (g_nGoldDialogMode == 3) wszHeader = L"Withdraw Gold (Stash)";
+
+    D2Win_10127_SetFont(D2FONT_FONT16);
+    const int32_t nHdrW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszHeader));
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszHeader), nLeft + (nBoxW - nHdrW) / 2, nTop + 22, 4, 0);
+
+    // Input box
+    D2GFX_DrawBox(nLeft + 36, nTop + 34, nLeft + nBoxW - 36, nTop + 62, 0x00u, DRAWMODE_NORMAL);
+    RECT rcInput = { nLeft + 36, nTop + 34, nLeft + nBoxW - 36, nTop + 62 };
+    D2GFX_UtilRect(&rcInput, 0x15u);
+
+    char szDisplay[24] = {};
+    snprintf(szDisplay, sizeof(szDisplay), "%s_", s_szGoldInputBuf);
+    Unicode wszAmt[24] = {};
+    Unicode::win2Unicode(wszAmt, szDisplay, 23);
+    const int32_t nAmtW = D2Win_10121_GetTextWidth(wszAmt);
+    D2Win_10117_DrawText(wszAmt, nLeft + (nBoxW - nAmtW) / 2, nTop + 54, 0, 0);
+
+    // [OK] & [Cancel] buttons
+    const bool bHoverOk  = (gnMouseX >= nLeft + 26  && gnMouseX <= nLeft + 106 && gnMouseY >= nTop + 76 && gnMouseY <= nTop + 102);
+    const bool bHoverCan = (gnMouseX >= nLeft + 138 && gnMouseX <= nLeft + 218 && gnMouseY >= nTop + 76 && gnMouseY <= nTop + 102);
+    RECT rcOk  = { nLeft + 26,  nTop + 76, nLeft + 106, nTop + 102 };
+    RECT rcCan = { nLeft + 138, nTop + 76, nLeft + 218, nTop + 102 };
+    D2GFX_DrawBox(rcOk.left, rcOk.top, rcOk.right, rcOk.bottom, bHoverOk ? 0x62u : 0x00u, DRAWMODE_TRANS75);
+    D2GFX_DrawBox(rcCan.left, rcCan.top, rcCan.right, rcCan.bottom, bHoverCan ? 0x62u : 0x00u, DRAWMODE_TRANS75);
+    D2GFX_UtilRect(&rcOk, 0x0Du);
+    D2GFX_UtilRect(&rcCan, 0x0Du);
+
+    const wchar_t* wszOk  = L"OK";
+    const wchar_t* wszCan = L"Cancel";
+    const int32_t nOkW  = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszOk));
+    const int32_t nCanW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszCan));
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszOk),  nLeft + 66 - nOkW / 2,  nTop + 94, bHoverOk ? 4 : 0, 0);
+    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszCan), nLeft + 178 - nCanW / 2, nTop + 94, bHoverCan ? 4 : 0, 0);
+}
+
 struct D2ClientPortalInfoStrc
 {
     uint32_t dwPortalGUID;
@@ -5855,7 +6485,7 @@ void __stdcall SOUND_PlayUnitSpeech(struct D2UnitStrc * a0, unsigned int a1)
 }
 void __stdcall TEXT_CloseQuestSpeechBox(void)
 {
-    
+    D2Client_CloseNpcGossipSpeech();
 }
 void __stdcall TEXT_DisplaySystemMessage(struct Unicode const * a0, unsigned char a1)
 {
@@ -5863,11 +6493,17 @@ void __stdcall TEXT_DisplaySystemMessage(struct Unicode const * a0, unsigned cha
 }
 void __stdcall TEXT_PlayQuestSpeechBox(unsigned short a0, int a1)
 {
-    (void)a0; (void)a1;
+    (void)a1;
+    const Unicode* pStr = a0 ? D2LANG_GetStringFromTblIndex(static_cast<short>(a0)) : nullptr;
+    if (pStr && pStr[0].ch != 0)
+    {
+        WrapNpcSpeechIntoLines(reinterpret_cast<const wchar_t*>(pStr));
+        s_bNpcGossipOpen = 1;
+    }
 }
 void __stdcall UI_CancelActiveCursorState(void)
 {
-    
+    gnCursorState = 0;
 }
 void __stdcall UI_ClearGoldDialogFocus(void)
 {
@@ -5911,7 +6547,7 @@ void __fastcall UI_OpenEscOptionsMenu(int a0, int a1)
 }
 void __stdcall UI_OpenGoldDialog(int a0)
 {
-    (void)a0;
+    D2Client_OpenGoldDialog(a0);
 }
 void __stdcall UI_ResetRightPanelLayout(void)
 {
@@ -6100,37 +6736,80 @@ wchar_t const * __fastcall sub_6FB200F0(int a0)
 {
     static const wchar_t* const s_c[16] = { L"\xFF" L"c0", L"\xFF" L"c1", L"\xFF" L"c2", L"\xFF" L"c3", L"\xFF" L"c4", L"\xFF" L"c5", L"\xFF" L"c6", L"\xFF" L"c7", L"\xFF" L"c8", L"\xFF" L"c9", L"\xFF" L"c:", L"\xFF" L"c;", L"\xFF" L"c0", L"\xFF" L"c0", L"\xFF" L"c0", L"\xFF" L"c0" }; return s_c[a0 & 15];
 }
+static void SkillDescReplaceOrAppendInt(const wchar_t* wszTemplate, wchar_t* wszOut, int32_t nVal, bool bPlusPrefix)
+{
+    if (!wszOut) return;
+    if (!wszTemplate)
+    {
+        _snwprintf(wszOut, 255, bPlusPrefix ? L"+%d" : L"%d", nVal);
+        wszOut[255] = 0;
+        return;
+    }
+    const wchar_t* pSpec = wcsstr(wszTemplate, L"%d");
+    if (!pSpec) pSpec = wcsstr(wszTemplate, L"%i");
+    if (pSpec)
+    {
+        wchar_t wszPrefix[256] = {};
+        const size_t uPre = static_cast<size_t>(pSpec - wszTemplate);
+        if (uPre > 0)
+        {
+            wcsncpy(wszPrefix, wszTemplate, uPre < 255 ? uPre : 255);
+        }
+        const bool bAlreadyHasSign = (uPre > 0 && (wszTemplate[uPre - 1] == L'+' || wszTemplate[uPre - 1] == L'-'));
+        _snwprintf(wszOut, 255, (bPlusPrefix && !bAlreadyHasSign && nVal >= 0) ? L"%ls+%d%ls" : L"%ls%d%ls", wszPrefix, nVal, pSpec + 2);
+        wszOut[255] = 0;
+        return;
+    }
+    _snwprintf(wszOut, 255, (bPlusPrefix && nVal >= 0) ? L"%ls+%d" : L"%ls%d", wszTemplate, nVal);
+    wszOut[255] = 0;
+}
+
 void __fastcall sub_6FB201A0(wchar_t * a0, wchar_t const * a1, int a2, wchar_t const * a3)
 {
-    if (a0) _snwprintf(a0, 256, L"%ls+%d%ls\n", a1 ? a1 : L"", a2, a3 ? a3 : L"");
+    if (a0) { _snwprintf(a0, 255, (a2 >= 0) ? L"%ls+%d%ls" : L"%ls%d%ls", a1 ? a1 : L"", a2, a3 ? a3 : L""); a0[255] = 0; }
 }
 void __fastcall sub_6FB201D0(wchar_t * a0, wchar_t const * a1, int a2, wchar_t const * a3)
 {
-    if (a0) _snwprintf(a0, 256, L"%ls%d%ls\n", a1 ? a1 : L"", a2, a3 ? a3 : L"");
+    if (a0) { _snwprintf(a0, 255, L"%ls%d%ls", a1 ? a1 : L"", a2, a3 ? a3 : L""); a0[255] = 0; }
 }
 void __fastcall sub_6FB20200(wchar_t * a0, wchar_t const * a1, wchar_t const * a2, wchar_t const * a3)
 {
-    if (a0) _snwprintf(a0, 256, L"%ls%ls%ls\n", a1 ? a1 : L"", a2 ? a2 : L"", a3 ? a3 : L"");
+    if (a0) { _snwprintf(a0, 255, L"%ls%ls%ls", a1 ? a1 : L"", a2 ? a2 : L"", a3 ? a3 : L""); a0[255] = 0; }
 }
 void __fastcall sub_6FB20280(wchar_t const * a0, wchar_t * a1, int a2)
 {
-    if (a1) _snwprintf(a1, 256, L"%ls+%d\n", a0 ? a0 : L"", a2);
+    SkillDescReplaceOrAppendInt(a0, a1, a2, true);
 }
 void __fastcall sub_6FB202B0(wchar_t const * a0, wchar_t * a1, int a2)
 {
-    if (a1) _snwprintf(a1, 256, L"%ls%d\n", a0 ? a0 : L"", a2);
+    SkillDescReplaceOrAppendInt(a0, a1, a2, false);
 }
 void __fastcall sub_6FB202E0(wchar_t const * a0, wchar_t * a1, wchar_t const * a2)
 {
-    if (a1) _snwprintf(a1, 256, L"%ls%ls\n", a0 ? a0 : L"", a2 ? a2 : L"");
+    if (!a1) return;
+    if (a0)
+    {
+        const wchar_t* pSpec = wcsstr(a0, L"%s");
+        if (pSpec)
+        {
+            wchar_t wszPrefix[256] = {};
+            const size_t uPre = static_cast<size_t>(pSpec - a0);
+            if (uPre > 0) wcsncpy(wszPrefix, a0, uPre < 255 ? uPre : 255);
+            _snwprintf(a1, 255, L"%ls%ls%ls", wszPrefix, a2 ? a2 : L"", pSpec + 2);
+            a1[255] = 0;
+            return;
+        }
+    }
+    _snwprintf(a1, 255, L"%ls%ls", a0 ? a0 : L"", a2 ? a2 : L"");
+    a1[255] = 0;
 }
 void __fastcall sub_6FB20310(wchar_t * a0, int a1, wchar_t const * a2)
 {
-    if (a0) _snwprintf(a0, 256, L"+%d%ls\n", a1, a2 ? a2 : L"");
+    if (a0) { _snwprintf(a0, 255, (a1 >= 0) ? L"+%d%ls" : L"%d%ls", a1, a2 ? a2 : L""); a0[255] = 0; }
 }
 void __fastcall sub_6FB20340(wchar_t * a0, int a1, wchar_t const * a2)
 {
-    if (a0) _snwprintf(a0, 256, L"%d%ls\n", a1, a2 ? a2 : L"");
+    if (a0) { _snwprintf(a0, 255, L"%d%ls", a1, a2 ? a2 : L""); a0[255] = 0; }
 }
 struct D2UnitStrc * __fastcall sub_6FB57830(struct D2InventoryStrc * a0)
 {

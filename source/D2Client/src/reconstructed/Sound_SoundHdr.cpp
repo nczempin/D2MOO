@@ -1502,17 +1502,35 @@ void __fastcall CHARSTATS_DrawDefenseHoverTooltip(D2UnitStrc* pPlayer, int32_t n
     int32_t nDefense = 0, nBlockPct = 0, nMonsterId = -1;
     int32_t nChanceToBeHit = CHARSTATS_CalcChanceToBeHit(pPlayer, &nDefense, &nBlockPct, &nMonsterId);
 
-    wchar_t wszTooltip[128];
-    swprintf(wszTooltip, 128, L"%d%%", nChanceToBeHit);
+    wchar_t wszTooltip[160] = {};
+    if (nBlockPct > 0)
+    {
+        swprintf(wszTooltip, 159, L"Chance monster will hit you: %d%%\nChance to Block: %d%%", nChanceToBeHit, nBlockPct > 75 ? 75 : nBlockPct);
+    }
+    else
+    {
+        swprintf(wszTooltip, 159, L"Chance monster will hit you: %d%%", nChanceToBeHit);
+    }
+    D2Win_10127_SetFont(6);
     D2Win_10124_DrawHoverText(wszTooltip, nX, nY, 0, 1, 0);
 }
 
 // 1.12a: 0x6FB1ACD0 (__fastcall)
 void __fastcall CHARSTATS_DrawAttackRatingHoverTooltip(D2UnitStrc* pPlayer, int32_t nX, int32_t nY, int32_t bLeftHand)
 {
-    wchar_t wszTooltip[128];
-    int32_t nAR = D2Common_10552_GetUnitToHitFactor(pPlayer);
-    swprintf(wszTooltip, 128, L"%d", nAR);
+    int32_t nBaseDmg = 0, nMaxDmg = 0, nBonusAR = 0;
+    int32_t nAR = D2Common_11026_GetAttackRate(pPlayer, 0, 0, bLeftHand ? 1 : 0, nullptr, &nBaseDmg, &nMaxDmg, &nBonusAR);
+    if (nAR < 1) nAR = D2Common_10552_GetUnitToHitFactor(pPlayer);
+    int32_t nPlayerLvl = D2Common_10519_GetUnitStatSigned(pPlayer, 12 /* STAT_LEVEL */, 0);
+    if (nPlayerLvl < 1) nPlayerLvl = 1;
+    int32_t nEstMonDef = nPlayerLvl * 15;
+    int32_t nChance = (nAR + nEstMonDef > 0) ? ((100 * nAR) / (nAR + nEstMonDef)) : 95;
+    if (nChance < 5) nChance = 5;
+    if (nChance > 95) nChance = 95;
+
+    wchar_t wszTooltip[128] = {};
+    swprintf(wszTooltip, 127, L"Average chance to hit: %d%%", nChance);
+    D2Win_10127_SetFont(6);
     D2Win_10124_DrawHoverText(wszTooltip, nX, nY, 0, 1, 0);
 }
 
@@ -1777,6 +1795,20 @@ void __stdcall CHARSTATS_DrawPanel()
         tClose.pCellFile = g_pCharStatBtnCellFile;
         tClose.nFrame = 10;
         D2Gfx_10072_DrawCellFile(&tClose, nOx + 48, nTopY + 420, 0xFFFFFFFFu, 5, nullptr);
+    }
+
+    extern int32_t gnMouseX;
+    extern int32_t gnMouseY;
+    if (gnMouseX >= nOx + 145 && gnMouseX <= nOx + 312)
+    {
+        if (gnMouseY >= nTopY + 146 && gnMouseY <= nTopY + 170)
+        {
+            CHARSTATS_DrawAttackRatingHoverTooltip(pPlayer, nOx + 228, nTopY + 142, 1);
+        }
+        else if (gnMouseY >= nTopY + 192 && gnMouseY <= nTopY + 216)
+        {
+            CHARSTATS_DrawDefenseHoverTooltip(pPlayer, nOx + 228, nTopY + 188);
+        }
     }
 }
 

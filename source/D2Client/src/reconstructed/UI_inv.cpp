@@ -1580,12 +1580,28 @@ void __stdcall INV_DrawGoldAmountBox(int32_t nMode)
         return;
     }
 
+    if (!g_pInvGoldBtnCell)
+    {
+        g_pInvGoldBtnCell = ARCHIVE_LoadCellFileDefault("PANEL\\invgoldbtn", 0);
+    }
+
+    const int32_t nLeftPanelX  = (g_nScreenWidth >= 800) ? ((g_nScreenWidth - 640) / 2) : 0;
+    const int32_t nPanelTop    = (g_nScreenHeight >= 600) ? 60 : 0;
+    const int32_t nRightPanelX = (g_nScreenWidth >= 800) ? (320 + g_nRightPanelOffsetX) : 320;
+
     D2Win_10127_SetFont(D2FONT_FONT16);
     Unicode wszBuf[128] = {};
-    char szNum[32] = {};
+    char szNum[64] = {};
 
     if (nMode == 1)
     {
+        if (g_pInvGoldBtnCell)
+        {
+            D2GfxDataStrc tCoin = {};
+            tCoin.pCellFile = g_pInvGoldBtnCell;
+            tCoin.nFrame = 0;
+            TEXTURE_CelDraw(&tCoin, nRightPanelX + 91, nPanelTop + 396, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
         int32_t nGold = STATLIST_UnitGetStatValue(g_pPlayerUnit, STAT_GOLD, 0);
         SStrPrintf(szNum, sizeof(szNum), "%d", nGold);
         Unicode::win2Unicode(wszBuf, szNum, 64);
@@ -1596,13 +1612,19 @@ void __stdcall INV_DrawGoldAmountBox(int32_t nMode)
     }
     else if (nMode == 2)
     {
+        if (g_pInvGoldBtnCell)
+        {
+            D2GfxDataStrc tCoin = {};
+            tCoin.pCellFile = g_pInvGoldBtnCell;
+            tCoin.nFrame = 0;
+            TEXTURE_CelDraw(&tCoin, nLeftPanelX + 94, nPanelTop + 39, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
         int32_t nBankGold = STATLIST_UnitGetStatValue(g_pPlayerUnit, STAT_GOLDBANK, 0);
-        SStrPrintf(szNum, sizeof(szNum), "%d", nBankGold);
+        int32_t nBankMax  = UNITS_GetStashGoldLimit(g_pPlayerUnit);
+        SStrPrintf(szNum, sizeof(szNum), "%d / %d", nBankGold, nBankMax);
         Unicode::win2Unicode(wszBuf, szNum, 64);
 
-        int32_t nX = g_nRightPanelOffsetX + 118;
-        int32_t nY = 35 - g_nPanelOffsetY;
-        D2Win_10117_DrawText(wszBuf, nX, nY, 0, 0);
+        D2Win_10117_DrawText(wszBuf, nLeftPanelX + 118, nPanelTop + 35, 0, 0);
     }
 }
 
@@ -2191,6 +2213,24 @@ void __stdcall INV_InitInventoryLayoutRectsAndGrids()
     g_rNpcShopGridRect.right  = g_rNpcShopGridRect.left + 10 * 29;
     g_rNpcShopGridRect.bottom = g_rNpcShopGridRect.top + 10 * 29;
 
+    // 6. Mercenary Equipment Paperdoll Slots (Left Panel)
+    g_atMercBodyLocRects[BODYLOC_HEAD].nLeft    = nLeftOx + 133;
+    g_atMercBodyLocRects[BODYLOC_HEAD].nRight   = nLeftOx + 191;
+    g_atMercBodyLocRects[BODYLOC_HEAD].nTop     = nLeftTop + 4;
+    g_atMercBodyLocRects[BODYLOC_HEAD].nBottom  = nLeftTop + 62;
+    g_atMercBodyLocRects[BODYLOC_TORSO].nLeft   = nLeftOx + 133;
+    g_atMercBodyLocRects[BODYLOC_TORSO].nRight  = nLeftOx + 191;
+    g_atMercBodyLocRects[BODYLOC_TORSO].nTop    = nLeftTop + 74;
+    g_atMercBodyLocRects[BODYLOC_TORSO].nBottom = nLeftTop + 161;
+    g_atMercBodyLocRects[BODYLOC_RARM].nLeft    = nLeftOx + 17;
+    g_atMercBodyLocRects[BODYLOC_RARM].nRight   = nLeftOx + 75;
+    g_atMercBodyLocRects[BODYLOC_RARM].nTop     = nLeftTop + 46;
+    g_atMercBodyLocRects[BODYLOC_RARM].nBottom  = nLeftTop + 162;
+    g_atMercBodyLocRects[BODYLOC_LARM].nLeft    = nLeftOx + 249;
+    g_atMercBodyLocRects[BODYLOC_LARM].nRight   = nLeftOx + 307;
+    g_atMercBodyLocRects[BODYLOC_LARM].nTop     = nLeftTop + 46;
+    g_atMercBodyLocRects[BODYLOC_LARM].nBottom  = nLeftTop + 162;
+
     // Map loaded paperdoll background cells onto body location descriptors
     g_atBodyLocRects[BODYLOC_HEAD].pCell    = g_apInvSlotBackCells[4];
     g_atBodyLocRects[BODYLOC_NECK].pCell    = g_apInvSlotBackCells[5];
@@ -2390,10 +2430,15 @@ void __stdcall INV_RenderMercenaryInventoryPanel()
         int32_t nCurHp = STATLIST_UnitGetStatValue(pMerc, STAT_HITPOINTS, 0) >> 8;
         int32_t nMaxHp = STATLIST_UnitGetStatValue(pMerc, STAT_MAXHP, 0) >> 8;
         if (nMaxHp < nCurHp) nMaxHp = nCurHp;
+        uint32_t dwMercExp = (uint32_t)STATLIST_UnitGetStatValue(pMerc, STAT_EXPERIENCE, 0);
+        int32_t nMinDmg = STATLIST_UnitGetStatValue(pMerc, STAT_MINDAMAGE, 0);
+        int32_t nMaxDmg = STATLIST_UnitGetStatValue(pMerc, STAT_MAXDAMAGE, 0);
+        if (nMinDmg < 1) nMinDmg = 1;
+        if (nMaxDmg <= nMinDmg) nMaxDmg = nMinDmg + 2;
+
         D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
-        INV_DrawAsciiTextHelper("Life", nLeft + 60, nTop + 265, 4, TRUE);
-        snprintf(szBuf, sizeof(szBuf), "%d / %d", nCurHp, nMaxHp);
-        INV_DrawAsciiTextHelper(szBuf, nLeft + 185, nTop + 265, 0, TRUE);
+        snprintf(szBuf, sizeof(szBuf), "Life: %d / %d    Exp: %u", nCurHp, nMaxHp, dwMercExp);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 262, 0, TRUE);
 
         int32_t nStr = STATLIST_UnitGetStatValue(pMerc, STAT_STRENGTH, 0);
         int32_t nDex = STATLIST_UnitGetStatValue(pMerc, STAT_DEXTERITY, 0);
@@ -2403,10 +2448,10 @@ void __stdcall INV_RenderMercenaryInventoryPanel()
         int32_t nLightRes = STATLIST_UnitGetStatValue(pMerc, STAT_LIGHTRESIST, 0);
         int32_t nPoisRes = STATLIST_UnitGetStatValue(pMerc, STAT_POISONRESIST, 0);
 
-        snprintf(szBuf, sizeof(szBuf), "Str: %d  Dex: %d  Def: %d", nStr, nDex, nDef);
-        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 292, 0, TRUE);
+        snprintf(szBuf, sizeof(szBuf), "Dmg: %d-%d  Def: %d  Str: %d  Dex: %d", nMinDmg, nMaxDmg, nDef, nStr, nDex);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 288, 0, TRUE);
         snprintf(szBuf, sizeof(szBuf), "Fire %d%%  Cold %d%%  Light %d%%  Pois %d%%", nFireRes, nColdRes, nLightRes, nPoisRes);
-        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 318, 0, TRUE);
+        INV_DrawAsciiTextHelper(szBuf, nLeft + 160, nTop + 314, 0, TRUE);
 
         if (pMerc->pInventory)
         {
@@ -2418,6 +2463,8 @@ void __stdcall INV_RenderMercenaryInventoryPanel()
             };
             for (int32_t s = 0; s < 4; ++s)
             {
+                RECT rcSlot = { aMercSlots[s][1], aMercSlots[s][2], aMercSlots[s][3], aMercSlots[s][4] };
+                D2GFX_UtilRect(&rcSlot, 0x15u);
                 D2UnitStrc* pEq = INVENTORY_GetItemFromBodyLoc(pMerc->pInventory, aMercSlots[s][0]);
                 if (pEq)
                 {
@@ -2658,7 +2705,7 @@ void __stdcall ITEMDESC_ConcatenateTooltipLines()
 // Draws the green/red placement highlight box over a Mercenary equipment slot.
 void __stdcall INV_DrawMercSlotPlacementHighlight(int32_t nBodyLoc)
 {
-    D2UnitStrc* pMerc = INV_GetInteractedNpcUnit();
+    D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(g_pPlayerUnit);
     if (pMerc)
     {
         INV_DrawBodySlotPlacementHighlight(nBodyLoc, pMerc);
@@ -3359,6 +3406,45 @@ void __stdcall INV_RenderNpcShopPanel()
     INV_RenderInventoryPageItems(pNpc);
     g_nCurrentInvPage = nPrevPage;
 
+    D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
+    if (g_nInvPanelMode == 2)
+    {
+        INV_DrawAsciiTextHelper("Gamble - Right-click item to purchase", nLeft + 140, nTop + 404, 4, TRUE);
+    }
+    else if (INV_HasRepairAllButton())
+    {
+        const bool bHoverRep    = (g_nMouseX >= nLeft + 24  && g_nMouseX <= nLeft + 112 && g_nMouseY >= nTop + 384 && g_nMouseY <= nTop + 418);
+        const bool bHoverRepAll = (g_nMouseX >= nLeft + 124 && g_nMouseX <= nLeft + 244 && g_nMouseY >= nTop + 384 && g_nMouseY <= nTop + 418);
+        RECT rcRep    = { nLeft + 24,  nTop + 386, nLeft + 112, nTop + 416 };
+        RECT rcRepAll = { nLeft + 124, nTop + 386, nLeft + 244, nTop + 416 };
+        D2GFX_DrawBox(rcRep.left, rcRep.top, rcRep.right, rcRep.bottom, (g_nCursorState == 7 || bHoverRep) ? 0x62u : 0x00u, DRAWMODE_TRANS75);
+        D2GFX_DrawBox(rcRepAll.left, rcRepAll.top, rcRepAll.right, rcRepAll.bottom, bHoverRepAll ? 0x62u : 0x00u, DRAWMODE_TRANS75);
+        D2GFX_UtilRect(&rcRep, 0x0Du);
+        D2GFX_UtilRect(&rcRepAll, 0x0Du);
+        INV_DrawAsciiTextHelper((g_nCursorState == 7) ? "Repair*" : "Repair", nLeft + 68, nTop + 406, (g_nCursorState == 7 || bHoverRep) ? 4 : 0, TRUE);
+        INV_DrawAsciiTextHelper("Repair All", nLeft + 184, nTop + 406, bHoverRepAll ? 4 : 0, TRUE);
+
+        if (bHoverRepAll && g_pPlayerUnit)
+        {
+            const int32_t nAllCost = ITEMS_GetAllRepairCosts(
+                nullptr,
+                g_pPlayerUnit,
+                static_cast<int32_t>(pNpc->dwClassId),
+                static_cast<D2C_Difficulties>(g_nGameDifficulty),
+                QUESTRECORD_GetPlayerQuestFlags(g_pPlayerUnit),
+                nullptr);
+            char szRepTip[96] = {};
+            snprintf(szRepTip, sizeof(szRepTip), "Repair All Equipped: %d Gold", nAllCost > 0 ? nAllCost : 0);
+            Unicode wszRepTip[96] = {};
+            Unicode::win2Unicode(wszRepTip, szRepTip, 95);
+            D2Win_10129_DrawFramedText(wszRepTip, nLeft + 184, nTop + 378, 0, 1);
+        }
+    }
+    else
+    {
+        INV_DrawAsciiTextHelper("Right-click to Buy / Sell", nLeft + 140, nTop + 404, 5, TRUE);
+    }
+
     if (g_pBuySellBtnCell)
     {
         D2GfxDataStrc tClose = {};
@@ -3385,17 +3471,26 @@ void __fastcall INV_InitiateShopItemTransaction(
     }
 
     const int32_t nVendorId = (int32_t)pNpc->dwClassId;
+    const bool bIsGamble = (!bIsSell && g_nInvPanelMode == 2);
+    const D2C_TransactionTypes eTxType = bIsSell
+        ? TRANSACTIONTYPE_SELL
+        : (bIsGamble ? TRANSACTIONTYPE_GAMBLE : TRANSACTIONTYPE_BUY);
     const int32_t nCost = ITEMS_GetTransactionCost(
         g_pPlayerUnit,
         pItem,
         (D2C_Difficulties)g_nGameDifficulty,
         QUESTRECORD_GetPlayerQuestFlags(g_pPlayerUnit),
         nVendorId,
-        bIsSell ? TRANSACTIONTYPE_SELL : TRANSACTIONTYPE_BUY);
+        eTxType);
 
     if (bIsSell)
     {
-        NET_SendByteAndFourDwords(0x33u, pNpc->dwUnitId, pItem->dwUnitId, 0u, (uint32_t)(nCost > 0 ? nCost : 0));
+        NET_SendByteAndFourDwords(
+            0x33u,
+            pNpc->dwUnitId,
+            pItem->dwUnitId,
+            static_cast<uint32_t>(pItem->dwAnimMode & 0xFFFFu),
+            static_cast<uint32_t>(nCost > 0 ? nCost : 0));
     }
     else
     {
@@ -3403,7 +3498,17 @@ void __fastcall INV_InitiateShopItemTransaction(
                                  STATLIST_UnitGetStatValue(g_pPlayerUnit, STAT_GOLDBANK, 0);
         if (nPlrGold >= nCost)
         {
-            NET_SendByteAndFourDwords(0x32u, pNpc->dwUnitId, pItem->dwUnitId, 0u, (uint32_t)(nCost > 0 ? nCost : 0));
+            const bool bShiftMultibuy = !bIsGamble && ((GetKeyState(VK_SHIFT) & 0x8000) != 0);
+            const uint32_t dwModeAndFlags =
+                (bIsGamble ? 2u : 0u) |
+                ((static_cast<uint32_t>(pItem->dwAnimMode) & 0x7FFFu) << 16) |
+                (bShiftMultibuy ? 0x80000000u : 0u);
+            NET_SendByteAndFourDwords(
+                0x32u,
+                pNpc->dwUnitId,
+                pItem->dwUnitId,
+                dwModeAndFlags,
+                static_cast<uint32_t>(nCost > 0 ? nCost : 0));
         }
     }
 }
@@ -3464,6 +3569,17 @@ int32_t __fastcall INV_HandleStandardBodySlotClick(
 
     D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(pPlayer->pInventory);
     D2UnitStrc* pSlotItem = INVENTORY_GetItemFromBodyLoc(pPlayer->pInventory, nBodyLoc);
+
+    if (g_nCursorState == 7)
+    {
+        D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+        if (pNpc && pSlotItem && !pCursorItem)
+        {
+            NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, pSlotItem->dwUnitId, 1u, 0u);
+            return 1;
+        }
+        return 0;
+    }
 
     if (!pCursorItem && pSlotItem)
     {
@@ -3580,6 +3696,26 @@ BOOL __stdcall INV_HandleInventoryGridClick(
         {
             NET_SendByteAndTwoDwords(0x27, pTargetItem->dwUnitId, pScrollOrTome->dwUnitId);
             ITEMS_LockItemInInventory(pTargetItem);
+            return TRUE;
+        }
+        return FALSE;
+    }
+
+    // 1b. Repair cursor state (7)
+    if (g_nCursorState == 7)
+    {
+        D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+        D2UnitStrc* pTargetItem = INVENTORY_GetItemFromInventoryPage(
+            pInventory,
+            nCellX,
+            nCellY,
+            &nItemGridX,
+            &nItemGridY,
+            nRecordId,
+            nInvPage);
+        if (pNpc && pTargetItem && !pCursorItem && INV_CheckCursorItemClear(pPlayer))
+        {
+            NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, pTargetItem->dwUnitId, 1u, 0u);
             return TRUE;
         }
         return FALSE;
@@ -3987,10 +4123,27 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
             return;
         }
 
+        // Right-panel Gold Drop / Stash Deposit button (drawn at nRightPanelX + 91, nPanelTop + 396)
+        if (!bRightButton &&
+            nX >= nRightPanelX + 86 && nX <= nRightPanelX + 114 &&
+            nY >= nPanelTop + 374   && nY <= nPanelTop + 404 &&
+            !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
+        {
+            UI_OpenGoldDialog(g_bStashPanelOpen ? 2 : 1);
+            SMsgBreakHandlerChain(pMsg);
+            return;
+        }
+
         if (nX >= g_tInvGridLayout.nLeft && nX <= g_tInvGridLayout.nRight &&
             nY >= g_tInvGridLayout.nTop  && nY <= g_tInvGridLayout.nBottom)
         {
-            if ((bRightButton || (pMsg->wParam & (MK_CONTROL | MK_SHIFT)) != 0) &&
+            if (bRightButton && g_nCursorState == 7)
+            {
+                g_nCursorState = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+            if ((bRightButton || (pMsg->wParam & MK_CONTROL) != 0) &&
                 g_bNpcShopPanelOpen && g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9)
             {
                 D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
@@ -4124,11 +4277,48 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
             }
         }
 
+        // NPC Shop Repair / Repair All action buttons
+        if (!bRightButton && INV_HasRepairAllButton() &&
+            nY >= nPanelTop + 384 && nY <= nPanelTop + 418 &&
+            !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
+        {
+            if (nX >= nLeftPanelX + 24 && nX <= nLeftPanelX + 112)
+            {
+                g_nCursorState = (g_nCursorState == 7) ? 0 : 7;
+                SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+            if (nX >= nLeftPanelX + 124 && nX <= nLeftPanelX + 244)
+            {
+                if (D2UnitStrc* pNpc = INV_GetInteractedNpcUnit())
+                {
+                    NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, 0u, 0u, 0x80000000u);
+                    SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
+                }
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+        }
+
         // NPC Shop 10x10 Item Grid
         if (nX >= g_rNpcShopGridRect.left && nX <= g_rNpcShopGridRect.right &&
             nY >= g_rNpcShopGridRect.top  && nY <= g_rNpcShopGridRect.bottom)
         {
             D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+            D2UnitStrc* pCursorItem = g_pPlayerUnit->pInventory ? INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory) : nullptr;
+            if (pNpc && pCursorItem && !bRightButton)
+            {
+                INV_InitiateShopItemTransaction(pCursorItem, nY, pNpc, TRUE, nX);
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
             if (pNpc && pNpc->pInventory)
             {
                 for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(pNpc->pInventory); pIt; pIt = INVENTORY_GetNextItem(pIt))
@@ -4162,6 +4352,17 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
     }
     else if (g_nInvPanelMode == 11)
     {
+        if (!bRightButton &&
+            nX >= nLeftPanelX + 86 && nX <= nLeftPanelX + 118 &&
+            nY >= nPanelTop + 16   && nY <= nPanelTop + 46 &&
+            !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
+        {
+            UI_OpenGoldDialog(3);
+            pMsg->bHandled = TRUE;
+            pMsg->lResult = 0;
+            SMsgBreakHandlerChain(pMsg);
+            return;
+        }
         if (nX >= g_tStashGridLayout.nLeft && nX <= g_tStashGridLayout.nRight &&
             nY >= g_tStashGridLayout.nTop  && nY <= g_tStashGridLayout.nBottom)
         {
@@ -4218,9 +4419,31 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
             return;
         }
     }
+    else if (g_bMercInvOpen && !bRightButton &&
+             nX >= nLeftPanelX && nX <= nLeftPanelX + 320 &&
+             nY >= nPanelTop   && nY <= nPanelTop + 432)
+    {
+        D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(g_pPlayerUnit);
+        if (pMerc && INV_CheckCursorItemClear(g_pPlayerUnit))
+        {
+            const int32_t nMercBodyLoc = INV_HitTestMercBodyLocRects(nX, nY, NULL, NULL);
+            D2UnitStrc* pCursorItem = g_pPlayerUnit->pInventory ? INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory) : nullptr;
+            if (nMercBodyLoc < 11)
+            {
+                NET_SendByteAndWord(0x61u, static_cast<uint16_t>(nMercBodyLoc));
+            }
+            else if (pCursorItem != nullptr)
+            {
+                // Drop cursor healing/thawing/antidote/rejuv potion onto Mercenary panel
+                NET_SendByteAndWord(0x61u, 0u);
+            }
+        }
+        pMsg->bHandled = TRUE;
+        pMsg->lResult = 0;
+        SMsgBreakHandlerChain(pMsg);
+        return;
+    }
 }
-
-// 1.12a: 0x6FB63040
 // Master Inventory & Container UI Render Routine:
 // Renders the open left-side panel (NPC Shop 1..9, Stash 11, Horadric Cube 12..13, Trade 14),
 // the right-side Player Inventory & Equipment Paperdoll, Gold boxes, and Item Hover Tooltips.
@@ -4435,6 +4658,33 @@ void __stdcall INV_RenderAllInventoryPanels()
             }
         }
 
+        if (!g_pHoveredItemUnit && g_bMercInvOpen)
+        {
+            D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(g_pPlayerUnit);
+            if (pMerc && pMerc->pInventory)
+            {
+                const int32_t aMercLocs[4] = { BODYLOC_HEAD, BODYLOC_TORSO, BODYLOC_RARM, BODYLOC_LARM };
+                for (int32_t m = 0; m < 4; ++m)
+                {
+                    const D2InvBodyLocInfoStrc* pSlot = &g_atMercBodyLocRects[aMercLocs[m]];
+                    if (pSlot->nLeft > 0 &&
+                        g_nMouseX >= pSlot->nLeft && g_nMouseX <= pSlot->nRight &&
+                        g_nMouseY >= pSlot->nTop  && g_nMouseY <= pSlot->nBottom)
+                    {
+                        D2UnitStrc* pMercItem = INVENTORY_GetItemFromBodyLoc(pMerc->pInventory, aMercLocs[m]);
+                        if (pMercItem)
+                        {
+                            g_pHoveredItemUnit = pMercItem;
+                            g_bHoveredItemValid = TRUE;
+                            g_nHoveredItemTooltipX = (pSlot->nLeft + pSlot->nRight) / 2;
+                            g_nHoveredItemTooltipTop = pSlot->nTop;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         if (!g_pHoveredItemUnit)
         {
             if (g_nInvPanelMode == 11)
@@ -4510,7 +4760,7 @@ void __stdcall INV_RenderAllInventoryPanels()
 // Window message handler for mouse move (WM_MOUSEMOVE) over the Mercenary inventory panel.
 void __stdcall INV_OnMercInventoryMouseMove(D2WinMsgStrc* pMsg)
 {
-    D2UnitStrc* pMerc = INV_GetInteractedNpcUnit();
+    D2UnitStrc* pMerc = D2Client_GetLocalMercUnit(g_pPlayerUnit);
     if (!pMerc || !pMerc->pInventory)
     {
         return;
@@ -4548,43 +4798,10 @@ void __stdcall INV_OnMercInventoryMouseMove(D2WinMsgStrc* pMsg)
 
 // 1.12a: 0x6FB64520
 // Window message handler for releasing left mouse button (WM_LBUTTONUP) on the Mercenary inventory panel,
-// dispatching C2S 0x61 (Equip/Unequip Mercenary Item) or C2S 0x62 (Feed Potion to Mercenary).
+// dispatching C2S 0x61 (Equip/Unequip/Feed Mercenary Item).
 void __stdcall INV_OnMercInventoryMouseUp(D2WinMsgStrc* pMsg)
 {
-    D2UnitStrc* pMerc = INV_GetInteractedNpcUnit();
-    if (!pMerc)
-    {
-        return;
-    }
-
-    pMsg->bHandled = FALSE;
-    int32_t nBodyLoc = INV_HitTestMercBodyLocRects(g_nMouseX, g_nMouseY, NULL, NULL);
-    if (nBodyLoc < 11)
-    {
-        if (INV_CheckCursorItemClear(g_pPlayerUnit))
-        {
-            // Equip / unequip / swap mercenary item in slot nBodyLoc (C2S 0x61)
-            NET_SendByteAndWord(0x61, (uint16_t)nBodyLoc);
-            pMsg->bHandled = TRUE;
-            pMsg->lResult = 0;
-            SMsgBreakHandlerChain(pMsg);
-        }
-    }
-    else if (nBodyLoc == 12)
-    {
-        if (INV_CheckCursorItemClear(g_pPlayerUnit))
-        {
-            // Feed cursor potion to mercenary via portrait click (C2S 0x62)
-            D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory);
-            if (pCursorItem)
-            {
-                NET_SendByteAndDword(0x62, pCursorItem->dwUnitId);
-                pMsg->bHandled = TRUE;
-                pMsg->lResult = 0;
-                SMsgBreakHandlerChain(pMsg);
-            }
-        }
-    }
+    (void)pMsg;
 }
 
 // 1.12a: 0x6FB649B0
@@ -4923,6 +5140,38 @@ void __stdcall INV_OnInventoryGridRightClick(D2WinMsgStrc* pMsg)
         if (nX >= g_tInvGridLayout.nLeft && nX <= g_tInvGridLayout.nRight &&
             nY >= g_tInvGridLayout.nTop  && nY <= g_tInvGridLayout.nBottom)
         {
+            if (g_nCursorState == 7)
+            {
+                g_nCursorState = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+            if (g_bNpcShopPanelOpen && g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9)
+            {
+                D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
+                if (pNpc && g_pPlayerUnit->pInventory && !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
+                {
+                    const int32_t nCellW = (g_tInvGridLayout.nGridBoxWidth > 0) ? g_tInvGridLayout.nGridBoxWidth : 29;
+                    const int32_t nCellH = (g_tInvGridLayout.nGridBoxHeight > 0) ? g_tInvGridLayout.nGridBoxHeight : 29;
+                    for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(g_pPlayerUnit->pInventory); pIt; pIt = INVENTORY_GetNextItem(pIt))
+                    {
+                        if (!INVENTORY_UnitIsItem(pIt) || INVENTORY_GetItemNodePage(pIt) != 1 || ITEMS_GetInvPage(pIt) != INVPAGE_INVENTORY)
+                            continue;
+                        uint8_t w = 1, h = 1;
+                        ITEMS_GetDimensions(pIt, &w, &h, __FILE__, __LINE__);
+                        int32_t ix = g_tInvGridLayout.nLeft + UNITS_GetXPosition(pIt) * nCellW;
+                        int32_t iy = g_tInvGridLayout.nTop  + UNITS_GetYPosition(pIt) * nCellH;
+                        if (nX >= ix && nX < ix + (int32_t)w * nCellW && nY >= iy && nY < iy + (int32_t)h * nCellH)
+                        {
+                            INV_InitiateShopItemTransaction(pIt, nY, pNpc, TRUE, nX);
+                            SMsgBreakHandlerChain(pMsg);
+                            return;
+                        }
+                    }
+                }
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
             if (INV_HandleGridItemRightClick(nY, nX, INVPAGE_INVENTORY, g_pPlayerUnit, g_pPlayerUnit->pInventory))
             {
                 if (g_nInvPanelMode >= 2 && g_nInvPanelMode <= 4)
@@ -4993,8 +5242,9 @@ void __stdcall INV_OnContainerPanelRightClick(D2WinMsgStrc* pMsg)
         return;
     }
 
-    if (g_nCursorState == 6)
+    if (g_nCursorState == 6 || g_nCursorState == 7)
     {
+        g_nCursorState = 0;
         UI_CancelActiveCursorState();
     }
     else if (g_nCursorState == 8)
@@ -5003,17 +5253,29 @@ void __stdcall INV_OnContainerPanelRightClick(D2WinMsgStrc* pMsg)
     }
     else if (!INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
     {
-        if (g_nInvPanelMode == 1 || g_nInvPanelMode == 2)
+        if (g_bNpcShopPanelOpen || (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9))
         {
-            // Right-click in NPC Shop grid to quick-buy item
+            // Right-click in NPC Shop grid to quick-buy / gamble item
             if (nX >= g_rNpcShopGridRect.left && nX <= g_rNpcShopGridRect.right &&
-                nY >= g_rNpcShopGridRect.top  && nY <= g_rNpcShopGridRect.bottom &&
-                g_pHoveredSocketHostItem)
+                nY >= g_rNpcShopGridRect.top  && nY <= g_rNpcShopGridRect.bottom)
             {
                 D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
-                if (pNpc)
+                if (pNpc && pNpc->pInventory)
                 {
-                    INV_InitiateShopItemTransaction(g_pHoveredSocketHostItem, nY, pNpc, FALSE, nX);
+                    for (D2UnitStrc* pIt = INVENTORY_GetFirstItem(pNpc->pInventory); pIt; pIt = INVENTORY_GetNextItem(pIt))
+                    {
+                        if (!INVENTORY_UnitIsItem(pIt) || ITEMS_GetInvPage(pIt) != g_nSelectedShopTab)
+                            continue;
+                        uint8_t w = 1, h = 1;
+                        ITEMS_GetDimensions(pIt, &w, &h, __FILE__, __LINE__);
+                        int32_t ix = g_rNpcShopGridRect.left + UNITS_GetXPosition(pIt) * 29;
+                        int32_t iy = g_rNpcShopGridRect.top  + UNITS_GetYPosition(pIt) * 29;
+                        if (nX >= ix && nX < ix + (int32_t)w * 29 && nY >= iy && nY < iy + (int32_t)h * 29)
+                        {
+                            INV_InitiateShopItemTransaction(pIt, nY, pNpc, FALSE, nX);
+                            break;
+                        }
+                    }
                 }
             }
         }

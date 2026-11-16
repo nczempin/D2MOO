@@ -1106,10 +1106,12 @@ void __stdcall SKILLTREE_RenderPanel()
 
     const int32_t aSkillColX[3] = { nPanelLeft + 15, nPanelLeft + 84, nPanelLeft + 153 };
     const int32_t aSkillRowY[6] = { nPanelTop + 14, nPanelTop + 82, nPanelTop + 150, nPanelTop + 218, nPanelTop + 286, nPanelTop + 354 };
-    char szHoveredTip[128] = {};
+    int32_t nHoveredSkillId = -1;
+    bool bHoveredSkillUnlocked = false;
     int32_t nHoverX = nPanelLeft + 120;
     int32_t nHoverY = nPanelTop + 140;
     bool bRow6Col1Occupied = false;
+    const int32_t nPlrLvl = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_LEVEL, 0);
 
     D2CellFileStrc* pIconCel = s_apClassSkillIconCells[nClassId];
     if (pIconCel && sgptDataTables && sgptDataTables->pSkillsTxt && sgptDataTables->pSkillDescTxt)
@@ -1130,20 +1132,19 @@ void __stdcall SKILLTREE_RenderPanel()
             const int32_t nIconY = aSkillRowY[sd.nSkillRow - 1];
             D2SkillStrc* pSkill = SKILLS_GetSkillById(gpPlayerUnit, sId, -1);
             const int32_t nLvl = pSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pSkill, 1) : 0;
+            const bool bMeetsPrereqs = (nLvl > 0) || (nPlrLvl >= sk.wReqLevel && SKILLS_CheckRequiredSkills(gpPlayerUnit, sId) != 0);
 
-            GAME_DrawSingleCelTopLeft(pIconCel, nIconX, nIconY, (nLvl > 0) ? sd.nIconCel : (sd.nIconCel + 1));
+            GAME_DrawSingleCelTopLeft(pIconCel, nIconX, nIconY, bMeetsPrereqs ? sd.nIconCel : (sd.nIconCel + 1));
 
             char szLvl[16] = {};
             snprintf(szLvl, sizeof(szLvl), "%d", nLvl);
-            GAME_DrawAsciiText(szLvl, nIconX + 41, nIconY + 55, (nLvl > 0) ? 4 : 0, TRUE);
+            const uint8_t nLvlColor = (nLvl > 0) ? 4 : (bMeetsPrereqs ? 0 : 5);
+            GAME_DrawAsciiText(szLvl, nIconX + 41, nIconY + 55, nLvlColor, TRUE);
 
             if (gnMouseX >= nIconX && gnMouseX < nIconX + 48 && gnMouseY >= nIconY && gnMouseY < nIconY + 48)
             {
-                const Unicode* pName = sd.wStrName ? D2LANG_GetStringFromTblIndex(sd.wStrName) : nullptr;
-                char szName[64] = {};
-                if (pName) Unicode::unicode2Win(szName, pName, 63);
-                snprintf(szHoveredTip, sizeof(szHoveredTip), "%s (Level %d, Req Lvl %d)",
-                    szName[0] ? szName : "Skill", nLvl, sk.wReqLevel);
+                nHoveredSkillId = sId;
+                bHoveredSkillUnlocked = bMeetsPrereqs;
                 nHoverX = nIconX + 24;
                 nHoverY = (nIconY - 8 > nPanelTop + 15) ? (nIconY - 8) : (nPanelTop + 15);
             }
@@ -1196,12 +1197,25 @@ void __stdcall SKILLTREE_RenderPanel()
             10);
     }
 
-    if (szHoveredTip[0])
+    if (nHoveredSkillId >= 0)
     {
-        Unicode wszTip[128] = {};
-        Unicode::win2Unicode(wszTip, szHoveredTip, 127);
-        D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
-        D2Win_10129_DrawFramedText(wszTip, nHoverX, nHoverY, 0, 1);
+        extern int32_t g_nHoveredSkillId_6FBBA6E8;
+        extern int32_t g_nSkillHoverX_6FBBA6D0;
+        extern int32_t g_nSkillHoverY_6FBBA6CC;
+        extern void __cdecl sub_6FAF91D0(void);
+        extern void __cdecl sub_6FAF9490(void);
+
+        g_nHoveredSkillId_6FBBA6E8 = nHoveredSkillId;
+        g_nSkillHoverX_6FBBA6D0    = nHoverX;
+        g_nSkillHoverY_6FBBA6CC    = nHoverY;
+        if (bHoveredSkillUnlocked)
+        {
+            sub_6FAF9490();
+        }
+        else
+        {
+            sub_6FAF91D0();
+        }
     }
 }
 
