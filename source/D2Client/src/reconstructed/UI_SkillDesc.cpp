@@ -493,10 +493,10 @@ D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId)
     D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return nullptr;
-    uint16_t wSkillDesc = pSkillsTxt->wSkillDesc;
-    if (wSkillDesc <= 0 || wSkillDesc >= g_nSkillDescTxtRecordCount_6FDD1C4C)
+    int16_t nSkillDesc = static_cast<int16_t>(pSkillsTxt->wSkillDesc);
+    if (nSkillDesc < 0 || nSkillDesc >= g_nSkillDescTxtRecordCount_6FDD1C4C)
         return nullptr;
-    return &g_pSkillDescTxt_6FDD1C44[wSkillDesc];
+    return &g_pSkillDescTxt_6FDD1C44[nSkillDesc];
 }
 
 // 1.12a: 0x6FAF2210
@@ -3169,21 +3169,19 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 53:
-        if (sub_6FB075D0(pUnit, nSkillId))
-            sub_6FAF4D70(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
-        break;
     case 54:
-        if (sub_6FB07580(pUnit, nSkillId))
-            sub_6FAF4DC0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
-        break;
     case 55:
-        if (sub_6FB07530(pUnit, nSkillId))
-            sub_6FAF4C50(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
-        break;
     case 56:
-        if (sub_6FB074E0(pUnit, nSkillId))
-            sub_6FAF3450(nSkillId, nSkillLevel, pUnit, pSkillDesc, nLineIdx, wszOut);
+    {
+        D2SkillStrc* pQtySkill = pUnit ? SKILLS_GetSkillById(pUnit, nSkillId, D2UnitInvalidGUID) : nullptr;
+        int32_t nQty = pQtySkill ? SKILLS_GetQuantity(pQtySkill) : 0;
+        const wchar_t* wszQtyFmt = D2LANG_GetStringByTblIndex(0x1058);
+        if (wszQtyFmt && wcsstr(wszQtyFmt, L"%d") != nullptr)
+            swprintf(wszOut, wszQtyFmt, nQty);
+        else
+            swprintf(wszOut, L"Quantity: %d", nQty);
         break;
+    }
     case 57:
         sub_6FAF2560(nValA, wszOut, wStrA, 0x10AC);
         break;
@@ -3225,7 +3223,7 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
             if (wcsstr(D2LANG_GetStringByTblIndex(wStrA), L"%d") != nullptr)
                 swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), nValA);
             else
-                sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
+                wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
         }
         break;
     case 67:
@@ -3464,7 +3462,7 @@ void __cdecl sub_6FAF91D0(void)
     {
         const int32_t nPlrLvl = STATLIST_UnitGetStatValue(pPlayer, 12 /* STAT_LEVEL */, 0);
         nColors[nLineCount] = (nPlrLvl < pSkillsTxt->wReqLevel) ? 1 : 0;
-        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x1111), wszLines[nLineCount++], pSkillsTxt->wReqLevel); // "Required Level: "
+        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x105B), wszLines[nLineCount++], pSkillsTxt->wReqLevel); // "Required Level: "
     }
 
     if (IsValidSkillStrId(pSkillDesc->wStrLong))
@@ -3574,9 +3572,16 @@ void __cdecl sub_6FAF9490(void)
     }
 
     D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
-    if (nSkillLevel <= 0 && pSkillsTxt && pSkillsTxt->wReqLevel > 1)
+    if (pSkillsTxt && pSkillsTxt->wReqLevel > 1)
     {
-        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x1111), wszLines[nLineCount++], pSkillsTxt->wReqLevel);
+        const int32_t nPlrLvl = STATLIST_UnitGetStatValue(pPlayer, 12 /* STAT_LEVEL */, 0);
+        nColors[nLineCount] = (nPlrLvl < pSkillsTxt->wReqLevel) ? 1 : 0;
+        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x105B), wszLines[nLineCount++], pSkillsTxt->wReqLevel); // "Required Level: "
+    }
+
+    if (pSkill && SKILLS_GetSkillLevel(pPlayer, pSkill, 0) >= 20)
+    {
+        wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(0x1111)); // "Maximum Level Reached"
     }
 
     if (IsValidSkillStrId(pSkillDesc->wStrLong))
@@ -3608,18 +3613,17 @@ void __cdecl sub_6FAF9490(void)
     D2WIN_DrawFramedText(wszFull, g_nSkillHoverX_6FBBA6D0, nClampedY, 0, (g_nSkillTreeTab_6FBA79FC == 3) ? 2 : 0);
 }
 
-// 1.12a: 0x6FAF9A90
-// Calling convention: __fastcall (ECX = nSkillId, EDX = nHoverIdx)
-void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
+int32_t __fastcall D2Client_FindBoundHotkeyForSkill(int32_t nSkillId, int32_t bLeftHand);
+
+void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkillLevel, D2SkillStrc* pSkill, int32_t bLeftHand, int32_t nCenterX, int32_t nBottomY)
 {
     D2UnitStrc* pPlayer = sub_6FAFF3D0();
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (!pPlayer || !pSkillDesc)
         return;
 
-    int32_t nSkillLevel = g_nSpeedBarSkillLevels_6FBC23B8[nHoverIdx];
-    int32_t nSkillFlags = g_nSpeedBarSkillFlags_6FBC22C8[nHoverIdx];
-    D2SkillStrc* pSkill = SKILLS_GetSkillById(pPlayer, nSkillId, nSkillFlags);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    const int32_t nEvalLvl = (nSkillLevel > 0) ? nSkillLevel : 1;
 
     wchar_t wszLines[32][256] = {};
     int32_t nColors[32] = {};
@@ -3629,7 +3633,7 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            sub_6FAF7600(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3639,7 +3643,7 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            sub_6FAF7600(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3647,12 +3651,13 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
 
     if (pSkill)
     {
-        int32_t nCharges = 0, nMaxCharges = 0;
-        if (SKILLS_GetSkillInfo(pSkill, nullptr, nullptr, &nMaxCharges, &nCharges) && nMaxCharges > 0)
+        D2UnitGUID nOwnerGUID = D2UnitInvalidGUID;
+        int nInfoLvl = 0, nCharges = 0;
+        if (SKILLS_GetSkillInfo(pSkill, &nOwnerGUID, nullptr, &nInfoLvl, &nCharges) && nCharges > 0)
         {
-            swprintf(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(0x105B), nCharges, nMaxCharges);
+            swprintf(wszLines[nLineCount++], L"Level %d (%d Charges)", nInfoLvl, nCharges);
         }
-        else if (nSkillLevel > 0)
+        else if (nSkillLevel > 0 && pSkillsTxt && pSkillsTxt->nCharClass >= 0 && pSkillsTxt->nCharClass < 7)
         {
             sub_6FB202B0(D2LANG_GetStringByTblIndex(0x109E), wszLines[nLineCount++], nSkillLevel);
         }
@@ -3676,16 +3681,43 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     if (IsValidSkillStrId(pSkillDesc->wStrName))
     {
         nColors[nLineCount] = 2;
-        wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(pSkillDesc->wStrName));
+        const int32_t nHk = D2Client_FindBoundHotkeyForSkill(nSkillId, bLeftHand);
+        if (nHk >= 0 && nHk < 12)
+            swprintf(wszLines[nLineCount++], L"%s (F%d)", D2LANG_GetStringByTblIndex(pSkillDesc->wStrName), nHk + 1);
+        else
+            wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(pSkillDesc->wStrName));
     }
 
-    wchar_t wszFull[2048] = {};
-    BuildFramedSkillTooltipString(wszLines, nColors, nLineCount, wszFull, 2048);
+    if (nLineCount <= 0)
+        return;
+
+    wchar_t wszFull[1024] = {};
+    BuildFramedSkillTooltipString(wszLines, nColors, nLineCount, wszFull, 1020);
 
     D2WIN_SetFont(1);
-    int32_t nX = g_nSpeedBarSkillX_6FBC2598[nHoverIdx];
-    int32_t nY = g_nSpeedBarSkillY_6FBC24A8[nHoverIdx] - 48;
-    D2WIN_DrawFramedText(wszFull, nX, ClampSkillTooltipBottomY(wszFull, nY), 0, g_bSkillHoverIsRight_6FBC21C0 ? 2 : 0);
+    D2WIN_DrawFramedText(wszFull, nCenterX, ClampSkillTooltipBottomY(wszFull, nBottomY), 0, 1);
+}
+
+// 1.12a: 0x6FAF9A90
+// Calling convention: __fastcall (ECX = nSkillId, EDX = nHoverIdx)
+void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
+{
+    D2UnitStrc* pPlayer = sub_6FAFF3D0();
+    if (!pPlayer || nHoverIdx < 0 || nHoverIdx >= 60)
+        return;
+
+    int32_t nSkillLevel = g_nSpeedBarSkillLevels_6FBC23B8[nHoverIdx];
+    D2UnitGUID nOwnerGUID = static_cast<D2UnitGUID>(g_nSpeedBarSkillFlags_6FBC22C8[nHoverIdx]);
+    D2SkillStrc* pSkill = (nSkillId > 0) ? SKILLS_GetSkillById(pPlayer, nSkillId, nOwnerGUID) : nullptr;
+    if (!pSkill && nSkillId > 0)
+        pSkill = SKILLS_GetSkillById(pPlayer, nSkillId, D2UnitInvalidGUID);
+    if (pSkill && nSkillLevel <= 0)
+        nSkillLevel = SKILLS_GetSkillLevel(pPlayer, pSkill, 1);
+
+    const int32_t nCenterX = g_nSpeedBarSkillX_6FBC2598[nHoverIdx] + 24;
+    const int32_t nBottomY = g_nSpeedBarSkillY_6FBC24A8[nHoverIdx] - 52;
+    const int32_t bLeftHand = g_bSkillHoverIsRight_6FBC21C0 ? 0 : 1;
+    SKILLDESC_DrawActiveSkillTooltip(nSkillId, nSkillLevel, pSkill, bLeftHand, nCenterX, nBottomY);
 }
 
 // 1.12a: 0x6FAFA030
