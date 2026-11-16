@@ -1086,7 +1086,7 @@ void __fastcall D2Client_PacketHandler_ItemRemoveFromBelt(const uint8_t* pPacket
 
     if (INVENTORY_RemoveItem(pItem))
     {
-        if (pPacket[1] == 0x0F && !ITEMS_CheckItemFlag(pItem, IFLAG_DELETED, __LINE__, __FILE__))
+        if (pPacket[1] == 0x0F && !ITEMS_CheckItemFlag(pItem, IFLAG_DELETED | IFLAG_QUANTITY, __LINE__, __FILE__))
         {
             D2Client_RepositionExistingItemUnit(pItem, 0, 0, ITEMMODE_ONCURSOR, 0xFF, TRUE);
             INVENTORY_SetCursorItem(pOwner->pInventory, pItem);
@@ -1477,7 +1477,7 @@ void __fastcall D2Client_PacketHandler_ItemRemoveFromInventory(const uint8_t* pP
             D2Client_ExpireItemStatListOnOwner(pOwner, pItem);
         }
         INVENTORY_RemoveItem(pItem);
-        if (!ITEMS_CheckItemFlag(pItem, IFLAG_DELETED, __LINE__, __FILE__))
+        if (!ITEMS_CheckItemFlag(pItem, IFLAG_DELETED | IFLAG_QUANTITY, __LINE__, __FILE__))
         {
             D2Client_RepositionExistingItemUnit(pItem, 0, 0, ITEMMODE_ONCURSOR, 0xFF, TRUE);
             INVENTORY_SetCursorItem(pOwner->pInventory, pItem);
@@ -1611,10 +1611,14 @@ void __fastcall D2Client_PacketHandler_ItemUnequip(const uint8_t* pPacket)
             D2Client_UpdateEquippedWeaponClassCache(nullptr, bBodyLoc);
             D2Client_PlaySoundCentered(4);
         }
-        if (!ITEMS_CheckItemFlag(pItem, IFLAG_DELETED, __LINE__, __FILE__))
+        if (!ITEMS_CheckItemFlag(pItem, IFLAG_DELETED | IFLAG_QUANTITY, __LINE__, __FILE__))
         {
             D2Client_RepositionExistingItemUnit(pItem, 0, 0, ITEMMODE_ONCURSOR, 0xFF, TRUE);
             INVENTORY_SetCursorItem(pOwner->pInventory, pItem);
+        }
+        else
+        {
+            D2Client_UnequipAndDeleteItemUnit(pItem);
         }
         if (pOwner->dwUnitType == UNIT_PLAYER)
         {

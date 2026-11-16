@@ -2776,10 +2776,10 @@ BOOL __fastcall INV_UseInventoryItemRightClick(D2UnitStrc* pPlayer, D2UnitStrc* 
         return FALSE;
     }
 
-    if (pPlayer->pDynamicPath)
+    int32_t nPlayerX = pPlayer->pDynamicPath ? PATH_GetXPosition(pPlayer->pDynamicPath) : UNITS_GetXPosition(pPlayer);
+    int32_t nPlayerY = pPlayer->pDynamicPath ? PATH_GetYPosition(pPlayer->pDynamicPath) : UNITS_GetYPosition(pPlayer);
+    if (nPlayerX > 0 && nPlayerY > 0)
     {
-        int32_t nPlayerX = PATH_GetXPosition(pPlayer->pDynamicPath);
-        int32_t nPlayerY = PATH_GetYPosition(pPlayer->pDynamicPath);
         NET_SendByteAndThreeDwords(0x20, pItem->dwUnitId, nPlayerX, nPlayerY);
         return TRUE;
     }

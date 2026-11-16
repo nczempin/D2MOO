@@ -3514,14 +3514,14 @@ void __stdcall D2Client_BuildFullItemTooltipText(
         lines.PushSingle(0, wszQty);
     }
 
-    // Durability / Indestructible (0x6FB5DCC6: ITEMS_HasDurability excludes stackable throwables)
-    if (ITEMS_HasDurability(pItem))
+    // Durability / Indestructible (0x6FB58300: skip stackable items, check Indestructible before ITEMS_HasDurability)
+    if (!pItemsTxt->nStackable && !pItemsTxt->nNoDurability)
     {
         if (STATLIST_UnitGetStatValue(pItem, STAT_ITEM_INDESCTRUCTIBLE, 0) > 0)
         {
             lines.PushSingle(3, L"Indestructible");
         }
-        else
+        else if (ITEMS_HasDurability(pItem))
         {
             const int32_t nMaxDur = STATLIST_UnitGetStatValue(pItem, STAT_MAXDURABILITY, 0);
             if (nMaxDur > 0)

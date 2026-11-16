@@ -194,6 +194,8 @@ void __stdcall INV_ClearHoveredItemState();
 void __fastcall INV_SetPanelMode(int32_t nMode);
 void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnInventoryPanelMouseUp(D2WinMsgStrc* pMsg);
+void __stdcall INV_OnInventoryGridRightClick(D2WinMsgStrc* pMsg);
+void __stdcall INV_OnContainerPanelRightClick(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnStashPanelMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnHoradricCubeMouseUp(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnMercInventoryMouseUp(D2WinMsgStrc* pMsg);
@@ -2154,19 +2156,75 @@ static bool HandleHudBottomBarMouseDown(int32_t mx, int32_t my)
 		UI_ToggleMiniPanel();
 		return true;
 	}
-	// Belt slots 1..4 on bottom bar
-	if (mx >= nBarBaseX + 422 && mx < nBarBaseX + 550 && gpPlayerUnit && gpPlayerUnit->pInventory)
+	return true;
+}
+
+static bool HandleBeltMouseClick(int32_t mx, int32_t my, bool bLeftClick)
+{
+	if (!gpPlayerUnit || !gpPlayerUnit->pInventory)
 	{
-		const int32_t nCol = std::max<int32_t>(0, std::min<int32_t>(3, (mx - (nBarBaseX + 422)) / 32));
-		if (D2UnitStrc* pBeltItem = INVENTORY_GetItemFromBeltSlot(gpPlayerUnit->pInventory, nCol))
+		return false;
+	}
+	if (gaPanelStates[D2PANEL_ESCMENU] != 0 || gaPanelStates[D2PANEL_NPCMENU] != 0)
+	{
+		return false;
+	}
+
+	const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+	const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+	const int32_t nSlotBaseX = (nW >= 800) ? (nW / 2 + 23) : (nW / 2 + 102);
+	const int32_t nBeltRows = (gaPanelStates[D2PANEL_BELT] != 0) ? std::max<int32_t>(1, g_nEquippedBeltRows) : 1;
+	const int32_t nTopY = (nBeltRows > 1) ? (nH - 9 - 31 * nBeltRows - 4) : (nH - 48);
+	const int32_t nBottomY = nH - 2;
+
+	if (mx < nSlotBaseX - 2 || mx >= nSlotBaseX + 4 * 31 + 2 || my < nTopY || my > nBottomY)
+	{
+		return false;
+	}
+
+	const int32_t nCol = std::max<int32_t>(0, std::min<int32_t>(3, (mx - nSlotBaseX) / 31));
+	const int32_t nRow = std::max<int32_t>(0, std::min<int32_t>(nBeltRows - 1, (nH - 9 - my) / 31));
+	const int32_t nSlot = nCol + 4 * nRow;
+	if (nSlot < 0 || nSlot >= 4 * std::max<int32_t>(1, g_nEquippedBeltRows))
+	{
+		return true;
+	}
+
+	D2UnitStrc* pBeltItem = INVENTORY_GetItemFromBeltSlot(gpPlayerUnit->pInventory, nSlot);
+	D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(gpPlayerUnit->pInventory);
+
+	if (!bLeftClick)
+	{
+		if (pBeltItem != nullptr && pCursorItem == nullptr)
 		{
 			SendUseBeltItem(pBeltItem->dwUnitId, (GetKeyState(VK_SHIFT) & 0x8000) != 0);
 		}
-		else
+		return true;
+	}
+
+	if (pCursorItem != nullptr)
+	{
+		if (ITEMS_CheckIfBeltable(pCursorItem))
 		{
-			UI_SetPanelState(D2PANEL_BELT, 2, 0);
+			if (pBeltItem == nullptr)
+			{
+				MSG_SendByte2Dwords(0x23u, pCursorItem->dwUnitId, static_cast<uint32_t>(nSlot));
+			}
+			else
+			{
+				MSG_SendByte2Dwords(0x25u, pCursorItem->dwUnitId, pBeltItem->dwUnitId);
+			}
 		}
 		return true;
+	}
+
+	if (pBeltItem != nullptr)
+	{
+		MSG_SendByteDword(0x24u, pBeltItem->dwUnitId);
+	}
+	else if (g_nEquippedBeltRows > 1)
+	{
+		UI_SetPanelState(D2PANEL_BELT, 2, 0);
 	}
 	return true;
 }
@@ -2218,12 +2276,20 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		tMsg.wParam = wParam;
 		tMsg.nX = static_cast<uint16_t>(mx);
 		tMsg.nY = static_cast<uint16_t>(my);
+		tMsg.dwKeyFlags =
+			(((GetKeyState(VK_SHIFT) & 0x8000) != 0 || (wParam & MK_SHIFT) != 0) ? 4u : 0u) |
+			(((GetKeyState(VK_CONTROL) & 0x8000) != 0 || (wParam & MK_CONTROL) != 0) ? 8u : 0u) |
+			(((GetKeyState(VK_MENU) & 0x8000) != 0) ? 16u : 0u);
 
 		if (bLeftClick && HandleEscMenuMouseDown(mx, my))
 		{
 			return 0;
 		}
 		if (bLeftClick && HandleNpcDialogMouseDown(mx, my))
+		{
+			return 0;
+		}
+		if (HandleBeltMouseClick(mx, my, bLeftClick))
 		{
 			return 0;
 		}
@@ -2236,14 +2302,6 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			D2Client_HandleSpeedBarClick(mx, my, g_nSpeedBarSide == 1 ? 1 : 0);
 			UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
 			return 0;
-		}
-		if (!bLeftClick && mx >= 418 && mx <= 550 && (my >= 552 || gaPanelStates[D2PANEL_BELT]))
-		{
-			PANEL_OnRButtonDown(reinterpret_cast<D2MsgStrc*>(&tMsg));
-			if (tMsg.dwKeyFlags != 0 || tMsg.bHandled != 0)
-			{
-				return 0;
-			}
 		}
 
 		// Left-side panels (0..400)
@@ -2310,7 +2368,14 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 					++gdwTransmutesSent;
 					return 0;
 				}
-				INV_OnInventoryPanelMouseDown(&tMsg);
+				if (bLeftClick)
+				{
+					INV_OnInventoryPanelMouseDown(&tMsg);
+				}
+				else
+				{
+					INV_OnContainerPanelRightClick(&tMsg);
+				}
 				return 0;
 			}
 		}
@@ -2320,7 +2385,14 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		{
 			if (gaPanelStates[D2PANEL_INVENTORY])
 			{
-				INV_OnInventoryPanelMouseDown(&tMsg);
+				if (bLeftClick)
+				{
+					INV_OnInventoryPanelMouseDown(&tMsg);
+				}
+				else
+				{
+					INV_OnInventoryGridRightClick(&tMsg);
+				}
 				return 0;
 			}
 			if (gaPanelStates[D2PANEL_SKILLTREE])
@@ -2474,6 +2546,10 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		tMsg.wParam = wParam;
 		tMsg.nX = static_cast<uint16_t>(gMousePos.x);
 		tMsg.nY = static_cast<uint16_t>(gMousePos.y);
+		tMsg.dwKeyFlags =
+			(((GetKeyState(VK_SHIFT) & 0x8000) != 0 || (wParam & MK_SHIFT) != 0) ? 4u : 0u) |
+			(((GetKeyState(VK_CONTROL) & 0x8000) != 0 || (wParam & MK_CONTROL) != 0) ? 8u : 0u) |
+			(((GetKeyState(VK_MENU) & 0x8000) != 0) ? 16u : 0u);
 		if (gaPanelStates[D2PANEL_CHAR])
 		{
 			CHARSTATS_HandleMouseUp(&tMsg);
