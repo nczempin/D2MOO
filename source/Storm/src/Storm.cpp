@@ -378,32 +378,33 @@ static FARPROC __stdcall StormResolveOrdinal(uint32_t nOrdinal, FARPROC pfnFallb
 	if (!s_bTriedLoad)
 	{
 		s_bTriedLoad = true;
-		char szPath[MAX_PATH] = {};
-		if (GetModuleFileNameA(nullptr, szPath, MAX_PATH) != 0)
+		// All ordinals imported across D2MOO modules are implemented natively in Storm.dll.
+		// Only load legacy retail Storm112.dll if explicitly requested via D2MOO_USE_STORM112=1.
+		const char* szEnableLegacy = std::getenv("D2MOO_USE_STORM112");
+		if (szEnableLegacy && szEnableLegacy[0] == '1')
 		{
-			char* pSlash = std::strrchr(szPath, '\\');
-			if (pSlash)
+			char szPath[MAX_PATH] = {};
+			if (GetModuleFileNameA(nullptr, szPath, MAX_PATH) != 0)
 			{
-				pSlash[1] = '\0';
-				std::strncat(szPath, "Storm112.dll", MAX_PATH - std::strlen(szPath) - 1);
-				s_hStormBackend = LoadLibraryA(szPath);
+				char* pSlash = std::strrchr(szPath, '\\');
+				if (pSlash)
+				{
+					pSlash[1] = '\0';
+					std::strncat(szPath, "Storm112.dll", MAX_PATH - std::strlen(szPath) - 1);
+					s_hStormBackend = LoadLibraryA(szPath);
+				}
 			}
-		}
-		if (!s_hStormBackend)
-		{
-			s_hStormBackend = LoadLibraryA("Storm112.dll");
-		}
-		if (s_hStormBackend)
-		{
-			// Storm.dll (1.12a) DllMain checks lpvReserved == nullptr (dynamic LoadLibrary load)
-			// and deliberately calls 0x6FC015F0(0x10000100) to poison the MPQ crypt_table at
-			// 0x6FC45358 with seed 0x10000100 instead of 0x100001.
-			// Calling SFileDestroy (@262) immediately after LoadLibrary frees the poisoned table
-			// and resets 0x6FC45358 to nullptr so SFileOpenArchive initializes it with 0x100001.
-			using SFileDestroyFn = BOOL(__stdcall*)();
-			if (auto pfnDestroy = reinterpret_cast<SFileDestroyFn>(GetProcAddress(s_hStormBackend, MAKEINTRESOURCEA(262))))
+			if (!s_hStormBackend)
 			{
-				pfnDestroy();
+				s_hStormBackend = LoadLibraryA("Storm112.dll");
+			}
+			if (s_hStormBackend)
+			{
+				using SFileDestroyFn = BOOL(__stdcall*)();
+				if (auto pfnDestroy = reinterpret_cast<SFileDestroyFn>(GetProcAddress(s_hStormBackend, MAKEINTRESOURCEA(262))))
+				{
+					pfnDestroy();
+				}
 			}
 		}
 	}
@@ -1153,4 +1154,383 @@ int __stdcall SUniConvertUTF8to16(wchar_t* pBuffer, int nBufferCount, const char
 	}
 	*pOutLength = static_cast<int>(target - targetStart);
 	return result;
+}
+
+// ============================================================================
+// Native SMem*, SStr*, and SErr* Implementations
+// ============================================================================
+
+// Storm.#401 (1.12a: 0x6FC2A970)
+void* __stdcall SMemAlloc(size_t bytes, const char* logfilename, int logline, uint32_t flags)
+{
+	(void)logfilename;
+	(void)logline;
+	const size_t allocSize = (bytes > 0) ? bytes : 1u;
+	const DWORD dwHeapFlags = (flags & 0x08u) ? HEAP_ZERO_MEMORY : 0u;
+	return HeapAlloc(GetProcessHeap(), dwHeapFlags, allocSize);
+}
+
+// Storm.#403 (1.12a: 0x6FC2A060)
+int32_t __stdcall SMemFree(void* location, const char* logfilename, int logline, uint32_t flags)
+{
+	(void)logfilename;
+	(void)logline;
+	(void)flags;
+	if (!location)
+	{
+		return 1;
+	}
+	return HeapFree(GetProcessHeap(), 0, location) ? 1 : 0;
+}
+
+// Storm.#404
+size_t __stdcall SMemGetSize(void* location, const char* logfilename, int logline)
+{
+	(void)logfilename;
+	(void)logline;
+	if (!location)
+	{
+		return 0;
+	}
+	const SIZE_T sz = HeapSize(GetProcessHeap(), 0, location);
+	return (sz == static_cast<SIZE_T>(-1)) ? 0u : static_cast<size_t>(sz);
+}
+
+// Storm.#405
+void* __stdcall SMemReAlloc(void* location, int amount, const char* logfilename, int logline, uint32_t flags)
+{
+	if (flags == 0xB00BEEE5u)
+	{
+		return nullptr;
+	}
+	if (!location)
+	{
+		return SMemAlloc((amount > 0) ? static_cast<size_t>(amount) : 1u, logfilename, logline, flags);
+	}
+	if (amount <= 0)
+	{
+		SMemFree(location, logfilename, logline, flags);
+		return nullptr;
+	}
+	const DWORD dwHeapFlags = ((flags & 0x08u) ? HEAP_ZERO_MEMORY : 0u) | ((flags & 0x10u) ? HEAP_REALLOC_IN_PLACE_ONLY : 0u);
+	return HeapReAlloc(GetProcessHeap(), dwHeapFlags, location, static_cast<SIZE_T>(amount));
+}
+
+// Storm.#501
+size_t __stdcall SStrCopy(char* dest, const char* source, size_t destsize)
+{
+	if (!dest || destsize == 0)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return 0;
+	}
+	if (!source)
+	{
+		dest[0] = '\0';
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return 0;
+	}
+	if (destsize == 0x7FFFFFFFu)
+	{
+		size_t i = 0;
+		while (source[i] != '\0')
+		{
+			dest[i] = source[i];
+			++i;
+		}
+		dest[i] = '\0';
+		return i;
+	}
+	size_t i = 0;
+	const size_t maxChars = destsize - 1;
+	while (i < maxChars && source[i] != '\0')
+	{
+		dest[i] = source[i];
+		++i;
+	}
+	dest[i] = '\0';
+	return i;
+}
+
+// Storm.#504
+void __stdcall SStrTokenize(const char** string, char* buffer, size_t bufferchars, const char* delimiter, int32_t* quoted)
+{
+	if (quoted) *quoted = 0;
+	if (buffer && bufferchars > 0) buffer[0] = '\0';
+	if (!string || !*string || !delimiter) return;
+
+	const char* p = *string;
+	while (*p != '\0' && std::strchr(delimiter, *p) != nullptr)
+	{
+		++p;
+	}
+	if (*p == '\0')
+	{
+		*string = p;
+		return;
+	}
+
+	bool bInQuotes = false;
+	size_t outIdx = 0;
+	while (*p != '\0')
+	{
+		if (*p == '"')
+		{
+			bInQuotes = !bInQuotes;
+			if (quoted) *quoted = 1;
+			++p;
+			continue;
+		}
+		if (!bInQuotes && std::strchr(delimiter, *p) != nullptr)
+		{
+			break;
+		}
+		if (buffer && bufferchars > 0 && outIdx + 1 < bufferchars)
+		{
+			buffer[outIdx++] = *p;
+		}
+		++p;
+	}
+	if (buffer && bufferchars > 0)
+	{
+		buffer[outIdx] = '\0';
+	}
+	if (*p != '\0')
+	{
+		++p;
+	}
+	*string = p;
+}
+
+// Storm.#506
+size_t __stdcall SStrLen(const char* string)
+{
+	if (!string)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return 0;
+	}
+	return std::strlen(string);
+}
+
+// Storm.#507
+void* __stdcall SStrDup(int a1)
+{
+	const char* szSrc = reinterpret_cast<const char*>(static_cast<uintptr_t>(static_cast<uint32_t>(a1)));
+	if (!szSrc)
+	{
+		return nullptr;
+	}
+	const size_t nLen = std::strlen(szSrc) + 1;
+	char* pCopy = static_cast<char*>(SMemAlloc(nLen, __FILE__, __LINE__, 0));
+	if (pCopy)
+	{
+		std::memcpy(pCopy, szSrc, nLen);
+	}
+	return pCopy;
+}
+
+// Storm.#508
+int32_t __stdcall SStrCmp(const char* Str1, const char* Str2, size_t MaxCount)
+{
+	if (!Str1) Str1 = "";
+	if (!Str2) Str2 = "";
+	if (MaxCount == 0x7FFFFFFFu)
+	{
+		return std::strcmp(Str1, Str2);
+	}
+	return std::strncmp(Str1, Str2, MaxCount);
+}
+
+// Storm.#509
+int32_t __stdcall SStrCmpI(const char* Str1, const char* Str2, size_t MaxCount)
+{
+	if (!Str1) Str1 = "";
+	if (!Str2) Str2 = "";
+	if (MaxCount == 0x7FFFFFFFu)
+	{
+		return _stricmp(Str1, Str2);
+	}
+	return _strnicmp(Str1, Str2, MaxCount);
+}
+
+// Storm.#510
+char* __stdcall SStrUpper(char* Str)
+{
+	if (!Str) return nullptr;
+	for (char* p = Str; *p != '\0'; ++p)
+	{
+		if (*p >= 'a' && *p <= 'z') *p = static_cast<char>(*p - 0x20);
+	}
+	return Str;
+}
+
+// Storm.#579
+int __stdcall SStrLower(char* Str)
+{
+	if (!Str) return 0;
+	for (char* p = Str; *p != '\0'; ++p)
+	{
+		if (*p >= 'A' && *p <= 'Z') *p = static_cast<char>(*p + 0x20);
+	}
+	return 1;
+}
+
+// Storm.#571
+const char* __stdcall SStrChr(const char* string, char c)
+{
+	if (!string)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return nullptr;
+	}
+	return std::strchr(string, c);
+}
+
+// Storm.#572
+const char* __stdcall SStrChrR(const char* string, char c)
+{
+	if (!string)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return nullptr;
+	}
+	return std::strrchr(string, c);
+}
+
+// Storm.#574
+float __stdcall SStrToFloat(const char* string)
+{
+	if (!string) return 0.0f;
+	return static_cast<float>(std::atof(string));
+}
+
+// Storm.#575
+int32_t __stdcall SStrToInt(const char* string)
+{
+	if (!string) return 0;
+	return static_cast<int32_t>(std::atoi(string));
+}
+
+// Storm.#578
+int __cdecl SStrPrintf(char* DstBuf, size_t MaxCount, const char* Format, ...)
+{
+	va_list args;
+	va_start(args, Format);
+	const int res = SStrVPrintf(DstBuf, MaxCount, const_cast<char*>(Format), args);
+	va_end(args);
+	return res;
+}
+
+static uint32_t g_dwStormLastError = ERROR_SUCCESS;
+
+// Storm.#463
+uint32_t __cdecl SErrGetLastError()
+{
+	return g_dwStormLastError;
+}
+
+// Storm.#465
+void __stdcall SErrSetLastError(uint32_t dwErrCode)
+{
+	g_dwStormLastError = dwErrCode;
+	SetLastError(dwErrCode);
+}
+
+// Storm.#462
+int __stdcall SErrGetErrorStr(DWORD dwMessageId, LPSTR lpBuffer, DWORD nSize)
+{
+	if (!lpBuffer || nSize == 0)
+	{
+		return 0;
+	}
+	const DWORD dwLen = FormatMessageA(
+		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		nullptr,
+		dwMessageId,
+		0,
+		lpBuffer,
+		nSize,
+		nullptr);
+	if (dwLen == 0)
+	{
+		std::snprintf(lpBuffer, nSize, "Storm error 0x%08lX", static_cast<unsigned long>(dwMessageId));
+	}
+	return 1;
+}
+
+// Storm.#464
+BOOL __stdcall SErrRegisterMessageSource(__int16 a1, int a2, int a3)
+{
+	(void)a1;
+	(void)a2;
+	(void)a3;
+	return TRUE;
+}
+
+// Storm.#564
+int32_t __stdcall SErrPrepareAppFatal(const char* filename, int32_t linenumber)
+{
+	(void)filename;
+	(void)linenumber;
+	return 1;
+}
+
+// Storm.#561
+__declspec(noreturn) void __cdecl SErrDisplayAppFatal(char* Format, ...)
+{
+	char szBuf[2048] = {};
+	if (Format)
+	{
+		va_list args;
+		va_start(args, Format);
+		std::vsnprintf(szBuf, sizeof(szBuf) - 1, Format, args);
+		va_end(args);
+	}
+	std::fprintf(stderr, "Storm Fatal Error: %s\n", szBuf);
+	std::exit(EXIT_FAILURE);
+}
+
+// Storm.#461
+int32_t __stdcall SErrDisplayError(
+	uint32_t messageId,
+	const char* filename,
+	int32_t linenumber,
+	const char* description,
+	int32_t recoverable,
+	uint32_t exitcode)
+{
+	std::fprintf(
+		stderr,
+		"Storm Error 0x%08X at %s:%d: %s\n",
+		messageId,
+		filename ? filename : "<unknown>",
+		linenumber,
+		description ? description : "");
+	if (recoverable)
+	{
+		return 1;
+	}
+	std::exit(static_cast<int>(exitcode));
+}
+
+// Storm.#562
+int32_t __cdecl SErrDisplayErrorFmt(
+	uint32_t messageId,
+	const char* filename,
+	int32_t linenumber,
+	int32_t recoverable,
+	uint32_t uExitCode,
+	char* Format,
+	...)
+{
+	char szDesc[2048] = {};
+	if (Format)
+	{
+		va_list args;
+		va_start(args, Format);
+		std::vsnprintf(szDesc, sizeof(szDesc) - 1, Format, args);
+		va_end(args);
+	}
+	return SErrDisplayError(messageId, filename, linenumber, szDesc, recoverable, uExitCode);
 }

@@ -226,11 +226,11 @@ void GAMEAPI ParseCmdLine(D2ConfigStrc* pCfg, const char *argv)
 
 
 	const size_t nArgvLength = strlen(argv);
-	char szCommandNameTestBuf[24] = {};
-	char szCommandValueBuf[24] = {};
-	char szCommand[48] = {};
+	char szCommandNameTestBuf[260] = {};
+	char szCommandValueBuf[260] = {};
+	char szCommand[260] = {};
 		
-	for (int nCharIndex = 0; nCharIndex < nArgvLength; nCharIndex++)
+	for (size_t nCharIndex = 0; nCharIndex < nArgvLength; nCharIndex++)
 	{
 		if (argv[nCharIndex] != '-')
 		{
@@ -243,8 +243,8 @@ void GAMEAPI ParseCmdLine(D2ConfigStrc* pCfg, const char *argv)
 			int nCommandIndex = -1;
 			const char* pszCommand = &argv[nCharIndex];
 			const size_t nRemainingLen = strlen(pszCommand);
-			int i = 0;
-			while (i < nRemainingLen && pszCommand[i] != '\0' && pszCommand[i] != '-')
+			size_t i = 0;
+			while (i < nRemainingLen && i + 2 < sizeof(szCommand) && pszCommand[i] != '\0' && pszCommand[i] != '-')
 			{
 				szCommand[i] = pszCommand[i];
 				i++;
@@ -252,7 +252,8 @@ void GAMEAPI ParseCmdLine(D2ConfigStrc* pCfg, const char *argv)
 
 			szCommand[i] = '\0';
 			szCommand[i + 1] = '\0';
-			strcpy(szCommandNameTestBuf, szCommand); // NOLINT(clang-diagnostic-deprecated-declarations)
+			strncpy(szCommandNameTestBuf, szCommand, sizeof(szCommandNameTestBuf) - 1);
+			szCommandNameTestBuf[sizeof(szCommandNameTestBuf) - 1] = '\0';
 			stoLower(szCommandNameTestBuf);
 			const size_t szCommandLength = strlen(szCommandNameTestBuf);
 			for (size_t commandCharIndex = szCommandLength; commandCharIndex != 0; commandCharIndex--)
@@ -267,7 +268,7 @@ void GAMEAPI ParseCmdLine(D2ConfigStrc* pCfg, const char *argv)
 			// Copy what's left of the command (value)
 			size_t nValueIdx = 0;
 			for (size_t nCommandValueOffset = strlen(szCommandNameTestBuf); 
-				szCommand[nCommandValueOffset + nValueIdx];
+				szCommand[nCommandValueOffset + nValueIdx] && nValueIdx + 1 < sizeof(szCommandValueBuf);
 				nValueIdx++
 				)
 			{
@@ -329,8 +330,8 @@ int GAMEAPI GetCmdIndex(const char *s)
 //1.10f: Game.0x4013B0
 void GAMEAPI ParseCmdValue(char *s)
 {
-	char szBuf[24];
-	strcpy(szBuf, s); // NOLINT(clang-diagnostic-deprecated-declarations)
+	char szBuf[260] = {};
+	strncpy(szBuf, s, sizeof(szBuf) - 1);
 
 	const char separatorChars[] = { ' ', '\t', '\n', ':', 0};
 	size_t nFirstChar = strspn(szBuf, separatorChars);

@@ -215,79 +215,79 @@ D2FUNC_DLL_NP(STORM, SDlgSetLocale, char*, __stdcall, (int a1, const char *a2), 
 D2FUNC_DLL_NP(STORM, SFileAuthenticateArchive, int, __stdcall, (HANDLE hArchive, int a2), 0x13b00);  //Storm.#251
 
 /// Imported by ['D2Win.dll']
-D2FUNC_DLL_NP(STORM, SFileCloseArchive, BOOL, __stdcall, (HSARCHIVE hArchive), 0x147c0);  //Storm.#252
+STORM_DLL_DECL BOOL __stdcall SFileCloseArchive(HSARCHIVE hArchive);  //Storm.#252
 
 /// Imported by ['D2Launch.dll', 'Fog.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SFileCloseFile, BOOL, __stdcall, (HANDLE hFile), 0x14900);  //Storm.#253
+STORM_DLL_DECL BOOL __stdcall SFileCloseFile(HANDLE hFile);  //Storm.#253
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileDdaBegin, int, __stdcall, (HANDLE hFile, int a2, int a3), 0x14b30);  //Storm.#254
+STORM_DLL_DECL int __stdcall SFileDdaBegin(HANDLE hFile, int a2, int a3);  //Storm.#254
 
 /// Imported by ['D2sound.dll']
-D2FUNC_DLL_NP(STORM, SFileDdaBeginEx, int, __stdcall, (HANDLE hFile, signed int a2, unsigned int a3, unsigned __int32 lDistanceToMove, signed int a5, signed int a6, int a7), 0x14b60);  //Storm.#255
+STORM_DLL_DECL int __stdcall SFileDdaBeginEx(HANDLE hFile, signed int a2, unsigned int a3, unsigned __int32 lDistanceToMove, signed int a5, signed int a6, int a7);  //Storm.#255
 
 /// Imported by ['D2sound.dll']
-D2FUNC_DLL_NP(STORM, SFileDdaDestroy, BOOL, __cdecl, (), 0x167f0);  //Storm.#256
+STORM_DLL_DECL BOOL __cdecl SFileDdaDestroy();  //Storm.#256
 
 /// Imported by ['D2sound.dll']
-D2FUNC_DLL_NP(STORM, SFileDdaEnd, BOOL, __stdcall, (HANDLE directsound), 0x16a00);  //Storm.#257
+STORM_DLL_DECL BOOL __stdcall SFileDdaEnd(HANDLE directsound);  //Storm.#257
 
 /// Imported by ['D2sound.dll']
-D2FUNC_DLL_NP(STORM, SFileDdaGetPos, BOOL, __stdcall, (int a1, int a2, int a3), 0x16b30);  //Storm.#258
+STORM_DLL_DECL BOOL __stdcall SFileDdaGetPos(int a1, int a2, int a3);  //Storm.#258
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileDdaGetVolume, BOOL, __stdcall, (int a1, int a2, int a3), 0x16be0);  //Storm.#259
+STORM_DLL_DECL BOOL __stdcall SFileDdaGetVolume(int a1, int a2, int a3);  //Storm.#259
 
 /// Imported by ['D2sound.dll']
-D2FUNC_DLL_NP(STORM, SFileDdaInitialize, BOOL, __stdcall, (HANDLE directsound), 0x16cd0);  //Storm.#260
+STORM_DLL_DECL BOOL __stdcall SFileDdaInitialize(HANDLE directsound);  //Storm.#260
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileDdaSetVolume, BOOL, __stdcall, (HANDLE directsound, signed int bigvolume, signed int volume), 0x16d00);  //Storm.#261
+STORM_DLL_DECL BOOL __stdcall SFileDdaSetVolume(HANDLE directsound, signed int bigvolume, signed int volume);  //Storm.#261
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileDestroy, BOOL, __cdecl, (), 0x16dc0);  //Storm.#262
+STORM_DLL_DECL BOOL __cdecl SFileDestroy();  //Storm.#262
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileEnableDirectAccess, BOOL, __stdcall, (HANDLE hFile), 0x17040);  //Storm.#263
+STORM_DLL_DECL BOOL __stdcall SFileEnableDirectAccess(HANDLE hFile);  //Storm.#263
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileGetFileArchive, BOOL, __stdcall, (HANDLE hFile, HANDLE archive), 0x17220);  //Storm.#264
+STORM_DLL_DECL BOOL __stdcall SFileGetFileArchive(HANDLE hFile, HANDLE archive);  //Storm.#264
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileGetFileSize, int, __stdcall, (int, LPDWORD lpFileSizeHigh), 0x17300);  //Storm.#265
+STORM_DLL_DECL int __stdcall SFileGetFileSize(int, LPDWORD lpFileSizeHigh);  //Storm.#265
 
 /// Imported by ['D2Win.dll']
-D2FUNC_DLL_NP(STORM, SFileOpenArchive, BOOL, __stdcall, (char *szName, int nPriority, int nFlags, HSARCHIVE*), 0x17510);  //Storm.#266
+STORM_DLL_DECL BOOL __stdcall SFileOpenArchive(char *szName, int nPriority, int nFlags, HSARCHIVE*);  //Storm.#266
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileOpenFile, int, __stdcall, (char *Str, int), 0x17ed0);  //Storm.#267
+STORM_DLL_DECL int __stdcall SFileOpenFile(char *Str, int);  //Storm.#267
 
 /// Imported by ['D2Launch.dll', 'D2Direct3D.dll', 'D2Glide.dll', 'D2DDraw.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SFileOpenFileEx, int, __stdcall, (int, char *Str, char, int), 0x17ef0);  //Storm.#268
+STORM_DLL_DECL int __stdcall SFileOpenFileEx(int, char *Str, char, int);  //Storm.#268
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileReadFile, int, __stdcall, (int, int, int, int, LONG lDistanceToMove), 0x188e0);  //Storm.#269
+STORM_DLL_DECL int __stdcall SFileReadFile(int, int, int, int, LONG lDistanceToMove);  //Storm.#269
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileSetBasePath, BOOL, __stdcall, (char *path), 0x18fd0);  //Storm.#270
+STORM_DLL_DECL BOOL __stdcall SFileSetBasePath(char *path);  //Storm.#270
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileSetFilePointer, int, __stdcall, (int, LONG lDistanceToMove, int, DWORD dwMoveMethod), 0x190c0);  //Storm.#271
+STORM_DLL_DECL int __stdcall SFileSetFilePointer(int, LONG lDistanceToMove, int, DWORD dwMoveMethod);  //Storm.#271
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileSetLocale, LCID, __stdcall, (LCID lcLocale), 0x19220);  //Storm.#272
+STORM_DLL_DECL LCID __stdcall SFileSetLocale(LCID lcLocale);  //Storm.#272
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileGetBasePath, BOOL, __stdcall, (char *result, int maxSize), 0x17170);  //Storm.#273
+STORM_DLL_DECL BOOL __stdcall SFileGetBasePath(char *result, int maxSize);  //Storm.#273
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileSetIoErrorMode, BOOL, __stdcall, (int a1, int a2), 0x19200);  //Storm.#274
+STORM_DLL_DECL BOOL __stdcall SFileSetIoErrorMode(int a1, int a2);  //Storm.#274
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileGetArchiveName, BOOL, __stdcall, (HANDLE hArchive, char *name, int length), 0x17100);  //Storm.#275
+STORM_DLL_DECL BOOL __stdcall SFileGetArchiveName(HANDLE hArchive, char *name, int length);  //Storm.#275
 
 /// Imported by ['D2CMP.dll', 'D2Common.dll', 'D2sound.dll', 'D2Win.dll', 'D2Client.dll', 'D2Lang.dll']
-D2FUNC_DLL_NP(STORM, SFileGetFileName, BOOL, __stdcall, (HANDLE hFile, char *buffer, int length), 0x17290);  //Storm.#276
+STORM_DLL_DECL BOOL __stdcall SFileGetFileName(HANDLE hFile, char *buffer, int length);  //Storm.#276
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SFileGetArchiveInfo, int, __stdcall, (int a1, int a2, int a3), 0x17070);  //Storm.#277
@@ -305,43 +305,43 @@ STORM_DLL_DECL BOOL __stdcall SFileUnloadFile(void *buffer);  //Storm.#280
 STORM_DLL_DECL int __stdcall SFileLoadFileEx(int a1, char *Str, int a3, int a4, int a5, char a6, LONG lDistanceToMove);  //Storm.#281
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFilePrioritizeRequest, void, __stdcall, (int a1, int a2), 0x186f0);  //Storm.#282
+STORM_DLL_DECL void __stdcall SFilePrioritizeRequest(int a1, int a2);  //Storm.#282
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileCancelRequest, void, __stdcall, (int a1), 0x14280);  //Storm.#283
+STORM_DLL_DECL void __stdcall SFileCancelRequest(int a1);  //Storm.#283
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileSetAsyncBudget, int, __stdcall, (int a1), 0x18fc0);  //Storm.#284
+STORM_DLL_DECL int __stdcall SFileSetAsyncBudget(int a1);  //Storm.#284
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileSetDataChunkSize, void, __stdcall, (int a1), 0x19090);  //Storm.#285
+STORM_DLL_DECL void __stdcall SFileSetDataChunkSize(int a1);  //Storm.#285
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileEnableSeekOptimization, int, __stdcall, (int a1), 0x17060);  //Storm.#286
+STORM_DLL_DECL int __stdcall SFileEnableSeekOptimization(int a1);  //Storm.#286
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileReadFileEx, int, __stdcall, (int, int, int, int, LONG lDistanceToMove, int), 0x18910);  //Storm.#287
+STORM_DLL_DECL int __stdcall SFileReadFileEx(int, int, int, int, LONG lDistanceToMove, int);  //Storm.#287
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SFileFileExists, DWORD, __stdcall, (HANDLE hFile), 0x14790);  //Storm.#288
+STORM_DLL_DECL DWORD __stdcall SFileFileExists(HANDLE hFile);  //Storm.#288
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, SFileFileExistsEx, int, __stdcall, (int, int, int, int, LONG lDistanceToMove, int, int), 0x18940);  //Storm.#289
+STORM_DLL_DECL int __stdcall SFileFileExistsEx(int, int, int, int, LONG lDistanceToMove, int, int);  //Storm.#289
 
 /// Not imported by any .dll
 STORM_DLL_DECL int __stdcall SFileReadFileEx2(int a1, char *Str, int a3, int a4, int a5, char a6, LONG lDistanceToMove, int a8);  //Storm.#290
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, StormDestroy, BOOL, __cdecl, (), 0x2b300);  //Storm.#301
+STORM_DLL_DECL BOOL __cdecl StormDestroy();  //Storm.#301
 
 /// Not imported by any .dll
 STORM_DLL_DECL HMODULE __cdecl StormGetInstance();  //Storm.#302
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, StormGetOption, BOOL, __stdcall, (int type, int optval, size_t optlen), 0x2b360);  //Storm.#303
+STORM_DLL_DECL BOOL __stdcall StormGetOption(int type, int optval, size_t optlen);  //Storm.#303
 
 /// Imported by ['Fog.dll']
-D2FUNC_DLL_NP(STORM, StormSetOption, BOOL, __stdcall, (int type, int optval, size_t optlen), 0x2b440);  //Storm.#304
+STORM_DLL_DECL BOOL __stdcall StormSetOption(int type, int optval, size_t optlen);  //Storm.#304
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SBltGetSCode, BOOL, __stdcall, (unsigned int a1, char *buffer, size_t buffersize, int a4), 0x5430);  //Storm.#312
@@ -356,7 +356,7 @@ D2FUNC_DLL_NP(STORM, SBltROP3Clipped, BOOL, __stdcall, (int a1, int a2, int a3, 
 D2FUNC_DLL_NP(STORM, SBltROP3Tiled, BOOL, __stdcall, (int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10), 0x5a90);  //Storm.#315
 
 /// Imported by ['D2Direct3D.dll', 'D2Gdi.dll', 'D2Glide.dll', 'D2DDraw.dll']
-D2FUNC_DLL_NP(STORM, SBmpDecodeImage, BOOL, __stdcall, (int a1, signed int *a2, unsigned int a3, int a4, int a5, int a6, int a7, int a8, int a9), 0x5da0);  //Storm.#321
+STORM_DLL_DECL BOOL __stdcall SBmpDecodeImage(int a1, signed int *a2, unsigned int a3, int a4, int a5, int a6, int a7, int a8, int a9);  //Storm.#321
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SBmpLoadImage, int, __stdcall, (char *Str, int, int, int, int, int, int), 0x68d0);  //Storm.#323
@@ -528,28 +528,28 @@ typedef BOOL(CALLBACK* SMSGIDLEPROC)(DWORD);
 typedef void (CALLBACK* SMSGHANDLER)(SMSGHANDLER_PARAMS*);
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgDispatchMessage, BOOL, __stdcall, (HWND hWnd, DWORD messageID, WPARAM wParam, LPARAM lParam, BOOL* bUseResult, LRESULT* pResult), 0x1d200);  //Storm.#412
+STORM_DLL_DECL BOOL __stdcall SMsgDispatchMessage(HWND hWnd, DWORD messageID, WPARAM wParam, LPARAM lParam, BOOL* bUseResult, LRESULT* pResult);  //Storm.#412
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SMsgDoMessageLoop, WPARAM, __stdcall, (SMSGIDLEPROC *pIdleProc, bool bCleanUponQuit), 0x1d310);  //Storm.#413
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgRegisterCommand, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d4c0);  //Storm.#414
+STORM_DLL_DECL BOOL __stdcall SMsgRegisterCommand(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#414
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgRegisterKeyDown, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d5b0);  //Storm.#415
+STORM_DLL_DECL BOOL __stdcall SMsgRegisterKeyDown(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#415
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgRegisterKeyUp, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d5d0);  //Storm.#416
+STORM_DLL_DECL BOOL __stdcall SMsgRegisterKeyUp(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#416
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgRegisterMessage, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d5f0);  //Storm.#417
+STORM_DLL_DECL BOOL __stdcall SMsgRegisterMessage(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#417
 
 /// Imported by ['D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgPopRegisterState, BOOL, __stdcall, (int type), 0x1d440);  //Storm.#418
+STORM_DLL_DECL BOOL __stdcall SMsgPopRegisterState(int type);  //Storm.#418
 
 /// Imported by ['D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgPushRegisterState, BOOL, __stdcall, (int type), 0x1d480);  //Storm.#419
+STORM_DLL_DECL BOOL __stdcall SMsgPushRegisterState(int type);  //Storm.#419
 
 inline BOOL __stdcall SMsgPopRegisterState(HWND hWnd) { return SMsgPopRegisterState((int)(intptr_t)hWnd); }
 inline BOOL __stdcall SMsgPushRegisterState(HWND hWnd) { return SMsgPushRegisterState((int)(intptr_t)hWnd); }
@@ -676,7 +676,7 @@ D2FUNC_DLL_NP(STORM, SVidSetVolume, BOOL, __stdcall, (int video, int a2, int a3,
 D2FUNC_DLL_NP(STORM, SErrDisplayError, BOOL, __stdcall, (uint32_t errorcode, const char* filename, int32_t linenumber, const char* description, int32_t recoverable, uint32_t exitcode), 0x12020);  //Storm.#461
 #endif
 /// Imported by ['D2Client.dll']
-D2FUNC_DLL_NP(STORM, SErrGetErrorStr, int, __stdcall, (DWORD dwMessageId, LPSTR lpBuffer, DWORD nSize), 0x125d0);  //Storm.#462
+STORM_DLL_DECL int __stdcall SErrGetErrorStr(DWORD dwMessageId, LPSTR lpBuffer, DWORD nSize);  //Storm.#462
 
 #if !WITH_SQUALL
 /// Not imported by any .dll
@@ -684,7 +684,7 @@ D2FUNC_DLL_NP(STORM, SErrGetLastError, DWORD, __cdecl, (), 0x126f0);  //Storm.#4
 #endif
 
 /// Imported by ['D2Client.dll']
-D2FUNC_DLL_NP(STORM, SErrRegisterMessageSource, BOOL, __stdcall, (__int16 a1, int a2, int a3), 0x12800);  //Storm.#464
+STORM_DLL_DECL BOOL __stdcall SErrRegisterMessageSource(__int16 a1, int a2, int a3);  //Storm.#464
 
 #if !WITH_SQUALL
 /// Not imported by any .dll
@@ -819,19 +819,19 @@ D2FUNC_DLL_NP(STORM, SStrUpper, char*, __stdcall, (char *Str), 0x2b240);  //Stor
 #endif
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgBreakHandlerChain, BOOL, __stdcall, (SMSGHANDLER_PARAMS* pData), 0x1d110);  //Storm.#511
+STORM_DLL_DECL BOOL __stdcall SMsgBreakHandlerChain(SMSGHANDLER_PARAMS* pData);  //Storm.#511
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgUnregisterCommand, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d630);  //Storm.#512
+STORM_DLL_DECL BOOL __stdcall SMsgUnregisterCommand(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#512
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgUnregisterKeyDown, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d680);  //Storm.#513
+STORM_DLL_DECL BOOL __stdcall SMsgUnregisterKeyDown(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#513
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgUnregisterKeyUp, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d6a0);  //Storm.#514
+STORM_DLL_DECL BOOL __stdcall SMsgUnregisterKeyUp(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#514
 
 /// Imported by ['D2Win.dll', 'D2Client.dll']
-D2FUNC_DLL_NP(STORM, SMsgUnregisterMessage, BOOL, __stdcall, (HWND hWnd, uint32_t nId, SMSGHANDLER pHandler), 0x1d6c0);  //Storm.#515
+STORM_DLL_DECL BOOL __stdcall SMsgUnregisterMessage(HWND hWnd, uint32_t nId, SMSGHANDLER pHandler);  //Storm.#515
 
 inline BOOL __stdcall SMsgBreakHandlerChain(void* pData) { return SMsgBreakHandlerChain((SMSGHANDLER_PARAMS*)pData); }
 template <typename T>
@@ -848,10 +848,10 @@ inline size_t __stdcall SStrNCpy(char* dest, const char* source, size_t destsize
 D2FUNC_DLL_NP(STORM, SMsgGetDispatcher, int, __stdcall, (int a1), 0x1d3a0);  //Storm.#516
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SMsgSetDefaultWindow, BOOL, __stdcall, (int a1), 0x1d610);  //Storm.#517
+STORM_DLL_DECL BOOL __stdcall SMsgSetDefaultWindow(int a1);  //Storm.#517
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SMsgGetDefaultWindow, HWND, __cdecl, (), 0x1d390);  //Storm.#518
+STORM_DLL_DECL HWND __cdecl SMsgGetDefaultWindow();  //Storm.#518
 
 /// Not imported by any .dll
 D2FUNC_DLL_NP(STORM, SRgn521, int, __stdcall, (int a1), 0x26060);  //Storm.#521
@@ -941,7 +941,7 @@ D2FUNC_DLL_NP(STORM, SLogCriticalLog, void, __stdcall, (HANDLE handle, int a2), 
 D2FUNC_DLL_NP(STORM, SCompCompress, BOOL, __stdcall, (void *a1, int a2, unsigned int a3, signed int amount, int a5, char a6, int a7), 0xca50);  //Storm.#551
 
 /// Not imported by any .dll
-D2FUNC_DLL_NP(STORM, SCompDecompress, BOOL, __stdcall, (void *a1, int *a2, const void *a3, unsigned int a4), 0xcc10);  //Storm.#552
+STORM_DLL_DECL BOOL __stdcall SCompDecompress(void *a1, int *a2, const void *a3, unsigned int a4);  //Storm.#552
 
 #if !WITH_SQUALL
 /// Not imported by any .dll
