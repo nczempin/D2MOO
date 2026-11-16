@@ -16,6 +16,7 @@
 #include <D2Lang.h>
 #include <D2StrTable.h>
 #include <D2Gfx.h>
+#include <Scale.h>
 #include <Texture.h>
 #include <Tile.h>
 #include <Window.h>
@@ -925,6 +926,10 @@ static void SubtileToWorldIso(int32_t nSubX, int32_t nSubY, float* pIsoX, float*
 
 static void ScreenPointToSubtile(int32_t nScreenX, int32_t nScreenY, int32_t* pSubX, int32_t* pSubY)
 {
+	if (D2GFX_CheckPerspective())
+	{
+		SCALE_ScalePerspectivePosition(nScreenX, nScreenY, 0, &nScreenX, &nScreenY, 1);
+	}
 	const int32_t nCenterX = (gnViewportWidth > 0 ? gnViewportWidth / 2 : 400) + gnViewportShiftOffsetX;
 	const int32_t nCenterY = (gnViewportHeight > 0 ? gnViewportHeight / 2 : 276);
 	int nIsoX = static_cast<int>(gfPlayerWorldX) + (nScreenX - nCenterX);
@@ -949,8 +954,12 @@ static bool WorldUnitToScreenPos(D2UnitStrc* pUnit, int32_t* pOutSx, int32_t* pO
 	DUNGEON_GameSubtileToClientCoords(&nUx, &nUy);
 	const int32_t nCenterX = (gnViewportWidth > 0 ? gnViewportWidth / 2 : 400) + gnViewportShiftOffsetX;
 	const int32_t nCenterY = (gnViewportHeight > 0 ? gnViewportHeight / 2 : 276);
-	const int32_t nSx = nCenterX + (nUx - static_cast<int32_t>(gfPlayerWorldX));
-	const int32_t nSy = nCenterY + (nUy - static_cast<int32_t>(gfPlayerWorldY));
+	int32_t nSx = nCenterX + (nUx - static_cast<int32_t>(gfPlayerWorldX));
+	int32_t nSy = nCenterY + (nUy - static_cast<int32_t>(gfPlayerWorldY));
+	if (D2GFX_CheckPerspective())
+	{
+		SCALE_ScalePerspectivePosition(nSx, nSy, 0, &nSx, &nSy, 0);
+	}
 	if (pOutSx) *pOutSx = nSx;
 	if (pOutSy) *pOutSy = nSy;
 	return (nSx >= -64 && nSx <= gnScreenWidth + 64 && nSy >= -64 && nSy <= gnScreenHeight + 64);
@@ -1191,6 +1200,8 @@ extern int32_t __fastcall D2Client_HandleGoldDialogChar(char ch);
 extern int32_t __fastcall D2Client_HandleGoldDialogKey(uint32_t uVk);
 extern int32_t __fastcall D2Client_HandleGoldDialogClick(int32_t mx, int32_t my);
 extern D2UnitStrc* __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+extern int32_t __fastcall NPCSPEECH_PickGreetingSound(D2UnitStrc* pNpcUnit, int32_t nSpeechMode);
+extern void    __fastcall D2Client_PlaySoundById(int32_t nSoundId);
 extern int32_t g_nClientSoundVolume;
 extern int32_t g_bClientMusicOption;
 extern int32_t g_nClientGammaPct;
@@ -1199,6 +1210,14 @@ static void CloseActiveNpcSession()
 {
 	if (g_nInteractingNpcGUID != 0)
 	{
+		if (g_pTradeNpcUnit != nullptr)
+		{
+			const int32_t nFarewellSnd = NPCSPEECH_PickGreetingSound(g_pTradeNpcUnit, 2);
+			if (nFarewellSnd > 0)
+			{
+				D2Client_PlaySoundById(nFarewellSnd);
+			}
+		}
 		SendTownFolkCancel(static_cast<uint32_t>(g_nInteractingNpcGUID));
 	}
 	D2Client_SetNpcHireSubmenu(0);
@@ -1226,6 +1245,12 @@ static void OpenNpcInteractionSession(D2UnitStrc* pNpc)
 	g_nInteractingNpcGUID = static_cast<int32_t>(pNpc->dwUnitId);
 	g_nInteractingNpcClassId = static_cast<int32_t>(pNpc->dwClassId);
 	gdwActiveInteractNpcGUID = g_nInteractingNpcGUID;
+
+	const int32_t nGreetSnd = NPCSPEECH_PickGreetingSound(pNpc, 0);
+	if (nGreetSnd > 0)
+	{
+		D2Client_PlaySoundById(nGreetSnd);
+	}
 
 	SendUnitInteract(UNIT_MONSTER, pNpc->dwUnitId);
 	GAME_SendTownFolkInit_2F(UNIT_MONSTER, pNpc->dwUnitId);
@@ -2402,6 +2427,7 @@ static bool HandleEscMenuMouseDown(int32_t mx, int32_t my)
 				else if (nOpt == 3) // Perspective ON / OFF (Hardware renderer)
 				{
 					D2GFX_TogglePerspective();
+					SRegSaveValue("Diablo II", "Perspective", 0, D2GFX_CheckPerspective() ? 1 : 0);
 				}
 				else if (nOpt == 4) // Window scale 1200x900 / 800x600
 				{
@@ -2806,7 +2832,7 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 						g_nSkillTreeTab_6FBA79FC = 0;
 					}
 				}
-				else if (((mx >= 426 && mx <= 462) || (mx >= 592 && mx <= 628)) && my >= 442 && my <= 482)
+				else if (((mx >= 412 && mx <= 462) || (mx >= 588 && mx <= 628)) && my >= 440 && my <= 482)
 				{
 					UI_SetPanelState(D2PANEL_SKILLTREE, 1, 0);
 				}
@@ -3739,20 +3765,16 @@ static void RenderInGameFrame()
 	UI_RenderHUD();
 
 	// 3. Optional /fps Telemetry Line & Active Chat Input Box
-	if (gbShowFpsOverlay)
+	if (gbShowFpsOverlay && gnViewportShiftMode != 3)
 	{
 		char szFps[128] = {};
 		Unicode wszFps[128] = {};
-		std::snprintf(
-			szFps,
-			sizeof(szFps),
-			"FPS: 60  Ping: %ums  Seed: 0x%08X  Level: %u",
-			gdwClientPing,
-			gdwServerMapSeed,
-			static_cast<unsigned int>(gnCurrentLevelId));
+		std::snprintf(szFps, sizeof(szFps), "FPS: 60   Skip: 0   Ping: %u", gdwClientPing);
 		Unicode::win2Unicode(wszFps, szFps, 127);
 		D2Win_10127_SetFont(D2FONT_FONT16);
-		D2Win_10117_DrawText(wszFps, 18, 22, 3, 0);
+		const int32_t nFpsX = (gnViewportShiftMode != 0) ? 92 : 18;
+		const int32_t nFpsY = (gnViewportShiftMode != 0) ? 76 : 20;
+		D2Win_10117_DrawText(wszFps, nFpsX, nFpsY, 0, 0);
 	}
 
 	if (gbChatInputOpen)
@@ -3778,6 +3800,54 @@ static bool CaptureWindowBmpToFile(HWND hWnd, const char* szOutPath)
 	{
 		return false;
 	}
+
+	if (D2GFX_HardwareAcceleratedRenderMode())
+	{
+		int32_t nSurfW = 0;
+		int32_t nSurfH = 0;
+		WINDOW_GetDimensions(&nSurfW, &nSurfH);
+		if (nSurfW > 0 && nSurfH > 0)
+		{
+			std::vector<uint8_t> vRgb(static_cast<size_t>(nSurfW) * static_cast<size_t>(nSurfH) * 3u);
+			if (D2GFX_GetBackBuffer(vRgb.data()))
+			{
+				const uint32_t dwRowStride = ((static_cast<uint32_t>(nSurfW) * 3u + 3u) & ~3u);
+				const uint32_t dwImgSize = dwRowStride * static_cast<uint32_t>(nSurfH);
+				std::vector<uint8_t> vBmpRows(dwImgSize, 0u);
+				for (int32_t y = 0; y < nSurfH; ++y)
+				{
+					const uint8_t* pSrc = vRgb.data() + static_cast<size_t>(nSurfH - 1 - y) * static_cast<size_t>(nSurfW) * 3u;
+					uint8_t* pDst = vBmpRows.data() + static_cast<size_t>(y) * dwRowStride;
+					for (int32_t x = 0; x < nSurfW; ++x)
+					{
+						pDst[x * 3 + 0] = pSrc[x * 3 + 2];
+						pDst[x * 3 + 1] = pSrc[x * 3 + 1];
+						pDst[x * 3 + 2] = pSrc[x * 3 + 0];
+					}
+				}
+				BITMAPFILEHEADER bfh = {};
+				bfh.bfType = 0x4D42;
+				bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+				bfh.bfSize = bfh.bfOffBits + dwImgSize;
+				BITMAPINFOHEADER bih = {};
+				bih.biSize = sizeof(BITMAPINFOHEADER);
+				bih.biWidth = nSurfW;
+				bih.biHeight = nSurfH;
+				bih.biPlanes = 1;
+				bih.biBitCount = 24;
+				bih.biCompression = BI_RGB;
+				if (FILE* pFile = std::fopen(szOutPath, "wb"))
+				{
+					std::fwrite(&bfh, 1, sizeof(bfh), pFile);
+					std::fwrite(&bih, 1, sizeof(bih), pFile);
+					std::fwrite(vBmpRows.data(), 1, dwImgSize, pFile);
+					std::fclose(pFile);
+					return true;
+				}
+			}
+		}
+	}
+
 	RECT rcClient = {};
 	if (!GetClientRect(hWnd, &rcClient))
 	{
@@ -4386,6 +4456,7 @@ static void WriteNativeAutotestReportJson(const char* szOutDir)
 					_stricmp(me.szModule, "D2Win.dll") == 0 ||
 					_stricmp(me.szModule, "D2gfx.dll") == 0 ||
 					_stricmp(me.szModule, "D2Gdi.dll") == 0 ||
+					_stricmp(me.szModule, "D2Glide.dll") == 0 ||
 					_stricmp(me.szModule, "D2CMP.dll") == 0 ||
 					_stricmp(me.szModule, "D2Lang.dll") == 0 ||
 					_stricmp(me.szModule, "D2Net.dll") == 0 ||
@@ -4449,6 +4520,8 @@ static void WriteNativeAutotestReportJson(const char* szOutDir)
 			"  \"automapRoomsPopulated\": %u,\n"
 			"  \"zeroOriginalBlizzardDlls\": %s,\n"
 			"  \"storm112BackendLoaded\": %s,\n"
+			"  \"displayType\": %d,\n"
+			"  \"perspectiveEnabled\": %s,\n"
 			"  \"d2mooCompiledModulesLoaded\": %d\n"
 			"}\n",
 			gszCharName,
@@ -4490,6 +4563,8 @@ static void WriteNativeAutotestReportJson(const char* szOutDir)
 			gdwAutomapRoomsPopulated,
 			bZeroOriginalDlls ? "true" : "false",
 			bStorm112Loaded ? "true" : "false",
+			static_cast<int32_t>(D2GFX_GetDisplayType()),
+			D2GFX_CheckPerspective() ? "true" : "false",
 			nD2MooModules);
 		std::fclose(pJson);
 	}

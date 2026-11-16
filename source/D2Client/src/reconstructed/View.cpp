@@ -226,7 +226,7 @@ void __fastcall VIEW_ScreenToWorldCoords(D2ViewportStrc* pViewport, int32_t nScr
     {
         D2GFX_ScalePerspectivePosition(nScreenX, nScreenY, 0, &nIsoX, &nIsoY, 1);
     }
-    else if (pViewport != nullptr)
+    if (pViewport != nullptr)
     {
         nIsoX += pViewport->nViewOffsetX - pViewport->nScreenLeft;
         nIsoY += pViewport->nViewOffsetY - pViewport->nScreenTop;

@@ -1192,8 +1192,8 @@ void __stdcall SKILLTREE_RenderPanel()
     if (s_pSkillBuySellBtnCell)
     {
         GAME_DrawSingleCelTopLeft(s_pSkillBuySellBtnCell,
-            bRow6Col1Occupied ? (nPanelLeft + 195) : (nPanelLeft + 28),
-            nPanelTop + 388,
+            bRow6Col1Occupied ? (nPanelLeft + 190) : (nPanelLeft + 16),
+            nPanelTop + 384,
             10);
     }
 

@@ -343,8 +343,8 @@ void __stdcall USEITEM_DrawPanel(void)
     if (g_nUseItemPanelMode == 0 || g_nUseItemPanelMode == 1)
     {
         D2CellBufferStrc sCelBuf = {};
-        sCelBuf.pCelFile = (g_nUseItemPanelMode == 0) ? g_pHoradricBackCel : g_pUpgradeCel;
-        sCelBuf.nFrame   = 0;
+        sCelBuf.pCellFile = (g_nUseItemPanelMode == 0) ? g_pHoradricBackCel : g_pUpgradeCel;
+        sCelBuf.nFrame    = 0;
         TEXTURE_CelDraw(&sCelBuf, 105, 270, -1, (DrawMode)5, nullptr);
 
         if (gpBuySellBtnCel == nullptr)
@@ -353,7 +353,7 @@ void __stdcall USEITEM_DrawPanel(void)
             wsprintfA(szBtnPath, "%s\\ui\\panel\\buysellbtn", "DATA\\GLOBAL");
             gpBuySellBtnCel = ARCHIVE_LoadCellFileDefault(szBtnPath, 0);
         }
-        sCelBuf.pCelFile = gpBuySellBtnCel;
+        sCelBuf.pCellFile = gpBuySellBtnCel;
 
         // Draw Confirm & Cancel buttons
         for (int32_t i = 0; i < g_nUseItemButtonCount; ++i)
@@ -669,7 +669,7 @@ void __stdcall USEITEM_UpdateAndRender(void)
     {
         return;
     }
-    if (!D2CMP_SpriteValidate(&sItemCelBuf, 0, 1) || sItemCelBuf.pCelFile == nullptr)
+    if (!D2CMP_SpriteValidate(&sItemCelBuf, 0, 1) || sItemCelBuf.pCellFile == nullptr)
     {
         return;
     }

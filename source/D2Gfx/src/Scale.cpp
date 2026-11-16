@@ -53,7 +53,7 @@ void __stdcall SCALE_DecreaseFactor()
 }
 
 //D2Gfx.0x6FA73FE0 (#10064)
-void __stdcall SCALE_SetPerspectiveScale(int32_t nXScale, int32_t nYScale)
+int32_t __stdcall SCALE_SetPerspectiveScale(int32_t nXScale, int32_t nYScale)
 {
     D2_ASSERT(D2GFX_HardwareAcceleratedRenderMode());
     D2_ASSERT(gGfxSettings.bPerspectiveEnabled);
@@ -99,7 +99,7 @@ void __stdcall SCALE_ScalePerspectivePosition(int32_t nXPos, int32_t nYPos, int3
     D2_ASSERT(D2GFX_HardwareAcceleratedRenderMode());
     D2_ASSERT(gGfxSettings.bPerspectiveEnabled);
 
-    return gpGraphicsInterface->pfPerspectiveTransformScale(nXPos, nYPos, 0, pXAdjust, pYAdjust, bOrder);
+    return gpGraphicsInterface->pfPerspectiveTransformScale(nXPos, nYPos, nAngle, pXAdjust, pYAdjust, bOrder);
 }
 
 //D2Gfx.0x6FA74200 (#10068)

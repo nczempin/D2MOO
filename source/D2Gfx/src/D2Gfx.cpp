@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <Fog.h>
+#include <Storm.h>
 
 #include "CmnSubtile.h"
 #include "DisplayType.h"
@@ -46,7 +47,7 @@ int32_t __stdcall D2GFX_Initialize(HINSTANCE hInstance, WNDPROC pfWndProc, Displ
     ghInstance = hInstance;
 
     WNDCLASSA wndClass = {};
-    if (nDisplayType == DISPLAYTYPE_OPENGL)
+    if (nDisplayType == DISPLAYTYPE_OPENGL || nDisplayType == DISPLAYTYPE_GLIDE)
     {
         wndClass.style = CS_OWNDC;
     }
@@ -117,6 +118,13 @@ int32_t __stdcall D2GFX_Initialize(HINSTANCE hInstance, WNDPROC pfWndProc, Displ
     if (!D2GFX_HardwareAcceleratedRenderMode())
     {
         bPerspectiveCapable = 0;
+        gGfxSettings.bPerspectiveEnabled = 0;
+    }
+    else
+    {
+        DWORD dwPerspective = 1;
+        SRegLoadValue("Diablo II", "Perspective", 0, &dwPerspective);
+        gGfxSettings.bPerspectiveEnabled = (dwPerspective != 0) ? 1 : 0;
     }
     gGfxSettings.bPerspectiveCapable = bPerspectiveCapable;
 
@@ -318,6 +326,10 @@ uint32_t* __stdcall D2GFX_GetCacheResults()
 void __fastcall D2GFX_SetViewMatrixAdjust(int32_t nAdjust)
 {
     gnViewMatrixAdjust_6FA8D254 = nAdjust;
+    if (gpGraphicsInterface)
+    {
+        gpGraphicsInterface->pfSetOption(12, nAdjust);
+    }
 }
 
 //D2Gfx.0x6FA73C60 (#10042)

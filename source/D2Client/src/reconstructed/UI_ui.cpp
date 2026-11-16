@@ -23,6 +23,7 @@
 #include <D2Inventory.h>
 #include <D2CMP.h>
 #include <D2Gfx.h>
+#include <Scale.h>
 #include <D2WinArchive.h>
 #include <D2WinFont.h>
 
@@ -1511,10 +1512,15 @@ int32_t __fastcall UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX,
     const int32_t dY = nUnitY - nPlrY;
     const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
     const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
-    const int32_t nCenterX = (nW / 2) - gnPanelShiftOffset;
+    const int32_t nCenterX = (nW / 2) + gnPanelShiftOffset;
     const int32_t nCenterY = ((nH - 48) / 2);
-    *pOutScreenX = nCenterX + (dX - dY) * 16;
-    *pOutScreenY = nCenterY + (dX + dY) * 8;
+    int32_t nSx = nCenterX + (dX - dY) * 16;
+    int32_t nSy = nCenterY + (dX + dY) * 8;
+    if (D2GFX_CheckPerspective()) {
+        SCALE_ScalePerspectivePosition(nSx, nSy, 0, &nSx, &nSy, 0);
+    }
+    *pOutScreenX = nSx;
+    *pOutScreenY = nSy;
     return (*pOutScreenX >= 0 && *pOutScreenX <= nW && *pOutScreenY >= 0 && *pOutScreenY <= nH - 48) ? 1 : 0;
 }
 
@@ -2152,7 +2158,7 @@ static void WAYPOINT_DrawPanel()
         if (s_pWaygateIconsCel && nIconMaxF > 0) {
             D2GfxDataStrc tIcon = {};
             tIcon.pCellFile = s_pWaygateIconsCel;
-            int32_t nIconFrame = bUnlocked ? (bIsCurrent ? 2 : 1) : 0;
+            int32_t nIconFrame = bUnlocked ? 0 : (nIconMaxF > 2 ? 2 : (nIconMaxF - 1));
             if (nIconFrame >= nIconMaxF) nIconFrame = nIconMaxF - 1;
             tIcon.nFrame = nIconFrame;
             D2GFX_DrawCellContextEx(&tIcon, nBaseX + 36, nRowY + 20, -1, 5, nullptr);

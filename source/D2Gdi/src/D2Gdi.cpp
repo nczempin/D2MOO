@@ -98,8 +98,11 @@ static int32_t __fastcall D2GDI_GammaCanBeControlled()
 }
 
 //1.12a: D2Gdi.0x6F875F20
-static void __fastcall D2GDI_UpdatePerspective(int32_t nScaleX, int32_t nScaleY)
+static BOOL __fastcall D2GDI_UpdatePerspective(int32_t nScaleX, int32_t nScaleY)
 {
+	(void)nScaleX;
+	(void)nScaleY;
+	return FALSE;
 }
 
 //1.12a: D2Gdi.0x6F875F30

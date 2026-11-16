@@ -208,7 +208,7 @@ struct D2GraphicsInterfaceStrc
 	void(__fastcall* pfSetGlobalScale)(int32_t nScaleFactor);
 	BOOL(__fastcall* pfSetGamma)(int32_t nGamma);
 	int32_t(__fastcall* pfGammaCanBeControlled)();
-	void(__fastcall* pfUpdatePerspective)(int32_t nScaleX, int32_t nScaleY);
+	BOOL(__fastcall* pfUpdatePerspective)(int32_t nScaleX, int32_t nScaleY);
 	void(__fastcall* pfPerspectiveTransform)(int32_t nPosX, int32_t nPosY, int32_t nBais, int32_t* pXAdjust, int32_t* pYAdjust);
 	void(__fastcall* pfPerspectiveTransformScale)(int32_t nPosX, int32_t nPosY, int32_t nAngle, int32_t* pXAdjust, int32_t* pYAdjust, int32_t bOrder);
 	void(__fastcall* pfPerspectiveClearScale)();

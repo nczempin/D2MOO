@@ -91,6 +91,7 @@ extern void*       gpfnPrevClientLoopHook;      // 0x6FBB5364
 extern int32_t     gbRecordPlaybackActive;      // 0x6FBCC090
 extern int32_t     gbNpcSpeechEnabled;          // 0x6FB905EC (initialized to 1)
 extern D2UnitStrc* gpClientPlayer;              // 0x6FBCC3D0
+extern D2UnitStrc* gpPlayerUnit;
 extern D2DrlgActStrc* gpClientAct;              // 0x6FBCC01C
 extern uint32_t    gdwClientGameFrame;          // 0x6FBB32B0
 extern int32_t     gnScreenWidth;               // 0x6FB8C6E0
@@ -300,14 +301,14 @@ int32_t __fastcall NPCSPEECH_PickGreetingSound(D2UnitStrc* pNpcUnit, int32_t nSp
         return pRec->nFarewell;
     }
 
-    D2UnitStrc* pPlayer = gpClientPlayer;
+    D2UnitStrc* pPlayer = gpClientPlayer ? gpClientPlayer : gpPlayerUnit;
     int32_t nAttempt = 0;
     int32_t nPickedSound = 0;
 
     do
     {
         int32_t nBaseSoundId = pRec->nGreeting1;
-        if (nSpeechMode == 0 && pRec->nGreeting2 != 0)
+        if (nSpeechMode == 0 && pRec->nGreeting2 != 0 && pPlayer != nullptr)
         {
             // Advance 64-bit LCG seed on pPlayer->dwSeed (+0x20)
             uint64_t uNext = static_cast<uint64_t>(pPlayer->dwInitSeed) * 0x6AC690C5ULL + pPlayer->dwEndSeed;
@@ -322,7 +323,7 @@ int32_t __fastcall NPCSPEECH_PickGreetingSound(D2UnitStrc* pNpcUnit, int32_t nSp
         if (pRec->nDayCycleBase != 0)
         {
             bool bUseCycleGreeting = (nBaseSoundId == 0);
-            if (!bUseCycleGreeting)
+            if (!bUseCycleGreeting && pPlayer != nullptr)
             {
                 uint64_t uNext = static_cast<uint64_t>(pPlayer->dwInitSeed) * 0x6AC690C5ULL + pPlayer->dwEndSeed;
                 pPlayer->dwInitSeed = static_cast<uint32_t>(uNext);

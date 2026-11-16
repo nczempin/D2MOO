@@ -450,7 +450,7 @@ extern int32_t __fastcall D2Client_InitMissileUnitDataAndPath(D2UnitStrc* pMissi
 #pragma comment(linker, "/alternatename:_SCALE_GetFactor@0=?SCALE_GetFactor@@YGHXZ")
 #pragma comment(linker, "/alternatename:_SCALE_SetDefaultFactor@0=?SCALE_SetDefaultFactor@@YGXXZ")
 #pragma comment(linker, "/alternatename:_SCALE_SetDefaultFactorPerspectiveFactor@0=?SCALE_SetDefaultFactorPerspectiveFactor@@YGXXZ")
-#pragma comment(linker, "/alternatename:_SCALE_SetPerspectiveScale@8=?SCALE_SetPerspectiveScale@@YGXHH@Z")
+#pragma comment(linker, "/alternatename:_SCALE_SetPerspectiveScale@8=?SCALE_SetPerspectiveScale@@YGHHH@Z")
 #pragma comment(linker, "/alternatename:_SCALE_UpdateFactor@0=?SCALE_UpdateFactor@@YGXXZ")
 #pragma comment(linker, "/alternatename:_SCmdProcess@16=?SCmdProcess@@YGHPAPBDHHH@Z")
 #pragma comment(linker, "/alternatename:_SCmdRegisterArgList@8=?SCmdRegisterArgList@@YGHHH@Z")
@@ -1366,7 +1366,7 @@ BOOL __fastcall sub_6FD91E80(D2UnitStrc* pUnit, D2UnitStrc* pItem1, D2UnitStrc* 
 }
 
 extern "C" {
-void __fastcall Bridge_D2GFX_SetViewportShift_19214(int32_t nShiftX) { gnViewportShiftOffsetX = nShiftX; D2GFX_SetViewMatrixAdjust(nShiftX); }
+void __fastcall Bridge_D2GFX_SetViewportShift_19214(int32_t nShiftX) { gnViewportShiftOffsetX = nShiftX; D2GFX_SetViewMatrixAdjust(nShiftX < 0 ? 1 : (nShiftX > 0 ? 2 : 0)); }
 #pragma comment(linker, "/alternatename:@D2GFX_SetViewportShift@4=@Bridge_D2GFX_SetViewportShift_19214@4")
 const wchar_t* __fastcall Bridge_D2LANG_GetStringByReferenceIndex_72297(int32_t id) { return (const wchar_t*)D2LANG_GetStringFromTblIndex((short)id); }
 #pragma comment(linker, "/alternatename:@D2LANG_GetStringByReferenceIndex@4=@Bridge_D2LANG_GetStringByReferenceIndex_72297@4")
@@ -4953,12 +4953,21 @@ void __fastcall D2Client_PlaySoundById(int32_t nSoundId)
     {
         return;
     }
-    char szSfxPath[80] = {};
+    char szSfxPath[128] = {};
     snprintf(szSfxPath, sizeof(szSfxPath), "data\\global\\sfx\\%s", pRec->szFileName);
-    if (pRec->bMusicVol || pRec->bStream)
+    if (pRec->bMusicVol)
     {
         D2SOUND_PlayMusicFile(szSfxPath, pRec->nLoop != 0);
         return;
+    }
+    HANDLE hProbe = nullptr;
+    if (!SFileOpenFileEx(0, szSfxPath, 0, reinterpret_cast<int>(&hProbe)) || !hProbe)
+    {
+        snprintf(szSfxPath, sizeof(szSfxPath), "data\\local\\sfx\\eng\\%s", pRec->szFileName);
+    }
+    else
+    {
+        SFileCloseFile(hProbe);
     }
     if (!D2SOUND_FastIsInitialized())
     {

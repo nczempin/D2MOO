@@ -741,7 +741,7 @@ void __stdcall D2Win_COMMANDS_MouseMove_6F8AD670(SMSGHANDLER_PARAMS* pMsg)
 	--nScreenWidth;
 	--nScreenHeight;
 
-	if (D2GFX_HardwareAcceleratedRenderMode())
+	if (D2GFX_HardwareAcceleratedRenderMode() && !D2GFX_CheckWindowed())
 	{
 		bool bSetCursorPos = false;
 		if (nX > nScreenWidth)

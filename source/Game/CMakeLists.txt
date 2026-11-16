@@ -44,6 +44,7 @@ add_dependencies(Game
   D2Lang
   D2CMP
   D2Gdi
+  D2Glide
 )
 set_target_properties(Game PROPERTIES
   OUTPUT_NAME Game.D2MOO

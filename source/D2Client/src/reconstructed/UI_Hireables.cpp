@@ -1845,16 +1845,9 @@ void __fastcall ENV_DrawShadowTileNode(int32_t nScreenPanels, uint32_t* pShadowN
         {
             return;
         }
-        if (D2GFX_CheckPerspective())
-        {
-            TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], pShadowNode[1], pShadowNode[2], 4, nScreenPanels);
-        }
-        else
-        {
-            int32_t nX = static_cast<int32_t>(pViewport[1]) - static_cast<int32_t>(pViewport[9]) + static_cast<int32_t>(pTileData[0]);
-            int32_t nY = static_cast<int32_t>(pTileData[1]) - static_cast<int32_t>(pViewport[10]) + static_cast<int32_t>(pViewport[2]);
-            TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], nX, nY, 4, 0);
-        }
+        int32_t nX = static_cast<int32_t>(pViewport[1]) - static_cast<int32_t>(pViewport[9]) + static_cast<int32_t>(pTileData[0]);
+        int32_t nY = static_cast<int32_t>(pTileData[1]) - static_cast<int32_t>(pViewport[10]) + static_cast<int32_t>(pViewport[2]);
+        TILE_ShadowTileDraw((D2TileLibraryEntryStrc*)pTileData[6], nX, nY, 4, nScreenPanels);
     }
 }
 

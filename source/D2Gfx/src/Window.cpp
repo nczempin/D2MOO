@@ -265,7 +265,7 @@ int32_t __stdcall WINDOW_GetDimensions(int32_t* pWidth, int32_t* pHeight)
 //D2Gfx.0x6FA74A10 (#10029)
 void __stdcall WINDOW_ShowCursor(int32_t bShow)
 {
-    if (!gbIsWindowed || gnDisplayType == DISPLAYTYPE_GLIDE || gnDisplayType == DISPLAYTYPE_OPENGL || gnDisplayType == DISPLAYTYPE_DIRECT3D)
+    if (!gbIsWindowed)
     {
         return;
     }

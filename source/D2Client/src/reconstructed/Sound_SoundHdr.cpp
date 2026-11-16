@@ -1554,8 +1554,8 @@ int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg)
     int32_t nOx = g_nLeftPanelOffsetX;
     int32_t nTopY = -g_nLeftPanelOffsetY;
 
-    if (nMouseX >= nOx + 48 && nMouseX <= nOx + 80 &&
-        nMouseY >= nTopY + 388 && nMouseY <= nTopY + 420)
+    if ((nMouseX >= nOx + 46 && nMouseX <= nOx + 86 || nMouseX >= nOx + 124 && nMouseX <= nOx + 164) &&
+        nMouseY >= nTopY + 384 && nMouseY <= nTopY + 424)
     {
         SOUND_PlayUiClick(2);
         UI_SetPanelState(D2PANEL_CHAR, 0, 0);
@@ -1794,7 +1794,7 @@ void __stdcall CHARSTATS_DrawPanel()
         D2GfxDataStrc tClose = {};
         tClose.pCellFile = g_pCharStatBtnCellFile;
         tClose.nFrame = 10;
-        D2Gfx_10072_DrawCellFile(&tClose, nOx + 48, nTopY + 420, 0xFFFFFFFFu, 5, nullptr);
+        D2Gfx_10072_DrawCellFile(&tClose, nOx + 128, nTopY + 418, 0xFFFFFFFFu, 5, nullptr);
     }
 
     extern int32_t gnMouseX;
@@ -1820,7 +1820,7 @@ int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg)
     int32_t nOx = g_nLeftPanelOffsetX;
     int32_t nTopY = -g_nLeftPanelOffsetY;
 
-    if (nMouseX >= nOx + 46 && nMouseX <= nOx + 86 &&
+    if ((nMouseX >= nOx + 46 && nMouseX <= nOx + 86 || nMouseX >= nOx + 124 && nMouseX <= nOx + 164) &&
         nMouseY >= nTopY + 384 && nMouseY <= nTopY + 424)
     {
         UI_SetPanelState(D2PANEL_CHAR, 1, 0);
