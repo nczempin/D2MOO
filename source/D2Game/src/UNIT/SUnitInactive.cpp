@@ -530,6 +530,11 @@ D2UnitStrc* __fastcall SUNITINACTIVE_RestoreInactiveItem(D2GameStrc* pGame, D2Ac
 //D2Game.0x6FCC4270
 void __fastcall SUNITINACTIVE_FreeInactiveUnitLists(D2GameStrc* pGame)
 {
+	if (!pGame)
+	{
+		return;
+	}
+
 	for (int32_t i = 0; i < 5; ++i)
 	{
 		D2InactiveUnitListStrc* pCurrentList = pGame->pInactiveUnitList[i];
@@ -566,6 +571,7 @@ void __fastcall SUNITINACTIVE_FreeInactiveUnitLists(D2GameStrc* pGame)
 
 			pCurrentList = pNextList;
 		}
+		pGame->pInactiveUnitList[i] = nullptr;
 	}
 }
 

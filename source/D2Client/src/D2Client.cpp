@@ -190,6 +190,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg);
 void __stdcall INV_SyncExpansionModeFlag();
 void __stdcall INV_InitInventoryLayoutRectsAndGrids();
 void __stdcall INV_ClearWaitingForServerCursorSync();
+void __stdcall INV_ClearHoveredItemState();
 void __fastcall INV_SetPanelMode(int32_t nMode);
 void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg);
 void __stdcall INV_OnInventoryPanelMouseUp(D2WinMsgStrc* pMsg);
@@ -2889,6 +2890,8 @@ static void InitInGameAssets()
 
 static void ShutdownInGameAssets()
 {
+	INV_ClearHoveredItemState();
+	INV_ClearWaitingForServerCursorSync();
 	CloseActiveNpcSession();
 	UI_ReleaseAllAssets();
 	D2Client_ClearItemInvCellCache();
@@ -4318,6 +4321,17 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	}
 
 	SendLeaveGamePacket();
+
+	if (ghServerThread)
+	{
+		EnterCriticalSection(&gServerThreadLock);
+		gbStopServerThread = 1;
+		LeaveCriticalSection(&gServerThreadLock);
+		WaitForSingleObject(ghServerThread, 5000);
+		CloseHandle(ghServerThread);
+		ghServerThread = nullptr;
+	}
+
 	if (!bRemoteTcpMode && (gnGameType == 0 || gnGameType == 1))
 	{
 		for (int32_t i = 0; i < 4; ++i)
@@ -4333,16 +4347,6 @@ static int32_t __stdcall D2Client_State2_MainLoop()
 	if (!bRemoteTcpMode && (gnGameType == 0 || gnGameType == 1))
 	{
 		GAME_CloseAllGames();
-	}
-
-	if (ghServerThread)
-	{
-		EnterCriticalSection(&gServerThreadLock);
-		gbStopServerThread = 1;
-		LeaveCriticalSection(&gServerThreadLock);
-		WaitForSingleObject(ghServerThread, 5000);
-		CloseHandle(ghServerThread);
-		ghServerThread = nullptr;
 	}
 
 	return D2CLIENT_STATE_LEAVE_GAME;

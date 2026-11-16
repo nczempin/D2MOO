@@ -990,7 +990,11 @@ static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit == nullptr && nUnitType == UNIT_PLAYER)
     {
-        pUnit = UNIT_GetClientPlayer();
+        D2UnitStrc* pLocal = UNIT_GetClientPlayer();
+        if (pLocal != nullptr && pLocal->dwUnitId != 0x7FFFFFFFu)
+        {
+            pUnit = pLocal;
+        }
     }
     if (pUnit != nullptr)
     {
@@ -1009,7 +1013,11 @@ static void __fastcall SCMD_Handler22_UpdateItemSkill(uint8_t* pPacket)
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit == nullptr && nUnitType == UNIT_PLAYER)
     {
-        pUnit = UNIT_GetClientPlayer();
+        D2UnitStrc* pLocal = UNIT_GetClientPlayer();
+        if (pLocal != nullptr && pLocal->dwUnitId != 0x7FFFFFFFu)
+        {
+            pUnit = pLocal;
+        }
     }
     if (pUnit != nullptr)
     {
@@ -1035,15 +1043,32 @@ static void __fastcall SCMD_Handler23_SetSkill(uint8_t* pPacket)
     const int32_t  nItemGUID  = *reinterpret_cast<int32_t*>(&pPacket[9]);
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
-    if (pUnit == nullptr)
+    if (pUnit == nullptr && nUnitType == UNIT_PLAYER)
     {
-        pUnit = UNIT_GetClientPlayer();
+        D2UnitStrc* pLocal = UNIT_GetClientPlayer();
+        if (pLocal != nullptr && pLocal->dwUnitId != 0x7FFFFFFFu)
+        {
+            pUnit = pLocal;
+        }
     }
     if (pUnit != nullptr)
     {
         if (wSkillId > 0 && SKILLS_GetSkillById(pUnit, wSkillId, nItemGUID) == nullptr)
         {
-            SKILLS_AddSkill(pUnit, wSkillId);
+            if (nItemGUID == -1)
+            {
+                SKILLS_AssignSkill(pUnit, wSkillId, 0, FALSE, __FILE__, __LINE__);
+            }
+            else
+            {
+                D2SkillStrc* pAdded = SKILLS_AddSkill(pUnit, wSkillId);
+                if (pAdded != nullptr)
+                {
+                    pAdded->nSkillLevel = 0;
+                    pAdded->nOwnerGUID = static_cast<D2UnitGUID>(nItemGUID);
+                    SKILLS_SetFlags(pAdded, SKILLS_GetFlags(pAdded) | 1);
+                }
+            }
         }
         if (nHand != 0)
         {
@@ -1371,7 +1396,11 @@ static void __fastcall SCMD_Handler94_BaseSkillLevels(uint8_t* pPacket)
     D2UnitStrc* pPlayer = UNIT_FindClientUnit(static_cast<int32_t>(dwPlayerGUID), UNIT_PLAYER);
     if (pPlayer == nullptr)
     {
-        pPlayer = UNIT_GetClientPlayer();
+        D2UnitStrc* pLocal = UNIT_GetClientPlayer();
+        if (pLocal != nullptr && pLocal->dwUnitId != 0x7FFFFFFFu)
+        {
+            pPlayer = pLocal;
+        }
     }
     if (pPlayer == nullptr)
     {

@@ -432,6 +432,11 @@ BOOL __stdcall GAME_CreateNewEmptyGame(char* szGameName, const char* szPassword,
     gpGameDataTbl_6FD45818->tHashTable.Unlock(hLock);
 
     D2_ASSERT(pGame);
+    {
+        uint8_t* pClearStart = reinterpret_cast<uint8_t*>(&pGame->lpCriticalSection);
+        uint8_t* pClearEnd = reinterpret_cast<uint8_t*>(pGame + 1);
+        memset(pClearStart, 0, static_cast<size_t>(pClearEnd - pClearStart));
+    }
     pGame->lpCriticalSection = D2_ALLOC_STRC_POOL(nullptr, CRITICAL_SECTION);
     InitializeCriticalSection(pGame->lpCriticalSection);
 
@@ -651,6 +656,12 @@ void __fastcall GAME_SendGameInit(int32_t nClientId, char* szGameName, uint8_t n
     if (!pGame)
     {
         return;
+    }
+
+    {
+        uint8_t* pClearStart = reinterpret_cast<uint8_t*>(&pGame->lpCriticalSection);
+        uint8_t* pClearEnd = reinterpret_cast<uint8_t*>(pGame + 1);
+        memset(pClearStart, 0, static_cast<size_t>(pClearEnd - pClearStart));
     }
 
     pGame->lpCriticalSection = D2_ALLOC_STRC_POOL(nullptr, CRITICAL_SECTION);
@@ -1192,15 +1203,22 @@ void __fastcall GAME_FreeGame(D2GameGUID nGameGUID, D2GameStrc* pGame)
     LeaveCriticalSection(&gCriticalSection_6FD45800);
 
     MONSTERREGION_FreeAll(pGame->pMemoryPool, pGame->pMonReg);
+    memset(pGame->pMonReg, 0, sizeof(pGame->pMonReg));
     OBJRGN_FreeObjectControl(pGame);
+    pGame->pObjectControl = nullptr;
     QUESTS_QuestFree(pGame);
+    pGame->pQuestControl = nullptr;
     SUNITPROXY_FreeNpcControl(pGame);
+    pGame->pNpcControl = nullptr;
     CLIENTS_FreeClientsFromGame(pGame);
     LEVEL_RemoveAllUnits(pGame);
     SUNITINACTIVE_FreeInactiveUnitLists(pGame);
     EVENT_FreeEventQueue(pGame);
+    pGame->pTimerQueue = nullptr;
     PARTY_FreePartyControl(pGame);
+    pGame->pPartyControl = nullptr;
     ARENA_FreeArena(pGame);
+    pGame->pArenaCtrl = nullptr;
 
     for (int32_t i = 0; i < 5; ++i)
     {
@@ -1214,6 +1232,7 @@ void __fastcall GAME_FreeGame(D2GameGUID nGameGUID, D2GameStrc* pGame)
     if (pGame->pMemoryPool)
     {
         FOG_DestroyMemoryPoolSystem(pGame->pMemoryPool);
+        pGame->pMemoryPool = nullptr;
     }
 
     LeaveCriticalSection(pGame->lpCriticalSection);

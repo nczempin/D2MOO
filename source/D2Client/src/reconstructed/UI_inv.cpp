@@ -2789,6 +2789,15 @@ BOOL __fastcall INV_UseInventoryItemRightClick(D2UnitStrc* pPlayer, D2UnitStrc* 
     return FALSE;
 }
 
+extern void __stdcall D2Client_BuildFullItemTooltipText(
+    D2UnitStrc* pItem,
+    D2UnitStrc* pOwnerUnit,
+    BOOL bShowShopPrice,
+    int32_t nVendorId,
+    int32_t nDifficulty,
+    Unicode* wszOut,
+    int32_t nMaxChars);
+
 // 1.12a: 0x6FB5C520
 // Formats the "Right-click to read / open / use" hint line on books, scrolls, and the Horadric Cube.
 void __stdcall INV_DrawHoveredBookOrScrollTooltip(D2UnitStrc* pItem, Unicode* pOutBuf)
@@ -2797,6 +2806,14 @@ void __stdcall INV_DrawHoveredBookOrScrollTooltip(D2UnitStrc* pItem, Unicode* pO
     {
         return;
     }
+    D2Client_BuildFullItemTooltipText(
+        pItem,
+        g_pPlayerUnit,
+        (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9) ? TRUE : FALSE,
+        148,
+        g_nGameDifficulty,
+        pOutBuf,
+        1024);
 }
 
 // 1.12a: 0x6FB5C720
@@ -2832,15 +2849,6 @@ void __stdcall ITEMDESC_FormatItemMagicProperties(D2UnitStrc* pItem)
 void __stdcall INV_RenderButtonHoverTooltip()
 {
 }
-
-extern void __stdcall D2Client_BuildFullItemTooltipText(
-    D2UnitStrc* pItem,
-    D2UnitStrc* pOwnerUnit,
-    BOOL bShowShopPrice,
-    int32_t nVendorId,
-    int32_t nDifficulty,
-    Unicode* wszOut,
-    int32_t nMaxChars);
 
 // 1.12a: 0x6FB5D320
 // 1.12a: 0x6FB5DA10 (false-split jump-table continuation inside INV_RenderHoveredItemTooltip)

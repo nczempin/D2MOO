@@ -33,6 +33,7 @@
 #include <Path/Path.h>
 #include <D2StatList.h>
 #include <D2Items.h>
+#include <D2ItemMods.h>
 #include <D2Skills.h>
 #include <D2Inventory.h>
 #include <D2Composit.h>
@@ -2575,6 +2576,61 @@ struct BridgeTooltipLineBufStrc
         }
     }
 
+    void PushD2BottomToTopMultiline(int32_t nDefaultColor, const wchar_t* wszText)
+    {
+        if (!wszText || !wszText[0])
+            return;
+        wchar_t aSegs[16][160] = {};
+        int32_t aSegColors[16] = {};
+        int32_t nSegCount = 0;
+        int32_t nCurColor = nDefaultColor;
+        size_t s = 0;
+        for (size_t i = 0; ; ++i)
+        {
+            const wchar_t wc = wszText[i];
+            if (wc == 0 || wc == L'\n')
+            {
+                if (s > 0 && nSegCount < 16)
+                {
+                    aSegs[nSegCount][s] = 0;
+                    // Trim pure whitespace segments
+                    bool bHasNonSpace = false;
+                    for (size_t k = 0; k < s; ++k)
+                    {
+                        if (aSegs[nSegCount][k] != L' ' && aSegs[nSegCount][k] != L'\t' && aSegs[nSegCount][k] != L'\r')
+                        {
+                            bHasNonSpace = true;
+                            break;
+                        }
+                    }
+                    if (bHasNonSpace)
+                    {
+                        aSegColors[nSegCount] = nCurColor;
+                        ++nSegCount;
+                    }
+                }
+                s = 0;
+                if (wc == 0)
+                    break;
+            }
+            else if (wc != L'\r')
+            {
+                if (wc == 0x00FF && wszText[i + 1] == L'c' && wszText[i + 2] >= L'0' && wszText[i + 2] <= L'9')
+                {
+                    nCurColor = wszText[i + 2] - L'0';
+                }
+                if (nSegCount < 16 && s < 154)
+                {
+                    aSegs[nSegCount][s++] = wc;
+                }
+            }
+        }
+        for (int32_t k = nSegCount - 1; k >= 0; --k)
+        {
+            PushSingle(aSegColors[k], aSegs[k]);
+        }
+    }
+
     void EmitReversedForD2Win(Unicode* wszOut, int32_t nMaxChars) const
     {
         if (!wszOut || nMaxChars <= 0)
@@ -3262,14 +3318,125 @@ void __stdcall D2Client_BuildFullItemTooltipText(
     const int32_t nQual = ITEMS_GetItemQuality(pItem);
     const BOOL bIdentified = ITEMS_CheckItemFlag(pItem, IFLAG_IDENTIFIED, __LINE__, __FILE__);
 
-    // Potion / Scroll / Tome / Elixir spell description lines from Items.txt (wSpellDescStr)
-    if (pItemsTxt->nSpellDesc > 0 && pItemsTxt->wSpellDescStr > 0)
+    // Tomes (ITEMTYPE_BOOK = 18): exact 1.12a 0x6FB5C520 layout
+    if (ITEMS_CheckItemTypeId(pItem, ITEMTYPE_BOOK))
+    {
+        if (!bShowShopPrice)
+        {
+            const wchar_t* wszIns = Bridge_GetTblWStr(2206); // STR_IDX_2206_InsertScrolls
+            lines.PushD2BottomToTopMultiline(0, (wszIns && wszIns[0]) ? wszIns : L"Insert Scroll to Add");
+            const wchar_t* wszUse = Bridge_GetTblWStr(2203); // STR_IDX_2203_RightClicktoUse
+            lines.PushD2BottomToTopMultiline(0, (wszUse && wszUse[0]) ? wszUse : L"Right Click to Cast");
+        }
+        const int32_t nBookQty = STATLIST_UnitGetStatValue(pItem, STAT_QUANTITY, 0);
+        wchar_t wszBookQty[64] = {};
+        swprintf(wszBookQty, 63, L"Quantity: %d", nBookQty);
+        lines.PushSingle(0, wszBookQty);
+        lines.EmitReversedForD2Win(wszOut, nMaxChars);
+        return;
+    }
+
+    // Quest special usage hints (Moldy Tome 'bkd ', Horadric Cube 'box ', matching 0x6FB5E2E6)
+    if (!bShowShopPrice && pItem->dwAnimMode == IMODE_STORED)
+    {
+        if (pItemsTxt->dwCode == 0x20646B62u) // 'bkd '
+        {
+            const wchar_t* wszRead = Bridge_GetTblWStr(2205);
+            lines.PushD2BottomToTopMultiline(0, (wszRead && wszRead[0]) ? wszRead : L"Right Click to Read");
+        }
+        else if (pItemsTxt->dwCode == 0x20786F62u) // 'box '
+        {
+            const wchar_t* wszOpen = Bridge_GetTblWStr(2204);
+            lines.PushD2BottomToTopMultiline(0, (wszOpen && wszOpen[0]) ? wszOpen : L"Right Click to Open");
+        }
+    }
+
+    // Potion / Scroll / Elixir spell description lines from Items.txt (0x6FB574E0)
+    bool bEmittedUseHint = false;
+    if (pItemsTxt->nSpellDesc > 0 && pItemsTxt->wSpellDescStr > 0 && pItemsTxt->wSpellDescStr != 0x1506)
     {
         const wchar_t* wszSpellDesc = Bridge_GetTblWStr(pItemsTxt->wSpellDescStr);
         if (wszSpellDesc && wszSpellDesc[0])
         {
-            lines.PushMultilineTopToBottom(0, wszSpellDesc);
+            const uint32_t dwCalcId = (pItemsTxt->dwCalc[0] != 0 && pItemsTxt->dwCalc[0] != 0xFFFFFFFFu)
+                ? pItemsTxt->dwCalc[0]
+                : pItemsTxt->dwSpellDescCalc;
+            wchar_t wszSpell[512] = {};
+            if (pItemsTxt->nSpellDesc == 1)
+            {
+                wcsncpy(wszSpell, wszSpellDesc, 511);
+            }
+            else if (pItemsTxt->nSpellDesc == 2)
+            {
+                int32_t nVal = pPlr ? ITEMMODS_EvaluateItemFormula(pPlr, pItem, dwCalcId) : 0;
+                const int16_t wStat0 = pItemsTxt->wStat[0];
+                if (pPlr)
+                {
+                    if (wStat0 == STAT_HITPOINTS || wStat0 == STAT_MAXHP || wStat0 == STAT_HPREGEN)
+                    {
+                        nVal = ITEMS_GetBonusLifeBasedOnClass(pPlr, nVal);
+                    }
+                    else if (wStat0 == STAT_MANA || wStat0 == STAT_MAXMANA || wStat0 == STAT_MANARECOVERY)
+                    {
+                        nVal = ITEMS_GetBonusManaBasedOnClass(pPlr, nVal);
+                    }
+                }
+                if (wcschr(wszSpellDesc, L'\n') == nullptr && _wcsicmp(wszSpellDesc, L"Points:") == 0)
+                {
+                    if (wStat0 == STAT_MANA || wStat0 == STAT_MAXMANA || wStat0 == STAT_MANARECOVERY)
+                        swprintf(wszSpell, 511, L"Restores %d Mana", nVal);
+                    else
+                        swprintf(wszSpell, 511, L"Heals %d Life", nVal);
+                }
+                else
+                {
+                    swprintf(wszSpell, 511, L"%ls %d", wszSpellDesc, nVal);
+                }
+            }
+            else if (pItemsTxt->nSpellDesc == 3)
+            {
+                const int32_t nVal = pPlr ? ITEMMODS_EvaluateItemFormula(pPlr, pItem, dwCalcId) : 0;
+                swprintf(wszSpell, 511, L"%ls %d", wszSpellDesc, nVal);
+            }
+            else if (pItemsTxt->nSpellDesc == 4)
+            {
+                const int32_t nVal = pPlr ? ITEMMODS_EvaluateItemFormula(pPlr, pItem, dwCalcId) : 0;
+                if (wcschr(wszSpellDesc, L'%'))
+                    Bridge_FormatTblTemplate(wszSpell, 511, wszSpellDesc, nVal, 0, L"", L"");
+                else
+                    swprintf(wszSpell, 511, L"%ls %d", wszSpellDesc, nVal);
+            }
+
+            if (wszSpell[0])
+            {
+                if (wcsstr(wszSpell, L"Right Click") != nullptr)
+                    bEmittedUseHint = true;
+                lines.PushD2BottomToTopMultiline(0, wszSpell);
+            }
         }
+    }
+
+    // Scroll / Potion usage hint when in player inventory (not in shop or on ground)
+    if (!bShowShopPrice && !bEmittedUseHint && pItem->dwAnimMode != IMODE_ONGROUND)
+    {
+        if (ITEMS_CheckItemTypeId(pItem, ITEMTYPE_SCROLL))
+        {
+            const wchar_t* wszUse = Bridge_GetTblWStr(2203); // STR_IDX_2203_RightClicktoUse
+            lines.PushD2BottomToTopMultiline(0, (wszUse && wszUse[0]) ? wszUse : L"Right Click to Cast");
+        }
+        else if (pItem->dwAnimMode == IMODE_STORED &&
+                 (ITEMS_CheckItemTypeId(pItem, ITEMTYPE_POTION) || ITEMS_CheckItemTypeId(pItem, ITEMTYPE_ELIXIR)))
+        {
+            const wchar_t* wszUse = Bridge_GetTblWStr(2203);
+            lines.PushD2BottomToTopMultiline(0, (wszUse && wszUse[0]) ? wszUse : L"Right Click to Use");
+        }
+    }
+
+    // Charm inventory hint (0x6FB55DC0: 0x4FD6 = STR_IDX_20438_Charmdes)
+    if (ITEMS_CheckItemTypeId(pItem, ITEMTYPE_CHARM))
+    {
+        const wchar_t* wszCharm = Bridge_GetTblWStr(20438);
+        lines.PushD2BottomToTopMultiline(0, (wszCharm && wszCharm[0]) ? wszCharm : L"Keep in Inventory to Gain Bonus");
     }
 
     // Defense
@@ -3347,8 +3514,8 @@ void __stdcall D2Client_BuildFullItemTooltipText(
         lines.PushSingle(0, wszQty);
     }
 
-    // Durability / Indestructible
-    if (!pItemsTxt->nNoDurability)
+    // Durability / Indestructible (0x6FB5DCC6: ITEMS_HasDurability excludes stackable throwables)
+    if (ITEMS_HasDurability(pItem))
     {
         if (STATLIST_UnitGetStatValue(pItem, STAT_ITEM_INDESCTRUCTIBLE, 0) > 0)
         {
@@ -3510,8 +3677,10 @@ void __stdcall D2Client_DrawBeltItemHoverTooltip(struct D2UnitStrc * a0, int a1,
     D2Client_BuildFullItemTooltipText(a0, gpPlayerUnit, FALSE, 148, 0, wszTip, 1024);
     if (wszTip[0].ch != 0)
     {
+        const int32_t nBeltTopY = ((gnScreenHeight > 0 ? gnScreenHeight : 600) - 56);
+        const int32_t nDrawY = (a2 - 12 > nBeltTopY) ? nBeltTopY : (a2 - 12);
         D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
-        D2Win_10129_DrawFramedText(wszTip, a1, a2 - 12, 0, 1);
+        D2Win_10129_DrawFramedText(wszTip, a1, nDrawY, 0, 1);
     }
 }
 void __fastcall D2Client_DrawSkillQuantityOverlay(struct D2SkillStrc * a0, int a1, int a2)
@@ -4715,9 +4884,29 @@ void __stdcall PLAYER_CycleActiveSkillHotkey(int a0)
 {
     (void)a0;
 }
+extern void __fastcall D2Client_StripAndFreeUnitInventoryItems(D2UnitStrc* pUnit);
 void __fastcall PLAYER_FreeClientPlayer(struct D2UnitStrc * a0)
 {
-    if (!a0) return; if (gpClientAct && UNITS_GetRoom(a0)) UNITROOM_RemoveUnitFromRoom(a0); if (a0->pDynamicPath) { PATH_FreeDynamicPath(nullptr, a0->pDynamicPath); a0->pDynamicPath = nullptr; } if (a0->pInventory) { INVENTORY_FreeInventory(a0->pInventory); a0->pInventory = nullptr; } UNITS_FreePlayerData(nullptr, a0); GFX_FreeUnitGfxData(a0);
+    if (!a0)
+        return;
+    if (gpClientAct && UNITS_GetRoom(a0))
+        UNITROOM_RemoveUnitFromRoom(a0);
+    if (a0->pDynamicPath)
+    {
+        PATH_FreeDynamicPath(nullptr, a0->pDynamicPath);
+        a0->pDynamicPath = nullptr;
+    }
+    if (a0->pInventory)
+    {
+        D2Client_StripAndFreeUnitInventoryItems(a0);
+        if (a0->pInventory)
+        {
+            INVENTORY_FreeInventory(a0->pInventory);
+            a0->pInventory = nullptr;
+        }
+    }
+    UNITS_FreePlayerData(nullptr, a0);
+    GFX_FreeUnitGfxData(a0);
 }
 struct D2UnitStrc * __stdcall PLAYER_GetLocalPlayer(void)
 {
