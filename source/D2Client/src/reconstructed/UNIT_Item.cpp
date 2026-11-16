@@ -273,7 +273,16 @@ BOOL __fastcall D2Client_PlaceItemInBodyLocWrapper(D2InventoryStrc* pInventory, 
     {
         return FALSE;
     }
-    return INVENTORY_PlaceItemInBodyLoc(pInventory, pItem, nBodyLoc);
+    if (!INVENTORY_PlaceItemInBodyLoc(pInventory, pItem, nBodyLoc))
+    {
+        return FALSE;
+    }
+    ITEMS_SetBodyLocation(pItem, static_cast<uint8_t>(nBodyLoc));
+    if (nBodyLoc == BODYLOC_RARM || nBodyLoc == BODYLOC_LARM)
+    {
+        INVENTORY_UpdateWeaponGUIDOnInsert(pInventory, pItem);
+    }
+    return TRUE;
 }
 
 // 1.12a: 0x6FB455F0
@@ -563,7 +572,7 @@ void __fastcall D2Client_ExpireItemStatListOnOwner(D2UnitStrc* pOwner, D2UnitStr
     }
     else
     {
-        D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndFlag(pItem, 1);
+        D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndFlag(pItem, 0x40);
         if (pStatList)
         {
             D2Common_10474_FreeStatList(pStatList);
@@ -599,8 +608,7 @@ void __fastcall D2Client_ApplySocketedOrEquippedItemStats(D2UnitStrc* pTargetUni
         }
     }
 
-    D2StatListStrc* pItemStatList = STATLIST_GetStatListFromUnitAndFlag(pItem, 1);
-    if (!pItemStatList)
+    if (!pItem->pStatListEx)
     {
         return;
     }
@@ -753,6 +761,7 @@ void __stdcall D2Client_UnequipAndDeleteItemUnit(D2UnitStrc* pItem)
                     {
                         uint8_t bBodyLoc = ITEMS_GetBodyLocation(pItem);
                         D2Client_ExpireItemStatListOnOwner(pOwner, pItem);
+                        INVENTORY_UpdateWeaponGUIDOnRemoval(pInv, pItem);
                         if (pOwner == D2Client_GetLocalPlayer())
                         {
                             D2Client_UpdateEquippedWeaponClassCache(nullptr, bBodyLoc);
@@ -1270,6 +1279,10 @@ void __fastcall D2Client_RecalculateAllEquippedAndCharmItems(D2UnitStrc* pUnit, 
             if (bMeetsReq && bDisabled)
             {
                 ITEMS_SetItemFlag(pItem, ITEMFLAG_DISABLED, FALSE);
+                if (nBodyLoc == BODYLOC_RARM || nBodyLoc == BODYLOC_LARM)
+                {
+                    INVENTORY_UpdateWeaponGUIDOnInsert(pUnit->pInventory, pItem);
+                }
                 D2Client_ApplySocketedOrEquippedItemStats(pUnit, pItem);
                 if (pUnit == D2Client_GetLocalPlayer())
                 {
@@ -1280,6 +1293,10 @@ void __fastcall D2Client_RecalculateAllEquippedAndCharmItems(D2UnitStrc* pUnit, 
             else if (!bMeetsReq && !bDisabled)
             {
                 ITEMS_SetItemFlag(pItem, ITEMFLAG_DISABLED, TRUE);
+                if (nBodyLoc == BODYLOC_RARM || nBodyLoc == BODYLOC_LARM)
+                {
+                    INVENTORY_UpdateWeaponGUIDOnRemoval(pUnit->pInventory, pItem);
+                }
                 D2Client_ExpireItemStatListOnOwner(pUnit, pItem);
                 if (pUnit == D2Client_GetLocalPlayer())
                 {
@@ -1543,6 +1560,7 @@ void __fastcall D2Client_PacketHandler_ItemSwapBodyLoc(const uint8_t* pPacket)
         if (pOldItem && pOldItem != pNewItem)
         {
             D2Client_ExpireItemStatListOnOwner(pOwner, pOldItem);
+            INVENTORY_UpdateWeaponGUIDOnRemoval(pOwner->pInventory, pOldItem);
             INVENTORY_RemoveItem(pOldItem);
             D2Client_OnUnequipItemComponentUpdate(pOwner, pOldItem);
         }
@@ -1585,6 +1603,7 @@ void __fastcall D2Client_PacketHandler_ItemUnequip(const uint8_t* pPacket)
             D2Client_SaveUnitVitalsAndActiveSkills(pOwner);
         }
         D2Client_ExpireItemStatListOnOwner(pOwner, pItem);
+        INVENTORY_UpdateWeaponGUIDOnRemoval(pOwner->pInventory, pItem);
         INVENTORY_RemoveItem(pItem);
         D2Client_OnUnequipItemComponentUpdate(pOwner, pItem);
         if (pOwner == D2Client_GetLocalPlayer())
@@ -1868,6 +1887,7 @@ void __fastcall D2Client_PacketHandler_ItemAutoUnequipToInventory(const uint8_t*
         int32_t nX = UNITS_GetXPosition(pItem);
         int32_t nY = UNITS_GetYPosition(pItem);
         D2Client_ExpireItemStatListOnOwner(pOwner, pItem);
+        INVENTORY_UpdateWeaponGUIDOnRemoval(pOwner->pInventory, pItem);
         INVENTORY_RemoveItem(pItem);
         D2Client_OnUnequipItemComponentUpdate(pOwner, pItem);
         D2Client_PlaceItemInUnitInventoryPage(pOwner, pItem, nX, nY, ITEMMODE_STORED, (pOwner == D2Client_GetLocalPlayer()));
@@ -1896,20 +1916,22 @@ void __fastcall D2Client_PacketHandler_WeaponSwitch(const uint8_t* pPacket)
     D2UnitStrc* pSwRArm = INVENTORY_GetItemFromBodyLoc(pInv, BODYLOC_SWRARM);
     D2UnitStrc* pSwLArm = INVENTORY_GetItemFromBodyLoc(pInv, BODYLOC_SWLARM);
 
-    if (pRArm)   { D2Client_ExpireItemStatListOnOwner(pPlayer, pRArm);   INVENTORY_RemoveItem(pRArm); }
-    if (pLArm)   { D2Client_ExpireItemStatListOnOwner(pPlayer, pLArm);   INVENTORY_RemoveItem(pLArm); }
+    if (pRArm)   { D2Client_ExpireItemStatListOnOwner(pPlayer, pRArm);   INVENTORY_UpdateWeaponGUIDOnRemoval(pInv, pRArm); INVENTORY_RemoveItem(pRArm); }
+    if (pLArm)   { D2Client_ExpireItemStatListOnOwner(pPlayer, pLArm);   INVENTORY_UpdateWeaponGUIDOnRemoval(pInv, pLArm); INVENTORY_RemoveItem(pLArm); }
     if (pSwRArm) { D2Client_ExpireItemStatListOnOwner(pPlayer, pSwRArm); INVENTORY_RemoveItem(pSwRArm); }
     if (pSwLArm) { D2Client_ExpireItemStatListOnOwner(pPlayer, pSwLArm); INVENTORY_RemoveItem(pSwLArm); }
 
     if (pSwRArm && INVENTORY_PlaceItemInBodyLoc(pInv, pSwRArm, BODYLOC_RARM))
     {
         ITEMS_SetBodyLocation(pSwRArm, BODYLOC_RARM);
+        INVENTORY_UpdateWeaponGUIDOnInsert(pInv, pSwRArm);
         D2Client_OnEquipItemComponentUpdate(pPlayer, pSwRArm);
         D2Client_ApplySocketedOrEquippedItemStats(pPlayer, pSwRArm);
     }
     if (pSwLArm && INVENTORY_PlaceItemInBodyLoc(pInv, pSwLArm, BODYLOC_LARM))
     {
         ITEMS_SetBodyLocation(pSwLArm, BODYLOC_LARM);
+        INVENTORY_UpdateWeaponGUIDOnInsert(pInv, pSwLArm);
         D2Client_OnEquipItemComponentUpdate(pPlayer, pSwLArm);
         D2Client_ApplySocketedOrEquippedItemStats(pPlayer, pSwLArm);
     }

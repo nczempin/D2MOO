@@ -2833,6 +2833,15 @@ void __stdcall INV_RenderButtonHoverTooltip()
 {
 }
 
+extern void __stdcall D2Client_BuildFullItemTooltipText(
+    D2UnitStrc* pItem,
+    D2UnitStrc* pOwnerUnit,
+    BOOL bShowShopPrice,
+    int32_t nVendorId,
+    int32_t nDifficulty,
+    Unicode* wszOut,
+    int32_t nMaxChars);
+
 // 1.12a: 0x6FB5D320
 // 1.12a: 0x6FB5DA10 (false-split jump-table continuation inside INV_RenderHoveredItemTooltip)
 // Master item hover tooltip renderer: formats base stats, magic properties, set bonuses,
@@ -2844,100 +2853,31 @@ void __stdcall INV_RenderHoveredItemTooltip(D2UnitStrc* pOwnerUnit, BOOL bIsNpcS
         return;
     }
 
-    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(g_pHoveredItemUnit->dwClassId);
-    if (!pItemsTxt)
+    const BOOL bShowShopPrice = bIsNpcShop || (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9);
+    D2UnitStrc* pNpc = bShowShopPrice ? INV_GetInteractedNpcUnit() : nullptr;
+    const int32_t nVendorId = pNpc ? static_cast<int32_t>(pNpc->dwClassId) : 148;
+
+    Unicode wszTip[1024] = {};
+    D2Client_BuildFullItemTooltipText(
+        g_pHoveredItemUnit,
+        pOwnerUnit,
+        bShowShopPrice,
+        nVendorId,
+        g_nGameDifficulty,
+        wszTip,
+        1024);
+    if (!wszTip[0])
     {
         return;
     }
 
-    const Unicode* pBaseName = pItemsTxt->wNameStr ? D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr) : nullptr;
-    char szName[64] = {};
-    if (pBaseName && pBaseName[0])
-    {
-        Unicode::unicode2Win(szName, pBaseName, 63);
-    }
-    if (!szName[0])
-    {
-        memcpy(szName, pItemsTxt->szCode, 4);
-        szName[4] = '\0';
-    }
-
-    char szTip[512] = {};
-    int32_t nOff = snprintf(szTip, sizeof(szTip), "%s", szName);
-
-    int32_t nDef = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_ARMORCLASS, 0);
-    if (nDef > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nDefense: %d", nDef);
-    }
-    if (pItemsTxt->nMaxDam > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nOne-Hand Damage: %d to %d",
-            (int32_t)pItemsTxt->nMinDam, (int32_t)pItemsTxt->nMaxDam);
-    }
-    else if (pItemsTxt->n2HandMaxDam > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nTwo-Hand Damage: %d to %d",
-            (int32_t)pItemsTxt->n2HandMinDam, (int32_t)pItemsTxt->n2HandMaxDam);
-    }
-
-    int32_t nQty = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_QUANTITY, 0);
-    if (nQty > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nQuantity: %d", nQty);
-    }
-
-    int32_t nMaxDur = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_MAXDURABILITY, 0);
-    if (nMaxDur > 0 && nOff < 460)
-    {
-        int32_t nCurDur = STATLIST_UnitGetStatValue(g_pHoveredItemUnit, STAT_DURABILITY, 0);
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nDurability: %d of %d", nCurDur, nMaxDur);
-    }
-
-    if (pItemsTxt->wReqStr > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nRequired Strength: %d", (int32_t)pItemsTxt->wReqStr);
-    }
-    if (pItemsTxt->wReqDex > 0 && nOff < 460)
-    {
-        nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff, "\nRequired Dexterity: %d", (int32_t)pItemsTxt->wReqDex);
-    }
-
-    if (bIsNpcShop || (g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9))
-    {
-        D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
-        int32_t nVendorId = pNpc ? (int32_t)pNpc->dwClassId : 148;
-        BOOL bInStore = ITEMS_CheckItemFlag(g_pHoveredItemUnit, IFLAG_INSTORE, __LINE__, __FILE__);
-        int32_t nCost = ITEMS_GetTransactionCost(
-            g_pPlayerUnit,
-            g_pHoveredItemUnit,
-            (D2C_Difficulties)g_nGameDifficulty,
-            nullptr,
-            nVendorId,
-            bInStore ? TRANSACTIONTYPE_BUY : TRANSACTIONTYPE_SELL);
-        if (nCost > 0 && nOff < 480)
-        {
-            nOff += snprintf(szTip + nOff, sizeof(szTip) - (size_t)nOff,
-                bInStore ? "\nBuy Cost: %d" : "\nSell Value: %d", nCost);
-        }
-    }
-
-    int32_t nColor = 0;
-    int32_t nQual = ITEMS_GetItemQuality(g_pHoveredItemUnit);
-    if (nQual == ITEMQUAL_MAGIC) nColor = 3;
-    else if (nQual == ITEMQUAL_SET) nColor = 2;
-    else if (nQual == ITEMQUAL_RARE) nColor = 9;
-    else if (nQual == ITEMQUAL_UNIQUE) nColor = 4;
-
-    Unicode wszTip[512] = {};
-    Unicode::win2Unicode(wszTip, szTip, 511);
     int32_t nDrawX = (g_nHoveredItemTooltipX > 0) ? g_nHoveredItemTooltipX : g_nMouseX;
     int32_t nDrawY = (g_nHoveredItemTooltipTop > 24) ? (g_nHoveredItemTooltipTop - 8) : (g_nMouseY - 12);
     if (nDrawX < 80) nDrawX = 80;
     if (nDrawX > g_nScreenWidth - 80) nDrawX = g_nScreenWidth - 80;
     if (nDrawY < 24) nDrawY = 24;
     D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
-    D2Win_10129_DrawFramedText(wszTip, nDrawX, nDrawY, nColor, 1);
+    D2Win_10129_DrawFramedText(wszTip, nDrawX, nDrawY, 0, 1);
 }
 
 // 1.12a: 0x6FB5E430

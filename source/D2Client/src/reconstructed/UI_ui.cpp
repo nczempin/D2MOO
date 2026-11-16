@@ -1518,6 +1518,8 @@ int32_t __fastcall UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX,
     return (*pOutScreenX >= 0 && *pOutScreenX <= nW && *pOutScreenY >= 0 && *pOutScreenY <= nH - 48) ? 1 : 0;
 }
 
+extern int32_t __fastcall D2Client_GetItemQualityTextColor(D2UnitStrc* pItem);
+
 // 1.12a: 0x6FB3C9D0 (__fastcall)
 void __fastcall UI_DrawGroundItemHoverLabel(D2UnitStrc* pItemUnit /*ecx*/)
 {
@@ -1528,7 +1530,7 @@ void __fastcall UI_DrawGroundItemHoverLabel(D2UnitStrc* pItemUnit /*ecx*/)
     ITEM_BuildGroundLabelText(pItemUnit, wszLabel, 255);
     if (wszLabel[0]) {
         D2WIN_SetFont(1);
-        D2WIN_DrawFramedText(reinterpret_cast<const wchar_t*>(wszLabel), nScreenX, nScreenY - 18, 0, 1);
+        D2WIN_DrawFramedText(reinterpret_cast<const wchar_t*>(wszLabel), nScreenX, nScreenY - 18, D2Client_GetItemQualityTextColor(pItemUnit), 1);
     }
 }
 

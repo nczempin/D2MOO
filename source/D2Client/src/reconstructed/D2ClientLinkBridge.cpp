@@ -2130,7 +2130,7 @@ static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
     {
         const int32_t nSid = SKILLS_GetSkillIdFromSkill(pSk, __FILE__, __LINE__);
         if (nSid > 0 && nSid < sgptDataTables->nSkillsTxtRecordCount &&
-            sgptDataTables->pSkillsTxt[nSid].wSummon > 0 &&
+            static_cast<int16_t>(sgptDataTables->pSkillsTxt[nSid].wSummon) > 0 &&
             SKILLS_GetSkillLevel(gpPlayerUnit, pSk, 1) > 0)
         {
             bHasAnySummonSkill = true;
@@ -2296,18 +2296,1222 @@ void __fastcall D2Client_DrawActiveSkillButtonsTooltip(int a0, int a1)
         D2Win_10129_DrawFramedText(wszTip, nTipX, nH - 56, 0, 1);
     }
 }
+static const wchar_t* Bridge_GetTblWStr(uint16_t wTblIdx)
+{
+    if (wTblIdx == 0)
+        return L"";
+    const Unicode* pU = D2LANG_GetStringFromTblIndex(wTblIdx);
+    return pU ? reinterpret_cast<const wchar_t*>(pU) : L"";
+}
+
+int32_t __fastcall D2Client_GetItemQualityTextColor(D2UnitStrc* pItem)
+{
+    if (!pItem || pItem->dwUnitType != UNIT_ITEM)
+        return 0;
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_RUNEWORD, __LINE__, __FILE__))
+        return 4; // Gold
+    const int32_t nQual = ITEMS_GetItemQuality(pItem);
+    switch (nQual)
+    {
+    case ITEMQUAL_INFERIOR: return 5; // Gray
+    case ITEMQUAL_MAGIC:    return 3; // Blue
+    case ITEMQUAL_SET:      return 2; // Green
+    case ITEMQUAL_RARE:     return 9; // Yellow
+    case ITEMQUAL_UNIQUE:   return 4; // Gold
+    case ITEMQUAL_CRAFT:    return 8; // Orange
+    case ITEMQUAL_TEMPERED: return 9; // Yellow
+    default: break;
+    }
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_ETHEREAL, __LINE__, __FILE__) ||
+        ITEMS_CheckItemFlag(pItem, IFLAG_SOCKETED, __LINE__, __FILE__))
+    {
+        return 5; // Gray
+    }
+    return 0; // White
+}
+
+static void Bridge_BuildItemDisplayNames(
+    D2UnitStrc* pItem,
+    wchar_t* wszTitleLine,
+    size_t nTitleCap,
+    wchar_t* wszBaseLine,
+    size_t nBaseCap)
+{
+    wszTitleLine[0] = 0;
+    wszBaseLine[0] = 0;
+    if (!pItem || pItem->dwUnitType != UNIT_ITEM)
+        return;
+
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(pItem->dwClassId);
+    if (!pItemsTxt)
+        return;
+
+    wchar_t wszBase[128] = {};
+    const wchar_t* pBaseTbl = Bridge_GetTblWStr(pItemsTxt->wNameStr);
+    if (pBaseTbl && pBaseTbl[0])
+    {
+        wcsncpy(wszBase, pBaseTbl, 127);
+    }
+    else
+    {
+        for (int i = 0; i < 4 && pItemsTxt->szCode[i] && pItemsTxt->szCode[i] != ' '; ++i)
+            wszBase[i] = static_cast<wchar_t>(static_cast<uint8_t>(pItemsTxt->szCode[i]));
+    }
+
+    if (pItemsTxt->dwCode == 0x20646C67u) // 'gld '
+    {
+        const int32_t nGold = STATLIST_UnitGetStatValue(pItem, STAT_GOLD, 0);
+        if (nGold > 0)
+            swprintf(wszBaseLine, nBaseCap, L"%d %ls", nGold, wszBase[0] ? wszBase : L"Gold");
+        else
+            wcsncpy(wszBaseLine, wszBase[0] ? wszBase : L"Gold", nBaseCap - 1);
+        return;
+    }
+
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_ISEAR, __LINE__, __FILE__))
+    {
+        const char* szEar = ITEMS_GetEarName(pItem);
+        if (szEar && szEar[0])
+        {
+            wchar_t wszEar[32] = {};
+            for (int i = 0; i < 31 && szEar[i]; ++i)
+                wszEar[i] = static_cast<wchar_t>(static_cast<uint8_t>(szEar[i]));
+            swprintf(wszBaseLine, nBaseCap, L"%ls's %ls", wszEar, wszBase);
+            return;
+        }
+    }
+
+    const int32_t nQual = ITEMS_GetItemQuality(pItem);
+    const BOOL bIdentified = ITEMS_CheckItemFlag(pItem, IFLAG_IDENTIFIED, __LINE__, __FILE__);
+
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_RUNEWORD, __LINE__, __FILE__))
+    {
+        const uint16_t wRwIdx = ITEMS_GetPrefixId(pItem, 0);
+        if (sgptDataTables && sgptDataTables->pMagicAffixDataTables.pMagicAffixTxt)
+        {
+            // wMagicPrefix[0] stores Runes.txt wStringId or index
+            const wchar_t* pRwStr = Bridge_GetTblWStr(wRwIdx);
+            if ((!pRwStr || !pRwStr[0]) && wRwIdx < sgptDataTables->pRuneDataTables.nRunesTxtRecordCount && sgptDataTables->pRuneDataTables.pRunesTxt)
+                pRwStr = Bridge_GetTblWStr(sgptDataTables->pRuneDataTables.pRunesTxt[wRwIdx].wStringId);
+            if (pRwStr && pRwStr[0])
+                wcsncpy(wszTitleLine, pRwStr, nTitleCap - 1);
+        }
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        return;
+    }
+
+    if (!bIdentified && nQual >= ITEMQUAL_MAGIC)
+    {
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        return;
+    }
+
+    switch (nQual)
+    {
+    case ITEMQUAL_INFERIOR:
+    {
+        const int32_t nLqId = ITEMS_GetFileIndex(pItem);
+        D2LowQualityItemsTxt* pLq = DATATBLS_GetLowQualityItemsTxtRecord(nLqId);
+        const wchar_t* pLqStr = pLq ? Bridge_GetTblWStr(pLq->wTblId) : L"";
+        if (pLqStr && pLqStr[0])
+            swprintf(wszBaseLine, nBaseCap, L"%ls %ls", pLqStr, wszBase);
+        else
+            swprintf(wszBaseLine, nBaseCap, L"Low Quality %ls", wszBase);
+        break;
+    }
+    case ITEMQUAL_SUPERIOR:
+    {
+        const wchar_t* pSupStr = Bridge_GetTblWStr(1727);
+        if (pSupStr && pSupStr[0] && _wcsicmp(pSupStr, L"an evil force") != 0)
+            swprintf(wszBaseLine, nBaseCap, L"%ls %ls", pSupStr, wszBase);
+        else
+            swprintf(wszBaseLine, nBaseCap, L"Superior %ls", wszBase);
+        break;
+    }
+    case ITEMQUAL_MAGIC:
+    {
+        const uint16_t wPref = ITEMS_GetPrefixId(pItem, 0);
+        const uint16_t wSuff = ITEMS_GetSuffixId(pItem, 0);
+        D2MagicAffixTxt* pPref = wPref ? DATATBLS_GetMagicAffixTxtRecord(wPref) : nullptr;
+        D2MagicAffixTxt* pSuff = wSuff ? DATATBLS_GetMagicAffixTxtRecord(wSuff) : nullptr;
+        const wchar_t* wszPref = pPref ? Bridge_GetTblWStr(pPref->wTblIndex) : L"";
+        const wchar_t* wszSuff = pSuff ? Bridge_GetTblWStr(pSuff->wTblIndex) : L"";
+        if (wszPref[0] && wszSuff[0])
+            swprintf(wszBaseLine, nBaseCap, L"%ls %ls %ls", wszPref, wszBase, wszSuff);
+        else if (wszPref[0])
+            swprintf(wszBaseLine, nBaseCap, L"%ls %ls", wszPref, wszBase);
+        else if (wszSuff[0])
+            swprintf(wszBaseLine, nBaseCap, L"%ls %ls", wszBase, wszSuff);
+        else
+            wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        break;
+    }
+    case ITEMQUAL_RARE:
+    case ITEMQUAL_CRAFT:
+    case ITEMQUAL_TEMPERED:
+    {
+        const uint16_t wRPref = ITEMS_GetRarePrefixId(pItem);
+        const uint16_t wRSuff = ITEMS_GetRareSuffixId(pItem);
+        D2RareAffixTxt* pRP = wRPref ? DATATBLS_GetRareAffixTxtRecord(wRPref) : nullptr;
+        D2RareAffixTxt* pRS = wRSuff ? DATATBLS_GetRareAffixTxtRecord(wRSuff) : nullptr;
+        const wchar_t* wszRP = pRP ? Bridge_GetTblWStr(pRP->wStringId) : L"";
+        const wchar_t* wszRS = pRS ? Bridge_GetTblWStr(pRS->wStringId) : L"";
+        if (wszRP[0] && wszRS[0])
+            swprintf(wszTitleLine, nTitleCap, L"%ls %ls", wszRP, wszRS);
+        else if (wszRP[0])
+            wcsncpy(wszTitleLine, wszRP, nTitleCap - 1);
+        else if (wszRS[0])
+            wcsncpy(wszTitleLine, wszRS, nTitleCap - 1);
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        break;
+    }
+    case ITEMQUAL_SET:
+    {
+        const int32_t nSetIdx = ITEMS_GetFileIndex(pItem);
+        if (sgptDataTables && sgptDataTables->pSetItemsTxt && nSetIdx >= 0 && nSetIdx < sgptDataTables->nSetItemsTxtRecordCount)
+        {
+            const wchar_t* wszSet = Bridge_GetTblWStr(sgptDataTables->pSetItemsTxt[nSetIdx].wStringId);
+            if (wszSet && wszSet[0])
+                wcsncpy(wszTitleLine, wszSet, nTitleCap - 1);
+        }
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        break;
+    }
+    case ITEMQUAL_UNIQUE:
+    {
+        const int32_t nUniIdx = ITEMS_GetFileIndex(pItem);
+        if (sgptDataTables && sgptDataTables->pUniqueItemsTxt && nUniIdx >= 0 && nUniIdx < sgptDataTables->nUniqueItemsTxtRecordCount)
+        {
+            const wchar_t* wszUni = Bridge_GetTblWStr(sgptDataTables->pUniqueItemsTxt[nUniIdx].wTblIndex);
+            if (wszUni && wszUni[0])
+                wcsncpy(wszTitleLine, wszUni, nTitleCap - 1);
+        }
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        break;
+    }
+    default:
+        wcsncpy(wszBaseLine, wszBase, nBaseCap - 1);
+        break;
+    }
+
+    if (ITEMS_CheckItemFlag(pItem, IFLAG_PERSONALIZED, __LINE__, __FILE__))
+    {
+        const char* szPlr = ITEMS_GetEarName(pItem);
+        if (szPlr && szPlr[0])
+        {
+            wchar_t wszPlr[32] = {};
+            for (int i = 0; i < 31 && szPlr[i]; ++i)
+                wszPlr[i] = static_cast<wchar_t>(static_cast<uint8_t>(szPlr[i]));
+            wchar_t wszTarget[160] = {};
+            if (wszTitleLine[0])
+            {
+                swprintf(wszTarget, 159, L"%ls's %ls", wszPlr, wszTitleLine);
+                wcsncpy(wszTitleLine, wszTarget, nTitleCap - 1);
+            }
+            else
+            {
+                swprintf(wszTarget, 159, L"%ls's %ls", wszPlr, wszBaseLine);
+                wcsncpy(wszBaseLine, wszTarget, nBaseCap - 1);
+            }
+        }
+    }
+}
+
+struct BridgeTooltipLineBufStrc
+{
+    wchar_t aLines[48][160];
+    int32_t nCount;
+
+    void PushSingle(int32_t nColor, const wchar_t* wszLine)
+    {
+        if (!wszLine || !wszLine[0] || nCount >= 48)
+            return;
+        wchar_t* pDst = aLines[nCount];
+        size_t o = 0;
+        if (wszLine[0] != 0x00FF)
+        {
+            pDst[o++] = static_cast<wchar_t>(0x00FF);
+            pDst[o++] = L'c';
+            pDst[o++] = static_cast<wchar_t>(L'0' + (nColor & 0x0F));
+        }
+        for (size_t i = 0; wszLine[i] != 0 && o < 158; ++i)
+        {
+            if (wszLine[i] != L'\r')
+                pDst[o++] = wszLine[i];
+        }
+        pDst[o] = 0;
+        if (o > 3 || (wszLine[0] == 0x00FF && o > 3))
+            ++nCount;
+    }
+
+    void PushMultilineTopToBottom(int32_t nDefaultColor, const wchar_t* wszText)
+    {
+        if (!wszText || !wszText[0])
+            return;
+        int32_t nCurColor = nDefaultColor;
+        wchar_t wszSeg[160] = {};
+        size_t s = 0;
+        for (size_t i = 0; ; ++i)
+        {
+            const wchar_t wc = wszText[i];
+            if (wc == 0 || wc == L'\n')
+            {
+                wszSeg[s] = 0;
+                if (s > 0)
+                    PushSingle(nCurColor, wszSeg);
+                s = 0;
+                if (wc == 0)
+                    break;
+            }
+            else
+            {
+                if (wc == 0x00FF && wszText[i + 1] == L'c' && wszText[i + 2] >= L'0' && wszText[i + 2] <= L'9')
+                {
+                    nCurColor = wszText[i + 2] - L'0';
+                }
+                if (s < 154)
+                    wszSeg[s++] = wc;
+            }
+        }
+    }
+
+    void EmitReversedForD2Win(Unicode* wszOut, int32_t nMaxChars) const
+    {
+        if (!wszOut || nMaxChars <= 0)
+            return;
+        wchar_t* pOut = reinterpret_cast<wchar_t*>(wszOut);
+        pOut[0] = 0;
+        if (nCount <= 0)
+            return;
+        const int32_t nSafeMax = (nMaxChars > 1000) ? 1000 : (nMaxChars - 1);
+        int32_t nPos = 0;
+        for (int32_t i = nCount - 1; i >= 0; --i)
+        {
+            const int32_t nLen = static_cast<int32_t>(wcslen(aLines[i]));
+            if (nPos + nLen + 2 >= nSafeMax)
+                break;
+            if (nPos > 0)
+                pOut[nPos++] = L'\n';
+            memcpy(pOut + nPos, aLines[i], static_cast<size_t>(nLen) * sizeof(wchar_t));
+            nPos += nLen;
+        }
+        pOut[nPos] = 0;
+    }
+};
+
+static void Bridge_FormatTblTemplate(
+    wchar_t* wszOut,
+    size_t nOutCap,
+    const wchar_t* wszFmt,
+    int32_t nInt1,
+    int32_t nInt2,
+    const wchar_t* wszStr1,
+    const wchar_t* wszStr2)
+{
+    wszOut[0] = 0;
+    if (!wszFmt || !wszFmt[0] || nOutCap < 2)
+        return;
+    int32_t nIntIdx = 0;
+    int32_t nStrIdx = 0;
+    size_t o = 0;
+    for (size_t i = 0; wszFmt[i] != 0 && o + 1 < nOutCap; ++i)
+    {
+        if (wszFmt[i] == L'%' && wszFmt[i + 1] != 0)
+        {
+            if (wszFmt[i + 1] == L'%')
+            {
+                wszOut[o++] = L'%';
+                ++i;
+                continue;
+            }
+            bool bPlus = false;
+            size_t j = i + 1;
+            if (wszFmt[j] == L'+')
+            {
+                bPlus = true;
+                ++j;
+            }
+            while (wszFmt[j] >= L'0' && wszFmt[j] <= L'9')
+                ++j;
+            if (wszFmt[j] == L'l')
+                ++j;
+            if (wszFmt[j] == L'd' || wszFmt[j] == L'i' || wszFmt[j] == L'u')
+            {
+                const int32_t v = (nIntIdx++ == 0) ? nInt1 : nInt2;
+                wchar_t wszNum[32] = {};
+                if (bPlus && v >= 0)
+                    swprintf(wszNum, 31, L"+%d", v);
+                else
+                    swprintf(wszNum, 31, L"%d", v);
+                for (size_t k = 0; wszNum[k] && o + 1 < nOutCap; ++k)
+                    wszOut[o++] = wszNum[k];
+                i = j;
+                continue;
+            }
+            if (wszFmt[j] == L's')
+            {
+                const wchar_t* s = (nStrIdx++ == 0) ? wszStr1 : wszStr2;
+                if (s)
+                {
+                    for (size_t k = 0; s[k] && o + 1 < nOutCap; ++k)
+                        wszOut[o++] = s[k];
+                }
+                i = j;
+                continue;
+            }
+        }
+        wszOut[o++] = wszFmt[i];
+    }
+    wszOut[o] = 0;
+}
+
+static const wchar_t* Bridge_GetSkillNameWStr(int32_t nSkillId, int32_t* pOutCharClass)
+{
+    if (pOutCharClass)
+        *pOutCharClass = -1;
+    if (!sgptDataTables || !sgptDataTables->pSkillsTxt || !sgptDataTables->pSkillDescTxt)
+        return L"";
+    if (nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+        return L"";
+    const D2SkillsTxt& rSk = sgptDataTables->pSkillsTxt[nSkillId];
+    if (pOutCharClass)
+        *pOutCharClass = rSk.nCharClass;
+    if (rSk.wSkillDesc < 0 || rSk.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount)
+        return L"";
+    return Bridge_GetTblWStr(sgptDataTables->pSkillDescTxt[rSk.wSkillDesc].wStrName);
+}
+
+static bool Bridge_FormatSingleStatDescLine(
+    D2UnitStrc* pItem,
+    int32_t nStatId,
+    int32_t nLayer,
+    int32_t nRawValue,
+    uint8_t nDescFunc,
+    uint8_t nDescVal,
+    uint16_t wStrPos,
+    uint16_t wStrNeg,
+    uint16_t wStr2,
+    wchar_t* wszOut,
+    size_t nOutCap)
+{
+    wszOut[0] = 0;
+    if (nDescFunc == 0 || !sgptDataTables || nStatId < 0 || nStatId >= sgptDataTables->nItemStatCostTxtRecordCount)
+        return false;
+
+    const D2ItemStatCostTxt& rCost = sgptDataTables->pItemStatCostTxt[nStatId];
+    int32_t nVal = nRawValue;
+    if (rCost.nValShift > 0 && rCost.nValShift < 31)
+        nVal >>= rCost.nValShift;
+    if (rCost.nOp >= 2 && rCost.nOp <= 5)
+    {
+        const int32_t nBase = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, rCost.wOpBase, 0) : 1;
+        nVal = (nVal * nBase) >> rCost.nOpParam;
+    }
+    if (nVal == 0 && rCost.nKeepZero == 0 && nDescFunc != 12)
+        return false;
+
+    const wchar_t* wszMain = Bridge_GetTblWStr((nVal >= 0) ? wStrPos : (wStrNeg ? wStrNeg : wStrPos));
+    const wchar_t* wszExtra = wStr2 ? Bridge_GetTblWStr(wStr2) : L"";
+
+    auto EmitWithDescVal = [&](const wchar_t* wszNumPart, const wchar_t* wszSuffix2) {
+        if (nDescVal == 0 || !wszNumPart[0])
+        {
+            if (wszSuffix2 && wszSuffix2[0])
+                swprintf(wszOut, nOutCap, L"%ls %ls", wszMain, wszSuffix2);
+            else
+                wcsncpy(wszOut, wszMain, nOutCap - 1);
+        }
+        else if (nDescVal == 1)
+        {
+            if (wszSuffix2 && wszSuffix2[0])
+                swprintf(wszOut, nOutCap, L"%ls %ls %ls", wszNumPart, wszMain, wszSuffix2);
+            else
+                swprintf(wszOut, nOutCap, L"%ls %ls", wszNumPart, wszMain);
+        }
+        else
+        {
+            if (wszSuffix2 && wszSuffix2[0])
+                swprintf(wszOut, nOutCap, L"%ls %ls %ls", wszMain, wszNumPart, wszSuffix2);
+            else
+                swprintf(wszOut, nOutCap, L"%ls %ls", wszMain, wszNumPart);
+        }
+    };
+
+    wchar_t wszNum[32] = {};
+    switch (nDescFunc)
+    {
+    case 1:
+        swprintf(wszNum, 31, (nVal >= 0) ? L"+%d" : L"%d", nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 2:
+        swprintf(wszNum, 31, L"%d%%", nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 3:
+        swprintf(wszNum, 31, L"%d", nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 4:
+        swprintf(wszNum, 31, (nVal >= 0) ? L"+%d%%" : L"%d%%", nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 5:
+        swprintf(wszNum, 31, L"%d%%", (nVal * 100) / 128);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 6:
+        swprintf(wszNum, 31, (nVal >= 0) ? L"+%d" : L"%d", nVal);
+        EmitWithDescVal(wszNum, wszExtra);
+        return wszOut[0] != 0;
+    case 7:
+        swprintf(wszNum, 31, L"%d%%", nVal);
+        EmitWithDescVal(wszNum, wszExtra);
+        return wszOut[0] != 0;
+    case 8:
+        swprintf(wszNum, 31, (nVal >= 0) ? L"+%d%%" : L"%d%%", nVal);
+        EmitWithDescVal(wszNum, wszExtra);
+        return wszOut[0] != 0;
+    case 9:
+        swprintf(wszNum, 31, L"%d", nVal);
+        EmitWithDescVal(wszNum, wszExtra);
+        return wszOut[0] != 0;
+    case 11:
+    {
+        const int32_t nSec = (nVal > 0) ? ((2500 + nVal / 2) / nVal) : 20;
+        if (wcschr(wszMain, L'%'))
+            Bridge_FormatTblTemplate(wszOut, nOutCap, wszMain, 1, nSec, L"", L"");
+        else
+            swprintf(wszOut, nOutCap, L"Repairs 1 durability in %d seconds", nSec);
+        return wszOut[0] != 0;
+    }
+    case 12:
+        if (nVal > 1)
+        {
+            swprintf(wszNum, 31, L"+%d", nVal);
+            EmitWithDescVal(wszNum, nullptr);
+        }
+        else
+        {
+            wcsncpy(wszOut, wszMain, nOutCap - 1);
+        }
+        return wszOut[0] != 0;
+    case 13:
+    {
+        if (nLayer >= 0 && nLayer < 7 && sgptDataTables->pCharStatsTxt)
+        {
+            const wchar_t* wszClsSkills = Bridge_GetTblWStr(sgptDataTables->pCharStatsTxt[nLayer].wStrAllSkills);
+            if (wcschr(wszClsSkills, L'%'))
+                Bridge_FormatTblTemplate(wszOut, nOutCap, wszClsSkills, nVal, 0, L"", L"");
+            else if (wszClsSkills[0])
+                swprintf(wszOut, nOutCap, L"+%d %ls", nVal, wszClsSkills);
+        }
+        return wszOut[0] != 0;
+    }
+    case 14:
+    {
+        const int32_t nCls = nLayer >> 3;
+        const int32_t nTab = nLayer & 7;
+        if (nCls >= 0 && nCls < 7 && nTab >= 0 && nTab < 3 && sgptDataTables->pCharStatsTxt)
+        {
+            const wchar_t* wszTab = Bridge_GetTblWStr(sgptDataTables->pCharStatsTxt[nCls].wStrSkillTab[nTab]);
+            const wchar_t* wszOnly = Bridge_GetTblWStr(sgptDataTables->pCharStatsTxt[nCls].wStrClassOnly);
+            wchar_t wszPart[128] = {};
+            if (wcschr(wszTab, L'%'))
+                Bridge_FormatTblTemplate(wszPart, 127, wszTab, nVal, 0, L"", L"");
+            else if (wszTab[0])
+                swprintf(wszPart, 127, L"+%d %ls", nVal, wszTab);
+            if (wszPart[0])
+            {
+                if (wszOnly[0])
+                    swprintf(wszOut, nOutCap, L"%ls %ls", wszPart, wszOnly);
+                else
+                    wcsncpy(wszOut, wszPart, nOutCap - 1);
+            }
+        }
+        return wszOut[0] != 0;
+    }
+    case 15:
+    {
+        const int32_t nSkId = nLayer >> 6;
+        const int32_t nSkLvl = nLayer & 0x3F;
+        const wchar_t* wszSkName = Bridge_GetSkillNameWStr(nSkId, nullptr);
+        if (wszMain[0] && wcschr(wszMain, L'%'))
+            Bridge_FormatTblTemplate(wszOut, nOutCap, wszMain, nVal, nSkLvl, wszSkName, L"");
+        else if (wszSkName[0])
+            swprintf(wszOut, nOutCap, L"%d%% Chance to cast Level %d %ls", nVal, nSkLvl, wszSkName);
+        return wszOut[0] != 0;
+    }
+    case 16:
+    {
+        const wchar_t* wszSkName = Bridge_GetSkillNameWStr(nLayer, nullptr);
+        if (wszMain[0] && wcschr(wszMain, L'%'))
+            Bridge_FormatTblTemplate(wszOut, nOutCap, wszMain, nVal, 0, wszSkName, L"");
+        else if (wszSkName[0])
+            swprintf(wszOut, nOutCap, L"Level %d %ls Aura When Equipped", nVal, wszSkName);
+        return wszOut[0] != 0;
+    }
+    case 19:
+        if (wszMain[0] && wcschr(wszMain, L'%'))
+            Bridge_FormatTblTemplate(wszOut, nOutCap, wszMain, nVal, 0, L"", L"");
+        else if (wszMain[0])
+            swprintf(wszOut, nOutCap, L"%ls %d", wszMain, nVal);
+        return wszOut[0] != 0;
+    case 20:
+        swprintf(wszNum, 31, L"%d%%", -nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 21:
+        swprintf(wszNum, 31, L"%d", -nVal);
+        EmitWithDescVal(wszNum, nullptr);
+        return wszOut[0] != 0;
+    case 24:
+    {
+        const int32_t nSkId = nLayer >> 6;
+        const int32_t nSkLvl = nLayer & 0x3F;
+        const int32_t nCurChg = nRawValue & 0xFF;
+        const int32_t nMaxChg = (nRawValue >> 8) & 0xFF;
+        const wchar_t* wszSkName = Bridge_GetSkillNameWStr(nSkId, nullptr);
+        if (wszSkName[0])
+            swprintf(wszOut, nOutCap, L"Level %d %ls (%d/%d Charges)", nSkLvl, wszSkName, nCurChg, nMaxChg);
+        return wszOut[0] != 0;
+    }
+    case 27:
+    {
+        int32_t nSkClass = -1;
+        const wchar_t* wszSkName = Bridge_GetSkillNameWStr(nLayer, &nSkClass);
+        const wchar_t* wszOnly = (nSkClass >= 0 && nSkClass < 7 && sgptDataTables->pCharStatsTxt)
+            ? Bridge_GetTblWStr(sgptDataTables->pCharStatsTxt[nSkClass].wStrClassOnly)
+            : L"";
+        if (wszSkName[0])
+        {
+            if (wszOnly[0])
+                swprintf(wszOut, nOutCap, L"+%d to %ls %ls", nVal, wszSkName, wszOnly);
+            else
+                swprintf(wszOut, nOutCap, L"+%d to %ls", nVal, wszSkName);
+        }
+        return wszOut[0] != 0;
+    }
+    case 28:
+    {
+        const wchar_t* wszSkName = Bridge_GetSkillNameWStr(nLayer, nullptr);
+        if (wszSkName[0])
+            swprintf(wszOut, nOutCap, L"+%d to %ls", nVal, wszSkName);
+        return wszOut[0] != 0;
+    }
+    default:
+        (void)pItem;
+        if (wszMain[0])
+        {
+            swprintf(wszNum, 31, L"%+d", nVal);
+            EmitWithDescVal(wszNum, nullptr);
+        }
+        return wszOut[0] != 0;
+    }
+}
+
+struct BridgeAggStatEntryStrc
+{
+    int32_t nStatId;
+    int32_t nLayer;
+    int32_t nValue;
+    int32_t nPriority;
+};
+
+static void Bridge_AccumulateStatList(
+    const D2StatListStrc* pList,
+    BridgeAggStatEntryStrc* pEntries,
+    int32_t* pCount,
+    int32_t nMaxEntries)
+{
+    if (!pList || !sgptDataTables || !sgptDataTables->pItemStatCostTxt)
+        return;
+    for (int32_t i = 0; i < pList->Stats.nStatCount; ++i)
+    {
+        const D2StatStrc& s = pList->Stats.pStat[i];
+        const int32_t nStatId = s.nStat;
+        const int32_t nLayer = s.nLayer;
+        if (nStatId < 0 || nStatId >= sgptDataTables->nItemStatCostTxtRecordCount)
+            continue;
+        bool bMerged = false;
+        for (int32_t k = 0; k < *pCount; ++k)
+        {
+            if (pEntries[k].nStatId == nStatId && pEntries[k].nLayer == nLayer)
+            {
+                pEntries[k].nValue += s.nValue;
+                bMerged = true;
+                break;
+            }
+        }
+        if (!bMerged && *pCount < nMaxEntries)
+        {
+            pEntries[*pCount].nStatId = nStatId;
+            pEntries[*pCount].nLayer = nLayer;
+            pEntries[*pCount].nValue = s.nValue;
+            pEntries[*pCount].nPriority = sgptDataTables->pItemStatCostTxt[nStatId].nDescPriority;
+            ++(*pCount);
+        }
+    }
+}
+
+static void Bridge_AppendFormattedStatEntries(
+    D2UnitStrc* pItem,
+    BridgeAggStatEntryStrc* aStats,
+    int32_t nStatCount,
+    int32_t nTextColor,
+    bool* pbHasUndeadBonus,
+    BridgeTooltipLineBufStrc* pLines)
+{
+    if (nStatCount <= 0 || !sgptDataTables || !sgptDataTables->pItemStatCostTxt)
+        return;
+
+    auto FindStatVal = [&](int32_t id) -> int32_t {
+        for (int32_t i = 0; i < nStatCount; ++i)
+        {
+            if (aStats[i].nStatId == id && aStats[i].nLayer == 0)
+                return aStats[i].nValue;
+        }
+        return 0;
+    };
+
+    // Sort descending by nDescPriority (higher priority appears higher in tooltip)
+    for (int32_t i = 0; i < nStatCount - 1; ++i)
+    {
+        for (int32_t j = i + 1; j < nStatCount; ++j)
+        {
+            if (aStats[j].nPriority > aStats[i].nPriority)
+            {
+                BridgeAggStatEntryStrc tmp = aStats[i];
+                aStats[i] = aStats[j];
+                aStats[j] = tmp;
+            }
+        }
+    }
+
+    bool bConsumed[96] = {};
+
+    // Check dgrp groups (e.g., All Resistances when Fire/Light/Cold/Poison resist are equal and non-zero)
+    bool bGroupDone[16] = {};
+    for (int32_t i = 0; i < nStatCount && i < 96; ++i)
+    {
+        const D2ItemStatCostTxt& rC = sgptDataTables->pItemStatCostTxt[aStats[i].nStatId];
+        if (rC.wDescGrp > 0 && rC.wDescGrp < 16 && !bGroupDone[rC.wDescGrp])
+        {
+            bGroupDone[rC.wDescGrp] = true;
+            bool bAllPresentAndEqual = true;
+            const int32_t nRefVal = aStats[i].nValue;
+            if (nRefVal == 0)
+                continue;
+            for (int32_t s = 0; s < sgptDataTables->nItemStatCostTxtRecordCount; ++s)
+            {
+                if (sgptDataTables->pItemStatCostTxt[s].wDescGrp == rC.wDescGrp)
+                {
+                    if (FindStatVal(s) != nRefVal)
+                    {
+                        bAllPresentAndEqual = false;
+                        break;
+                    }
+                }
+            }
+            if (bAllPresentAndEqual)
+            {
+                wchar_t wszGrp[160] = {};
+                if (Bridge_FormatSingleStatDescLine(
+                        pItem, aStats[i].nStatId, 0, nRefVal,
+                        rC.nDescGrpFunc, rC.nDescGrpVal,
+                        rC.wDescGrpStrPos, rC.wDescGrpStrNeg, rC.wDescGrpStr2,
+                        wszGrp, 159))
+                {
+                    pLines->PushSingle(nTextColor, wszGrp);
+                    for (int32_t k = 0; k < nStatCount && k < 96; ++k)
+                    {
+                        if (sgptDataTables->pItemStatCostTxt[aStats[k].nStatId].wDescGrp == rC.wDescGrp)
+                            bConsumed[k] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    bool bDidEdPct = false, bDidPhysPair = false, bDidFirePair = false, bDidLtngPair = false, bDidMagPair = false, bDidColdPair = false, bDidPoisPair = false;
+
+    for (int32_t i = 0; i < nStatCount && i < 96; ++i)
+    {
+        if (bConsumed[i])
+            continue;
+        const int32_t id = aStats[i].nStatId;
+        const int32_t lay = aStats[i].nLayer;
+        const int32_t val = aStats[i].nValue;
+
+        if (id == STAT_ITEM_UNDEADDAMAGE_PERCENT && pbHasUndeadBonus)
+            *pbHasUndeadBonus = true;
+
+        // Enhanced Damage pair (STAT_ITEM_MAXDAMAGE_PERCENT = 17, STAT_ITEM_MINDAMAGE_PERCENT = 18)
+        if (id == STAT_ITEM_MAXDAMAGE_PERCENT || id == STAT_ITEM_MINDAMAGE_PERCENT)
+        {
+            if (!bDidEdPct)
+            {
+                bDidEdPct = true;
+                const int32_t nEd = FindStatVal(STAT_ITEM_MAXDAMAGE_PERCENT);
+                const int32_t nEdVal = (nEd != 0) ? nEd : val;
+                if (nEdVal != 0)
+                {
+                    wchar_t wszEd[128] = {};
+                    swprintf(wszEd, 127, L"%+d%% Enhanced Damage", nEdVal);
+                    pLines->PushSingle(nTextColor, wszEd);
+                }
+            }
+            continue;
+        }
+        // Flat physical damage pair on magic list (21..24)
+        if (id == STAT_MINDAMAGE || id == STAT_MAXDAMAGE || id == STAT_SECONDARY_MINDAMAGE || id == STAT_SECONDARY_MAXDAMAGE)
+        {
+            if (!bDidPhysPair)
+            {
+                bDidPhysPair = true;
+                int32_t nMin = FindStatVal(STAT_MINDAMAGE);
+                int32_t nMax = FindStatVal(STAT_MAXDAMAGE);
+                if (nMin == 0) nMin = FindStatVal(STAT_SECONDARY_MINDAMAGE);
+                if (nMax == 0) nMax = FindStatVal(STAT_SECONDARY_MAXDAMAGE);
+                wchar_t wszD[128] = {};
+                if (nMin > 0 && nMax > 0)
+                {
+                    if (nMin == nMax) swprintf(wszD, 127, L"+%d Damage", nMin);
+                    else swprintf(wszD, 127, L"Adds %d-%d Damage", nMin, nMax);
+                }
+                else if (nMin > 0)
+                    swprintf(wszD, 127, L"+%d to Minimum Damage", nMin);
+                else if (nMax > 0)
+                    swprintf(wszD, 127, L"+%d to Maximum Damage", nMax);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+        // Fire damage (48, 49)
+        if (id == STAT_FIREMINDAM || id == STAT_FIREMAXDAM)
+        {
+            if (!bDidFirePair)
+            {
+                bDidFirePair = true;
+                const int32_t nMin = FindStatVal(STAT_FIREMINDAM), nMax = FindStatVal(STAT_FIREMAXDAM);
+                wchar_t wszD[128] = {};
+                if (nMin > 0 && nMax > nMin) swprintf(wszD, 127, L"Adds %d-%d Fire Damage", nMin, nMax);
+                else if (nMax > 0 || nMin > 0) swprintf(wszD, 127, L"+%d Fire Damage", (nMax > 0) ? nMax : nMin);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+        // Lightning damage (50, 51)
+        if (id == STAT_LIGHTMINDAM || id == STAT_LIGHTMAXDAM)
+        {
+            if (!bDidLtngPair)
+            {
+                bDidLtngPair = true;
+                const int32_t nMin = FindStatVal(STAT_LIGHTMINDAM), nMax = FindStatVal(STAT_LIGHTMAXDAM);
+                wchar_t wszD[128] = {};
+                if (nMin > 0 && nMax > nMin) swprintf(wszD, 127, L"Adds %d-%d Lightning Damage", nMin, nMax);
+                else if (nMax > 0 || nMin > 0) swprintf(wszD, 127, L"+%d Lightning Damage", (nMax > 0) ? nMax : nMin);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+        // Magic damage (52, 53)
+        if (id == STAT_MAGICMINDAM || id == STAT_MAGICMAXDAM)
+        {
+            if (!bDidMagPair)
+            {
+                bDidMagPair = true;
+                const int32_t nMin = FindStatVal(STAT_MAGICMINDAM), nMax = FindStatVal(STAT_MAGICMAXDAM);
+                wchar_t wszD[128] = {};
+                if (nMin > 0 && nMax > nMin) swprintf(wszD, 127, L"Adds %d-%d Magic Damage", nMin, nMax);
+                else if (nMax > 0 || nMin > 0) swprintf(wszD, 127, L"+%d Magic Damage", (nMax > 0) ? nMax : nMin);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+        // Cold damage (54, 55, 56)
+        if (id == STAT_COLDMINDAM || id == STAT_COLDMAXDAM || id == STAT_COLDLENGTH)
+        {
+            if (!bDidColdPair)
+            {
+                bDidColdPair = true;
+                const int32_t nMin = FindStatVal(STAT_COLDMINDAM), nMax = FindStatVal(STAT_COLDMAXDAM);
+                wchar_t wszD[128] = {};
+                if (nMin > 0 && nMax > nMin) swprintf(wszD, 127, L"Adds %d-%d Cold Damage", nMin, nMax);
+                else if (nMax > 0 || nMin > 0) swprintf(wszD, 127, L"+%d Cold Damage", (nMax > 0) ? nMax : nMin);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+        // Poison damage (57, 58, 59, 326)
+        if (id == STAT_POISONMINDAM || id == STAT_POISONMAXDAM || id == STAT_POISONLENGTH || id == STAT_POISON_COUNT)
+        {
+            if (!bDidPoisPair)
+            {
+                bDidPoisPair = true;
+                const int32_t nMin = FindStatVal(STAT_POISONMINDAM);
+                const int32_t nMax = FindStatVal(STAT_POISONMAXDAM);
+                int32_t nCnt = FindStatVal(STAT_POISON_COUNT);
+                int32_t nLen = FindStatVal(STAT_POISONLENGTH);
+                if (nCnt > 1 && nLen > 0) nLen /= nCnt;
+                if (nLen <= 0) nLen = 50;
+                const int32_t nTotalMin = (nMin * nLen + 128) >> 8;
+                const int32_t nTotalMax = (nMax * nLen + 128) >> 8;
+                const int32_t nSec = (nLen + 12) / 25;
+                wchar_t wszD[128] = {};
+                if (nTotalMin > 0 && nTotalMax > nTotalMin)
+                    swprintf(wszD, 127, L"Adds %d-%d Poison Damage over %d seconds", nTotalMin, nTotalMax, nSec > 0 ? nSec : 1);
+                else if (nTotalMax > 0 || nTotalMin > 0)
+                    swprintf(wszD, 127, L"+%d Poison Damage over %d seconds", (nTotalMax > 0) ? nTotalMax : nTotalMin, nSec > 0 ? nSec : 1);
+                if (wszD[0]) pLines->PushSingle(nTextColor, wszD);
+            }
+            continue;
+        }
+
+        const D2ItemStatCostTxt& rCost = sgptDataTables->pItemStatCostTxt[id];
+        wchar_t wszLine[160] = {};
+        if (Bridge_FormatSingleStatDescLine(
+                pItem, id, lay, val,
+                rCost.nDescFunc, rCost.nDescVal,
+                rCost.wDescStrPos, rCost.wDescStrNeg, rCost.wDescStr2,
+                wszLine, 159))
+        {
+            pLines->PushSingle(nTextColor, wszLine);
+        }
+    }
+}
+
+void __stdcall D2Client_BuildFullItemTooltipText(
+    D2UnitStrc* pItem,
+    D2UnitStrc* pOwnerUnit,
+    BOOL bShowShopPrice,
+    int32_t nVendorId,
+    int32_t nDifficulty,
+    Unicode* wszOut,
+    int32_t nMaxChars)
+{
+    if (!wszOut || nMaxChars <= 0)
+        return;
+    wszOut[0] = 0;
+    if (!pItem || pItem->dwUnitType != UNIT_ITEM)
+        return;
+
+    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(pItem->dwClassId);
+    if (!pItemsTxt)
+        return;
+
+    BridgeTooltipLineBufStrc lines = {};
+    const int32_t nNameColor = D2Client_GetItemQualityTextColor(pItem);
+
+    wchar_t wszTitle[160] = {};
+    wchar_t wszBaseName[160] = {};
+    Bridge_BuildItemDisplayNames(pItem, wszTitle, 159, wszBaseName, 159);
+    if (wszTitle[0])
+        lines.PushSingle(nNameColor, wszTitle);
+    if (wszBaseName[0])
+        lines.PushSingle(nNameColor, wszBaseName);
+
+    // Socketed rune sequence string (e.g. "'TalEth'")
+    if (pItem->pInventory && ITEMS_CheckItemFlag(pItem, IFLAG_SOCKETED, __LINE__, __FILE__))
+    {
+        wchar_t wszRunes[96] = {};
+        size_t rPos = 0;
+        for (D2UnitStrc* pSub = INVENTORY_GetFirstItem(pItem->pInventory); pSub != nullptr; pSub = INVENTORY_GetNextItem(pSub))
+        {
+            D2UnitStrc* pChk = INVENTORY_UnitIsItem(pSub);
+            if (pChk && ITEMS_CheckItemTypeId(pChk, ITEMTYPE_RUNE))
+            {
+                D2GemsTxt* pGem = DATATBLS_GetGemsTxtRecord(pChk->dwClassId);
+                if (pGem && pGem->szLetter[0])
+                {
+                    if (rPos == 0) wszRunes[rPos++] = L'\'';
+                    for (int c = 0; c < 8 && pGem->szLetter[c] && rPos < 90; ++c)
+                        wszRunes[rPos++] = static_cast<wchar_t>(static_cast<uint8_t>(pGem->szLetter[c]));
+                }
+            }
+        }
+        if (rPos > 0)
+        {
+            wszRunes[rPos++] = L'\'';
+            wszRunes[rPos] = 0;
+            lines.PushSingle(4, wszRunes);
+        }
+    }
+
+    D2UnitStrc* pPlr = gpPlayerUnit ? gpPlayerUnit : pOwnerUnit;
+
+    // Shop Buy / Sell price line
+    if (bShowShopPrice && pPlr)
+    {
+        const BOOL bInStore = ITEMS_CheckItemFlag(pItem, IFLAG_INSTORE, __LINE__, __FILE__);
+        const int32_t nCost = ITEMS_GetTransactionCost(
+            pPlr,
+            pItem,
+            static_cast<D2C_Difficulties>(nDifficulty),
+            nullptr,
+            nVendorId,
+            bInStore ? TRANSACTIONTYPE_BUY : TRANSACTIONTYPE_SELL);
+        if (nCost > 0)
+        {
+            wchar_t wszPrice[96] = {};
+            swprintf(wszPrice, 95, bInStore ? L"Buy Cost: %d" : L"Sell Value: %d", nCost);
+            lines.PushSingle(0, wszPrice);
+        }
+    }
+
+    const int32_t nQual = ITEMS_GetItemQuality(pItem);
+    const BOOL bIdentified = ITEMS_CheckItemFlag(pItem, IFLAG_IDENTIFIED, __LINE__, __FILE__);
+
+    // Potion / Scroll / Tome / Elixir spell description lines from Items.txt (wSpellDescStr)
+    if (pItemsTxt->nSpellDesc > 0 && pItemsTxt->wSpellDescStr > 0)
+    {
+        const wchar_t* wszSpellDesc = Bridge_GetTblWStr(pItemsTxt->wSpellDescStr);
+        if (wszSpellDesc && wszSpellDesc[0])
+        {
+            lines.PushMultilineTopToBottom(0, wszSpellDesc);
+        }
+    }
+
+    // Defense
+    const int32_t nDef = STATLIST_UnitGetStatValue(pItem, STAT_ARMORCLASS, 0);
+    if (nDef > 0)
+    {
+        const bool bBlueDef = (STATLIST_UnitGetStatValue(pItem, STAT_ITEM_ARMOR_PERCENT, 0) > 0);
+        wchar_t wszDef[96] = {};
+        if (bBlueDef)
+            swprintf(wszDef, 95, L"Defense: \x00FF" L"c3%d", nDef);
+        else
+            swprintf(wszDef, 95, L"Defense: %d", nDef);
+        lines.PushSingle(0, wszDef);
+    }
+
+    // Shield Chance to Block
+    if (pItemsTxt->nBlock > 0 && ITEMS_CheckItemTypeId(pItem, ITEMTYPE_ANY_SHIELD))
+    {
+        int32_t nBlk = pItemsTxt->nBlock + STATLIST_UnitGetStatValue(pItem, STAT_TOBLOCK, 0);
+        if (pPlr && pPlr->dwUnitType == UNIT_PLAYER && sgptDataTables && sgptDataTables->pCharStatsTxt && pPlr->dwClassId < 7)
+            nBlk += sgptDataTables->pCharStatsTxt[pPlr->dwClassId].nBlockFactor;
+        if (nBlk > 75) nBlk = 75;
+        wchar_t wszBlk[96] = {};
+        swprintf(wszBlk, 95, L"Chance to Block: %d%%", nBlk);
+        lines.PushSingle(0, wszBlk);
+    }
+
+    // Weapon Throw / One-Hand / Two-Hand Damage
+    const bool bEdBoost = (STATLIST_UnitGetStatValue(pItem, STAT_ITEM_MAXDAMAGE_PERCENT, 0) > 0);
+    const int32_t nThrowMax = STATLIST_UnitGetStatValue(pItem, STAT_ITEM_THROW_MAXDAMAGE, 0);
+    if (nThrowMax > 0)
+    {
+        int32_t nThrowMin = STATLIST_UnitGetStatValue(pItem, STAT_ITEM_THROW_MINDAMAGE, 0);
+        if (nThrowMin <= 0) nThrowMin = pItemsTxt->nMinMisDam;
+        wchar_t wszTh[96] = {};
+        if (bEdBoost)
+            swprintf(wszTh, 95, L"Throw Damage: \x00FF" L"c3%d to %d", nThrowMin, nThrowMax);
+        else
+            swprintf(wszTh, 95, L"Throw Damage: %d to %d", nThrowMin, nThrowMax);
+        lines.PushSingle(0, wszTh);
+    }
+
+    const int32_t n1HMax = STATLIST_UnitGetStatValue(pItem, STAT_MAXDAMAGE, 0);
+    if (n1HMax > 0 && pItemsTxt->nMaxDam > 0)
+    {
+        int32_t n1HMin = STATLIST_UnitGetStatValue(pItem, STAT_MINDAMAGE, 0);
+        if (n1HMin <= 0) n1HMin = pItemsTxt->nMinDam;
+        wchar_t wsz1H[96] = {};
+        if (bEdBoost || n1HMax > pItemsTxt->nMaxDam)
+            swprintf(wsz1H, 95, L"One-Hand Damage: \x00FF" L"c3%d to %d", n1HMin, n1HMax);
+        else
+            swprintf(wsz1H, 95, L"One-Hand Damage: %d to %d", n1HMin, n1HMax);
+        lines.PushSingle(0, wsz1H);
+    }
+
+    const int32_t n2HMax = STATLIST_UnitGetStatValue(pItem, STAT_SECONDARY_MAXDAMAGE, 0);
+    if (n2HMax > 0 && pItemsTxt->n2HandMaxDam > 0)
+    {
+        int32_t n2HMin = STATLIST_UnitGetStatValue(pItem, STAT_SECONDARY_MINDAMAGE, 0);
+        if (n2HMin <= 0) n2HMin = pItemsTxt->n2HandMinDam;
+        wchar_t wsz2H[96] = {};
+        if (bEdBoost || n2HMax > pItemsTxt->n2HandMaxDam)
+            swprintf(wsz2H, 95, L"Two-Hand Damage: \x00FF" L"c3%d to %d", n2HMin, n2HMax);
+        else
+            swprintf(wsz2H, 95, L"Two-Hand Damage: %d to %d", n2HMin, n2HMax);
+        lines.PushSingle(0, wsz2H);
+    }
+
+    // Stackable / Tome Quantity
+    if (pItemsTxt->nStackable)
+    {
+        const int32_t nQty = STATLIST_UnitGetStatValue(pItem, STAT_QUANTITY, 0);
+        wchar_t wszQty[64] = {};
+        swprintf(wszQty, 63, L"Quantity: %d", nQty);
+        lines.PushSingle(0, wszQty);
+    }
+
+    // Durability / Indestructible
+    if (!pItemsTxt->nNoDurability)
+    {
+        if (STATLIST_UnitGetStatValue(pItem, STAT_ITEM_INDESCTRUCTIBLE, 0) > 0)
+        {
+            lines.PushSingle(3, L"Indestructible");
+        }
+        else
+        {
+            const int32_t nMaxDur = STATLIST_UnitGetStatValue(pItem, STAT_MAXDURABILITY, 0);
+            if (nMaxDur > 0)
+            {
+                const int32_t nCurDur = STATLIST_UnitGetStatValue(pItem, STAT_DURABILITY, 0);
+                wchar_t wszDur[64] = {};
+                swprintf(wszDur, 63, L"Durability: %d of %d", nCurDur, nMaxDur);
+                lines.PushSingle(nCurDur == 0 ? 1 : 0, wszDur);
+            }
+        }
+    }
+
+    // Class-specific item restriction (e.g., "(Amazon Only)", "(Sorceress Only)")
+    const int32_t nItemClass = ITEMS_GetClassOfClassSpecificItem(pItem);
+    if (nItemClass >= 0 && nItemClass < 7 && sgptDataTables && sgptDataTables->pCharStatsTxt)
+    {
+        const wchar_t* wszOnly = Bridge_GetTblWStr(sgptDataTables->pCharStatsTxt[nItemClass].wStrClassOnly);
+        if (wszOnly && wszOnly[0])
+        {
+            const bool bWrongClass = (pPlr && pPlr->dwUnitType == UNIT_PLAYER && static_cast<int32_t>(pPlr->dwClassId) != nItemClass);
+            lines.PushSingle(bWrongClass ? 1 : 0, wszOnly);
+        }
+    }
+
+    // Requirements (Dexterity, Strength, Level) — red when player lacks requirement
+    const int32_t nReqPct = STATLIST_UnitGetStatValue(pItem, STAT_ITEM_REQ_PERCENT, 0);
+    const int32_t nEthDiscount = ITEMS_CheckItemFlag(pItem, IFLAG_ETHEREAL, __LINE__, __FILE__) ? 10 : 0;
+    if (pItemsTxt->wReqDex > 0)
+    {
+        int32_t nReqDex = (static_cast<int32_t>(pItemsTxt->wReqDex) * (100 + nReqPct)) / 100 - nEthDiscount;
+        if (nReqDex > 0)
+        {
+            const bool bLack = (pPlr && STATLIST_UnitGetStatValue(pPlr, STAT_DEXTERITY, 0) < nReqDex);
+            wchar_t wszRD[64] = {};
+            swprintf(wszRD, 63, L"Required Dexterity: %d", nReqDex);
+            lines.PushSingle(bLack ? 1 : 0, wszRD);
+        }
+    }
+    if (pItemsTxt->wReqStr > 0)
+    {
+        int32_t nReqStr = (static_cast<int32_t>(pItemsTxt->wReqStr) * (100 + nReqPct)) / 100 - nEthDiscount;
+        if (nReqStr > 0)
+        {
+            const bool bLack = (pPlr && STATLIST_UnitGetStatValue(pPlr, STAT_STRENGTH, 0) < nReqStr);
+            wchar_t wszRS[64] = {};
+            swprintf(wszRS, 63, L"Required Strength: %d", nReqStr);
+            lines.PushSingle(bLack ? 1 : 0, wszRS);
+        }
+    }
+    const int32_t nReqLvl = ITEMS_GetLevelRequirement(pItem, pPlr);
+    if (nReqLvl > 1)
+    {
+        const bool bLack = (pPlr && STATLIST_UnitGetStatValue(pPlr, STAT_LEVEL, 0) < nReqLvl);
+        wchar_t wszRL[64] = {};
+        swprintf(wszRL, 63, L"Required Level: %d", nReqLvl);
+        lines.PushSingle(bLack ? 1 : 0, wszRL);
+    }
+
+    if (!bIdentified && nQual >= ITEMQUAL_MAGIC)
+    {
+        lines.PushSingle(1, L"Unidentified");
+    }
+    else
+    {
+        // Aggregate magic/staffmod/affix/runeword/socketed stats (dwFlags & 0x40, excluding 0x2000 set partial lists)
+        BridgeAggStatEntryStrc aMagStats[96] = {};
+        int32_t nMagCount = 0;
+        if (pItem->pStatListEx && STATLIST_IsExtended(pItem->pStatListEx))
+        {
+            for (D2StatListStrc* pSL = pItem->pStatListEx->pMyLastList; pSL != nullptr; pSL = pSL->pPrevLink)
+            {
+                if ((pSL->dwFlags & 0x40) != 0 && (pSL->dwFlags & 0x2000) == 0)
+                {
+                    Bridge_AccumulateStatList(pSL, aMagStats, &nMagCount, 96);
+                }
+            }
+        }
+        if (pItem->pInventory)
+        {
+            for (D2UnitStrc* pSub = INVENTORY_GetFirstItem(pItem->pInventory); pSub != nullptr; pSub = INVENTORY_GetNextItem(pSub))
+            {
+                D2UnitStrc* pChk = INVENTORY_UnitIsItem(pSub);
+                if (pChk && pChk->pStatListEx && STATLIST_IsExtended(pChk->pStatListEx))
+                {
+                    for (D2StatListStrc* pSL = pChk->pStatListEx->pMyLastList; pSL != nullptr; pSL = pSL->pPrevLink)
+                    {
+                        if ((pSL->dwFlags & 0x40) != 0)
+                        {
+                            Bridge_AccumulateStatList(pSL, aMagStats, &nMagCount, 96);
+                        }
+                    }
+                }
+            }
+        }
+
+        bool bHasUndeadBonus = false;
+        Bridge_AppendFormattedStatEntries(pItem, aMagStats, nMagCount, 3, &bHasUndeadBonus, &lines);
+
+        // Blunt weapon implicit +50% Damage to Undead (staves, wands, maces, clubs, scepters, hammers)
+        if (!bHasUndeadBonus && ITEMS_CheckItemTypeId(pItem, 57)) // ITEMTYPE_BLUNT = 57
+        {
+            lines.PushSingle(3, L"+50% Damage to Undead");
+        }
+
+        // Partial Set Item green bonuses (dwFlags & 0x2040 == 0x2040)
+        if (nQual == ITEMQUAL_SET && pItem->pStatListEx && STATLIST_IsExtended(pItem->pStatListEx))
+        {
+            BridgeAggStatEntryStrc aSetStats[48] = {};
+            int32_t nSetCount = 0;
+            for (D2StatListStrc* pSL = pItem->pStatListEx->pMyStats; pSL != nullptr; pSL = pSL->pPrevLink)
+            {
+                if ((pSL->dwFlags & 0x2000) != 0)
+                    Bridge_AccumulateStatList(pSL, aSetStats, &nSetCount, 48);
+            }
+            for (D2StatListStrc* pSL = pItem->pStatListEx->pMyLastList; pSL != nullptr; pSL = pSL->pPrevLink)
+            {
+                if ((pSL->dwFlags & 0x2000) != 0)
+                    Bridge_AccumulateStatList(pSL, aSetStats, &nSetCount, 48);
+            }
+            Bridge_AppendFormattedStatEntries(pItem, aSetStats, nSetCount, 2, nullptr, &lines);
+        }
+    }
+
+    // Ethereal & Socketed footer line
+    const BOOL bEth = ITEMS_CheckItemFlag(pItem, IFLAG_ETHEREAL, __LINE__, __FILE__);
+    const BOOL bSock = ITEMS_CheckItemFlag(pItem, IFLAG_SOCKETED, __LINE__, __FILE__);
+    const int32_t nSockets = bSock ? STATLIST_UnitGetStatValue(pItem, STAT_ITEM_NUMSOCKETS, 0) : 0;
+    if (bEth && nSockets > 0)
+    {
+        wchar_t wszES[96] = {};
+        swprintf(wszES, 95, L"Ethereal (Cannot be Repaired), Socketed (%d)", nSockets);
+        lines.PushSingle(3, wszES);
+    }
+    else if (bEth)
+    {
+        lines.PushSingle(3, L"Ethereal (Cannot be Repaired)");
+    }
+    else if (nSockets > 0)
+    {
+        wchar_t wszSk[64] = {};
+        swprintf(wszSk, 63, L"Socketed (%d)", nSockets);
+        lines.PushSingle(3, wszSk);
+    }
+
+    lines.EmitReversedForD2Win(wszOut, nMaxChars);
+}
+
 void __stdcall D2Client_DrawBeltItemHoverTooltip(struct D2UnitStrc * a0, int a1, int a2)
 {
     if (!a0 || a0->dwUnitType != UNIT_ITEM)
         return;
-    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(a0->dwClassId);
-    if (!pItemsTxt)
-        return;
-    const Unicode* pName = D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr);
-    if (pName && pName[0].ch != 0)
+    Unicode wszTip[1024] = {};
+    D2Client_BuildFullItemTooltipText(a0, gpPlayerUnit, FALSE, 148, 0, wszTip, 1024);
+    if (wszTip[0].ch != 0)
     {
-        D2Win_10127_SetFont(D2FONT_FONT16);
-        D2Win_10129_DrawFramedText(pName, a1, a2 - 20, 0, 0);
+        D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
+        D2Win_10129_DrawFramedText(wszTip, a1, a2 - 12, 0, 1);
     }
 }
 void __fastcall D2Client_DrawSkillQuantityOverlay(struct D2SkillStrc * a0, int a1, int a2)
@@ -3183,27 +4387,14 @@ void __fastcall ITEM_BuildGroundLabelText(struct D2UnitStrc * a0, struct Unicode
     if (!a1 || a2 <= 0) return;
     a1[0] = 0;
     if (!a0 || a0->dwUnitType != UNIT_ITEM) return;
-    D2ItemsTxt* pItemsTxt = DATATBLS_GetItemsTxtRecord(a0->dwClassId);
-    if (!pItemsTxt) return;
-    const Unicode* pBase = pItemsTxt->wNameStr ? D2LANG_GetStringFromTblIndex(pItemsTxt->wNameStr) : nullptr;
-    if (pItemsTxt->dwCode == 0x20646C67u) // 'gld '
+    wchar_t wszTitle[160] = {};
+    wchar_t wszBase[160] = {};
+    Bridge_BuildItemDisplayNames(a0, wszTitle, 159, wszBase, 159);
+    const wchar_t* pChosen = wszTitle[0] ? wszTitle : wszBase;
+    if (pChosen[0])
     {
-        int32_t nGold = STATLIST_UnitGetStatValue(a0, STAT_GOLD, 0);
-        wchar_t wszBuf[128] = {};
-        if (nGold > 0 && pBase && pBase[0])
-            swprintf(wszBuf, 128, L"%d %ls", nGold, (const wchar_t*)pBase);
-        else if (nGold > 0)
-            swprintf(wszBuf, 128, L"%d Gold", nGold);
-        else if (pBase)
-            wcsncpy(wszBuf, (const wchar_t*)pBase, 127);
-        wcsncpy((wchar_t*)a1, wszBuf, (size_t)(a2 - 1));
-        ((wchar_t*)a1)[a2 - 1] = 0;
-        return;
-    }
-    if (pBase)
-    {
-        wcsncpy((wchar_t*)a1, (const wchar_t*)pBase, (size_t)(a2 - 1));
-        ((wchar_t*)a1)[a2 - 1] = 0;
+        wcsncpy(reinterpret_cast<wchar_t*>(a1), pChosen, static_cast<size_t>(a2 - 1));
+        reinterpret_cast<wchar_t*>(a1)[a2 - 1] = 0;
     }
 }
 void __fastcall ITEM_FreeClientItem(struct D2UnitStrc * a0)
@@ -3575,11 +4766,9 @@ static void __fastcall Bridge_ClientPlayerStatChangeCallback(
         else if (pSkill != nullptr)
         {
             SKILLS_RefreshSkill(pOwner, nSkillId);
-            if (!SKILLS_GetSkillLevel(pOwner, pSkill, FALSE))
-            {
-                SKILLS_AssignSkill(pOwner, nSkillId, 0, TRUE, __FILE__, __LINE__);
-            }
-            if (!SKILLS_GetSkillLevel(pOwner, pSkill, TRUE))
+            const int32_t nBaseLvl = SKILLS_GetSkillLevel(pOwner, pSkill, FALSE);
+            const int32_t nTotalLvl = SKILLS_GetSkillLevel(pOwner, pSkill, TRUE);
+            if (nTotalLvl <= 0)
             {
                 if (UNITS_GetLeftSkill(pOwner) == pSkill)
                 {
@@ -3589,6 +4778,10 @@ static void __fastcall Bridge_ClientPlayerStatChangeCallback(
                 {
                     SKILLS_SetRightActiveSkill(pOwner, 0, D2UnitInvalidGUID);
                 }
+            }
+            if (nBaseLvl <= 0 && nTotalLvl <= 0)
+            {
+                SKILLS_AssignSkill(pOwner, nSkillId, 0, TRUE, __FILE__, __LINE__);
             }
         }
     }

@@ -980,20 +980,21 @@ static void __fastcall SCMD_Handler_NoOp(uint8_t* pPacket)
 
 static void __fastcall SCMD_Handler21_UpdateSkill(uint8_t* pPacket)
 {
-    // D2GSPacketSrv21 (12B): [0]=0x21, [1]=nUnitType, [2]=unk, [3..6]=dwGUID, [7..8]=wSkillId, [9]=nBaseLvl, [10]=nBonusLvl
+    // D2GSPacketSrv21 (12B): [0]=0x21, [1]=nUnitType, [2]=bRemove, [3..6]=dwGUID, [7..8]=wSkillId, [9]=nBaseLvl, [10]=nBonusLvl
     const uint8_t  nUnitType  = pPacket[1];
+    const uint8_t  bRemove    = pPacket[2];
     const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[3]);
     const uint16_t wSkillId   = *reinterpret_cast<uint16_t*>(&pPacket[7]);
     const uint8_t  nBaseLevel = pPacket[9];
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
-    if (pUnit == nullptr)
+    if (pUnit == nullptr && nUnitType == UNIT_PLAYER)
     {
         pUnit = UNIT_GetClientPlayer();
     }
     if (pUnit != nullptr)
     {
-        SKILLS_AssignSkill(pUnit, wSkillId, nBaseLevel, FALSE, __FILE__, __LINE__);
+        SKILLS_AssignSkill(pUnit, wSkillId, nBaseLevel, bRemove != 0, __FILE__, __LINE__);
     }
 }
 
@@ -1040,7 +1041,7 @@ static void __fastcall SCMD_Handler23_SetSkill(uint8_t* pPacket)
     }
     if (pUnit != nullptr)
     {
-        if (SKILLS_GetSkillById(pUnit, wSkillId, nItemGUID) == nullptr)
+        if (wSkillId > 0 && SKILLS_GetSkillById(pUnit, wSkillId, nItemGUID) == nullptr)
         {
             SKILLS_AddSkill(pUnit, wSkillId);
         }
