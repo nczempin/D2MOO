@@ -300,6 +300,7 @@ static D2CellFileStrc* g_pPartyBoxesCel = nullptr;         // 0x6FBCC19C
 static D2CellFileStrc* g_pPartyPanelCel = nullptr;         // 0x6FBCC1A0
 static D2CellFileStrc* g_pPartyCharsCel = nullptr;         // 0x6FBCC1A4
 static D2CellFileStrc* g_pPartyBtn2Cel  = nullptr;         // 0x6FBCC1AC
+static D2CellFileStrc* g_pPartyCloseCel = nullptr;         // 0x6FBCBD4C
 static int32_t g_bPartyNeedRefresh      = 0;               // 0x6FBCC1B0
 static int32_t g_bPartyCloseBtnPressed  = 0;               // 0x6FBCC1B4
 static int32_t g_bPartyLeaveBtnPressed  = 0;               // 0x6FBCC1B8
@@ -380,30 +381,30 @@ Unicode* __fastcall PARTY_GetClassString(int32_t nClassId)
 {
     switch (nClassId)
     {
-    case 0: return D2LANG_GetStringFromTblIndex(0x0FA7); // Amazon
-    case 1: return D2LANG_GetStringFromTblIndex(0x0FA6); // Sorceress
-    case 2: return D2LANG_GetStringFromTblIndex(0x0FA5); // Necromancer
-    case 3: return D2LANG_GetStringFromTblIndex(0x0FA4); // Paladin
-    case 4: return D2LANG_GetStringFromTblIndex(0x0FA3); // Barbarian
-    case 5: return D2LANG_GetStringFromTblIndex(0x5212); // Druid
-    case 6: return D2LANG_GetStringFromTblIndex(0x5213); // Assassin
+    case 0: return D2LANG_GetStringFromTblIndex(0x0FAB); // Amazon (4011)
+    case 1: return D2LANG_GetStringFromTblIndex(0x0FAA); // Sorceress (4010)
+    case 2: return D2LANG_GetStringFromTblIndex(0x0FA9); // Necromancer (4009)
+    case 3: return D2LANG_GetStringFromTblIndex(0x0FA8); // Paladin (4008)
+    case 4: return D2LANG_GetStringFromTblIndex(0x0FA7); // Barbarian (4007)
+    case 5: return D2LANG_GetStringFromTblIndex(0x0FAC); // Druid (4012)
+    case 6: return D2LANG_GetStringFromTblIndex(0x0FAD); // Assassin (4013)
     default:
-        FOG_DisplayHalt(FOG_GetErrorLocation(188), "..\\Source\\D2Client\\UI\\Party.cpp", 188);
-        exit(-1);
-        return nullptr;
+        return D2LANG_GetStringFromTblIndex(0x0FAB);
     }
 }
 
-// 1.12a: 0x6FB0FE90
+// 1.12a: 0x6FB11060
 // Calling convention: __stdcall
 void __stdcall PARTY_LoadCellFiles()
 {
-    char szBtnPath[28];
-    strcpy(szBtnPath, "UI\\FrontEnd\\Button2");
-    g_pPartyBtn2Cel = UI_LoadPanelCellFile(szBtnPath);
-    g_pPartyPanelCel = UI_LoadPanelCellFile("panel\\party");
-    g_pPartyBoxesCel = UI_LoadPanelCellFile("panel\\pboxes");
-    g_pPartyCharsCel = UI_LoadPanelCellFile("panel\\pchars");
+    g_pPartyPanelCel = UI_LoadPanelCellFile("Menu\\party");
+    g_pPartyBtn2Cel  = UI_LoadPanelCellFile("Menu\\partybuttons");
+    g_pPartyBoxesCel = UI_LoadPanelCellFile("Menu\\partyboxes");
+    g_pPartyCharsCel = UI_LoadPanelCellFile("Menu\\partybar");
+    if (!g_pPartyCloseCel)
+    {
+        g_pPartyCloseCel = UI_LoadPanelCellFile("Panel\\buysellbtn");
+    }
 }
 
 // 1.12a: 0x6FB0FF50
@@ -419,10 +420,10 @@ void __stdcall PARTY_FreeNodesAndCellFiles()
     }
     g_pPartyNodesHead = nullptr;
 
-    D2CellFileStrc** ppCells[4] = {
-        &g_pPartyBoxesCel, &g_pPartyPanelCel, &g_pPartyCharsCel, &g_pPartyBtn2Cel
+    D2CellFileStrc** ppCells[5] = {
+        &g_pPartyBoxesCel, &g_pPartyPanelCel, &g_pPartyCharsCel, &g_pPartyBtn2Cel, &g_pPartyCloseCel
     };
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         D2CellFileStrc* pCel = *ppCells[i];
         if (pCel)
@@ -942,15 +943,58 @@ void __stdcall PARTY_DrawPartyScreen()
         D2GfxDataStrc tGfxData = { 0 };
         tGfxData.pCellFile = g_pPartyPanelCel;
 
-        // 4 quadrant tiles of panel\party
+        // 4 quadrant tiles of Menu\party (256x256, 64x256, 256x176, 64x176)
         tGfxData.nFrame = 0;
         TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
         tGfxData.nFrame = 1;
-        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x150, 0x100 - nBaseY, 0xFFFFFFFF, 5, nullptr);
         tGfxData.nFrame = 2;
-        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x50, 0x1B0 - nBaseY, 0xFFFFFFFF, 5, nullptr);
         tGfxData.nFrame = 3;
-        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x100, 0x1DF - nBaseY, 0xFFFFFFFF, 5, nullptr);
+        TEXTURE_CelDraw(&tGfxData, nBaseX + 0x150, 0x1B0 - nBaseY, 0xFFFFFFFF, 5, nullptr);
+    }
+
+    // Draw local player name & level/class in the top header box (1.12a: 0x6FB11150)
+    if (D2RosterUnitStrc* pLocalRoster = g_pRosterHead)
+    {
+        const char* szPlrName = pLocalRoster->szName[0] ? pLocalRoster->szName : "Adventurer";
+        Unicode wszPlrName[32] = {};
+        Unicode_toUnicode(wszPlrName, szPlrName, 31);
+        D2Win_10127_SetFont(1);
+        const int32_t nNameW = D2Win_10121_GetTextWidth(wszPlrName);
+        const int32_t nHdrLeft = nBaseX + 0x50 + 20;
+        const int32_t nHdrBoxW = 0xBF - 20;
+        const int32_t nNameX = (nNameW < nHdrBoxW) ? (nHdrLeft + ((nHdrBoxW - nNameW) >> 1)) : nHdrLeft;
+        D2Win_10117_DrawText(wszPlrName, nNameX, 0x1F - nBaseY, 4, 0);
+
+        const int32_t nLvl = (pLocalRoster->wLevel > 0) ? pLocalRoster->wLevel : 1;
+        const Unicode* wszClass = PARTY_GetClassString((pLocalRoster->dwClassId >= 0 && pLocalRoster->dwClassId < 7) ? pLocalRoster->dwClassId : 0);
+        char szLvlPrefix[32] = {};
+        snprintf(szLvlPrefix, sizeof(szLvlPrefix), "Level %d ", nLvl);
+        Unicode wszSubLine[64] = {};
+        Unicode_toUnicode(wszSubLine, szLvlPrefix, 31);
+        if (wszClass)
+        {
+            Unicode_strcat(wszSubLine, wszClass);
+        }
+        D2Win_10127_SetFont(6);
+        const int32_t nSubW = D2Win_10121_GetTextWidth(wszSubLine);
+        const int32_t nSubX = (nSubW < nHdrBoxW) ? (nHdrLeft + ((nHdrBoxW - nSubW) >> 1)) : nHdrLeft;
+        D2Win_10117_DrawText(wszSubLine, nSubX, 0x30 - nBaseY, 0, 0);
+        D2Win_10127_SetFont(1);
+    }
+
+    // Draw Close [X] button in bottom-right stone socket (1.12a: 0x6FB110B0)
+    if (!g_pPartyCloseCel)
+    {
+        g_pPartyCloseCel = UI_LoadPanelCellFile("Panel\\buysellbtn");
+    }
+    if (g_pPartyCloseCel)
+    {
+        D2GfxDataStrc tCloseBtn = { 0 };
+        tCloseBtn.pCellFile = g_pPartyCloseCel;
+        tCloseBtn.nFrame = 10 + (g_bPartyCloseBtnPressed ? 1 : 0);
+        TEXTURE_CelDraw(&tCloseBtn, nBaseX + 0x50 + 0x116, 0x1A5 - nBaseY, 0xFFFFFFFF, 5, nullptr);
     }
 
     // Draw each party screen player row

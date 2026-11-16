@@ -4936,6 +4936,7 @@ struct D2SoundsTxtStubStrc
 };
 #pragma pack(pop)
 extern D2SoundsTxtStubStrc* __fastcall SOUNDHDR_GetSoundTxtRecord(int32_t nSoundId);
+extern int32_t g_bClientMusicOption;
 
 void __fastcall D2Client_PlaySoundById(int32_t nSoundId)
 {
@@ -4955,9 +4956,12 @@ void __fastcall D2Client_PlaySoundById(int32_t nSoundId)
     }
     char szSfxPath[128] = {};
     snprintf(szSfxPath, sizeof(szSfxPath), "data\\global\\sfx\\%s", pRec->szFileName);
-    if (pRec->bMusicVol)
+    if (pRec->bMusicVol && pRec->nLoop != 0)
     {
-        D2SOUND_PlayMusicFile(szSfxPath, pRec->nLoop != 0);
+        if (g_bClientMusicOption)
+        {
+            D2SOUND_PlayMusicFile(szSfxPath, TRUE);
+        }
         return;
     }
     HANDLE hProbe = nullptr;
@@ -4982,17 +4986,16 @@ void __fastcall D2Client_PlaySoundById(int32_t nSoundId)
 
 void __fastcall D2Client_UpdateAreaMusic(int32_t nActNo, int32_t nLevelId)
 {
-    static int32_t s_nLastMusicLevel = -1;
-    if (!g_bClientSoundOption)
+    static const char* s_szLastTrack = nullptr;
+    if (nLevelId <= 0 || !g_bClientSoundOption || !g_bClientMusicOption)
     {
-        s_nLastMusicLevel = -1;
+        if (s_szLastTrack != nullptr || nLevelId <= 0)
+        {
+            D2SOUND_StopMusic();
+            s_szLastTrack = nullptr;
+        }
         return;
     }
-    if (nLevelId == s_nLastMusicLevel && D2SOUND_IsMusicPlaying())
-    {
-        return;
-    }
-    s_nLastMusicLevel = nLevelId;
     const char* szTrack = nullptr;
     if (DUNGEON_IsTownLevelId(nLevelId))
     {
@@ -5018,9 +5021,21 @@ void __fastcall D2Client_UpdateAreaMusic(int32_t nActNo, int32_t nLevelId)
         const int32_t nSafeAct = (nActNo >= 0 && nActNo < 5) ? nActNo : 0;
         szTrack = kWildTracks[nSafeAct];
     }
+    if (szTrack == s_szLastTrack && D2SOUND_IsMusicPlaying())
+    {
+        return;
+    }
     if (szTrack)
     {
-        D2SOUND_PlayMusicFile(szTrack, TRUE);
+        D2SOUND_StopMusic();
+        if (D2SOUND_PlayMusicFile(szTrack, TRUE))
+        {
+            s_szLastTrack = szTrack;
+        }
+        else
+        {
+            s_szLastTrack = nullptr;
+        }
     }
 }
 

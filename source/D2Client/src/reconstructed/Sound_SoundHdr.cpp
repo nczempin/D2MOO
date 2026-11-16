@@ -1687,21 +1687,24 @@ void __stdcall CHARSTATS_DrawPanel()
     int32_t nVit = D2Common_10519_GetUnitStatSigned(pPlayer, 3 /* STAT_VITALITY */, 0);
     int32_t nEne = D2Common_10519_GetUnitStatSigned(pPlayer, 1 /* STAT_ENERGY */, 0);
 
-    CHARSTATS_DrawTextAscii("Strength", nOx + 45, nTopY + 100, 4, 1);
+    D2Win_10127_SetFont(6);
+    CHARSTATS_DrawTextAscii("Strength", nOx + 38, nTopY + 99, 4, 1);
+    CHARSTATS_DrawTextAscii("Dexterity", nOx + 38, nTopY + 161, 4, 1);
+    CHARSTATS_DrawTextAscii("Vitality", nOx + 38, nTopY + 247, 4, 1);
+    CHARSTATS_DrawTextAscii("Energy", nOx + 38, nTopY + 309, 4, 1);
+
+    D2Win_10127_SetFont(1);
     snprintf(szBuf, sizeof(szBuf), "%d", nStr);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 100, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 95, nTopY + 100, 0, 1);
 
-    CHARSTATS_DrawTextAscii("Dexterity", nOx + 45, nTopY + 162, 4, 1);
     snprintf(szBuf, sizeof(szBuf), "%d", nDex);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 162, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 95, nTopY + 162, 0, 1);
 
-    CHARSTATS_DrawTextAscii("Vitality", nOx + 45, nTopY + 248, 4, 1);
     snprintf(szBuf, sizeof(szBuf), "%d", nVit);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 248, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 95, nTopY + 248, 0, 1);
 
-    CHARSTATS_DrawTextAscii("Energy", nOx + 45, nTopY + 310, 4, 1);
     snprintf(szBuf, sizeof(szBuf), "%d", nEne);
-    CHARSTATS_DrawTextAscii(szBuf, nOx + 115, nTopY + 310, 0, 1);
+    CHARSTATS_DrawTextAscii(szBuf, nOx + 95, nTopY + 310, 0, 1);
 
     int32_t nStatPts = D2Common_10519_GetUnitStatSigned(pPlayer, 4 /* STAT_STATPTS */, 0);
     if (nStatPts > 0)
@@ -1726,16 +1729,16 @@ void __stdcall CHARSTATS_DrawPanel()
     }
 
     D2Win_10127_SetFont(6);
-    CHARSTATS_DrawTextAscii("Attack Damage", nOx + 196, nTopY + 95, 4, 1);
-    CHARSTATS_DrawTextAscii("Attack Rating", nOx + 196, nTopY + 160, 4, 1);
-    CHARSTATS_DrawTextAscii("Defense", nOx + 196, nTopY + 206, 4, 1);
+    CHARSTATS_DrawTextAscii("Attack Damage", nOx + 202, nTopY + 95, 4, 1);
+    CHARSTATS_DrawTextAscii("Attack Rating", nOx + 202, nTopY + 160, 4, 1);
+    CHARSTATS_DrawTextAscii("Defense", nOx + 202, nTopY + 206, 4, 1);
     CHARSTATS_DrawTextAscii("Stamina", nOx + 186, nTopY + 244, 4, 1);
     CHARSTATS_DrawTextAscii("Life", nOx + 186, nTopY + 270, 4, 1);
     CHARSTATS_DrawTextAscii("Mana", nOx + 186, nTopY + 308, 4, 1);
-    CHARSTATS_DrawTextAscii("Fire Resistance", nOx + 204, nTopY + 345, 4, 1);
-    CHARSTATS_DrawTextAscii("Cold Resistance", nOx + 204, nTopY + 369, 4, 1);
-    CHARSTATS_DrawTextAscii("Lightning Resist", nOx + 204, nTopY + 393, 4, 1);
-    CHARSTATS_DrawTextAscii("Poison Resistance", nOx + 204, nTopY + 417, 4, 1);
+    CHARSTATS_DrawTextAscii("Fire Resistance", nOx + 214, nTopY + 345, 4, 1);
+    CHARSTATS_DrawTextAscii("Cold Resistance", nOx + 214, nTopY + 369, 4, 1);
+    CHARSTATS_DrawTextAscii("Lightning Resist", nOx + 214, nTopY + 393, 4, 1);
+    CHARSTATS_DrawTextAscii("Poison Resistance", nOx + 214, nTopY + 417, 4, 1);
 
     D2Win_10127_SetFont(1);
     int32_t nBaseDmg = 0, nMaxDmg = 0, nBonusAR = 0;

@@ -2733,6 +2733,14 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 				QUESTLOG_OnPanelMouseDown(&tMsg);
 				return 0;
 			}
+			if (gaPanelStates[D2PANEL_PARTY])
+			{
+				if (mx >= 352 && mx <= 396 && my >= 444 && my <= 486)
+				{
+					UI_SetPanelState(D2PANEL_PARTY, 1, 0);
+				}
+				return 0;
+			}
 			if (gaPanelStates[D2PANEL_WAYPOINT] || gaPanelStates[0x14])
 			{
 				const int32_t nBaseX = 80;
@@ -3295,6 +3303,11 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			UI_SetPanelState(D2PANEL_SHOWITEMS, 1, 0);
 			return 0;
 		}
+		if (wParam == VK_SNAPSHOT)
+		{
+			D2Win_10168_WINMAIN_CreateScreenshot();
+			return 0;
+		}
 		break;
 
 	default:
@@ -3524,7 +3537,7 @@ static void ShutdownInGameAssets()
 	GFX_FreeMonsterCofCache();
 	GFX_FreePlayerCofCache();
 	PALSHIFT_FreeTables();
-	D2SOUND_StopMusic();
+	D2Client_UpdateAreaMusic(-1, -1);
 	SOUNDHDR_FreeSoundTxtTables();
 	D2Client_ClearScreenMessages();
 	D2Client_ClearMercForHireList();

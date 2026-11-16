@@ -62,12 +62,32 @@ struct D2CharPagTextBoxStrc
 #pragma pack(pop)
 
 // API compatibility shims for 1.12a UI_SkillDesc
+static inline bool IsValidSkillStrId(uint16_t nIndex)
+{
+    return nIndex != 0 && nIndex != 0x1506;
+}
+
 static inline const wchar_t* D2LANG_GetStringByTblIndexW(uint16_t nIndex)
 {
+    if (!IsValidSkillStrId(nIndex))
+        return L"";
     const Unicode* pStr = D2LANG_GetStringByTblIndex(nIndex);
     return pStr ? reinterpret_cast<const wchar_t*>(pStr) : L"";
 }
 #define D2LANG_GetStringByTblIndex D2LANG_GetStringByTblIndexW
+
+static inline uint16_t GetElemDamageStrId_112a(uint8_t nElemType)
+{
+    switch (nElemType)
+    {
+    case 1: return 0x10A1; // Fire Damage:
+    case 2: return 0x10A3; // Lightning Damage:
+    case 3: return 0x10C3; // Magic Damage:
+    case 4: return 0x10A2; // Cold Damage:
+    case 5: return 0x10A4; // Poison Damage:
+    default: return 0x10A0; // Damage:
+    }
+}
 
 #define SKILLS_GetElementalMinDamage SKILLS_GetMinElemDamage
 #define SKILLS_GetElementalMaxDamage SKILLS_GetMaxElemDamage
@@ -497,8 +517,8 @@ int32_t __fastcall sub_6FAF2210(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t 
 
     if (nSkillId >= 0 && nSkillLevel > 0)
     {
-        uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-        if (pSkillsTxt && pSkillsTxt[0x19] == 0)
+        D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+        if (pSkillsTxt && (pSkillsTxt->dwFlags[0] & SKILLSFLAG_USEATTACKRATE) != 0)
             nPctAR += SKILLS_GetToHitFactor(pUnit, nSkillId, nSkillLevel);
     }
 
@@ -530,16 +550,16 @@ int32_t __fastcall sub_6FAF2310(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     int32_t nBonusAR = STATLIST_UnitGetItemStatOrSkillStatValue(pUnit, 0x13, 0);
     int32_t nPctAR = STATLIST_UnitGetStatValue(pUnit, 0x77, 0) + SKILLS_GetWeaponMasteryBonus(pUnit, pWeapon, 0, 0);
 
-    uint8_t* pSkillsTxt = (nSkillId >= 0) ? (uint8_t*)sub_6FAFF7E0(nSkillId) : nullptr;
-    if (pSkillsTxt && nSkillLevel > 0 && pSkillsTxt[0x19] == 0)
+    D2SkillsTxt* pSkillsTxt = (nSkillId >= 0) ? sub_6FAFF7E0(nSkillId) : nullptr;
+    if (pSkillsTxt && nSkillLevel > 0 && (pSkillsTxt->dwFlags[0] & SKILLSFLAG_USEATTACKRATE) != 0)
         nPctAR += SKILLS_GetToHitFactor(pUnit, nSkillId, nSkillLevel);
 
     if (pSkillsTxt)
     {
         for (int32_t i = 0; i < 5; ++i)
         {
-            if (*(int16_t*)(pSkillsTxt + 0x92 + i * 2) == 0x77)
-                nPctAR += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x9C + i * 4), nSkillId, nSkillLevel);
+            if (pSkillsTxt->nPassiveStat[i] == 0x77)
+                nPctAR += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwPassiveCalc[i], nSkillId, nSkillLevel);
         }
     }
 
@@ -574,8 +594,8 @@ int32_t __fastcall sub_6FAF2430(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t 
 
     if (nSkillId >= 0 && nSkillLevel > 0)
     {
-        uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-        if (pSkillsTxt && pSkillsTxt[0x19] == 0)
+        D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+        if (pSkillsTxt && (pSkillsTxt->dwFlags[0] & SKILLSFLAG_USEATTACKRATE) != 0)
             nPctAR += SKILLS_GetToHitFactor(pUnit, nSkillId, nSkillLevel);
     }
 
@@ -604,8 +624,11 @@ D2SkillDescTxt* __fastcall sub_6FAF2540(uint16_t wSkillDesc)
 void __fastcall sub_6FAF2560(int32_t nVal, wchar_t* wszOut, uint16_t wStrA, uint16_t wStrB)
 {
     wchar_t wszNum[32];
-    swprintf(wszNum, L"%d.%d", nVal / 25, ((nVal % 25) * 10) / 25);
-    if (wStrB)
+    if ((nVal % 25) == 0)
+        swprintf(wszNum, L"%d", nVal / 25);
+    else
+        swprintf(wszNum, L"%d.%d", nVal / 25, ((nVal % 25) * 10) / 25);
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszNum, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszNum);
@@ -679,8 +702,11 @@ void __fastcall sub_6FAF2840(uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, in
 {
     int32_t nYards = nVal * 2;
     wchar_t wszNum[32];
-    swprintf(wszNum, L"%d.%d", nYards / 3, ((nYards % 3) * 10) / 3);
-    if (wStrB)
+    if ((nYards % 3) == 0)
+        swprintf(wszNum, L"%d", nYards / 3);
+    else
+        swprintf(wszNum, L"%d.%d", nYards / 3, ((nYards % 3) * 10) / 3);
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszNum, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszNum);
@@ -690,7 +716,7 @@ void __fastcall sub_6FAF2840(uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, in
 // Calling convention: __usercall (EAX = wStrB, ECX = wStrA, EDX = wszOut, [esp+4] = nVal)
 void __fastcall sub_6FAF2950(uint16_t wStrA, wchar_t* wszOut, uint16_t wStrB, int32_t nVal)
 {
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB201D0(wszOut, D2LANG_GetStringByTblIndex(wStrA), nVal, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszOut, nVal);
@@ -700,7 +726,7 @@ void __fastcall sub_6FAF2950(uint16_t wStrA, wchar_t* wszOut, uint16_t wStrB, in
 // Calling convention: __usercall (EAX = wStrB, ECX = wStrA, EDX = wszOut, [esp+4] = nVal)
 void __fastcall sub_6FAF29B0(uint16_t wStrA, wchar_t* wszOut, uint16_t wStrB, int32_t nVal)
 {
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB201A0(wszOut, D2LANG_GetStringByTblIndex(wStrA), nVal, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB20280(D2LANG_GetStringByTblIndex(wStrA), wszOut, nVal);
@@ -712,7 +738,7 @@ void __fastcall sub_6FAF2A10(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16
 {
     wchar_t wszRange[32];
     sub_6FAF2760(nMin, nMax, wszRange);
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszRange, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszRange);
@@ -724,7 +750,7 @@ void __fastcall sub_6FAF2AB0(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16
 {
     wchar_t wszRange[32];
     sub_6FAF2720(nMin, nMax, wszRange);
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszRange, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszRange);
@@ -736,7 +762,7 @@ void __fastcall sub_6FAF2B50(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16
 {
     wchar_t wszRange[32];
     sub_6FAF2660(nMin, nMax, wszRange);
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszRange, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszRange);
@@ -748,7 +774,7 @@ void __fastcall sub_6FAF2BF0(int32_t nMin, int32_t nMax, wchar_t* wszOut, uint16
 {
     wchar_t wszRange[32];
     sub_6FAF26C0(nMin, nMax, wszRange);
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
         sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszRange, D2LANG_GetStringByTblIndex(wStrB));
     else
         sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszRange);
@@ -818,13 +844,13 @@ int32_t __fastcall sub_6FAF2E30(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
         return 0;
 
     int32_t nHp = (pMonStatInit->nMinHP + pMonStatInit->nMaxHP) / 2;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         for (int32_t i = 0; i < 5; ++i)
         {
-            if (*(int16_t*)(pSkillsTxt + 0x92 + i * 2) == 0x4D)
-                nHp += nHp * SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x9C + i * 4), nSkillId, nSkillLevel) / 100;
+            if (pSkillsTxt->nPassiveStat[i] == 0x4D)
+                nHp += nHp * SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwPassiveCalc[i], nSkillId, nSkillLevel) / 100;
         }
     }
     *pHpOut = nHp;
@@ -835,40 +861,30 @@ int32_t __fastcall sub_6FAF2E30(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
 // Calling convention: __usercall (EAX = nSkillLevel, ECX = nSkillId, [esp+4] = pUnit, [esp+8] = wszOut)
 void __fastcall sub_6FAF2F00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (!pSkillsTxt || !pSkillDesc)
         return;
 
-    int32_t nMin = 0, nMax = 0;
-    if (*(uint32_t*)(pSkillsTxt + 0x1A8))
-        nMin = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x1A8), nSkillId, nSkillLevel) << 8;
-    else
-        nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
+    int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
+    int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
 
-    if (*(uint32_t*)(pSkillsTxt + 0x1AC))
-        nMax = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x1AC), nSkillId, nSkillLevel) << 8;
-    else
-        nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-
-    if (pSkillDesc->dwDamCalc[0])
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (pSkillDesc->dwDamCalc[1])
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
 
     int32_t nLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-    if (pSkillsTxt[0x17C] == 5 && nLen > 0)
+    if (pSkillsTxt->nEType == 5 && nLen > 0)
     {
         nMin *= nLen;
         nMax *= nLen;
@@ -883,40 +899,30 @@ void __fastcall sub_6FAF2F00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 // Calling convention: __fastcall (ECX = nSkillId, EDX = nSkillLevel, [esp+4] = pUnit, [esp+8] = wszOut)
 void __fastcall sub_6FAF3090(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (!pSkillsTxt || !pSkillDesc)
         return;
 
-    int32_t nMin = 0, nMax = 0;
-    if (*(uint32_t*)(pSkillsTxt + 0x1A8))
-        nMin = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x1A8), nSkillId, nSkillLevel) << 8;
-    else
-        nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
+    int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
+    int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
 
-    if (*(uint32_t*)(pSkillsTxt + 0x1AC))
-        nMax = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x1AC), nSkillId, nSkillLevel) << 8;
-    else
-        nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-
-    if (pSkillDesc->dwDamCalc[0])
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (pSkillDesc->dwDamCalc[1])
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
 
     int32_t nLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-    if (pSkillsTxt[0x17C] == 5 && nLen > 0)
+    if (pSkillsTxt->nEType == 5 && nLen > 0)
     {
         nMin *= nLen;
         nMax *= nLen;
@@ -1009,8 +1015,8 @@ int32_t __fastcall sub_6FAF3410(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 void __fastcall sub_6FAF3450(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
     int32_t nElemType = pSkillDesc->nPrgDamElem[nLineIdx];
-    int32_t nMin = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel);
-    int32_t nMax = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel);
+    int32_t nMin = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel);
+    int32_t nMax = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel);
 
     for (int32_t i = 0; i < 5; ++i)
     {
@@ -1034,8 +1040,8 @@ void __fastcall sub_6FAF3450(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF3500(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
     int32_t nElemType = pSkillDesc->nPrgDamElem[nLineIdx];
-    int32_t nMin = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel) * 25;
-    int32_t nMax = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel) * 25;
+    int32_t nMin = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel) * 25;
+    int32_t nMax = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel) * 25;
 
     for (int32_t i = 0; i < 5; ++i)
     {
@@ -1093,8 +1099,8 @@ int32_t __fastcall sub_6FAF3600(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t*
 void __fastcall sub_6FAF3690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
     int32_t nElemType = pSkillDesc->nPrgDamElem[nLineIdx];
-    int32_t nMin = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel) / 3;
-    int32_t nMax = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel) / 3;
+    int32_t nMin = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMin[nLineIdx], nSkillId, nSkillLevel) / 3;
+    int32_t nMax = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwProgDmgMax[nLineIdx], nSkillId, nSkillLevel) / 3;
 
     for (int32_t i = 0; i < 5; ++i)
     {
@@ -1182,18 +1188,16 @@ void __fastcall sub_6FAF3980(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 {
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nMult = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nMult = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nMult)
         {
             nMin *= nMult;
             nMax *= nMult;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nDiv = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nDiv = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nDiv)
         {
             nMin /= nDiv;
@@ -1245,18 +1249,16 @@ void __fastcall sub_6FAF3B50(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 {
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1269,18 +1271,16 @@ void __fastcall sub_6FAF3C20(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 {
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1294,18 +1294,16 @@ void __fastcall sub_6FAF3CF0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nLenPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nLenPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nLenPct)
             nLen += nLen * nLenPct / 100;
     }
@@ -1327,7 +1325,7 @@ void __fastcall sub_6FAF3CF0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     else
         sub_6FAF2720((nMin + 128) & ~0xFF, (nMax + 128) & ~0xFF, wszRange);
 
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
     {
         wchar_t wszTemp[256];
         sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrB), wszTemp, nLen / 25);
@@ -1346,18 +1344,16 @@ void __fastcall sub_6FAF3EC0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nLenPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nLenPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nLenPct)
             nLen += nLen * nLenPct / 100;
     }
@@ -1379,7 +1375,7 @@ void __fastcall sub_6FAF3EC0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     else
         sub_6FAF2760((nMin + 128) & ~0xFF, (nMax + 128) & ~0xFF, wszRange);
 
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
     {
         wchar_t wszTemp[256];
         if (nLen % 25)
@@ -1407,18 +1403,16 @@ void __fastcall sub_6FAF40E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nLenPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nLenPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nLenPct)
             nLen += nLen * nLenPct / 100;
     }
@@ -1433,7 +1427,7 @@ void __fastcall sub_6FAF40E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     else
         sub_6FAF2760((nMin + 128) & ~0xFF, (nMax + 128) & ~0xFF, wszRange);
 
-    if (wStrB)
+    if (IsValidSkillStrId(wStrB))
     {
         wchar_t wszTemp[256];
         sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrB), wszTemp, nLen / 25);
@@ -1465,8 +1459,8 @@ int32_t __fastcall sub_6FAF4290(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t*
     if (!pfnDmg)
         return 0;
 
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    int32_t nElemType = pSkillsTxt ? pSkillsTxt[0x17C] : 0;
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    int32_t nElemType = pSkillsTxt ? pSkillsTxt->nEType : 0;
     return pfnDmg(pUnit, nSkillId, nSkillLevel, pMinDmg, pMaxDmg, pColor, nElemType);
 }
 
@@ -1475,8 +1469,8 @@ int32_t __fastcall sub_6FAF4290(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t*
 void __fastcall sub_6FAF4330(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (pSkillsTxt && *(int16_t*)(pSkillsTxt + 0x24) == wMissileId)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wSrvMissile == wMissileId)
     {
         nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1494,8 +1488,8 @@ void __fastcall sub_6FAF4330(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMi
 void __fastcall sub_6FAF43E0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (pSkillsTxt && *(int16_t*)(pSkillsTxt + 0x24) == wMissileId)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wSrvMissile == wMissileId)
     {
         nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1513,8 +1507,8 @@ void __fastcall sub_6FAF43E0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMi
 void __fastcall sub_6FAF44A0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (pSkillsTxt && *(int16_t*)(pSkillsTxt + 0x24) == wMissileId)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wSrvMissile == wMissileId)
     {
         nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1532,8 +1526,8 @@ void __fastcall sub_6FAF44A0(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMi
 void __fastcall sub_6FAF4560(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (pSkillsTxt && *(int16_t*)(pSkillsTxt + 0x24) == wMissileId)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wSrvMissile == wMissileId)
     {
         nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1593,24 +1587,22 @@ void __fastcall sub_6FAF46E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4750(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
     }
-    if (dwCalcA)
     {
-        int32_t nMult = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nMult = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nMult)
         {
             nMin *= nMult;
             nMax *= nMult;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nDiv = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nDiv = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nDiv)
         {
             nMin /= nDiv;
@@ -1625,24 +1617,22 @@ void __fastcall sub_6FAF4750(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4810(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
     }
-    if (dwCalcA)
     {
-        int32_t nMult = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nMult = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nMult)
         {
             nMin *= nMult;
             nMax *= nMult;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nDiv = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+        int32_t nDiv = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
         if (nDiv)
         {
             nMin /= nDiv;
@@ -1657,24 +1647,22 @@ void __fastcall sub_6FAF4810(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF48D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
     }
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1686,24 +1674,22 @@ void __fastcall sub_6FAF48D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF49B0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
     }
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1715,24 +1701,22 @@ void __fastcall sub_6FAF49B0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4AA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
         nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
     }
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1744,7 +1728,7 @@ void __fastcall sub_6FAF4AA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4B90(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1758,7 +1742,7 @@ void __fastcall sub_6FAF4B90(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4BF0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStr, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1775,18 +1759,16 @@ void __fastcall sub_6FAF4C50(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
                  + SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     int32_t nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1) * 3 / 4
                  + SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1808,18 +1790,16 @@ void __fastcall sub_6FAF4DC0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 {
     int32_t nMin = 0, nMax = 0, nColor = 0;
     sub_6FAFB080(pUnit, nSkillId, nSkillLevel, &nMin, &nMax, &nColor, 0);
-    if (dwCalcA)
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (dwCalcB)
     {
-        int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
+        int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) << 8;
         nMin += nBonus;
         nMax += nBonus;
     }
@@ -1837,18 +1817,18 @@ void __fastcall sub_6FAF4EA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 
     int32_t nBonusPct = 0;
     int32_t nSkillMasteryLvl = SKILLS_GetSkillLevel(pUnit, SKILLS_GetSkillById(pUnit, 70, -1), 1);
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
-        int32_t nBaseBonus = *(int32_t*)(pSkillsTxt + 0x16C);
+        int32_t nBaseBonus = static_cast<int32_t>(pSkillsTxt->dwLevToHit);
         if (nBaseBonus > 0 && nSkillLevel > 1)
             nBonusPct += (nSkillLevel - 1) * nBaseBonus;
     }
     if (nSkillMasteryLvl > 0)
     {
-        uint8_t* pMasteryTxt = (uint8_t*)sub_6FAFF7E0(70);
+        D2SkillsTxt* pMasteryTxt = sub_6FAFF7E0(70);
         if (pMasteryTxt)
-            nBonusPct += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pMasteryTxt + 0xA0), 70, nSkillMasteryLvl);
+            nBonusPct += SKILLS_EvaluateSkillFormula(pUnit, pMasteryTxt->dwPassiveCalc[1], 70, nSkillMasteryLvl);
     }
 
     int32_t nMin = monStatInit.nA1MinD;
@@ -1858,7 +1838,7 @@ void __fastcall sub_6FAF4EA0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         nMin += nMin * nBonusPct / 100;
         nMax += nMax * nBonusPct / 100;
     }
-    sub_6FAF2A10(nMin << 8, nMax << 8, wszOut, wStrA, wStrB);
+    sub_6FAF2A10(nMin << 8, nMax << 8, wszOut, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB);
 }
 
 // 1.12a: 0x6FAF4FE0
@@ -1895,7 +1875,7 @@ void __fastcall sub_6FAF5050(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkill
 
     if (pUnit && nSkillId >= 0 && nSkillLevel > 0)
     {
-        uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+        D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
         if (pSkillsTxt)
         {
             *pMinElem = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1903,7 +1883,7 @@ void __fastcall sub_6FAF5050(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSkill
             if (*pMaxElem < *pMinElem)
                 *pMaxElem = *pMinElem;
             if (pElemType)
-                *pElemType = pSkillsTxt[0x17C];
+                *pElemType = pSkillsTxt->nEType;
         }
     }
 
@@ -1967,20 +1947,20 @@ void __fastcall sub_6FAF5220(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 
     int32_t nMin = monStatInit.nA1MinD;
     int32_t nMax = monStatInit.nA1MaxD;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         for (int32_t i = 0; i < 5; ++i)
         {
-            if (*(int16_t*)(pSkillsTxt + 0x92 + i * 2) == 0x19)
+            if (pSkillsTxt->nPassiveStat[i] == 0x19)
             {
-                int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x9C + i * 4), nSkillId, nSkillLevel);
+                int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwPassiveCalc[i], nSkillId, nSkillLevel);
                 nMin += nMin * nPct / 100;
                 nMax += nMax * nPct / 100;
             }
         }
     }
-    sub_6FAF2A10(nMin << 8, nMax << 8, wszOut, wStrA, wStrB);
+    sub_6FAF2A10(nMin << 8, nMax << 8, wszOut, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB);
 }
 
 // 1.12a: 0x6FAF5330
@@ -1989,7 +1969,7 @@ void __fastcall sub_6FAF5330(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkill
 {
     int32_t nBaseMin = STATLIST_UnitGetStatValue(pUnit, 0x17, 0);
     int32_t nBaseMax = STATLIST_UnitGetStatValue(pUnit, 0x18, 0);
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nBaseMin += SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 0) >> 8;
@@ -2002,20 +1982,18 @@ void __fastcall sub_6FAF5330(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkill
         INVENTORY_GetEquippedShield(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60), &pShield);
         if (pShield)
         {
-            uint8_t* pItemTxt = (uint8_t*)DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pShield + 4));
+            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pShield + 4));
             if (pItemTxt)
             {
-                nBaseMin += pItemTxt[0x132];
-                nBaseMax += pItemTxt[0x133];
+                nBaseMin += pItemTxt->nMinDam;
+                nBaseMax += pItemTxt->nMaxDam;
             }
         }
     }
 
     int32_t nBonusPct = 0;
-    if (dwCalcA)
-        nBonusPct += SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
-    if (dwCalcB)
-        nBonusPct += SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+    nBonusPct += SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+    nBonusPct += SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
     if (STATES_CheckState(pUnit, 0x95))
     {
         D2StatListStrc* pStatList = STATLIST_GetStatListFromUnitAndState(pUnit, 0x95);
@@ -2058,7 +2036,7 @@ void __fastcall sub_6FAF5530(D2SkillDescTxt* pSkillDesc, int32_t nSkillLevel, D2
 
     wchar_t wszRange[32];
     sub_6FAF2760(nMin, nMax, wszRange);
-    if (pSkillDesc->wDescTextB[nLineIdx])
+    if (IsValidSkillStrId(pSkillDesc->wDescTextB[nLineIdx]))
     {
         wchar_t wszTemp[256];
         sub_6FB202B0(D2LANG_GetStringByTblIndex(pSkillDesc->wDescTextB[nLineIdx]), wszTemp, nLen / 25);
@@ -2075,8 +2053,8 @@ void __fastcall sub_6FAF5530(D2SkillDescTxt* pSkillDesc, int32_t nSkillLevel, D2
 void __fastcall sub_6FAF5690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
     uint16_t wMissileId = pSkillDesc->wDescMissile[nLineIdx];
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (pSkillsTxt && *(int16_t*)(pSkillsTxt + 0x24) == wMissileId)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wSrvMissile == wMissileId)
     {
         sub_6FAF3EC0(nSkillId, nSkillLevel, pUnit, pSkillDesc->wDescTextA[nLineIdx], pSkillDesc->wDescTextB[nLineIdx], wszOut, pSkillDesc->dwDescCalcA[nLineIdx], pSkillDesc->dwDescCalcB[nLineIdx]);
         return;
@@ -2085,18 +2063,16 @@ void __fastcall sub_6FAF5690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     int32_t nMin = MISSILE_CalculateMasteryBonus(wMissileId, pUnit, nSkillLevel) + MISSILE_GetMinElemDamage(0, pUnit, wMissileId, nSkillLevel);
     int32_t nMax = MISSILE_CalculateMasteryBonus(wMissileId, pUnit, nSkillLevel) + MISSILE_GetMaxElemDamage(0, pUnit, wMissileId, nSkillLevel);
     int32_t nLen = MISSILE_GetElemDamageLength(0, pUnit, wMissileId, nSkillLevel);
-    if (pSkillDesc->dwDescCalcA[nLineIdx])
     {
-        int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDescCalcA[nLineIdx], nSkillId, nSkillLevel);
+        int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDescCalcA[nLineIdx], nSkillId, nSkillLevel);
         if (nPct)
         {
             nMin += nMin * nPct / 100;
             nMax += nMax * nPct / 100;
         }
     }
-    if (pSkillDesc->dwDescCalcB[nLineIdx])
     {
-        int32_t nLenPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDescCalcB[nLineIdx], nSkillId, nSkillLevel);
+        int32_t nLenPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDescCalcB[nLineIdx], nSkillId, nSkillLevel);
         if (nLenPct)
             nLen += nLen * nLenPct / 100;
     }
@@ -2118,7 +2094,7 @@ void __fastcall sub_6FAF5690(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     else
         sub_6FAF2760((nMin + 128) & ~0xFF, (nMax + 128) & ~0xFF, wszRange);
 
-    if (pSkillDesc->wDescTextB[nLineIdx])
+    if (IsValidSkillStrId(pSkillDesc->wDescTextB[nLineIdx]))
     {
         wchar_t wszTemp[256];
         sub_6FB202B0(D2LANG_GetStringByTblIndex(pSkillDesc->wDescTextB[nLineIdx]), wszTemp, nLen / 25);
@@ -2435,11 +2411,11 @@ int32_t __fastcall sub_6FAF5DC0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
     if (nBaseMax <= nBaseMin)
         nBaseMax = nBaseMin + 256;
 
-    uint8_t* pSkillsTxt = (nSkillId >= 0) ? (uint8_t*)sub_6FAFF7E0(nSkillId) : nullptr;
+    D2SkillsTxt* pSkillsTxt = (nSkillId >= 0) ? sub_6FAFF7E0(nSkillId) : nullptr;
     int32_t nBonusMin = 0, nBonusMax = 0;
     if (pSkillsTxt && nSkillLevel > 0)
     {
-        if (pSkillsTxt[0x155])
+        if (pSkillsTxt->nToHitShift)
         {
             nBonusMin += SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 0);
             nBonusMax += SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 0);
@@ -2447,20 +2423,20 @@ int32_t __fastcall sub_6FAF5DC0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
         int32_t nSkillPct = 0;
         for (int32_t i = 0; i < 6; ++i)
         {
-            int16_t nStatId = *(int16_t*)(pSkillsTxt + 0x3A + i * 2);
+            int16_t nStatId = pSkillsTxt->wAuraStat[i];
             if (nStatId == 0x19)
-                nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel);
+                nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel);
             else if (nStatId == 0x15)
-                nBonusMin += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel) << 8;
+                nBonusMin += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel) << 8;
             else if (nStatId == 0x16)
-                nBonusMax += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel) << 8;
+                nBonusMax += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel) << 8;
         }
-        if (pSkillsTxt[0x04] & 0x20)
-            nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x148), nSkillId, nSkillLevel);
+        if (pSkillsTxt->dwFlags[0] & SKILLSFLAG_AURA)
+            nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
 
         int32_t nElemConvPct = 0;
-        if (pSkillsTxt[0x17C] != 0 && *(uint32_t*)(pSkillsTxt + 0x1A0) != 0)
-            nElemConvPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x1A0), nSkillId, nSkillLevel);
+        if (pSkillsTxt->nEType != 0)
+            nElemConvPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[3], nSkillId, nSkillLevel);
 
         if (nElemConvPct < 100)
             *pPhysBonus += nSkillPct;
@@ -2480,7 +2456,7 @@ int32_t __fastcall sub_6FAF5DC0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
 
     if (pSkillsTxt && nApplyPenalty)
     {
-        int32_t nSrcDam = pSkillsTxt[0x156];
+        int32_t nSrcDam = pSkillsTxt->nSrcDam;
         if (!nSrcDam)
             nSrcDam = 128;
         nTotalMin = (int32_t)(((int64_t)nTotalMin * nSrcDam) >> 7);
@@ -2492,10 +2468,10 @@ int32_t __fastcall sub_6FAF5DC0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
         D2SkillStrc* pDoubleThrow = SKILLS_GetSkillById(pUnit, 140, -1);
         if (pDoubleThrow)
         {
-            uint8_t* pDT = (uint8_t*)sub_6FAFF7E0(140);
+            D2SkillsTxt* pDT = sub_6FAFF7E0(140);
             if (pDT)
             {
-                int32_t nDTPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pDT + 0x13C), 140, SKILLS_GetSkillLevel(pUnit, pDoubleThrow, 1));
+                int32_t nDTPct = SKILLS_EvaluateSkillFormula(pUnit, pDT->dwCalc[0], 140, SKILLS_GetSkillLevel(pUnit, pDoubleThrow, 1));
                 if (nDTPct)
                 {
                     nTotalMin += nTotalMin * nDTPct / 100;
@@ -2549,7 +2525,7 @@ int32_t __fastcall sub_6FAF61B0(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF6280(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
@@ -2560,7 +2536,7 @@ int32_t __fastcall sub_6FAF6280(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     int32_t nElemBonus = 0, nMinElem = 0, nMaxElem = 0;
     sub_6FAF5050(-1, pUnit, 0, pWeapon, &nElemBonus, &nMinElem, &nMaxElem, nullptr, nElemType);
 
-    int32_t nConvPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x13C), nSkillId, nSkillLevel);
+    int32_t nConvPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     if (nConvPct > 0)
     {
         nMinPhys += nMinPhys * nConvPct / 100;
@@ -2586,11 +2562,11 @@ int32_t __fastcall sub_6FAF6280(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF63E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
-    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x148), nSkillId, nSkillLevel);
+    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
@@ -2621,11 +2597,11 @@ int32_t __fastcall sub_6FAF63E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
-    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x148), nSkillId, nSkillLevel);
+    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
@@ -2641,18 +2617,16 @@ int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (pSkillDesc)
     {
-        if (pSkillDesc->dwDamCalc[0])
         {
-            int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
+            int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
             if (nPct)
             {
                 nMinElem += nMinElem * nPct / 100;
                 nMaxElem += nMaxElem * nPct / 100;
             }
         }
-        if (pSkillDesc->dwDamCalc[1])
         {
-            int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
+            int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
             nMinElem += nBonus;
             nMaxElem += nBonus;
         }
@@ -2676,7 +2650,7 @@ int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF66F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
@@ -2710,11 +2684,11 @@ int32_t __fastcall sub_6FAF66F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
-    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x148), nSkillId, nSkillLevel);
+    int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
@@ -2730,18 +2704,16 @@ int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (pSkillDesc)
     {
-        if (pSkillDesc->dwDamCalc[0])
         {
-            int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
+            int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
             if (nPct)
             {
                 nMinElem += nMinElem * nPct / 100;
                 nMaxElem += nMaxElem * nPct / 100;
             }
         }
-        if (pSkillDesc->dwDamCalc[1])
         {
-            int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
+            int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
             nMinElem += nBonus;
             nMaxElem += nBonus;
         }
@@ -2765,7 +2737,7 @@ int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF6A20(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
@@ -2791,23 +2763,23 @@ int32_t __fastcall sub_6FAF6A20(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     int32_t nBonusMin = 0, nBonusMax = 0, nSkillPct = 0;
     if (nSkillLevel > 0)
     {
-        if (pSkillsTxt[0x155])
+        if (pSkillsTxt->nToHitShift)
         {
             nBonusMin += SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 0);
             nBonusMax += SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 0);
         }
         for (int32_t i = 0; i < 6; ++i)
         {
-            int16_t nStatId = *(int16_t*)(pSkillsTxt + 0x3A + i * 2);
+            int16_t nStatId = pSkillsTxt->wAuraStat[i];
             if (nStatId == 0x19)
-                nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel);
+                nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel);
             else if (nStatId == 0x15)
-                nBonusMin += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel) << 8;
+                nBonusMin += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel) << 8;
             else if (nStatId == 0x16)
-                nBonusMax += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x50 + i * 4), nSkillId, nSkillLevel) << 8;
+                nBonusMax += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwAuraStatCalc[i], nSkillId, nSkillLevel) << 8;
         }
-        if (pSkillsTxt[0x04] & 0x20)
-            nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x148), nSkillId, nSkillLevel);
+        if (pSkillsTxt->dwFlags[0] & SKILLSFLAG_AURA)
+            nSkillPct += SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     }
 
     int32_t nPhysBonus = nSkillPct + STATLIST_UnitGetStatValue(pUnit, 0x19, 0) + STATLIST_UnitGetStatValue(pUnit, 0x88, 0);
@@ -2867,25 +2839,29 @@ int32_t __fastcall sub_6FAF6CF0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __usercall (EAX = pUnit, ECX = nSkillId, EDX = nSkillLevel, [esp+4] = pSkillDesc, [esp+8] = wszOut)
 void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, wchar_t* wszOut)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-    if (!pSkillsTxt)
+    (void)pUnit;
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (!pSkillsTxt || !pSkillDesc)
         return;
 
-    int32_t nManaShift = *(int16_t*)(pSkillsTxt + 0x160);
-    int32_t nBaseMana = *(int16_t*)(pSkillsTxt + 0x15E);
-    int32_t nLvlMana = (nSkillLevel > 1) ? ((nSkillLevel - 1) * *(int16_t*)(pSkillsTxt + 0x162)) : 0;
+    if (pSkillsTxt->wMana == 0 && pSkillsTxt->wLevelMana == 0)
+        return;
+
+    int32_t nManaShift = pSkillsTxt->nManaShift;
+    int32_t nBaseMana = pSkillsTxt->wMana;
+    int32_t nLvlMana = (nSkillLevel > 1) ? ((nSkillLevel - 1) * pSkillsTxt->wLevelMana) : 0;
     int32_t nManaFixed = (nBaseMana + nLvlMana) << nManaShift;
-    int32_t nMinMana = *(int16_t*)(pSkillsTxt + 0x15C) << 8;
+    int32_t nMinMana = static_cast<int32_t>(pSkillsTxt->wMinMana) << 8;
     if (nManaFixed < nMinMana)
         nManaFixed = nMinMana;
 
-    if (nManaFixed <= 0 && pSkillDesc->wStrMana == 0)
+    if (nManaFixed <= 0 && !IsValidSkillStrId(pSkillDesc->wStrMana))
         return;
 
-    uint16_t wStrMana = pSkillDesc->wStrMana ? pSkillDesc->wStrMana : 0x0DD5;
+    uint16_t wStrMana = IsValidSkillStrId(pSkillDesc->wStrMana) ? pSkillDesc->wStrMana : 0x109F;
     wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrMana));
 
-    if (*(int16_t*)(pSkillsTxt + 0x160) >= 8 || (nManaFixed & 0xFF) == 0)
+    if (nManaShift >= 8 || (nManaFixed & 0xFF) == 0)
     {
         wchar_t wszNum[32];
         swprintf(wszNum, L"%d", nManaFixed >> 8);
@@ -2904,7 +2880,7 @@ void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 int32_t __stdcall sub_6FAF7560(int32_t nSkillId, wchar_t* wszOut, uint32_t nMaxChars)
 {
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
-    if (!pSkillDesc || !pSkillDesc->wStrName)
+    if (!pSkillDesc || !IsValidSkillStrId(pSkillDesc->wStrName))
         return 0;
 
     wcsncpy(wszOut, D2LANG_GetStringByTblIndex(pSkillDesc->wStrName), nMaxChars);
@@ -2938,14 +2914,16 @@ void __fastcall sub_6FAF75A0(D2UnitStrc* pUnit, int32_t nRow)
 // Jump table at 0x6FAF89FC (75 cases: descline 1..75)
 void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
+    wszOut[0] = L'\0';
     uint8_t nDescLine = pSkillDesc->nDescLine[nLineIdx];
     uint16_t wStrA = pSkillDesc->wDescTextA[nLineIdx];
     uint16_t wStrB = pSkillDesc->wDescTextB[nLineIdx];
     uint32_t dwCalcA = pSkillDesc->dwDescCalcA[nLineIdx];
     uint32_t dwCalcB = pSkillDesc->dwDescCalcB[nLineIdx];
 
-    int32_t nValA = dwCalcA ? SKILLS_EvaluateSkillFormula(pUnit, dwCalcA, nSkillId, nSkillLevel) : 0;
-    int32_t nValB = dwCalcB ? SKILLS_EvaluateSkillFormula(pUnit, dwCalcB, nSkillId, nSkillLevel) : 0;
+    int32_t nValA = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcA, nSkillId, nSkillLevel);
+    int32_t nValB = SKILLS_EvaluateSkillDescFormula(pUnit, dwCalcB, nSkillId, nSkillLevel);
+    D2SkillsTxt* pSkills = sub_6FAFF7E0(nSkillId);
 
     switch (nDescLine)
     {
@@ -2953,166 +2931,208 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         sub_6FAF7410(nSkillId, nSkillLevel, pUnit, pSkillDesc, wszOut);
         break;
     case 2:
-        sub_6FAF29B0(wStrA, wszOut, wStrB, nValA);
+        if (nValA)
+            sub_6FAF29B0(wStrA, wszOut, wStrB, nValA);
         break;
     case 3:
-        sub_6FAF2950(wStrA, wszOut, wStrB, nValA);
+        if (nValA)
+            sub_6FAF2950(wStrA, wszOut, wStrB, nValA);
         break;
     case 4:
-        sub_6FB20280(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
+        if (nValA)
+            sub_6FB20280(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
         break;
     case 5:
-        sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
+        if (nValA)
+            sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
         break;
     case 6:
-        sub_6FB20310(wszOut, nValA, D2LANG_GetStringByTblIndex(wStrA));
+        if (nValA)
+            sub_6FB20310(wszOut, nValA, D2LANG_GetStringByTblIndex(wStrA));
         break;
     case 7:
-        sub_6FB20340(wszOut, nValA, D2LANG_GetStringByTblIndex(wStrA));
+        if (nValA)
+            sub_6FB20340(wszOut, nValA, D2LANG_GetStringByTblIndex(wStrA));
         break;
     case 8:
     {
-        uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-        int32_t nToHit = pSkillsTxt ? SKILLS_GetToHitFactor(pUnit, nSkillId, nSkillLevel) : 0;
-        sub_6FAF29B0(0x0D9E, wszOut, 0x0DC9, nToHit);
+        int32_t nToHit = pSkills ? SKILLS_GetToHitFactor(pUnit, nSkillId, nSkillLevel) : 0;
+        if (nToHit)
+            sub_6FAF29B0(IsValidSkillStrId(wStrA) ? wStrA : 0x10A6, wszOut, IsValidSkillStrId(wStrB) ? wStrB : 0x10B3, nToHit);
         break;
     }
     case 9:
-    {
-        uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
-        if (pSkillsTxt)
+        if (pSkills)
         {
-            int32_t nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
-            int32_t nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
-            sub_6FAF2AB0(nMin, nMax, wszOut, 0x0DC7, wStrB);
+            int32_t nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 0) + (nValA << 8);
+            int32_t nMax = SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 0) + (nValB << 8);
+            if (nMin || nMax)
+                sub_6FAF2A10(nMin, nMax, wszOut, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB);
+        }
+        break;
+    case 10:
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3790(nSkillId, nSkillLevel, pUnit, wElemStr, wStrB, wszOut);
+        break;
+    }
+    case 11:
+    {
+        int32_t nElemLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 0);
+        uint8_t nEType = pSkills ? pSkills->nEType : 0;
+        if (nElemLen > 0 && (nEType == 4 || nEType == 5))
+        {
+            uint16_t wLenStr = IsValidSkillStrId(wStrA) ? wStrA : ((nEType == 4) ? 0x10A9 : 0x10AA);
+            sub_6FAF2560(nElemLen, wszOut, wLenStr, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         }
         break;
     }
-    case 10:
-        sub_6FAF3750(nSkillId, nSkillLevel, pUnit, 0x0DC7, wStrB, wszOut);
-        break;
-    case 11:
-        sub_6FAF3790(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
-        break;
     case 12:
     {
-        int32_t nElemLen = SKILLS_GetElementalLength(pUnit, nSkillId, nSkillLevel, 1);
-        sub_6FAF2560(nElemLen, wszOut, wStrA, wStrB);
+        if (nValA > 0)
+            sub_6FAF2560(nValA, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     }
     case 13:
     {
         D2MonStatInitStrc monStatInit = {};
         int32_t nHp = 0;
-        if (sub_6FAF2E30(nSkillId, pUnit, nSkillLevel, &monStatInit, &nHp))
-            sub_6FB202B0(D2LANG_GetStringByTblIndex(0x0DDC), wszOut, nHp);
+        if (sub_6FAF2E30(nSkillId, pUnit, nSkillLevel, &monStatInit, &nHp) && nHp > 0)
+            sub_6FB202B0(D2LANG_GetStringByTblIndex(IsValidSkillStrId(wStrA) ? wStrA : 0x10C6), wszOut, nHp);
         break;
     }
     case 14:
-        sub_6FAF3CF0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3CF0(nSkillId, nSkillLevel, pUnit, wElemStr, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
+    }
     case 15:
-        sub_6FAF2560(nValA, wszOut, wStrA, wStrB);
+        sub_6FAF2560(nValA, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     case 16:
-        sub_6FAF2560(nValA * 25, wszOut, wStrA, wStrB);
+        sub_6FAF2560(nValA * 25, wszOut, IsValidSkillStrId(wStrA) ? wStrA : 0x10B0, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     case 17:
-        sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
+        sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10BE);
         break;
     case 18:
         wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
         break;
     case 19:
-        sub_6FAF2840(wStrA, wStrB, wszOut, nValA);
+        sub_6FAF2840(wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10B6, wszOut, nValA);
         break;
     case 20:
-        sub_6FAF29B0(wStrA, wszOut, 0x0DC9, nValA);
+        if (nValA)
+            sub_6FAF29B0(wStrA, wszOut, IsValidSkillStrId(wStrB) ? wStrB : 0x10B3, nValA);
         break;
     case 21:
-        sub_6FAF2950(wStrA, wszOut, 0x0DC9, nValA);
+        if (nValA)
+            sub_6FAF2950(wStrA, wszOut, IsValidSkillStrId(wStrB) ? wStrB : 0x10B3, nValA);
         break;
     case 22:
-        sub_6FAF3870(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3870(nSkillId, nSkillLevel, pUnit, wElemStr, IsValidSkillStrId(wStrB) ? wStrB : 0x10BE, wszOut);
         break;
+    }
     case 23:
-        sub_6FAF2560(nValA, wszOut, wStrA, 0x0DC8);
+        sub_6FAF2560(nValA, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     case 24:
-        sub_6FAF3C20(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3C20(nSkillId, nSkillLevel, pUnit, wElemStr, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
+    }
     case 25:
-        sub_6FAF3B50(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3B50(nSkillId, nSkillLevel, pUnit, wElemStr, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
+    }
     case 26:
-        sub_6FAF3820(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
+        sub_6FAF3820(nSkillId, nSkillLevel, pUnit, wElemStr, IsValidSkillStrId(wStrB) ? wStrB : 0x10BE, wszOut);
         break;
+    }
     case 27:
-        sub_6FAF38D0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+    {
+        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : 0x10A1;
+        sub_6FAF38D0(nSkillId, nSkillLevel, pUnit, wElemStr, IsValidSkillStrId(wStrB) ? wStrB : 0x10BE, wszOut);
         break;
+    }
     case 28:
-        sub_6FAF2840(0x0D9A, 0x0DCB, wszOut, 2);
+        sub_6FAF2840(0x10AE, 0x10B6, wszOut, 2);
         break;
     case 29:
-        sub_6FAF2840(wStrB, 0x0DCB, wszOut, nValA);
+        sub_6FAF2840(IsValidSkillStrId(wStrA) ? wStrA : wStrB, 0x10B6, wszOut, nValA);
         break;
     case 30:
     {
-        uint16_t wMissileId = pSkillDesc->wDescMissile[nLineIdx];
+        uint16_t wMissileId = pSkillDesc->wDescMissile[0];
         int32_t nRange = MISSILE_GetRange(0, pUnit, wMissileId, nSkillLevel);
-        sub_6FAF2560(nRange, wszOut, wStrA, wStrB);
+        sub_6FAF2560(nRange, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     }
     case 31:
-        sub_6FAF2560(nValA, wszOut, wStrA, 0x0DC8);
+        sub_6FAF2560(nValA, wszOut, wStrA, IsValidSkillStrId(wStrB) ? wStrB : 0x10AC);
         break;
     case 32:
-    {
-        wchar_t wszBase[256];
-        sub_6FAF29B0(wStrA, wszBase, 0, nValA);
-        sub_6FB201D0(wszOut, wszBase, nValB, D2LANG_GetStringByTblIndex(wStrB));
+        if (nValA)
+        {
+            wchar_t wszSuffix[128] = {};
+            sub_6FAF29B0(wStrB, wszSuffix, 0x10B3, nValA);
+            swprintf(wszOut, L"%s%s", D2LANG_GetStringByTblIndex(wStrA), wszSuffix);
+        }
         break;
-    }
     case 33:
-        sub_6FAF4EA0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+        if (nSkillLevel > 1)
+            swprintf(wszOut, L"%s%s", D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB));
         break;
     case 34:
         sub_6FAF5220(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
         break;
     case 35:
-        sub_6FAF2A10(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
+        if (IsValidSkillStrId(wStrA))
+            swprintf(wszOut, L"%s: %d", D2LANG_GetStringByTblIndex(wStrA), nValA);
         break;
     case 36:
-        sub_6FB202B0(D2LANG_GetStringByTblIndex((nValA == 1) ? wStrA : wStrB), wszOut, nValA);
+        if (nValA)
+            sub_6FB202B0(D2LANG_GetStringByTblIndex((nValA == 1) ? wStrA : wStrB), wszOut, nValA);
         break;
     case 37:
-        sub_6FAF2840(wStrA, wStrB, wszOut, nValA / 2);
+        sub_6FAF2840(wStrA, 0x10B6, wszOut, nValA / 2);
         break;
     case 38:
-        sub_6FAF2A10(nValA << 8, nValB << 8, wszOut, wStrA, 0x0DC9);
+        sub_6FAF2A10(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 39:
-        sub_6FAF5330(pUnit, nSkillId, nSkillLevel, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        sub_6FAF5330(pUnit, nSkillId, nSkillLevel, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
     case 40:
-    {
-        wchar_t wszColor[16];
-        swprintf(wszColor, L"%s", sub_6FB200F0(nValA));
-        sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszOut, wszColor);
-        if (wStrB)
-            wcscat(wszOut, D2LANG_GetStringByTblIndex(wStrB));
+        if (IsValidSkillStrId(wStrA))
+        {
+            if (IsValidSkillStrId(wStrB) && wcsstr(D2LANG_GetStringByTblIndex(wStrA), L"%s") != nullptr)
+                swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB));
+            else if (IsValidSkillStrId(wStrB))
+                swprintf(wszOut, L"%s%s", D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB));
+            else
+                wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
+        }
         break;
-    }
     case 41:
-        sub_6FAF54E0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        sub_6FAF54E0(nSkillId, nSkillLevel, pUnit, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
     case 42:
-    {
-        wchar_t wszVal[64];
-        swprintf(wszVal, L"+%d.%d", nValA, nValB);
-        sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszVal, D2LANG_GetStringByTblIndex(wStrB));
+        if (nValA || nValB)
+        {
+            wchar_t wszVal[64];
+            swprintf(wszVal, L"+%d.%d", nValA, nValB);
+            sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszVal, D2LANG_GetStringByTblIndex(wStrB));
+        }
         break;
-    }
     case 43:
         sub_6FAF2BF0((nValA << 8) / 10, (nValB << 8) / 10, wszOut, wStrA, wStrB);
         break;
@@ -3122,51 +3142,53 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
     case 45:
     {
         int32_t nManaSteal = (nValA * 25) >> 8;
-        sub_6FAF2950(wStrA, wszOut, wStrB, nManaSteal);
+        if (nManaSteal)
+            sub_6FAF2950(wStrA, wszOut, wStrB, nManaSteal);
         break;
     }
     case 46:
         wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
         break;
     case 47:
-        sub_6FAF2A10(nValA, nValB, wszOut, wStrA, wStrB);
+        sub_6FAF2A10(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 48:
         sub_6FAF2BF0(nValA, nValB, wszOut, wStrA, wStrB);
         break;
     case 49:
-        if (sub_6FB074E0(pUnit, nSkillId))
-            sub_6FAF4620(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+        sub_6FAF4620(nSkillId, nSkillLevel, pUnit, IsValidSkillStrId(wStrA) ? wStrA : 0x10A0, wStrB, wszOut);
         break;
     case 50:
-        if (sub_6FB07530(pUnit, nSkillId))
-            sub_6FAF4330(nSkillId, nSkillLevel, pSkillDesc->wDescMissile[0], pUnit, wStrA, wStrB, wszOut);
+        sub_6FAF4330(nSkillId, nSkillLevel, pSkillDesc->wDescMissile[0], pUnit, IsValidSkillStrId(wStrA) ? wStrA : 0x10A1, wStrB, wszOut);
         break;
     case 51:
-        if (sub_6FB07580(pUnit, nSkillId))
-            sub_6FAF2950(wStrA, wszOut, wStrB, nValA);
+        if (IsValidSkillStrId(wStrA))
+            swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB));
         break;
     case 52:
-        if (sub_6FB075D0(pUnit, nSkillId))
-            sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
+        sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 53:
-        sub_6FAF4D70(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+        if (sub_6FB075D0(pUnit, nSkillId))
+            sub_6FAF4D70(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
         break;
     case 54:
-        sub_6FAF4DC0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        if (sub_6FB07580(pUnit, nSkillId))
+            sub_6FAF4DC0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
     case 55:
-        sub_6FAF4C50(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        if (sub_6FB07530(pUnit, nSkillId))
+            sub_6FAF4C50(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
     case 56:
-        sub_6FAF3450(nSkillId, nSkillLevel, pUnit, pSkillDesc, nLineIdx, wszOut);
+        if (sub_6FB074E0(pUnit, nSkillId))
+            sub_6FAF3450(nSkillId, nSkillLevel, pUnit, pSkillDesc, nLineIdx, wszOut);
         break;
     case 57:
-        sub_6FAF5530(pSkillDesc, nSkillLevel, pUnit, nLineIdx, wszOut);
+        sub_6FAF2560(nValA, wszOut, wStrA, 0x10AC);
         break;
     case 58:
-        sub_6FAF3500(nSkillId, nSkillLevel, pUnit, pSkillDesc, nLineIdx, wszOut);
+        sub_6FAF2AB0(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 59:
         sub_6FAF3690(nSkillId, nSkillLevel, pUnit, pSkillDesc, nLineIdx, wszOut);
@@ -3178,78 +3200,91 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         sub_6FAF3EC0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
         break;
     case 62:
-        sub_6FAF40E0(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        sub_6FAF2A10(nValA << 8, nValB << 8, wszOut, wStrA, wStrB);
         break;
     case 63:
-    {
-        const wchar_t* wszSkillName = D2LANG_GetStringByTblIndex(wStrB ? wStrB : sub_6FAF5BD0(nValB));
-        wchar_t wszTemp[256];
-        sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszTemp, wszSkillName);
-        sub_6FB20280(wszTemp, wszOut, nValA);
+        if (nValA)
+        {
+            if (IsValidSkillStrId(wStrA))
+                swprintf(wszOut, L"%s: %+d%% %s", D2LANG_GetStringByTblIndex(wStrA), nValA, D2LANG_GetStringByTblIndex(wStrB));
+            else
+                swprintf(wszOut, L"%+d%% %s", nValA, D2LANG_GetStringByTblIndex(wStrB));
+        }
         break;
-    }
     case 64:
-        sub_6FAF4750(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        if (IsValidSkillStrId(wStrA) && nValA != 0 && nValB > 0)
+            swprintf(wszOut, L"%s: +%d/%d %s", D2LANG_GetStringByTblIndex(wStrA), nValA, nValB, D2LANG_GetStringByTblIndex(wStrB));
         break;
     case 65:
-        sub_6FAF4810(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut, dwCalcA, dwCalcB);
+        if (IsValidSkillStrId(wStrA) && IsValidSkillStrId(wStrB))
+            swprintf(wszOut, L"%s: %s", D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB));
         break;
     case 66:
-    {
-        wchar_t wszTemp[256];
-        sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszTemp, nValA);
-        sub_6FB202B0(wszTemp, wszOut, nValB);
+        if (IsValidSkillStrId(wStrA))
+        {
+            if (wcsstr(D2LANG_GetStringByTblIndex(wStrA), L"%d") != nullptr)
+                swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), nValA);
+            else
+                sub_6FB202B0(D2LANG_GetStringByTblIndex(wStrA), wszOut, nValA);
+        }
         break;
-    }
     case 67:
-        sub_6FAF29B0(wStrA, wszOut, wStrB, nValA);
+        if (nValA)
+        {
+            if (IsValidSkillStrId(wStrA))
+                swprintf(wszOut, L"%s: %+d %s", D2LANG_GetStringByTblIndex(wStrA), nValA, D2LANG_GetStringByTblIndex(wStrB));
+            else
+                swprintf(wszOut, L"%+d %s", nValA, D2LANG_GetStringByTblIndex(wStrB));
+        }
         break;
     case 68:
-        sub_6FAF2950(wStrA, wszOut, wStrB, nValA);
+        if (nValA)
+            sub_6FAF2950(wStrA, wszOut, wStrB, nValA);
         break;
     case 69:
-    {
-        const wchar_t* wszRef = D2LANG_GetStringByTblIndex(wStrB);
-        wchar_t wszTemp[256];
-        sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszTemp, wszRef);
-        sub_6FB202B0(wszTemp, wszOut, nValA);
+        if (IsValidSkillStrId(wStrA) && nValA)
+            swprintf(wszOut, L"%s: %d %s", D2LANG_GetStringByTblIndex(wStrA), nValA, D2LANG_GetStringByTblIndex(wStrB));
         break;
-    }
     case 70:
-    {
-        const wchar_t* wszRef = D2LANG_GetStringByTblIndex(wStrB);
-        wchar_t wszTemp[256];
-        sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszTemp, wszRef);
-        sub_6FB20280(wszTemp, wszOut, nValA);
+        if (nValA)
+            swprintf(wszOut, L"%s%s%+d", D2LANG_GetStringByTblIndex(wStrA), D2LANG_GetStringByTblIndex(wStrB), nValA);
         break;
-    }
     case 71:
-    {
-        const wchar_t* wszRef = D2LANG_GetStringByTblIndex(wStrB ? wStrB : sub_6FAF5BD0(nValB));
-        wchar_t wszTemp[256];
-        sub_6FB202E0(D2LANG_GetStringByTblIndex(wStrA), wszTemp, wszRef);
-        sub_6FB202B0(wszTemp, wszOut, nValA);
+        if (IsValidSkillStrId(wStrA) && IsValidSkillStrId(wStrB))
+        {
+            wchar_t wszPrefix[256] = {};
+            if (wcsstr(D2LANG_GetStringByTblIndex(wStrB), L"%d") != nullptr)
+                swprintf(wszPrefix, D2LANG_GetStringByTblIndex(wStrB), nValA);
+            else
+                wcscpy(wszPrefix, D2LANG_GetStringByTblIndex(wStrB));
+            swprintf(wszOut, L"%s: %d", wszPrefix, nValB);
+        }
         break;
-    }
     case 72:
-    {
-        wchar_t wszRatio[64];
-        swprintf(wszRatio, L"%d/%d", nValA, nValB);
-        sub_6FB20200(wszOut, D2LANG_GetStringByTblIndex(wStrA), wszRatio, D2LANG_GetStringByTblIndex(wStrB));
+        if (nValA && nValB > 0)
+            swprintf(wszOut, L"%+d/%d %s", nValA, nValB, D2LANG_GetStringByTblIndex(wStrA));
         break;
-    }
     case 73:
-    {
-        wchar_t wszRatio[64];
-        swprintf(wszRatio, L"%d/%d", nValA, nValB);
-        sub_6FB202E0(wszRatio, wszOut, D2LANG_GetStringByTblIndex(wStrA));
+        if (nValA && nValB > 0)
+            swprintf(wszOut, L"%d/%d %s", nValA, nValB, D2LANG_GetStringByTblIndex(wStrA));
         break;
-    }
     case 74:
-        sub_6FAF4620(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+        if (IsValidSkillStrId(wStrA))
+        {
+            if (wcsstr(D2LANG_GetStringByTblIndex(wStrA), L"%d") != nullptr)
+                swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), nValA);
+            else
+                wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
+        }
         break;
     case 75:
-        sub_6FAF4680(nSkillId, nSkillLevel, pUnit, wStrA, wStrB, wszOut);
+        if (IsValidSkillStrId(wStrA))
+        {
+            if (wcsstr(D2LANG_GetStringByTblIndex(wStrA), L"%d") != nullptr)
+                swprintf(wszOut, D2LANG_GetStringByTblIndex(wStrA), nValA, nValB);
+            else
+                wcscpy(wszOut, D2LANG_GetStringByTblIndex(wStrA));
+        }
         break;
     default:
         break;
@@ -3260,7 +3295,7 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF8B30(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
@@ -3291,7 +3326,7 @@ int32_t __fastcall sub_6FAF8B30(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
@@ -3302,7 +3337,7 @@ int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     int32_t nElemBonus = 0, nMinElem = 0, nMaxElem = 0;
     sub_6FAF5050(nSkillId, pUnit, nSkillLevel, pWeapon, &nElemBonus, &nMinElem, &nMaxElem, nullptr, nElemType);
 
-    int32_t nBonusPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x13C), nSkillId, nSkillLevel);
+    int32_t nBonusPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
     if (nBonusPct > 0)
     {
         nMinPhys += nMinPhys * nBonusPct / 100;
@@ -3323,6 +3358,48 @@ int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     return 2;
 }
 
+static void BuildFramedSkillTooltipString(const wchar_t wszLines[][256], const int32_t* pColors, int32_t nLineCount, wchar_t* wszFull, size_t nCapChars)
+{
+    wszFull[0] = L'\0';
+    size_t nUsed = 0;
+    for (int32_t i = 0; i < nLineCount; ++i)
+    {
+        if (i > 0 && nUsed + 2 < nCapChars)
+        {
+            wszFull[nUsed++] = L'\n';
+            wszFull[nUsed] = L'\0';
+        }
+        int32_t nCol = (pColors && pColors[i] >= 0 && pColors[i] <= 12) ? pColors[i] : 0;
+        if (wszLines[i][0] != L'\0' && nUsed + 4 < nCapChars)
+        {
+            wszFull[nUsed++] = 0x00FF;
+            wszFull[nUsed++] = L'c';
+            wszFull[nUsed++] = static_cast<wchar_t>(L'0' + nCol);
+            wszFull[nUsed] = L'\0';
+        }
+        size_t nLineLen = wcslen(wszLines[i]);
+        if (nUsed + nLineLen + 1 < nCapChars)
+        {
+            wcscpy(wszFull + nUsed, wszLines[i]);
+            nUsed += nLineLen;
+        }
+    }
+}
+
+static int32_t ClampSkillTooltipBottomY(const wchar_t* wszFull, int32_t nHoverY)
+{
+    int32_t nLines = 1;
+    for (const wchar_t* p = wszFull; *p; ++p)
+    {
+        if (*p == L'\n')
+            ++nLines;
+    }
+    const int32_t nEstHeight = nLines * 16 + 14;
+    if (nHoverY < nEstHeight + 8)
+        return nEstHeight + 8;
+    return nHoverY;
+}
+
 // 1.12a: 0x6FAF91D0
 // Calling convention: __cdecl
 void __cdecl sub_6FAF91D0(void)
@@ -3333,11 +3410,45 @@ void __cdecl sub_6FAF91D0(void)
     if (!pPlayer || !pSkillDesc)
         return;
 
-    wchar_t wszLines[32][256] = {};
-    int32_t nColors[32] = {};
+    wchar_t wszLines[48][256] = {};
+    int32_t nColors[48] = {};
     int32_t nLineCount = 0;
 
-    for (int32_t i = 0; i < 6; ++i)
+    for (int32_t nIdx = 16; nIdx >= 10; --nIdx)
+    {
+        if (pSkillDesc->nDescLine[nIdx])
+        {
+            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            if (wszLines[nLineCount][0])
+            {
+                if (pSkillDesc->nDescLine[nIdx] == 40)
+                    nColors[nLineCount] = SKILLS_EvaluateSkillDescFormula(pPlayer, pSkillDesc->dwDescCalcA[nIdx], nSkillId, 1);
+                nLineCount++;
+            }
+        }
+    }
+
+    if (nLineCount > 0)
+        nLineCount++;
+
+    int32_t nFirstLvlStart = nLineCount;
+    for (int32_t nIdx = 0; nIdx < 6; ++nIdx)
+    {
+        if (pSkillDesc->nDescLine[nIdx])
+        {
+            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            if (wszLines[nLineCount][0])
+                nLineCount++;
+        }
+    }
+
+    if (nLineCount > nFirstLvlStart)
+    {
+        wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(0x10AD)); // "First Level"
+        nLineCount++;
+    }
+
+    for (int32_t i = 0; i < 4; ++i)
     {
         int32_t nIdx = 9 - i;
         if (pSkillDesc->nDescLine[nIdx])
@@ -3348,24 +3459,15 @@ void __cdecl sub_6FAF91D0(void)
         }
     }
 
-    if (nLineCount > 0)
-        nLineCount++;
-
-    for (int32_t i = 0; i < 6; ++i)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (pSkillsTxt && pSkillsTxt->wReqLevel > 1)
     {
-        int32_t nIdx = 5 - i;
-        if (pSkillDesc->nDescLine[nIdx])
-        {
-            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
-            if (wszLines[nLineCount][0])
-                nLineCount++;
-        }
+        const int32_t nPlrLvl = STATLIST_UnitGetStatValue(pPlayer, 12 /* STAT_LEVEL */, 0);
+        nColors[nLineCount] = (nPlrLvl < pSkillsTxt->wReqLevel) ? 1 : 0;
+        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x1111), wszLines[nLineCount++], pSkillsTxt->wReqLevel); // "Required Level: "
     }
 
-    wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(0x0DD6));
-    nLineCount++;
-
-    if (pSkillDesc->wStrLong)
+    if (IsValidSkillStrId(pSkillDesc->wStrLong))
     {
         wchar_t wszLong[512];
         wcscpy(wszLong, D2LANG_GetStringByTblIndex(pSkillDesc->wStrLong));
@@ -3380,21 +3482,18 @@ void __cdecl sub_6FAF91D0(void)
         }
     }
 
-    if (pSkillDesc->wStrName)
+    if (IsValidSkillStrId(pSkillDesc->wStrName))
     {
         nColors[nLineCount] = 1;
         wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(pSkillDesc->wStrName));
     }
 
-    wchar_t wszFull[2048] = {};
-    for (int32_t i = nLineCount - 1; i >= 0; --i)
-    {
-        wcscat(wszFull, wszLines[i]);
-        wcscat(wszFull, L"\n");
-    }
+    wchar_t wszFull[4096] = {};
+    BuildFramedSkillTooltipString(wszLines, nColors, nLineCount, wszFull, 4096);
 
     D2WIN_SetFont(1);
-    D2WIN_DrawFramedText(wszFull, g_nSkillHoverX_6FBBA6D0, g_nSkillHoverY_6FBBA6CC, 0, (g_nSkillTreeTab_6FBA79FC == 3) ? 2 : 0);
+    const int32_t nClampedY = ClampSkillTooltipBottomY(wszFull, g_nSkillHoverY_6FBBA6CC);
+    D2WIN_DrawFramedText(wszFull, g_nSkillHoverX_6FBBA6D0, nClampedY, 0, (g_nSkillTreeTab_6FBA79FC == 3) ? 2 : 0);
 }
 
 // 1.12a: 0x6FAF9490
@@ -3422,7 +3521,7 @@ void __cdecl sub_6FAF9490(void)
             if (wszLines[nLineCount][0])
             {
                 if (pSkillDesc->nDescLine[nIdx] == 40)
-                    nColors[nLineCount] = SKILLS_EvaluateSkillFormula(pPlayer, pSkillDesc->dwDescCalcA[nIdx], nSkillId, nSkillLevel > 0 ? nSkillLevel : 1);
+                    nColors[nLineCount] = SKILLS_EvaluateSkillDescFormula(pPlayer, pSkillDesc->dwDescCalcA[nIdx], nSkillId, nSkillLevel > 0 ? nSkillLevel : 1);
                 nLineCount++;
             }
         }
@@ -3432,7 +3531,8 @@ void __cdecl sub_6FAF9490(void)
         nLineCount++;
 
     int32_t nNextLvl = nSkillLevel + 1;
-    for (int32_t nIdx = 5; nIdx >= 0; --nIdx)
+    int32_t nNextLvlStart = nLineCount;
+    for (int32_t nIdx = 0; nIdx < 6; ++nIdx)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
@@ -3442,12 +3542,15 @@ void __cdecl sub_6FAF9490(void)
         }
     }
 
-    wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(nSkillLevel > 0 ? 0x0DD7 : 0x0DD6));
-    nLineCount++;
+    if (nLineCount > nNextLvlStart)
+    {
+        wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(nSkillLevel > 0 ? 0x109D : 0x10AD)); // "Next Level" / "First Level"
+        nLineCount++;
+    }
 
     if (nSkillLevel > 0)
     {
-        for (int32_t nIdx = 5; nIdx >= 0; --nIdx)
+        for (int32_t nIdx = 0; nIdx < 6; ++nIdx)
         {
             if (pSkillDesc->nDescLine[nIdx])
             {
@@ -3456,7 +3559,7 @@ void __cdecl sub_6FAF9490(void)
                     nLineCount++;
             }
         }
-        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x0DD4), wszLines[nLineCount++], nSkillLevel);
+        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x109E), wszLines[nLineCount++], nSkillLevel); // "Current Skill Level: "
         nLineCount++;
     }
 
@@ -3470,7 +3573,13 @@ void __cdecl sub_6FAF9490(void)
         }
     }
 
-    if (pSkillDesc->wStrLong)
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
+    if (nSkillLevel <= 0 && pSkillsTxt && pSkillsTxt->wReqLevel > 1)
+    {
+        sub_6FB202B0(D2LANG_GetStringByTblIndex(0x1111), wszLines[nLineCount++], pSkillsTxt->wReqLevel);
+    }
+
+    if (IsValidSkillStrId(pSkillDesc->wStrLong))
     {
         wchar_t wszLong[512];
         wcscpy(wszLong, D2LANG_GetStringByTblIndex(pSkillDesc->wStrLong));
@@ -3485,21 +3594,18 @@ void __cdecl sub_6FAF9490(void)
         }
     }
 
-    if (pSkillDesc->wStrName)
+    if (IsValidSkillStrId(pSkillDesc->wStrName))
     {
-        nColors[nLineCount] = 3;
+        nColors[nLineCount] = 2;
         wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(pSkillDesc->wStrName));
     }
 
     wchar_t wszFull[4096] = {};
-    for (int32_t i = nLineCount - 1; i >= 0; --i)
-    {
-        wcscat(wszFull, wszLines[i]);
-        wcscat(wszFull, L"\n");
-    }
+    BuildFramedSkillTooltipString(wszLines, nColors, nLineCount, wszFull, 4096);
 
     D2WIN_SetFont(1);
-    D2WIN_DrawFramedText(wszFull, g_nSkillHoverX_6FBBA6D0, g_nSkillHoverY_6FBBA6CC, 0, (g_nSkillTreeTab_6FBA79FC == 3) ? 2 : 0);
+    const int32_t nClampedY = ClampSkillTooltipBottomY(wszFull, g_nSkillHoverY_6FBBA6CC);
+    D2WIN_DrawFramedText(wszFull, g_nSkillHoverX_6FBBA6D0, nClampedY, 0, (g_nSkillTreeTab_6FBA79FC == 3) ? 2 : 0);
 }
 
 // 1.12a: 0x6FAF9A90
@@ -3516,13 +3622,14 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     D2SkillStrc* pSkill = SKILLS_GetSkillById(pPlayer, nSkillId, nSkillFlags);
 
     wchar_t wszLines[32][256] = {};
+    int32_t nColors[32] = {};
     int32_t nLineCount = 0;
 
-    for (int32_t nIdx = 5; nIdx >= 0; --nIdx)
+    for (int32_t nIdx = 0; nIdx < 6; ++nIdx)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3532,7 +3639,7 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3543,17 +3650,15 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
         int32_t nCharges = 0, nMaxCharges = 0;
         if (SKILLS_GetSkillInfo(pSkill, nullptr, nullptr, &nMaxCharges, &nCharges) && nMaxCharges > 0)
         {
-            wchar_t wszChargeLine[128];
-            sub_6FB202B0(D2LANG_GetStringByTblIndex(0x0D7A), wszChargeLine, nCharges);
-            sub_6FB202B0(wszChargeLine, wszLines[nLineCount++], nMaxCharges);
+            swprintf(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(0x105B), nCharges, nMaxCharges);
         }
         else if (nSkillLevel > 0)
         {
-            sub_6FB202B0(D2LANG_GetStringByTblIndex(0x0DD4), wszLines[nLineCount++], nSkillLevel);
+            sub_6FB202B0(D2LANG_GetStringByTblIndex(0x109E), wszLines[nLineCount++], nSkillLevel);
         }
     }
 
-    if (pSkillDesc->wStrShort)
+    if (IsValidSkillStrId(pSkillDesc->wStrShort))
     {
         wchar_t wszShort[512];
         wcscpy(wszShort, D2LANG_GetStringByTblIndex(pSkillDesc->wStrShort));
@@ -3568,20 +3673,19 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
         }
     }
 
-    if (pSkillDesc->wStrName)
+    if (IsValidSkillStrId(pSkillDesc->wStrName))
+    {
+        nColors[nLineCount] = 2;
         wcscpy(wszLines[nLineCount++], D2LANG_GetStringByTblIndex(pSkillDesc->wStrName));
+    }
 
     wchar_t wszFull[2048] = {};
-    for (int32_t i = nLineCount - 1; i >= 0; --i)
-    {
-        wcscat(wszFull, wszLines[i]);
-        wcscat(wszFull, L"\n");
-    }
+    BuildFramedSkillTooltipString(wszLines, nColors, nLineCount, wszFull, 2048);
 
     D2WIN_SetFont(1);
     int32_t nX = g_nSpeedBarSkillX_6FBC2598[nHoverIdx];
     int32_t nY = g_nSpeedBarSkillY_6FBC24A8[nHoverIdx] - 48;
-    D2WIN_DrawFramedText(wszFull, nX, nY, 0, g_bSkillHoverIsRight_6FBC21C0 ? 2 : 0);
+    D2WIN_DrawFramedText(wszFull, nX, ClampSkillTooltipBottomY(wszFull, nY), 0, g_bSkillHoverIsRight_6FBC21C0 ? 2 : 0);
 }
 
 // 1.12a: 0x6FAFA030
@@ -3648,19 +3752,19 @@ void __fastcall sub_6FAFA620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         D2UnitStrc* pBoots = INVENTORY_GetItemFromBodyLoc(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60), 9);
         if (pBoots)
         {
-            uint8_t* pItemTxt = (uint8_t*)DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pBoots + 4));
+            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pBoots + 4));
             if (pItemTxt)
             {
-                nBootMin = pItemTxt[0x132];
-                nBootMax = pItemTxt[0x133];
+                nBootMin = pItemTxt->nMinDam;
+                nBootMax = pItemTxt->nMaxDam;
             }
         }
     }
 
     int32_t nSkillPct = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
-        nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)(pSkillsTxt + 0x13C), nSkillId, nSkillLevel);
+        nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
 
     int32_t nStatBonusPct = STATLIST_UnitGetStatValue(pUnit, 0x19, 0);
     int32_t nMin = nBaseMin + nBaseMin * (nStr * 120 / 100 + nStatBonusPct + nSkillPct - 20) / 100
@@ -3763,18 +3867,16 @@ int32_t __fastcall sub_6FAFB1B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
     if (pSkillDesc)
     {
-        if (pSkillDesc->dwDamCalc[0])
         {
-            int32_t nPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
+            int32_t nPct = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[0], nSkillId, nSkillLevel);
             if (nPct)
             {
                 *pMinDmg += *pMinDmg * nPct / 100;
                 *pMaxDmg += *pMaxDmg * nPct / 100;
             }
         }
-        if (pSkillDesc->dwDamCalc[1])
         {
-            int32_t nBonus = SKILLS_EvaluateSkillFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
+            int32_t nBonus = SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDesc->dwDamCalc[1], nSkillId, nSkillLevel) << 8;
             *pMinDmg += nBonus;
             *pMaxDmg += nBonus;
         }

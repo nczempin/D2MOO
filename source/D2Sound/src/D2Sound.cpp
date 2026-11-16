@@ -1850,7 +1850,16 @@ static void D2SOUND_ResetMusicTracksPlayed()
 // 1.12a: 0x6F9B9890 (@10006 | 1.10f @10034)
 void __fastcall D2SOUND_EnableMusic(int32_t bEnable)
 {
-	if (bEnable && !gbMusicEnabled)
+	if (!bEnable)
+	{
+		if (gpMusicSample != nullptr && gpMusicSample->hFile != nullptr)
+		{
+			D2SOUND_SmpStop(gpMusicSample);
+		}
+		gbMusicEnabled = FALSE;
+		return;
+	}
+	if (!gbMusicEnabled)
 	{
 		D2SOUND_ResetMusicTracksPlayed();
 		gbPlayFirstMusicTrack = TRUE;
@@ -1885,9 +1894,13 @@ void __fastcall D2SOUND_StopMusic()
 BOOL __fastcall D2SOUND_PlayMusicFile(const char* szFile, BOOL bLoop)
 {
 	if (gpMusicSample == nullptr || gpDirectSound == nullptr || gnCurrentMasterVolume == 0 ||
-	    gpMusicSample->hFile != nullptr || szFile == nullptr)
+	    szFile == nullptr)
 	{
 		return FALSE;
+	}
+	if (gpMusicSample->hFile != nullptr)
+	{
+		D2SOUND_SmpStop(gpMusicSample);
 	}
 	D2SOUND_SmpReset(gpMusicSample);
 	D2SOUND_SmpSetVolume(gpMusicSample, 110);
