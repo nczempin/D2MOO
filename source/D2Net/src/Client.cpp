@@ -30,7 +30,7 @@ int32_t dword_6FC0B260;
 //D2Net.0x6FC01000 (#10017)
 int32_t __stdcall D2NET_10017()
 {
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
 		return 1;
 	}
@@ -83,7 +83,7 @@ DWORD __stdcall CLIENT_ConnectToHost(void* szIpAddress)
 //D2Net.0x6FC01120 (#10025)
 int32_t __stdcall D2NET_10025()
 {
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
 		return 2;
 	}
@@ -98,7 +98,7 @@ int32_t __stdcall D2NET_10025()
 		return 0;
 	}
 
-	if (!sub_6FC01A00())
+	if (!NET_IsLocalLoopback())
 	{
 		D2_LOCK(&gCriticalSection);
 		dword_6FC0B260 = 1;
@@ -122,11 +122,11 @@ void __stdcall CLIENT_Initialize(int32_t a1, const char* szIpAddress)
 
 	gpPacketBuffer = D2_CALLOC_STRC(D2PacketBufferStrc);
 
-	sub_6FC01A20(a1);
+	NET_SetLocalLoopbackMode(a1);
 
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
-		sub_6FC02110();
+		SERVER_SendLocalConnectHandshake();
 		return;
 	}
 
@@ -165,7 +165,7 @@ void __stdcall CLIENT_Release()
 
 	DeleteCriticalSection(&gCriticalSection);
 
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
 		return;
 	}
@@ -213,7 +213,7 @@ DWORD __stdcall CLIENT_ThreadProc(void* a1)
 			if (v4 == -1)
 			{
 				WSAGetLastError();
-				if (!sub_6FC01A00())
+				if (!NET_IsLocalLoopback())
 				{
 					D2_LOCK(&gCriticalSection);
 					dword_6FC0B260 = 0;
@@ -289,7 +289,7 @@ DWORD __stdcall CLIENT_ThreadProc(void* a1)
 				if (v4 == -1)
 				{
 					WSAGetLastError();
-					if (!sub_6FC01A00())
+					if (!NET_IsLocalLoopback())
 					{
 						D2_LOCK(&gCriticalSection);
 						dword_6FC0B260 = 0;
@@ -302,7 +302,7 @@ DWORD __stdcall CLIENT_ThreadProc(void* a1)
 
 				if (!v4)
 				{
-					if (!sub_6FC01A00())
+					if (!NET_IsLocalLoopback())
 					{
 						D2_LOCK(&gCriticalSection);
 						dword_6FC0B260 = 0;
@@ -420,7 +420,7 @@ int32_t __stdcall CLIENT_Send(int32_t nUnused, const uint8_t* pBuffer, int32_t n
 		return 0;
 	}
 
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
 		D2_ASSERT(nBufferSize <= MAX_MSG_SIZE);
 		return SERVER_EnqueuePacketToMessageList(pBuffer, nBufferSize);
@@ -433,7 +433,7 @@ int32_t __stdcall CLIENT_Send(int32_t nUnused, const uint8_t* pBuffer, int32_t n
 	}
 
 	WSAGetLastError();
-	if (sub_6FC01A00())
+	if (NET_IsLocalLoopback())
 	{
 		return 0;
 	}

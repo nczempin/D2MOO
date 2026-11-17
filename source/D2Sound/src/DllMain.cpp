@@ -1,5 +1,6 @@
 #include <Windows.h>
 
+// 1.12a: D2Sound.0x6F9B81D0
 // NOLINTBEGIN(bugprone-branch-clone)
 BOOL __stdcall DllMain(HINSTANCE hModule, DWORD dwReason, void* lpReserved)
 {

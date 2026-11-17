@@ -8,28 +8,28 @@
 #pragma warning (disable: 28159)
 
 
-int32_t dword_6FC0B264;
+int32_t gnLocalLoopbackMode; // 1.10f: 0x6FC0B264
 
 
-//D2Net.0x6FC01A00
-int32_t __stdcall sub_6FC01A00()
+// 1.10f: D2Net.0x6FC01A00
+int32_t __stdcall NET_IsLocalLoopback()
 {
-	return dword_6FC0B264 == 1 || dword_6FC0B264 == 2;
+	return gnLocalLoopbackMode == 1 || gnLocalLoopbackMode == 2;
 }
 
-//D2Net.0x6FC01A20
-void __fastcall sub_6FC01A20(int32_t a1)
+// 1.10f: D2Net.0x6FC01A20
+void __fastcall NET_SetLocalLoopbackMode(int32_t nMode)
 {
-	dword_6FC0B264 = a1;
+	gnLocalLoopbackMode = nMode;
 }
 
-//D2Net.0x6FC01A30
+// 1.10f: D2Net.0x6FC01A30
 int32_t __fastcall NET_DequeueFirstPacketFromList(CRITICAL_SECTION* pCriticalSection, D2PacketStrc** ppPacketList, uint8_t* pBuffer, uint32_t nBufferSize)
 {
 	D2_LOCK(pCriticalSection);
 
 	D2PacketStrc* pPacket = *ppPacketList;
-	if (!pPacket || (dword_6FC0B264 == 2 && GetTickCount() - pPacket->dwTickCount < 500))
+	if (!pPacket || (gnLocalLoopbackMode == 2 && GetTickCount() - pPacket->dwTickCount < 500))
 	{
 		D2_UNLOCK(pCriticalSection);
 		return -1;

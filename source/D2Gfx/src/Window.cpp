@@ -119,10 +119,7 @@ int32_t __stdcall WINDOW_Create(int32_t bWindowed, D2GameResolutionMode nResolut
     ghWnd = CreateWindowExA(WS_EX_APPWINDOW | WS_EX_TOPMOST, "Diablo II", "Diablo II", dwStyle, nX, nY, nWidth, nHeight, nullptr, nullptr, ghInstance, nullptr);
     if (!ghWnd)
     {
-        //if (!sub_6FA750A7(GetLastError()))
-        //    return 0;
-        //__debugbreak();
-        //dword_6FA8D854 = 0;
+        // 1.10f: D2Gfx.0x6FA750A7 | 1.12a: D2Gfx.0x6FA87AA0 (SErrDisplayError)
         return 0;
     }
 

@@ -32,7 +32,7 @@ constexpr D2GfxHelperStrc gpGfxHelpers =
 {
     D2GFX_FillYBufferTable_6FA71010,
     D2GFX_DrawVisTile_6FA72730,
-    sub_6FA72900,
+    TILE_DrawVisTileFlatLit,
     D2GFX_FloorTileDraw_6FA73410,
     TILE_TileDrawLit_6FA729D0,
     D2GFX_DrawBlendedVisTile_6FA72B80,
@@ -63,11 +63,7 @@ int32_t __stdcall D2GFX_Initialize(HINSTANCE hInstance, WNDPROC pfWndProc, Displ
 
     if (!RegisterClassA(&wndClass))
     {
-    	//if (sub_6FA750A7(GetLastError()))
-    	//{
-    	//	__debugbreak();
-    	//	dword_6FA8D854 = 0;
-    	//}
+        // 1.10f: D2Gfx.0x6FA750A7 | 1.12a: D2Gfx.0x6FA87AA0 (SErrDisplayError)
         return 0;
     }
 
@@ -436,7 +432,7 @@ void __stdcall D2GFX_SetPalette(PALETTEENTRY* pPalette)
 void __stdcall D2GFX_SetPaletteTables(D2PaletteTableStrc* pPaletteTables)
 {
     gpGraphicsInterface->pfSetPaletteTables(pPaletteTables);
-    sub_6FA71070(pPaletteTables);
+    TILE_SetPaletteTable(pPaletteTables);
 }
 
 //D2Gfx.0x6FA73ED0 (#10050)

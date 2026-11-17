@@ -24,12 +24,12 @@ D2NET_DLL_DECL D2NET_SERVER_GetClientGameGUIDFunctionType __stdcall D2NET_10040(
 int32_t __fastcall SERVER_ReadPacketFromBufferCallback(QServer* nUnused, D2PacketBufferStrc* pPacketBuffer, int32_t nBufferSize);
 //D2Net.0x6FC01FE0
 int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer, uint32_t nBufferSize, int32_t* a3, int32_t* a4, int32_t* a5, int32_t* a6, int32_t nUnused1, int32_t nUnused2);
-//D2Net.0x6FC020B0
-int32_t __fastcall sub_6FC020B0(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4);
-//D2Net.0x6FC020E0
-int32_t __fastcall sub_6FC020E0(int32_t a1, int32_t a2, int32_t a3, int32_t a4);
-//D2Net.0x6FC02110
-int32_t __fastcall sub_6FC02110();
+// 1.10f: D2Net.0x6FC020B0
+int32_t __fastcall SERVER_OnClientConnectedCallback(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4);
+// 1.10f: D2Net.0x6FC020E0
+int32_t __fastcall SERVER_OnClientDisconnectedCallback(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4);
+// 1.10f: D2Net.0x6FC02110
+int32_t __fastcall SERVER_SendLocalConnectHandshake();
 //D2Net.0x6FC02130 (#10002)
 D2NET_DLL_DECL int32_t __stdcall SERVER_WaitForSingleObject(uint32_t dwMilliseconds);
 //D2Net.0x6FC02150 (#10003)

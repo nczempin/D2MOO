@@ -754,8 +754,8 @@ int32_t __fastcall SERVER_ValidateClientPacket(D2PacketBufferStrc* pPacketBuffer
 	return 2;
 }
 
-//D2Net.0x6FC020B0
-int32_t __fastcall sub_6FC020B0(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4)
+// 1.10f: D2Net.0x6FC020B0
+int32_t __fastcall SERVER_OnClientConnectedCallback(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4)
 {
 #if defined(D2_VERSION_112A)
 	uint8_t data[2] = { 0xAF, 1 };
@@ -767,8 +767,8 @@ int32_t __fastcall sub_6FC020B0(int32_t a1, int32_t nClientId, int32_t a3, int32
 	return 1;
 }
 
-//D2Net.0x6FC020E0
-int32_t __fastcall sub_6FC020E0(int32_t a1, int32_t a2, int32_t a3, int32_t a4)
+// 1.10f: D2Net.0x6FC020E0
+int32_t __fastcall SERVER_OnClientDisconnectedCallback(int32_t a1, int32_t nClientId, int32_t a3, int32_t a4)
 {
 #if defined(D2_VERSION_112A)
 	const uint8_t data[1] = { 0x70 };
@@ -776,12 +776,12 @@ int32_t __fastcall sub_6FC020E0(int32_t a1, int32_t a2, int32_t a3, int32_t a4)
 	const uint8_t data[1] = { 0x6F };
 #endif
 
-	FOG_10175(gpServer, data, sizeof(data), a2);
+	FOG_10175(gpServer, data, sizeof(data), nClientId);
 	return 1;
 }
 
-//D2Net.0x6FC02110
-int32_t __fastcall sub_6FC02110()
+// 1.10f: D2Net.0x6FC02110
+int32_t __fastcall SERVER_SendLocalConnectHandshake()
 {
 #if defined(D2_VERSION_112A)
 	uint8_t data[2] = { 0xAF, 0 };
@@ -801,7 +801,7 @@ int32_t __stdcall SERVER_WaitForSingleObject(uint32_t dwMilliseconds)
 //D2Net.0x6FC02150 (#10003)
 void __stdcall SERVER_Initialize(int32_t a1, int32_t a2)
 {
-	gpServer = FOG_InitializeServer(a1, 3, GAME_PORT, a2, SERVER_ValidateClientPacket, sub_6FC020B0, sub_6FC020E0, SERVER_ReadPacketFromBufferCallback);
+	gpServer = FOG_InitializeServer(a1, 3, GAME_PORT, a2, SERVER_ValidateClientPacket, SERVER_OnClientConnectedCallback, SERVER_OnClientDisconnectedCallback, SERVER_ReadPacketFromBufferCallback);
 }
 
 //D2Net.0x6FC02190 (#10035)
@@ -875,7 +875,7 @@ uint32_t __stdcall D2NET_10006(int8_t a1, int32_t nClientId, void* pBufferArg, u
 
 	D2_ASSERT(nBufferSize <= MAX_MSG_SIZE);
 
-	if (sub_6FC01A00() && nClientId == 0)
+	if (NET_IsLocalLoopback() && nClientId == 0)
 	{
 		CLIENT_ReadPacketFromBuffer((D2PacketBufferStrc*)pBuffer, nBufferSize);
 		return nBufferSize;

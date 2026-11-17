@@ -93,17 +93,17 @@ void __fastcall D2GFX_FillYBufferTable_6FA71010(uint8_t* a1, int32_t a2, int32_t
     {
         dword_6FA81450 = a2;
         dword_6FA84680 = a2;
-        sub_6FA72700();
+        TILE_RebuildScanlineOffsetTable();
     }
 
     if (gnViewMatrixAdjust_6FA8D254 != dword_6FA7E040)
     {
-        sub_6FA72630(a2, a3);
+        TILE_UpdateClipBounds(a2, a3);
     }
 }
 
 //D2Gfx.0x6FA71070
-void __fastcall sub_6FA71070(D2PaletteTableStrc* pPaletteTable)
+void __fastcall TILE_SetPaletteTable(D2PaletteTableStrc* pPaletteTable)
 {
     memcpy(gpPaletteTable_6FA81460, pPaletteTable, sizeof(gpPaletteTable_6FA81460));
     dword_6FA81448 = gpPaletteTable_6FA81460;
@@ -127,7 +127,7 @@ int32_t __fastcall D2GFX_SetContrastAndGamma_6FA710C0()
 }
 
 //D2Gfx.0x6FA71130
-void __fastcall sub_6FA71130(uint8_t* a1, uint8_t* a2, uint8_t* a3)
+void __fastcall TILE_DrawDiamondBlockFlatUnclipped(uint8_t* a1, uint8_t* a2, uint8_t* a3)
 {
     // Unrolled in original dll
     for (int i = 0; i < 15; ++i)
@@ -144,7 +144,7 @@ void __fastcall sub_6FA71130(uint8_t* a1, uint8_t* a2, uint8_t* a3)
 }
 
 //D2Gfx.0x6FA71340
-void __fastcall sub_6FA71340(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6)
+void __fastcall TILE_DrawDiamondBlockGouraudUnclipped(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6)
 {
     uint8_t* v6 = a2;
 
@@ -168,7 +168,7 @@ void __fastcall sub_6FA71340(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, i
 }
 
 //D2Gfx.0x6FA71720
-void __fastcall sub_6FA71720(uint8_t* a1, uint8_t* a2, uint8_t* a3, int32_t a4)
+void __fastcall TILE_DrawRleBlockFlatUnclipped(uint8_t* a1, uint8_t* a2, uint8_t* a3, int32_t a4)
 {
     // TODO: Names
     uint8_t* v4 = a2;
@@ -201,7 +201,7 @@ void __fastcall sub_6FA71720(uint8_t* a1, uint8_t* a2, uint8_t* a3, int32_t a4)
 }
 
 //D2Gfx.0x6FA71970
-void __fastcall sub_6FA71970(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6, int32_t a7, uint8_t a8)
+void __fastcall TILE_DrawRleBlockGouraudUnclipped(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6, int32_t a7, uint8_t a8)
 {
     // TODO: Names
     uint8_t* v8 = a1;
@@ -241,7 +241,7 @@ void __fastcall sub_6FA71970(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, i
 }
 
 //D2Gfx.0x6FA71D90) --------------------------------------------------------
-void __fastcall sub_6FA71D90(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, uint8_t* a5, int32_t a6)
+void __fastcall TILE_DrawRleBlockFlatClipped(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, uint8_t* a5, int32_t a6)
 {
     BYTE* v6; // ebp@1
     BYTE* v7; // eax@1
@@ -338,7 +338,7 @@ void __fastcall sub_6FA71D90(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, u
 }
 
 //D2Gfx.0x6FA72090) --------------------------------------------------------
-void __fastcall sub_6FA72090(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, int32_t a5, int32_t a6, int32_t a7, int32_t a8, int32_t a9, uint8_t a10)
+void __fastcall TILE_DrawRleBlockGouraudClipped(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, int32_t a5, int32_t a6, int32_t a7, int32_t a8, int32_t a9, uint8_t a10)
 {
     char v10; // cl@1
     BYTE* v11; // ebp@1
@@ -464,7 +464,7 @@ void __fastcall DGFX_InitGouraudCache_6FA72570()
 }
 
 //D2Gfx.0x6FA72630
-void __fastcall sub_6FA72630(int32_t a1, int32_t a2)
+void __fastcall TILE_UpdateClipBounds(int32_t a1, int32_t a2)
 {
     //TODO: Names
     int32_t v2 = 0;
@@ -500,7 +500,7 @@ void __fastcall sub_6FA72630(int32_t a1, int32_t a2)
 }
 
 //D2Gfx.0x6FA72700
-void __fastcall sub_6FA72700()
+void __fastcall TILE_RebuildScanlineOffsetTable()
 {
     int32_t v2 = -32 * dword_6FA81450;
     for (int32_t i = 0; i < std::size(dword_6FA846A8); ++i)
@@ -599,7 +599,7 @@ void __fastcall D2GFX_DrawVisTile_6FA72730(uint8_t* a1, int32_t nX, int32_t nY)
 }
 
 //D2Gfx.0x6FA72900
-void __fastcall sub_6FA72900(uint8_t* a1, int32_t nX, int32_t nY, uint8_t a4)
+void __fastcall TILE_DrawVisTileFlatLit(uint8_t* a1, int32_t nX, int32_t nY, uint8_t a4)
 {
     if (nY < dword_6FA8D230 || nY >= dword_6FA8D24C || nX < dword_6FA84688 || nX >= dword_6FA85218)
     {
@@ -612,11 +612,11 @@ void __fastcall sub_6FA72900(uint8_t* a1, int32_t nX, int32_t nY, uint8_t a4)
 
     if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || nX < dword_6FA846A0 || nX >= dword_6FA8D234)
     {
-        sub_6FA71D90(nX, nY, a1, pBuffer, stru_6FA81580[(uint32_t)a4 >> 3].unk0x00, 32);
+        TILE_DrawRleBlockFlatClipped(nX, nY, a1, pBuffer, stru_6FA81580[(uint32_t)a4 >> 3].unk0x00, 32);
     }
     else
     {
-        sub_6FA71720(a1, pBuffer, stru_6FA81580[(uint32_t)a4 >> 3].unk0x00, 32);
+        TILE_DrawRleBlockFlatUnclipped(a1, pBuffer, stru_6FA81580[(uint32_t)a4 >> 3].unk0x00, 32);
     }
 }
 
@@ -631,7 +631,7 @@ void __fastcall TILE_TileDrawLit_6FA729D0(uint8_t* a1, int32_t nX, int32_t nY, i
         }
         else
         {
-            sub_6FA72900(a1, nX, nY, *(uint8_t*)pIntensities);
+            TILE_DrawVisTileFlatLit(a1, nX, nY, *(uint8_t*)pIntensities);
         }
     }
     else
@@ -650,7 +650,7 @@ void __fastcall TILE_TileDrawLit_6FA729D0(uint8_t* a1, int32_t nX, int32_t nY, i
             }
             else
             {
-                sub_6FA72900(a1, nX, nY, *(uint8_t*)pIntensities);
+                TILE_DrawVisTileFlatLit(a1, nX, nY, *(uint8_t*)pIntensities);
             }
         }
         else
@@ -662,11 +662,11 @@ void __fastcall TILE_TileDrawLit_6FA729D0(uint8_t* a1, int32_t nX, int32_t nY, i
                 uint8_t* pBuffer = &gCmnInfo_pBuffer_6FA8144C[dword_6FA846A8[nY + 32]] + nX;
                 if (nY < dword_6FA8D238 || nY >= dword_6FA8D248 || nX < dword_6FA846A0 || nX >= dword_6FA8D234)
                 {
-                    sub_6FA72090(nX, nY, a1, pBuffer, v6, v7, v9, v8, 32, 8);
+                    TILE_DrawRleBlockGouraudClipped(nX, nY, a1, pBuffer, v6, v7, v9, v8, 32, 8);
                 }
                 else
                 {
-                    sub_6FA71970(a1, pBuffer, v6, v7, v9, v8, 32, 8);
+                    TILE_DrawRleBlockGouraudUnclipped(a1, pBuffer, v6, v7, v9, v8, 32, 8);
                 }
             }
         }
@@ -922,13 +922,13 @@ void __fastcall D2GFX_DrawRoofTile_6FA72DC0(uint8_t* a1, int32_t nX, int32_t nY,
 }
 
 //D2Gfx.0x6FA73130
-void __fastcall sub_6FA73130(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, uint8_t a5)
+void __fastcall TILE_DrawFloorBlockFlatClipped(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, uint8_t a5)
 {
     D2PaletteStrc* pPalette = &stru_6FA81580[(uint32_t)a5 >> 3];
 
     if (a1->nFormat & 4)
     {
-        sub_6FA71D90(a2, a3, a1->dwOffset_pData, a4, pPalette->unk0x00, 15);
+        TILE_DrawRleBlockFlatClipped(a2, a3, a1->dwOffset_pData, a4, pPalette->unk0x00, 15);
     }
     else
     {
@@ -955,7 +955,7 @@ void __fastcall sub_6FA73130(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3,
 }
 
 //D2Gfx.0x6FA73270
-void __fastcall sub_6FA73270(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, int32_t* a5)
+void __fastcall TILE_DrawFloorBlockGouraudClipped(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, int32_t* a5)
 {
     // TODO: Names
     const int32_t v7 = a5[3] - a5[0];
@@ -965,7 +965,7 @@ void __fastcall sub_6FA73270(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3,
 
     if (a1->nFormat & 4)
     {
-        sub_6FA72090(a2, a3, a1->dwOffset_pData, a4, v11, v7, v12, v9, 15, 7);
+        TILE_DrawRleBlockGouraudClipped(a2, a3, a1->dwOffset_pData, a4, v11, v7, v12, v9, 15, 7);
     }
     else
     {
@@ -1058,11 +1058,11 @@ void __fastcall D2GFX_FloorTileDraw_6FA73410(D2TileLibraryEntryStrc* pTileLibrar
         {
             if (bFlatLit)
             {
-                sub_6FA73130(pBlock, nBlockX, nBlockY, pBlockDst, nFlatIntensity);
+                TILE_DrawFloorBlockFlatClipped(pBlock, nBlockX, nBlockY, pBlockDst, nFlatIntensity);
             }
             else
             {
-                sub_6FA73270(pBlock, nBlockX, nBlockY, pBlockDst, aIntensities);
+                TILE_DrawFloorBlockGouraudClipped(pBlock, nBlockX, nBlockY, pBlockDst, aIntensities);
             }
         }
         else
@@ -1072,22 +1072,22 @@ void __fastcall D2GFX_FloorTileDraw_6FA73410(D2TileLibraryEntryStrc* pTileLibrar
                 uint8_t* pPal = stru_6FA81580[(uint32_t)nFlatIntensity >> 3].unk0x00;
                 if (pBlock->nFormat & 4)
                 {
-                    sub_6FA71720(pBlock->dwOffset_pData, pBlockDst, pPal, 15);
+                    TILE_DrawRleBlockFlatUnclipped(pBlock->dwOffset_pData, pBlockDst, pPal, 15);
                 }
                 else
                 {
-                    sub_6FA71130(pBlock->dwOffset_pData, pBlockDst, pPal);
+                    TILE_DrawDiamondBlockFlatUnclipped(pBlock->dwOffset_pData, pBlockDst, pPal);
                 }
             }
             else
             {
                 if (pBlock->nFormat & 4)
                 {
-                    sub_6FA71970(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1], 15, 7);
+                    TILE_DrawRleBlockGouraudUnclipped(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1], 15, 7);
                 }
                 else
                 {
-                    sub_6FA71340(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1]);
+                    TILE_DrawDiamondBlockGouraudUnclipped(pBlock->dwOffset_pData, pBlockDst, 16 * aIntensities[0], aIntensities[3] - aIntensities[0], 16 * aIntensities[1], aIntensities[2] - aIntensities[1]);
                 }
             }
         }

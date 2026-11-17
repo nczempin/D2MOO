@@ -109,6 +109,7 @@ static BOOL CALLBACK D2SOUND_DSEnumCallback(LPGUID lpGuid, LPCSTR lpcstrDescript
 static void D2SOUND_InitDirectSoundAttempt();
 static void D2SOUND_InitWaveFormat(WAVEFORMATEX* pFormat, uint16_t nChannels);
 static const uint8_t* D2SOUND_FindRiffChunk(const uint8_t* pData, uint32_t* pInOutSize, uint32_t dwFourCC, uint32_t* pOutChunkSize);
+static BOOL D2SOUND_ReadLeVxdVersionResource(void* pOutBuffer, const char* szFilePath, uint32_t* pInOutSize);
 static BOOL D2SOUND_GetVxdFileVersion(const char* szFilePath, uint32_t* pOutMajor, uint32_t* pOutMinor, uint32_t* pOutBuild);
 static void D2SOUND_ResetMusicTracksPlayed();
 static void D2SOUND_InitMusicSystem();
@@ -1533,7 +1534,7 @@ void __fastcall D2SOUND_OpenSoundSystem(BOOL bExpansion)
 	{
 		GetWindowsDirectoryA(szPath, MAX_PATH);
 		strcat(szPath, "\\SYSTEM\\EMU10K1.VXD");
-		if (D2SOUND_GetVxdFileVersion(szPath, &dwBuild, &dwMajor, &dwMinor) && dwMajor == 4)
+		if (D2SOUND_GetVxdFileVersion(szPath, &dwMajor, &dwMinor, &dwBuild) && dwMajor == 4)
 		{
 			if ((dwMinor == 6 && dwBuild >= 0x26E && dwBuild <= 0x2C6) ||
 			    (dwMinor == 11 && dwBuild >= 0x274 && dwBuild <= 0x275))
@@ -1546,7 +1547,7 @@ void __fastcall D2SOUND_OpenSoundSystem(BOOL bExpansion)
 	{
 		GetWindowsDirectoryA(szPath, MAX_PATH);
 		strcat(szPath, "\\SYSTEM\\CRLDS3D.VXD");
-		if (D2SOUND_GetVxdFileVersion(szPath, &dwBuild, &dwMajor, &dwMinor))
+		if (D2SOUND_GetVxdFileVersion(szPath, &dwMajor, &dwMinor, &dwBuild))
 		{
 			if (dwMajor < 4 || (dwMajor == 4 && (dwMinor < 12 || (dwMinor == 12 && dwBuild < 0x40B))))
 			{
@@ -1764,17 +1765,97 @@ const uint8_t* __fastcall D2SOUND_UtilParseWaveData(const uint8_t* pWaveBuffer, 
 	return pData;
 }
 
-// 1.12a: 0x6F9B9520 (Internal)
-static BOOL D2SOUND_GetVxdFileVersion(const char* szFilePath, uint32_t* pOutBuild, uint32_t* pOutMajor, uint32_t* pOutMinor)
+// 1.12a: 0x6F9B8F70 (Internal; SEH cleanup at 0x6F9B90CB)
+static BOOL D2SOUND_ReadLeVxdVersionResource(void* pOutBuffer, const char* szFilePath, uint32_t* pInOutSize)
 {
-	DWORD dwHandle = 0;
-	DWORD dwVerSize = GetFileVersionInfoSizeA(szFilePath, &dwHandle);
+	BOOL bSuccess = FALSE;
+	HANDLE hFile = CreateFileA(szFilePath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+	HANDLE hMap = nullptr;
+	const uint8_t* pView = nullptr;
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		hMap = CreateFileMappingA(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+		if (hMap != nullptr)
+		{
+			pView = static_cast<const uint8_t*>(MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0));
+			if (pView != nullptr)
+			{
+				if (*reinterpret_cast<const uint16_t*>(pView) == IMAGE_DOS_SIGNATURE)
+				{
+					const int32_t nLfaNew = *reinterpret_cast<const int32_t*>(pView + 0x3C);
+					const uint32_t* pLeHdr = reinterpret_cast<const uint32_t*>(pView + nLfaNew);
+					if (*pLeHdr != 0x0000454Cu) // 'LE' with zero byte/word order
+					{
+						SetLastError(ERROR_BAD_FORMAT);
+					}
+					else if (pLeHdr[0x2F] == 0) // e32_winreslen
+					{
+						*pInOutSize = 0;
+						SetLastError(ERROR_RESOURCE_DATA_NOT_FOUND);
+					}
+					else
+					{
+						const uint32_t dwResOff = pLeHdr[0x2E]; // e32_winresoff
+						const uint32_t dwResSize = *reinterpret_cast<const uint32_t*>(pView + dwResOff + 8);
+						if (pOutBuffer != nullptr && dwResSize <= *pInOutSize)
+						{
+							memset(pOutBuffer, 0, *pInOutSize);
+							memcpy(pOutBuffer, pView + dwResOff + 12, dwResSize);
+							*pInOutSize = dwResSize;
+							SetLastError(ERROR_SUCCESS);
+							bSuccess = TRUE;
+						}
+						else
+						{
+							*pInOutSize = dwResSize;
+							SetLastError(ERROR_INSUFFICIENT_BUFFER);
+						}
+					}
+				}
+				else
+				{
+					SetLastError(ERROR_BAD_FORMAT);
+				}
+			}
+		}
+	}
+
+	const DWORD dwSavedErr = GetLastError();
+	if (pView != nullptr)
+	{
+		UnmapViewOfFile(pView);
+	}
+	if (hMap != nullptr)
+	{
+		CloseHandle(hMap);
+	}
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		CloseHandle(hFile);
+	}
+	SetLastError(dwSavedErr);
+	return bSuccess;
+}
+
+// 1.12a: 0x6F9B9520 (Internal)
+static BOOL D2SOUND_GetVxdFileVersion(const char* szFilePath, uint32_t* pOutMajor, uint32_t* pOutMinor, uint32_t* pOutBuild)
+{
+	uint32_t dwVerSize = 0;
+	if (!D2SOUND_ReadLeVxdVersionResource(nullptr, szFilePath, &dwVerSize))
+	{
+		if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+		{
+			return FALSE;
+		}
+		SetLastError(ERROR_SUCCESS);
+	}
 	if (dwVerSize == 0)
 	{
 		return FALSE;
 	}
 	void* pVerData = D2_ALLOC(dwVerSize);
-	if (!GetFileVersionInfoA(szFilePath, dwHandle, dwVerSize, pVerData))
+	if (!D2SOUND_ReadLeVxdVersionResource(pVerData, szFilePath, &dwVerSize))
 	{
 		D2_FREE(pVerData);
 		return FALSE;
@@ -1786,9 +1867,9 @@ static BOOL D2SOUND_GetVxdFileVersion(const char* szFilePath, uint32_t* pOutBuil
 		D2_FREE(pVerData);
 		return FALSE;
 	}
-	*pOutBuild = HIWORD(pFixedInfo->dwFileVersionLS);
-	*pOutMajor = pFixedInfo->dwFileVersionMS & 0xFFFFu;
-	*pOutMinor = pFixedInfo->dwFileVersionLS & 0xFFFFu;
+	*pOutMajor = HIWORD(pFixedInfo->dwFileVersionMS);
+	*pOutMinor = pFixedInfo->dwFileVersionMS & 0xFFFFu;
+	*pOutBuild = pFixedInfo->dwFileVersionLS & 0xFFFFu;
 	D2_FREE(pVerData);
 	return TRUE;
 }

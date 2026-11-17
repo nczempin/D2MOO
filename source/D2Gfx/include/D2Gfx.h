@@ -175,7 +175,7 @@ struct D2GfxHelperStrc
 {
 	void(__fastcall* pfFillYBufferTable)(uint8_t* ppvBits, int32_t nWidth, int32_t nHeight, int32_t a4);
 	void(__fastcall* pfDrawVisTile)(uint8_t* a1, int32_t a2, int32_t a3);
-	void(__fastcall* pfUnknown)(uint8_t* a1, int32_t a2, int32_t a3, uint8_t a4);
+	void(__fastcall* pfDrawVisTileFlatLit)(uint8_t* a1, int32_t a2, int32_t a3, uint8_t a4);
 	void(__fastcall* pfFloorTileDraw)(D2TileLibraryEntryStrc* pTileLibraryEntry, int32_t nX, int32_t nY, D2GfxLightExStrc* pLightEx);
 	void(__fastcall* pfTileDrawLit)(uint8_t* a1, int32_t a2, int32_t a3, int32_t* a4);
 	void(__fastcall* pfDrawBlendedVisTile)(uint8_t* a1, int32_t a2, int32_t a3, uint8_t a4);

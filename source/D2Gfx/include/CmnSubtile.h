@@ -59,44 +59,44 @@ void __fastcall D2GFX_InitGouraudCache_6FA71000();
 //D2Gfx.0x6FA71010
 void __fastcall D2GFX_FillYBufferTable_6FA71010(uint8_t* a1, int32_t a2, int32_t a3, int32_t a4);
 
-//D2Gfx.0x6FA71070
-void __fastcall sub_6FA71070(D2PaletteTableStrc* pPaletteTable);
+// 1.10f: D2Gfx.0x6FA71070 | 1.12a: D2Gfx.0x6FA8AA40
+void __fastcall TILE_SetPaletteTable(D2PaletteTableStrc* pPaletteTable);
 
 //D2Gfx.0x6FA710C0
 int32_t __fastcall D2GFX_SetContrastAndGamma_6FA710C0();
 
-//D2Gfx.0x6FA71130
-void __fastcall sub_6FA71130(uint8_t* a1, uint8_t* a2, uint8_t* a3);
+// 1.10f: D2Gfx.0x6FA71130
+void __fastcall TILE_DrawDiamondBlockFlatUnclipped(uint8_t* pSrc, uint8_t* pDst, uint8_t* pPalette);
 
-//D2Gfx.0x6FA71340) --------------------------------------------------------
-void __fastcall sub_6FA71340(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6);
+// 1.10f: D2Gfx.0x6FA71340
+void __fastcall TILE_DrawDiamondBlockGouraudUnclipped(uint8_t* pSrc, uint8_t* pDst, int32_t nInt0, int32_t nDelta0, int32_t nInt1, int32_t nDelta1);
 
-//D2Gfx.0x6FA71720
-void __fastcall sub_6FA71720(uint8_t* a1, uint8_t* a2, uint8_t* a3, int32_t a4);
+// 1.10f: D2Gfx.0x6FA71720
+void __fastcall TILE_DrawRleBlockFlatUnclipped(uint8_t* pSrc, uint8_t* pDst, uint8_t* pPalette, int32_t nRows);
 
-//D2Gfx.0x6FA71970) --------------------------------------------------------
-void __fastcall sub_6FA71970(uint8_t* a1, uint8_t* a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6, int32_t a7, uint8_t a8);
+// 1.10f: D2Gfx.0x6FA71970
+void __fastcall TILE_DrawRleBlockGouraudUnclipped(uint8_t* pSrc, uint8_t* pDst, int32_t nInt0, int32_t nDelta0, int32_t nInt1, int32_t nDelta1, int32_t nRows, uint8_t nShift);
 
-//D2Gfx.0x6FA71D90) --------------------------------------------------------
-void __fastcall sub_6FA71D90(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, uint8_t* a5, int32_t a6);
+// 1.10f: D2Gfx.0x6FA71D90
+void __fastcall TILE_DrawRleBlockFlatClipped(int32_t nX, int32_t nY, uint8_t* pSrc, uint8_t* pDst, uint8_t* pPalette, int32_t nRows);
 
-//D2Gfx.0x6FA72090) --------------------------------------------------------
-void __fastcall sub_6FA72090(int32_t a1, int32_t a2, uint8_t* a3, uint8_t* a4, int32_t a5, int32_t a6, int32_t a7, int32_t a8, int32_t a9, uint8_t a10);
+// 1.10f: D2Gfx.0x6FA72090
+void __fastcall TILE_DrawRleBlockGouraudClipped(int32_t nX, int32_t nY, uint8_t* pSrc, uint8_t* pDst, int32_t nInt0, int32_t nDelta0, int32_t nInt1, int32_t nDelta1, int32_t nRows, uint8_t nShift);
 
 //D2Gfx.0x6FA72570
 void __fastcall DGFX_InitGouraudCache_6FA72570();
 
-//D2Gfx.0x6FA72630
-void __fastcall sub_6FA72630(int32_t a1, int32_t a2);
+// 1.10f: D2Gfx.0x6FA72630
+void __fastcall TILE_UpdateClipBounds(int32_t nWidth, int32_t nHeight);
 
-//D2Gfx.0x6FA72700
-void __fastcall sub_6FA72700();
+// 1.10f: D2Gfx.0x6FA72700
+void __fastcall TILE_RebuildScanlineOffsetTable();
 
 //D2Gfx.0x6FA72730) --------------------------------------------------------
 void __fastcall D2GFX_DrawVisTile_6FA72730(uint8_t* a1, int32_t nX, int32_t nY);
 
-//D2Gfx.0x6FA72900
-void __fastcall sub_6FA72900(uint8_t* a1, int32_t nX, int32_t nY, uint8_t a4);
+// 1.10f: D2Gfx.0x6FA72900
+void __fastcall TILE_DrawVisTileFlatLit(uint8_t* pSrc, int32_t nX, int32_t nY, uint8_t nIntensity);
 
 //D2Gfx.0x6FA729D0
 void __fastcall TILE_TileDrawLit_6FA729D0(uint8_t* a1, int32_t nX, int32_t nY, int32_t* pIntensities);
@@ -107,11 +107,11 @@ void __fastcall D2GFX_DrawBlendedVisTile_6FA72B80(uint8_t* a1, int32_t nX, int32
 //D2Gfx.0x6FA72DC0) --------------------------------------------------------
 void __fastcall D2GFX_DrawRoofTile_6FA72DC0(uint8_t* a1, int32_t nX, int32_t nY, int32_t* pIntensities, uint8_t nAlpha);
 
-//D2Gfx.0x6FA73130) --------------------------------------------------------
-void __fastcall sub_6FA73130(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, uint8_t a5);
+// 1.10f: D2Gfx.0x6FA73130
+void __fastcall TILE_DrawFloorBlockFlatClipped(D2TileLibraryBlockStrc* pBlock, int32_t nX, int32_t nY, uint8_t* pDst, uint8_t nIntensity);
 
-//D2Gfx.0x6FA73270) --------------------------------------------------------
-void __fastcall sub_6FA73270(D2TileLibraryBlockStrc* a1, int32_t a2, int32_t a3, uint8_t* a4, int32_t* a5);
+// 1.10f: D2Gfx.0x6FA73270
+void __fastcall TILE_DrawFloorBlockGouraudClipped(D2TileLibraryBlockStrc* pBlock, int32_t nX, int32_t nY, uint8_t* pDst, int32_t* pIntensities);
 
 //D2Gfx.0x6FA73410) --------------------------------------------------------
 void __fastcall D2GFX_FloorTileDraw_6FA73410(D2TileLibraryEntryStrc* pTileLibraryEntry, int32_t nX, int32_t nY, D2GfxLightExStrc* pLightEx);
