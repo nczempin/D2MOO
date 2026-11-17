@@ -2286,7 +2286,7 @@ int32_t __fastcall D2Client_FindBoundHotkeyForSkill(int32_t nSkillId, int32_t bL
     return -1;
 }
 
-void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx);
+void __fastcall SKILLDESC_DrawSpeedBarSkillTooltip(int32_t nSkillId, int32_t nHoverIdx);
 void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkillLevel, D2SkillStrc* pSkill, int32_t bLeftHand, int32_t nCenterX, int32_t nBottomY);
 
 static void Bridge_PopulateAndRenderSpeedBar(bool bLeftSide, bool bRender)
@@ -3877,7 +3877,7 @@ void __fastcall D2Client_DrawSpeedBarLeftTooltip(int a0, int a1)
     {
         g_bSkillHoverIsRight_6FBC21C0 = 0;
         const int32_t idx = g_nSpeedBarHoverIdx_6FBC21CC;
-        sub_6FAF9A90(g_nSpeedBarSkillIds_6FBC21D8[idx], idx);
+        SKILLDESC_DrawSpeedBarSkillTooltip(g_nSpeedBarSkillIds_6FBC21D8[idx], idx);
     }
 }
 void __fastcall D2Client_DrawSpeedBarRightTooltip(int a0, int a1)
@@ -3887,7 +3887,7 @@ void __fastcall D2Client_DrawSpeedBarRightTooltip(int a0, int a1)
     {
         g_bSkillHoverIsRight_6FBC21C0 = 1;
         const int32_t idx = g_nSpeedBarHoverIdx_6FBC21CC;
-        sub_6FAF9A90(g_nSpeedBarSkillIds_6FBC21D8[idx], idx);
+        SKILLDESC_DrawSpeedBarSkillTooltip(g_nSpeedBarSkillIds_6FBC21D8[idx], idx);
     }
 }
 struct D2UnitStrc * __fastcall D2Client_FindClientSideUnit(int a0, int a1)

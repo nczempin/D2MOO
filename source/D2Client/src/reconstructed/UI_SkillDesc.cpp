@@ -180,7 +180,7 @@ void __cdecl sub_6FAF2060(void);
 BOOL __fastcall sub_6FAF2090(D2SkillStrc* pSkill, D2UnitStrc* pUnit);
 void __fastcall sub_6FAF20D0(D2UnitStrc* pUnit, D2StatListStrc** ppSavedStatList, D2UnitStrc* pLeftWeapon);
 void __fastcall sub_6FAF2170(D2StatListStrc* pSavedStatList, D2UnitStrc* pUnit, D2UnitStrc* pLeftWeapon);
-D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId);
+D2SkillDescTxt* __fastcall SKILLDESC_GetRecordForSkill(int32_t nSkillId);
 int32_t __fastcall sub_6FAF2210(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
 int32_t __fastcall sub_6FAF2310(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
 int32_t __fastcall sub_6FAF2430(D2UnitStrc* pWeapon, D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor);
@@ -218,7 +218,7 @@ void __fastcall sub_6FAF3750(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF3790(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
 void __fastcall sub_6FAF37D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
 void __fastcall sub_6FAF3820(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
-void __fastcall sub_6FAF3870(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
+void __fastcall SKILLDESC_FormatSubMissileBurnDps(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
 void __fastcall sub_6FAF38D0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
 void __fastcall sub_6FAF3920(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut);
 void __fastcall sub_6FAF3980(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut, uint32_t dwCalcA, uint32_t dwCalcB);
@@ -279,12 +279,12 @@ int32_t __fastcall sub_6FAF6CF0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, wchar_t* wszOut);
 int32_t __stdcall sub_6FAF7560(int32_t nSkillId, wchar_t* wszOut, uint32_t nMaxChars);
 void __fastcall sub_6FAF75A0(D2UnitStrc* pUnit, int32_t nRow);
-void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
+void __fastcall SKILLDESC_FormatDescLine(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut);
 int32_t __fastcall sub_6FAF8B30(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
 int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
-void __cdecl sub_6FAF91D0(void);
-void __cdecl sub_6FAF9490(void);
-void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx);
+void __cdecl SKILLDESC_DrawLockedSkillTreeTooltip(void);
+void __cdecl SKILLDESC_DrawUnlockedSkillTreeTooltip(void);
+void __fastcall SKILLDESC_DrawSpeedBarSkillTooltip(int32_t nSkillId, int32_t nHoverIdx);
 int32_t __fastcall sub_6FAFA030(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
 int32_t __fastcall sub_6FAFA1E0(D2UnitStrc* pUnit, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor);
 int32_t __fastcall sub_6FAFA210(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType);
@@ -448,7 +448,7 @@ void __fastcall sub_6FAF20D0(D2UnitStrc* pUnit, D2StatListStrc** ppSavedStatList
     if (!pUnit || !UNITS_CanDualWield(pUnit))
         return;
 
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     if (!pInventory || !INVENTORY_GetLeftHandWeapon(pInventory))
         return;
 
@@ -470,7 +470,7 @@ void __fastcall sub_6FAF2170(D2StatListStrc* pSavedStatList, D2UnitStrc* pUnit, 
     if (!pUnit || !UNITS_CanDualWield(pUnit))
         return;
 
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     if (!pInventory)
         return;
 
@@ -488,7 +488,7 @@ void __fastcall sub_6FAF2170(D2StatListStrc* pSavedStatList, D2UnitStrc* pUnit, 
 
 // 1.12a: 0x6FAF21F0
 // Calling convention: __fastcall (ECX = nSkillId)
-D2SkillDescTxt* __fastcall sub_6FAF21F0(int32_t nSkillId)
+D2SkillDescTxt* __fastcall SKILLDESC_GetRecordForSkill(int32_t nSkillId)
 {
     D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
@@ -542,7 +542,7 @@ int32_t __fastcall sub_6FAF2310(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pUnit)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     D2StatListStrc* pSavedStatList = nullptr;
     sub_6FAF20D0(pUnit, &pSavedStatList, pWeapon);
 
@@ -862,7 +862,7 @@ int32_t __fastcall sub_6FAF2E30(int32_t nSkillId, D2UnitStrc* pUnit, int32_t nSk
 void __fastcall sub_6FAF2F00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut)
 {
     D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillsTxt || !pSkillDesc)
         return;
 
@@ -900,7 +900,7 @@ void __fastcall sub_6FAF2F00(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF3090(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, wchar_t* wszOut)
 {
     D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillsTxt || !pSkillDesc)
         return;
 
@@ -971,7 +971,7 @@ void __fastcall sub_6FAF3240(wchar_t* wszText, int32_t nColor, int32_t nRow, int
 void __fastcall sub_6FAF3300(int32_t nCol, int32_t nRow, D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t nColor)
 {
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillDesc)
         return;
 
@@ -1006,7 +1006,7 @@ int32_t __fastcall sub_6FAF3410(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pUnit)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF2430(pWeapon, pUnit, nSkillId, nSkillLevel, pAR, pColor);
 }
 
@@ -1069,7 +1069,7 @@ int32_t __fastcall sub_6FAF35C0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pUnit)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF2210(pWeapon, pUnit, nSkillId, nSkillLevel, pAR, pColor);
 }
 
@@ -1084,7 +1084,7 @@ int32_t __fastcall sub_6FAF3600(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t*
 
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
     int32_t nSkillLevel = SKILLS_GetSkillLevel(pUnit, pSkill, 1);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillDesc || pSkillDesc->wDescAtt == 0 || pSkillDesc->wDescAtt >= 18)
         return sub_6FAF35C0(pUnit, nSkillId, nSkillLevel, pAR, pColor);
 
@@ -1152,16 +1152,20 @@ void __fastcall sub_6FAF3820(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 {
     int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1) * 25;
     int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1) * 25;
-    sub_6FAF2B50(nMin, nMax, wszOut, wStrA, wStrB);
+    sub_6FAF2BF0(nMin, nMax, wszOut, wStrA, wStrB);
 }
 
-// 1.12a: 0x6FAF3870
-// Calling convention: __usercall (EAX = nSkillLevel, ECX = nSkillId, [esp+4] = pUnit, [esp+8] = wStrA, [esp+12] = wStrB, [esp+16] = wszOut)
-void __fastcall sub_6FAF3870(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
+// 1.12a: 0x6FAF4D10 (replaces 1.09 sub_6FAF3870 for descline 22 ground-fire sub-missile burn DPS)
+// Calling convention: __usercall (EAX = nSkillLevel, ECX = nSkillId, ESI = wMissileId, [esp+4] = pUnit, [esp+8] = wszOut)
+void __fastcall SKILLDESC_FormatSubMissileBurnDps(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMissileId, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
-    int32_t nMin = SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1) * 25 / 2;
-    int32_t nMax = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1) * 25 / 2;
-    sub_6FAF2B50(nMin, nMax, wszOut, wStrA, wStrB);
+    (void)nSkillId;
+    int32_t nMin = MISSILE_GetMinElemDamage(nullptr, pUnit, wMissileId, nSkillLevel) * 75;
+    int32_t nMax = MISSILE_GetMaxElemDamage(nullptr, pUnit, wMissileId, nSkillLevel) * 75;
+    uint8_t nElemType = MISSILE_GetElemTypeFromMissileId(wMissileId);
+    uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(nElemType);
+    uint16_t wPerSec = IsValidSkillStrId(wStrB) ? wStrB : 0x10BE;
+    sub_6FAF2A10(nMin, nMax, wszOut, wElemStr, wPerSec);
 }
 
 // 1.12a: 0x6FAF38D0
@@ -1451,7 +1455,7 @@ int32_t __fastcall sub_6FAF4290(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t*
 
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
     int32_t nSkillLevel = SKILLS_GetSkillLevel(pUnit, pSkill, 1);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillDesc || pSkillDesc->wDescDam >= 36)
         return 0;
 
@@ -1545,7 +1549,7 @@ void __fastcall sub_6FAF4560(int32_t nSkillId, int32_t nSkillLevel, uint16_t wMi
 void __fastcall sub_6FAF4620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1559,7 +1563,7 @@ void __fastcall sub_6FAF4620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF4680(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -1573,7 +1577,7 @@ void __fastcall sub_6FAF4680(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 void __fastcall sub_6FAF46E0(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, uint16_t wStrA, uint16_t wStrB, wchar_t* wszOut)
 {
     int32_t nMin = 0, nMax = 0;
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (pSkillsTxt)
     {
         nMin = SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 1) * 25;
@@ -1911,7 +1915,7 @@ int32_t __fastcall sub_6FAF51A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
         return 0;
 
     int32_t nAR1 = 0, nAR2 = 0;
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     sub_6FAF2210(INVENTORY_GetLeftHandWeapon(pInventory), pUnit, nSkillId, nSkillLevel, &nAR1, pColor);
     sub_6FAF2210(INVENTORY_GetSecondaryWeapon(pInventory), pUnit, nSkillId, nSkillLevel, &nAR2, pColor);
     *pAR = (nAR1 + nAR2) / 2;
@@ -1925,7 +1929,7 @@ int32_t __fastcall sub_6FAF51F0(D2UnitStrc* pUnit, int32_t* pAR, int32_t* pColor
     if (!pUnit || !UNITS_CanDualWield(pUnit))
         return 0;
 
-    D2UnitStrc* pSecondaryWeapon = INVENTORY_GetSecondaryWeapon(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pSecondaryWeapon = INVENTORY_GetSecondaryWeapon(pUnit->pInventory);
     return sub_6FAF2210(pSecondaryWeapon, pUnit, 0, 1, pAR, pColor);
 }
 
@@ -1977,12 +1981,12 @@ void __fastcall sub_6FAF5330(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkill
     }
 
     D2UnitStrc* pShield = nullptr;
-    if (pUnit && *(uint32_t*)pUnit == 0)
+    if (pUnit && pUnit->dwUnitType == UNIT_PLAYER)
     {
-        INVENTORY_GetEquippedShield(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60), &pShield);
+        INVENTORY_GetEquippedShield(pUnit->pInventory, &pShield);
         if (pShield)
         {
-            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pShield + 4));
+            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(pShield->dwClassId);
             if (pItemTxt)
             {
                 nBaseMin += pItemTxt->nMinDam;
@@ -2316,7 +2320,7 @@ void __fastcall sub_6FAF5A90(D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMaxO
 // Calling convention: __stdcall
 uint16_t __stdcall sub_6FAF5BD0(int32_t nSkillId)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     return pSkillDesc ? pSkillDesc->wStrName : 0;
 }
 
@@ -2324,7 +2328,7 @@ uint16_t __stdcall sub_6FAF5BD0(int32_t nSkillId)
 // Calling convention: __stdcall
 uint16_t __stdcall sub_6FAF5BF0(int32_t nSkillId)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     return pSkillDesc ? pSkillDesc->wStrShort : 0;
 }
 
@@ -2332,7 +2336,7 @@ uint16_t __stdcall sub_6FAF5BF0(int32_t nSkillId)
 // Calling convention: __stdcall
 uint16_t __stdcall sub_6FAF5C10(int32_t nSkillId)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     return pSkillDesc ? pSkillDesc->wStrLong : 0;
 }
 
@@ -2340,7 +2344,7 @@ uint16_t __stdcall sub_6FAF5C10(int32_t nSkillId)
 // Calling convention: __stdcall
 uint16_t __stdcall sub_6FAF5C30(int32_t nSkillId)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     return pSkillDesc ? pSkillDesc->wStrAlt : 0;
 }
 
@@ -2348,7 +2352,7 @@ uint16_t __stdcall sub_6FAF5C30(int32_t nSkillId)
 // Calling convention: __stdcall
 uint16_t __stdcall sub_6FAF5C50(int32_t nSkillId)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     return pSkillDesc ? pSkillDesc->wStrMana : 0;
 }
 
@@ -2358,7 +2362,7 @@ void __fastcall sub_6FAF5C70(D2UnitStrc* pUnit, int32_t nRow, D2SkillStrc* pSkil
 {
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__);
     int32_t nSkillLevel = SKILLS_GetSkillLevel(pUnit, pSkill, 1);
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillDesc)
         return;
 
@@ -2529,7 +2533,7 @@ int32_t __fastcall sub_6FAF6280(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pSkillsTxt)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(nSkillId, pUnit, nSkillLevel, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -2567,7 +2571,7 @@ int32_t __fastcall sub_6FAF63E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
         return 0;
 
     int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -2602,7 +2606,7 @@ int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
         return 0;
 
     int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -2614,7 +2618,7 @@ int32_t __fastcall sub_6FAF6510(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     nMinElem = nMinElem * 3 / 4 + SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     nMaxElem = nMaxElem * 3 / 4 + SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
 
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (pSkillDesc)
     {
         {
@@ -2654,7 +2658,7 @@ int32_t __fastcall sub_6FAF66F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pSkillsTxt)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -2689,7 +2693,7 @@ int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
         return 0;
 
     int32_t nSkillPct = SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], nSkillId, nSkillLevel);
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -2701,7 +2705,7 @@ int32_t __fastcall sub_6FAF6800(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     nMinElem = nMinElem * 3 / 4 + SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     nMaxElem = nMaxElem * 3 / 4 + SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
 
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (pSkillDesc)
     {
         {
@@ -2741,7 +2745,7 @@ int32_t __fastcall sub_6FAF6A20(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pSkillsTxt)
         return 0;
 
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     D2UnitStrc* pWeapon = sub_6FB57830(pInventory);
     if (!pWeapon || !ITEMS_CheckWeaponIfThrow(pWeapon))
         return sub_6FAF61B0(0, pUnit, 1, pWeapon, pMinDmg, pMaxDmg, pColor, 1, nElemType);
@@ -2815,11 +2819,11 @@ int32_t __fastcall sub_6FAF6A20(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAF6CF0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pAR, int32_t* pColor)
 {
-    uint8_t* pSkillsTxt = (uint8_t*)sub_6FAFF7E0(nSkillId);
+    D2SkillsTxt* pSkillsTxt = sub_6FAFF7E0(nSkillId);
     if (!pSkillsTxt)
         return 0;
 
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     D2UnitStrc* pLeftWeapon = INVENTORY_GetLeftHandWeapon(pInventory);
     D2UnitStrc* pRightWeapon = INVENTORY_GetSecondaryWeapon(pInventory);
 
@@ -2879,7 +2883,7 @@ void __fastcall sub_6FAF7410(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 // Calling convention: __stdcall
 int32_t __stdcall sub_6FAF7560(int32_t nSkillId, wchar_t* wszOut, uint32_t nMaxChars)
 {
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pSkillDesc || !IsValidSkillStrId(pSkillDesc->wStrName))
         return 0;
 
@@ -2912,7 +2916,7 @@ void __fastcall sub_6FAF75A0(D2UnitStrc* pUnit, int32_t nRow)
 // 1.12a: 0x6FAF7600
 // Calling convention: __usercall (EAX = pUnit, ECX = nSkillId, EDX = nSkillLevel, [esp+4] = pSkillDesc, [esp+8] = nLineIdx, [esp+12] = wszOut)
 // Jump table at 0x6FAF89FC (75 cases: descline 1..75)
-void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
+void __fastcall SKILLDESC_FormatDescLine(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* pUnit, D2SkillDescTxt* pSkillDesc, int32_t nLineIdx, wchar_t* wszOut)
 {
     wszOut[0] = L'\0';
     uint8_t nDescLine = pSkillDesc->nDescLine[nLineIdx];
@@ -3032,8 +3036,7 @@ void __fastcall sub_6FAF7600(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         break;
     case 22:
     {
-        uint16_t wElemStr = IsValidSkillStrId(wStrA) ? wStrA : GetElemDamageStrId_112a(pSkills ? pSkills->nEType : 0);
-        sub_6FAF3870(nSkillId, nSkillLevel, pUnit, wElemStr, IsValidSkillStrId(wStrB) ? wStrB : 0x10BE, wszOut);
+        SKILLDESC_FormatSubMissileBurnDps(nSkillId, nSkillLevel, pSkillDesc->wDescMissile[0], pUnit, wStrA, wStrB, wszOut);
         break;
     }
     case 23:
@@ -3297,7 +3300,7 @@ int32_t __fastcall sub_6FAF8B30(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pSkillsTxt)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(0, pUnit, 1, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -3328,7 +3331,7 @@ int32_t __fastcall sub_6FAF8D60(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     if (!pSkillsTxt)
         return 0;
 
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     int32_t nPhysBonus = 0, nMinPhys = 0, nMaxPhys = 0;
     sub_6FAF5DC0(nSkillId, pUnit, nSkillLevel, pWeapon, &nPhysBonus, &nMinPhys, &nMaxPhys, 0);
 
@@ -3400,11 +3403,11 @@ static int32_t ClampSkillTooltipBottomY(const wchar_t* wszFull, int32_t nHoverY)
 
 // 1.12a: 0x6FAF91D0
 // Calling convention: __cdecl
-void __cdecl sub_6FAF91D0(void)
+void __cdecl SKILLDESC_DrawLockedSkillTreeTooltip(void)
 {
     D2UnitStrc* pPlayer = sub_6FAFF3D0();
     int32_t nSkillId = g_nHoveredSkillId_6FBBA6E8;
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pPlayer || !pSkillDesc)
         return;
 
@@ -3416,7 +3419,7 @@ void __cdecl sub_6FAF91D0(void)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
             {
                 if (pSkillDesc->nDescLine[nIdx] == 40)
@@ -3434,7 +3437,7 @@ void __cdecl sub_6FAF91D0(void)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3451,7 +3454,7 @@ void __cdecl sub_6FAF91D0(void)
         int32_t nIdx = 9 - i;
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3496,11 +3499,11 @@ void __cdecl sub_6FAF91D0(void)
 
 // 1.12a: 0x6FAF9490
 // Calling convention: __cdecl
-void __cdecl sub_6FAF9490(void)
+void __cdecl SKILLDESC_DrawUnlockedSkillTreeTooltip(void)
 {
     D2UnitStrc* pPlayer = sub_6FAFF3D0();
     int32_t nSkillId = g_nHoveredSkillId_6FBBA6E8;
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pPlayer || !pSkillDesc)
         return;
 
@@ -3515,7 +3518,7 @@ void __cdecl sub_6FAF9490(void)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
             {
                 if (pSkillDesc->nDescLine[nIdx] == 40)
@@ -3534,7 +3537,7 @@ void __cdecl sub_6FAF9490(void)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nNextLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, nNextLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3552,7 +3555,7 @@ void __cdecl sub_6FAF9490(void)
         {
             if (pSkillDesc->nDescLine[nIdx])
             {
-                sub_6FAF7600(nSkillId, nSkillLevel, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+                SKILLDESC_FormatDescLine(nSkillId, nSkillLevel, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
                 if (wszLines[nLineCount][0])
                     nLineCount++;
             }
@@ -3565,7 +3568,7 @@ void __cdecl sub_6FAF9490(void)
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, nSkillLevel > 0 ? nSkillLevel : 1, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3618,7 +3621,7 @@ int32_t __fastcall D2Client_FindBoundHotkeyForSkill(int32_t nSkillId, int32_t bL
 void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkillLevel, D2SkillStrc* pSkill, int32_t bLeftHand, int32_t nCenterX, int32_t nBottomY)
 {
     D2UnitStrc* pPlayer = sub_6FAFF3D0();
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (!pPlayer || !pSkillDesc)
         return;
 
@@ -3633,7 +3636,7 @@ void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkil
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3643,7 +3646,7 @@ void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkil
     {
         if (pSkillDesc->nDescLine[nIdx])
         {
-            sub_6FAF7600(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
+            SKILLDESC_FormatDescLine(nSkillId, nEvalLvl, pPlayer, pSkillDesc, nIdx, wszLines[nLineCount]);
             if (wszLines[nLineCount][0])
                 nLineCount++;
         }
@@ -3700,7 +3703,7 @@ void __fastcall SKILLDESC_DrawActiveSkillTooltip(int32_t nSkillId, int32_t nSkil
 
 // 1.12a: 0x6FAF9A90
 // Calling convention: __fastcall (ECX = nSkillId, EDX = nHoverIdx)
-void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
+void __fastcall SKILLDESC_DrawSpeedBarSkillTooltip(int32_t nSkillId, int32_t nHoverIdx)
 {
     D2UnitStrc* pPlayer = sub_6FAFF3D0();
     if (!pPlayer || nHoverIdx < 0 || nHoverIdx >= 60)
@@ -3724,7 +3727,7 @@ void __fastcall sub_6FAF9A90(int32_t nSkillId, int32_t nHoverIdx)
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFA030(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 1, nElemType);
 }
 
@@ -3735,7 +3738,7 @@ int32_t __fastcall sub_6FAFA1E0(D2UnitStrc* pUnit, int32_t* pMinDmg, int32_t* pM
     if (!pUnit || !UNITS_CanDualWield(pUnit))
         return 0;
 
-    D2UnitStrc* pSecondaryWeapon = INVENTORY_GetSecondaryWeapon(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pSecondaryWeapon = INVENTORY_GetSecondaryWeapon(pUnit->pInventory);
     return sub_6FAF61B0(0, pUnit, 1, pSecondaryWeapon, pMinDmg, pMaxDmg, pColor, 0, 0);
 }
 
@@ -3743,7 +3746,7 @@ int32_t __fastcall sub_6FAFA1E0(D2UnitStrc* pUnit, int32_t* pMinDmg, int32_t* pM
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFA210(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 1, nElemType);
 }
 
@@ -3751,7 +3754,7 @@ int32_t __fastcall sub_6FAFA210(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFA260(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3779,12 +3782,12 @@ void __fastcall sub_6FAFA620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
         nBaseMax = 1;
 
     int32_t nBootMin = 0, nBootMax = 0;
-    if (pUnit && *(uint32_t*)pUnit == 0 && *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60))
+    if (pUnit && pUnit->dwUnitType == UNIT_PLAYER && pUnit->pInventory)
     {
-        D2UnitStrc* pBoots = INVENTORY_GetItemFromBodyLoc(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60), 9);
+        D2UnitStrc* pBoots = INVENTORY_GetItemFromBodyLoc(pUnit->pInventory, BODYLOC_FEET);
         if (pBoots)
         {
-            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(*(uint32_t*)((uint8_t*)pBoots + 4));
+            D2ItemsTxt* pItemTxt = DATATBLS_GetItemsTxtRecord(pBoots->dwClassId);
             if (pItemTxt)
             {
                 nBootMin = pItemTxt->nMinDam;
@@ -3817,7 +3820,7 @@ void __fastcall sub_6FAFA620(int32_t nSkillId, int32_t nSkillLevel, D2UnitStrc* 
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFA8A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     D2UnitStrc* pLeftWeapon = INVENTORY_GetLeftHandWeapon(pInventory);
     (void)pLeftWeapon;
     return sub_6FAF6A20(pUnit, nSkillId, nSkillLevel, pMinDmg, pMaxDmg, pColor, nElemType);
@@ -3827,7 +3830,7 @@ int32_t __fastcall sub_6FAFA8A0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFA930(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     sub_6FAF61B0(0, pUnit, 1, pWeapon, pMinDmg, pMaxDmg, pColor, 1, nElemType);
     *pMinDmg += SKILLS_GetElementalMinDamage(pUnit, nSkillId, nSkillLevel, 1);
     *pMaxDmg += SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
@@ -3850,7 +3853,7 @@ int32_t __fastcall sub_6FAFA9F0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFAB40(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3868,7 +3871,7 @@ int32_t __fastcall sub_6FAFAD40(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFAD90(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3876,7 +3879,7 @@ int32_t __fastcall sub_6FAFAD90(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFAFB0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3884,7 +3887,7 @@ int32_t __fastcall sub_6FAFAFB0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFB080(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3896,7 +3899,7 @@ int32_t __fastcall sub_6FAFB1B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
     *pMaxDmg = SKILLS_GetElementalMaxDamage(pUnit, nSkillId, nSkillLevel, 1);
     *pColor = 0;
 
-    D2SkillDescTxt* pSkillDesc = sub_6FAF21F0(nSkillId);
+    D2SkillDescTxt* pSkillDesc = SKILLDESC_GetRecordForSkill(nSkillId);
     if (pSkillDesc)
     {
         {
@@ -3920,7 +3923,7 @@ int32_t __fastcall sub_6FAFB1B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFB2E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2InventoryStrc* pInventory = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInventory = pUnit->pInventory;
     D2UnitStrc* pLeftWeapon = INVENTORY_GetLeftHandWeapon(pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pLeftWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
@@ -3929,7 +3932,7 @@ int32_t __fastcall sub_6FAFB2E0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFB3B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3937,7 +3940,7 @@ int32_t __fastcall sub_6FAFB3B0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSk
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFB480(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 
@@ -3951,7 +3954,7 @@ BOOL __stdcall sub_6FB074E0(D2UnitStrc* pUnit, int32_t nSkillId)
 {
     if (!pUnit)
         return FALSE;
-    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(*(void**)((uint8_t*)pUnit + 0xA8)); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
+    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(pUnit->pSkills); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
     {
         if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) == nSkillId && SKILLS_GetSkillLevel(pUnit, pSkill, 1) > 0)
             return TRUE;
@@ -3965,7 +3968,7 @@ BOOL __stdcall sub_6FB07530(D2UnitStrc* pUnit, int32_t nSkillId)
 {
     if (!pUnit)
         return FALSE;
-    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(*(void**)((uint8_t*)pUnit + 0xA8)); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
+    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(pUnit->pSkills); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
     {
         if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) == nSkillId && SKILLS_GetSkillLevel(pUnit, pSkill, 1) > 0)
             return TRUE;
@@ -3979,7 +3982,7 @@ BOOL __stdcall sub_6FB07580(D2UnitStrc* pUnit, int32_t nSkillId)
 {
     if (!pUnit)
         return FALSE;
-    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(*(void**)((uint8_t*)pUnit + 0xA8)); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
+    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(pUnit->pSkills); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
     {
         if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) == nSkillId && SKILLS_GetSkillLevel(pUnit, pSkill, 1) > 0)
             return TRUE;
@@ -3993,7 +3996,7 @@ BOOL __stdcall sub_6FB075D0(D2UnitStrc* pUnit, int32_t nSkillId)
 {
     if (!pUnit)
         return FALSE;
-    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(*(void**)((uint8_t*)pUnit + 0xA8)); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
+    for (D2SkillStrc* pSkill = SKILLS_GetFirstSkillFromSkillList(pUnit->pSkills); pSkill; pSkill = SKILLS_GetNextSkill(pSkill))
     {
         if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, __LINE__) == nSkillId && SKILLS_GetSkillLevel(pUnit, pSkill, 1) > 0)
             return TRUE;
@@ -4007,7 +4010,7 @@ void __cdecl sub_6FB07620(void)
 {
     int32_t nIdx = g_nSpeedBarHoverIdx_6FBC21CC;
     if (nIdx >= 0 && nIdx < g_nSpeedBarCount_6FBC21C8)
-        sub_6FAF9A90(g_nSpeedBarSkillIds_6FBC21D8[nIdx], nIdx);
+        SKILLDESC_DrawSpeedBarSkillTooltip(g_nSpeedBarSkillIds_6FBC21D8[nIdx], nIdx);
 }
 
 // ============================================================================
@@ -4241,7 +4244,7 @@ int32_t __stdcall sub_6FAF3160(uint16_t wStrCustom, wchar_t* wszOut, int32_t nMi
 // Calling convention: __usercall (EAX = pUnit, [esp+4..40] = dual-wield callback wrapper args)
 int32_t __stdcall sub_6FAF3440(D2UnitStrc* pUnit, int32_t* pVal1A, int32_t* pVal1B, int32_t* pVal1C, int32_t* pVal2A, int32_t* pVal2B, int32_t nArg1, int32_t nArg2, void* pfnCallback, int32_t nArg3, int32_t nArg4)
 {
-    if (!pUnit || !*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60) || !UNITS_CanDualWield(pUnit))
+    if (!pUnit || !pUnit->pInventory || !UNITS_CanDualWield(pUnit))
         return 0;
     return 1;
 }
@@ -4761,7 +4764,7 @@ int32_t __stdcall sub_6FAF6D70(D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMa
 // Calling convention: __usercall (EAX = nBonusPct, ECX = pUnit, [esp+4..32] = weapon damage calculation args)
 int32_t __stdcall sub_6FAF7160(int32_t nBonusPct, D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMaxOut, int32_t* pColorOut, D2SkillStrc* pSkill, D2UnitStrc* pWeapon, int32_t nSrcDam, int32_t bTwoHand)
 {
-    if (!pUnit || !*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60))
+    if (!pUnit || !pUnit->pInventory)
         return 0;
     return 1;
 }
@@ -4789,7 +4792,7 @@ int32_t __stdcall sub_6FAF9180(D2UnitStrc* pUnit, int32_t* pMinOut, int32_t* pMa
 // Calling convention: __fastcall
 int32_t __fastcall sub_6FAFACB0(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t* pMinDmg, int32_t* pMaxDmg, int32_t* pColor, int32_t nElemType)
 {
-    D2UnitStrc* pWeapon = sub_6FB57830(*(D2InventoryStrc**)((uint8_t*)pUnit + 0x60));
+    D2UnitStrc* pWeapon = sub_6FB57830(pUnit->pInventory);
     return sub_6FAF61B0(nSkillId, pUnit, nSkillLevel, pWeapon, pMinDmg, pMaxDmg, pColor, 0, nElemType);
 }
 #endif

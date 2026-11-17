@@ -1202,19 +1202,19 @@ void __stdcall SKILLTREE_RenderPanel()
         extern int32_t g_nHoveredSkillId_6FBBA6E8;
         extern int32_t g_nSkillHoverX_6FBBA6D0;
         extern int32_t g_nSkillHoverY_6FBBA6CC;
-        extern void __cdecl sub_6FAF91D0(void);
-        extern void __cdecl sub_6FAF9490(void);
+        extern void __cdecl SKILLDESC_DrawLockedSkillTreeTooltip(void);
+        extern void __cdecl SKILLDESC_DrawUnlockedSkillTreeTooltip(void);
 
         g_nHoveredSkillId_6FBBA6E8 = nHoveredSkillId;
         g_nSkillHoverX_6FBBA6D0    = nHoverX;
         g_nSkillHoverY_6FBBA6CC    = nHoverY;
         if (bHoveredSkillUnlocked)
         {
-            sub_6FAF9490();
+            SKILLDESC_DrawUnlockedSkillTreeTooltip();
         }
         else
         {
-            sub_6FAF91D0();
+            SKILLDESC_DrawLockedSkillTreeTooltip();
         }
     }
 }
