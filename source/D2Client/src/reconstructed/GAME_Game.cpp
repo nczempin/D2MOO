@@ -3604,7 +3604,9 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
 
             if (g_nConsecutiveSkippedFrames == 0)
             {
-                if (gpPlayerUnit != nullptr && UNITS_GetRoom(gpPlayerUnit) != nullptr)
+                if (gpPlayerUnit != nullptr &&
+                    UNITS_GetRoom(gpPlayerUnit) != nullptr &&
+                    gdwClientGameTick >= 3u)
                 {
                     if (g_tClientTiming.pfnRenderFrame != nullptr)
                     {
@@ -3612,6 +3614,10 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
                     }
                     g_tClientTiming.dwRenderedFrameCount += 1u;
                     g_tClientTiming.nFpsSampleFrames     += 1;
+                }
+                else
+                {
+                    UI_StepAndDrawLoadingScreen(0);
                 }
             }
             else if (bTickElapsed)
@@ -4973,6 +4979,14 @@ static void Autotest_WriteReportJson(const char* szOutDir, uint32_t dwVendorShop
             nD2MooModules);
         fclose(pJson);
     }
+
+    char szExpectedAutoChar[32] = {};
+    if (GetEnvironmentVariableA("D2MOO_AUTO_CHAR", szExpectedAutoChar, sizeof(szExpectedAutoChar)) > 0 &&
+        szExpectedAutoChar[0] != '\0' &&
+        _stricmp(g_szConfigCharName, szExpectedAutoChar) != 0)
+    {
+        ExitProcess(2);
+    }
 }
 
 void __fastcall D2Client_RunNativeAutotestTick(void)
@@ -5132,7 +5146,7 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
                 if (INVENTORY_UnitIsItem(pItem)) ++dwShopCount;
             }
         }
-        if ((dwShopCount >= 10u && (dwTick - s_dwPhaseTick) >= 4u) || (dwTick - s_dwPhaseTick) >= 24u)
+        if ((dwShopCount >= 10u && (dwTick - s_dwPhaseTick) >= 4u) || (dwTick - s_dwPhaseTick) >= 75u)
         {
             s_dwVendorShopItems = dwShopCount;
             Autotest_SimulateClick(120, 102);

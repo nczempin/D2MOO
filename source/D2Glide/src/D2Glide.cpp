@@ -330,9 +330,9 @@ static inline uint32_t BlendPixelRGBA(uint32_t dst, uint32_t src, DrawMode eDraw
 		const uint32_t dg = (dst >> 8) & 0xFFu;
 		const uint32_t db = (dst >> 16) & 0xFFu;
 		return PackRGBA(
-			static_cast<uint8_t>(std::min<uint32_t>(255u, dr + (sr >> 1))),
-			static_cast<uint8_t>(std::min<uint32_t>(255u, dg + (sg >> 1))),
-			static_cast<uint8_t>(std::min<uint32_t>(255u, db + (sb >> 1))));
+			static_cast<uint8_t>((dr * sr) / 255u),
+			static_cast<uint8_t>((dg * sg) / 255u),
+			static_cast<uint8_t>((db * sb) / 255u));
 	}
 	case DRAWMODE_TRANSHIGHLIGHT:
 		return PackRGBA(

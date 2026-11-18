@@ -2903,7 +2903,8 @@ int32_t __fastcall D2LAUNCH_MainEntry(D2ConfigStrc* pCfg)
 	D2LAUNCH_DestroyAllControls();
 	D2LAUNCH_FreeSprites(FALSE);
 	STRTABLE_Destroy();
-	std::memset(&pCfg->_0082[26], 0, 24);
+	static_assert(sizeof(pCfg->_0082) >= 48, "D2ConfigStrc::_0082 must be at least 48 bytes so clearing the upper half never touches szName");
+	std::memset(&pCfg->_0082[24], 0, 24);
 	D2Win_10016();
 
 	return gdwNextModule;

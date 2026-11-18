@@ -1842,7 +1842,7 @@ int32_t __stdcall Bridge_D2SOUND_GetMusicVolume_84475() { return D2SOUND_GetMusi
 #pragma comment(linker, "/alternatename:_D2SOUND_GetMusicVolume@0=_Bridge_D2SOUND_GetMusicVolume_84475@0")
 int32_t __stdcall Bridge_D2WIN_SetEditBoxText_74631(D2WinEditBoxStrc* p, const Unicode* w) { if (!p || !w) return 0; Unicode::strncpy(p->wszText, w, 255); p->wszText[255] = 0; p->nTextLength = Unicode::strlen(p->wszText); return 1; }
 #pragma comment(linker, "/alternatename:_D2WIN_SetEditBoxText@8=_Bridge_D2WIN_SetEditBoxText_74631@8")
-void __stdcall Bridge_D2Win_TakeScreenshot_80137() {  }
+void __stdcall Bridge_D2Win_TakeScreenshot_80137() { D2Win_10168_WINMAIN_CreateScreenshot(); }
 #pragma comment(linker, "/alternatename:_D2Win_TakeScreenshot@0=_Bridge_D2Win_TakeScreenshot_80137@0")
 D2MonStatsTxt* __stdcall Bridge_DATATBLS_GetMonsterTxtRecord_44850(int32_t id) { return DATATBLS_GetMonStatsTxtRecord(id); }
 #pragma comment(linker, "/alternatename:_DATATBLS_GetMonsterTxtRecord@4=_Bridge_DATATBLS_GetMonsterTxtRecord_44850@4")

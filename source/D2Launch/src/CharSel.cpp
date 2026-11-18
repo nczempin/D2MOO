@@ -45,14 +45,14 @@ static D2LaunchScrollTrackStrc gCharScrollTrack = { 585, 457, 363 }; // 0x6FA60F
 
 // 8 Main Character Slot TextBoxes (0x6FA627F8..0x6FA62948: field_14 = 0x4C = 76px paperdoll offset)
 static D2WinControlInitStrc gCtrlCharSlotText[8] = {
-	{ D2WIN_TEXTBOX, 37,  178, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA627F8
-	{ D2WIN_TEXTBOX, 309, 178, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62828
-	{ D2WIN_TEXTBOX, 37,  271, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62858
-	{ D2WIN_TEXTBOX, 309, 271, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62888
-	{ D2WIN_TEXTBOX, 37,  364, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA628B8
-	{ D2WIN_TEXTBOX, 309, 364, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA628E8
-	{ D2WIN_TEXTBOX, 37,  457, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62918
-	{ D2WIN_TEXTBOX, 309, 457, 200, 92, 0x4C, 0, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62948
+	{ D2WIN_TEXTBOX, 37,  178, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA627F8
+	{ D2WIN_TEXTBOX, 309, 178, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62828
+	{ D2WIN_TEXTBOX, 37,  271, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62858
+	{ D2WIN_TEXTBOX, 309, 271, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62888
+	{ D2WIN_TEXTBOX, 37,  364, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA628B8
+	{ D2WIN_TEXTBOX, 309, 364, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA628E8
+	{ D2WIN_TEXTBOX, 37,  457, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62918
+	{ D2WIN_TEXTBOX, 309, 457, 200, 92, 0x4C, 8, nullptr, D2LAUNCH_OnCharSlotClick, nullptr, &gFontStyle16, reinterpret_cast<void*>(0x20) }, // 0x6FA62948
 };
 
 // 8 Right-Hand Clickable Slot TextBoxes (0x6FA62978..0x6FA62AC8: extends slot click target to full 272px width)

@@ -1413,6 +1413,9 @@ int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap)
             bClosedAny = 1;
         }
     }
+    if (bClosedAny != 0) {
+        g_dwPanelCloseCooldownTick = GetTickCount() + 500u;
+    }
     return bClosedAny;
 }
 

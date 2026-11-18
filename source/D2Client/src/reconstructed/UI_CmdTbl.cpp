@@ -2473,8 +2473,10 @@ void __fastcall CMDTBL_OnEscMenuDown(void)
         return;
     if (NPCMENU_IsActive())
     {
+        extern DWORD g_dwPanelCloseCooldownTick;
         NPCMENU_CloseActiveMenu();
         UI_CloseAllOpenPanels(0);
+        g_dwPanelCloseCooldownTick = GetTickCount() + 500u;
         return;
     }
     if (gbEscOptionsOpen)
