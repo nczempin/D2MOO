@@ -2425,6 +2425,7 @@ struct D2DialogStrc;
 extern D2DialogStrc* __cdecl DIALOG_GetActiveDialog(void);
 extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
 extern void __fastcall D2Client_CloseNpcGossipSpeech(void);
+extern int32_t __fastcall D2Client_AdvanceOrCloseNpcSpeech(void);
 extern int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit);
 extern int32_t g_bInteractingWithNpc;
 extern D2UnitStrc* g_pTradeNpcUnit;
@@ -2436,10 +2437,12 @@ void __fastcall CMDTBL_OnChatInputDown(void)
         return;
     if (D2Client_IsNpcGossipSpeechOpen() != 0)
     {
-        D2Client_CloseNpcGossipSpeech();
-        if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr)
+        if (D2Client_AdvanceOrCloseNpcSpeech() == 0)
         {
-            sub_6FACCF00(g_pTradeNpcUnit);
+            if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr)
+            {
+                sub_6FACCF00(g_pTradeNpcUnit);
+            }
         }
         return;
     }

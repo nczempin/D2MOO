@@ -2860,6 +2860,8 @@ void __fastcall GAME_LoadAct(uint8_t nAct, uint32_t dwMapSeed, uint16_t wLevelId
         g_pActSeeds->dwEndSeed  = dwFlags;
     }
 
+    extern void __cdecl sub_6FAC8030(void);
+    sub_6FAC8030();
     AUTOMAP_InitColors();
     LIGHTMAP_InitializeReciprocalTableAndActCallback();
     UI_InitPaletteColors();
@@ -3591,7 +3593,9 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
 
             if (bUpdatedProgress)
             {
+                extern void __fastcall D2Client_TickPendingNpcInteract(void);
                 extern void __fastcall D2Client_RunNativeAutotestTick(void);
+                D2Client_TickPendingNpcInteract();
                 D2Client_RunNativeAutotestTick();
             }
 
@@ -5135,7 +5139,8 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
             }
             break;
         }
-        if (gaPanelStates[8] != 0)
+        extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+        if (gaPanelStates[8] != 0 || D2Client_IsNpcGossipSpeechOpen() != 0)
         {
             s_dwPhaseTick = dwTick;
             s_nPhase = 2;
@@ -5175,11 +5180,13 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
         }
         else
         {
-            const int32_t vdx = UNITS_GetXPosition(gpPlayerUnit) - UNITS_GetXPosition(pVendor);
-            const int32_t vdy = UNITS_GetYPosition(gpPlayerUnit) - UNITS_GetYPosition(pVendor);
-            if (((vdx * vdx + vdy * vdy) <= 49 && (dwTick - s_dwStepSentTick) >= 6u) || (dwTick - s_dwStepSentTick) >= 45u)
+            const uint32_t dwWait = dwTick - s_dwStepSentTick;
+            if (dwWait == 12u || dwWait == 28u)
             {
-                MSG_ResetLastSentPacket();
+                D2Client_InteractWithNPC_6FAE30C0(pVendor);
+            }
+            else if (dwWait >= 60u)
+            {
                 D2Client_InteractWithNPC_6FAE30C0(pVendor);
                 s_dwPhaseTick = dwTick;
                 s_nPhase = 2;
@@ -5191,7 +5198,18 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
     case 2:
         if ((dwTick - s_dwPhaseTick) >= 4u)
         {
+            extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+            extern void __fastcall D2Client_CloseNpcGossipSpeech(void);
+            extern int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit);
             extern int __cdecl sub_6FAC9D00(void);
+            if (D2Client_IsNpcGossipSpeechOpen() != 0)
+            {
+                D2Client_CloseNpcGossipSpeech();
+                if (D2UnitStrc* pV = g_pTradeNpcUnit ? g_pTradeNpcUnit : D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER))
+                {
+                    sub_6FACCF00(pV);
+                }
+            }
             Autotest_CaptureBmp(s_szOutDir, "native_step2_npc_dialog.bmp");
             if (s_dwVendorGuid != 0)
             {

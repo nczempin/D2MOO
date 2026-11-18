@@ -349,14 +349,6 @@ struct D2NpcMenuDefStrc {
     uint8_t bHasMenu;                     // +0x26
 };
 
-// sizeof = 0x16 (table at 0x6FBA7F08, 45 entries)
-struct D2NpcGossipDefStrc {
-    uint16_t wNpcClassId;                 // +0x00
-    uint16_t wCount;                      // +0x02
-    uint16_t wIntroIds[8];                // +0x04
-    uint16_t bIntroShown;                 // +0x14
-};
-
 // sizeof = 0x14 (table at 0x6FBA6AA8)
 struct D2NpcQuestActionDefStrc {
     int32_t nNpcClassId;                  // +0x00
@@ -570,53 +562,7 @@ static const D2NpcMenuDefStrc g_aNpcMenuDefs[48] = {
     { 539, 2, { 3381,    0,    0, 0, 0 }, { (void*)sub_6FACC100, nullptr,             nullptr,             nullptr, nullptr }, 0 },
 };
 
-static D2NpcGossipDefStrc g_aNpcGossipDefs[45] = {
-    { 148, 0, {  6144, 47727, 3439, 0, 0, 0, 0,   0 }, 256 },
-    { 154, 0, { 36864, 47726, 2415, 0, 0, 0, 0,   0 }, 256 },
-    { 146, 0, { 14336, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
-    { 147, 0, { 45056, 47724, 2415, 0, 0, 0, 0,   0 }, 256 },
-    { 150, 0, { 20480, 47723, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 155, 0, {  2048, 47724, 2927, 0, 0, 0, 0, 256 }, 256 },
-    { 331, 0, {  2048, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
-    { 266, 0, {  2048, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
-    { 408, 0, {  2051, 47724,  111, 0, 0, 0, 0,   0 }, 256 },
-    { 175, 0, {  6145, 47734, 1903, 0, 0, 0, 0,   0 }, 257 },
-    { 176, 0, { 57345, 47727, 2671, 0, 0, 0, 0,   0 }, 257 },
-    { 177, 0, { 30721, 47728, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 199, 0, {  2049, 47730, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 200, 0, { 49153, 47730, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 198, 0, { 12289, 47729, 3695, 0, 0, 0, 0,   0 }, 256 },
-    { 201, 0, { 26625, 47731, 2671, 0, 0, 0, 0,   0 }, 256 },
-    { 202, 0, {     1, 47732, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 178, 0, { 47105, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 210, 0, { 24577, 47733, 3183, 0, 0, 0, 0, 256 }, 256 },
-    { 265, 0, { 14336, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
-    { 244, 0, { 43009, 47725, 1903, 0, 0, 0, 0,   0 }, 257 },
-    { 245, 0, {  6146, 47726, 2159, 0, 0, 0, 0,   0 }, 256 },
-    { 246, 0, { 64515, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
-    { 251, 0, { 52225, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
-    { 252, 0, { 59394, 47735, 2415, 0, 0, 0, 0,   0 }, 256 },
-    { 253, 0, { 12290, 47735, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 254, 0, { 28674, 47736, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 255, 0, {  6146, 47737, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 406, 0, { 47106, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 257, 0, { 47106, 47732, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 264, 0, { 34818, 47734, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 297, 0, { 12290, 47738, 1647, 0, 0, 0, 0,   0 }, 256 },
-    { 367, 0, { 52227, 47737,  879, 0, 0, 0, 0, 256 }, 256 },
-    { 405, 0, { 52227, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
-    { 257, 0, { 52227, 47737,  879, 0, 0, 0, 0,   0 }, 256 },
-    { 511, 0, {     4, 47740, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 512, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 513, 0, { 47108, 47740, 4207, 0, 0, 0, 0,   0 }, 256 },
-    { 514, 0, { 43012, 47741, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 515, 0, { 24580, 47742, 2927, 0, 0, 0, 0,   0 }, 256 },
-    { 521, 0, { 52228, 47737,  879, 0, 0, 0, 0, 256 }, 256 },
-    { 520, 0, { 36868, 47738, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 527, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 537, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
-    { 538, 0, { 18436, 47739, 3183, 0, 0, 0, 0,   0 }, 256 },
-};
+#include "D2NpcSpeechTables.h"
 
 static const D2NpcQuestActionDefStrc g_aNpcQuestActionDefs[8] = {
     { 155,  6, 0, 1, sub_6FACB2E0 },
@@ -802,7 +748,8 @@ int __stdcall sub_6FAC7FC0(int nQuestId, int nState)
 void __cdecl sub_6FAC8030()
 {
     for (int i = 0; i < 45; ++i) {
-        g_aNpcGossipDefs[i].bIntroShown = 0;
+        g_aNpcGossipDefs[i].bIntroShown = s_abNpcDefaultIntroShown[i];
+        g_aNpcGossipDefs[i].dwLastPicked = 0u;
     }
 }
 
@@ -948,6 +895,7 @@ void __cdecl sub_6FAC88F0()
 // 1.12a: 0x6FAC8940 (__cdecl)
 void __cdecl sub_6FAC8940()
 {
+    sub_6FAC8030();
     sub_6FAC88F0();
     if (g_pClientQuestRecord) {
         QUESTRECORD_FreeRecord(nullptr, g_pClientQuestRecord);
@@ -1122,6 +1070,8 @@ int __cdecl sub_6FAC97E0()
 // 1.12a: 0x6FAC9AF0 (__cdecl)
 void __cdecl sub_6FAC9AF0()
 {
+    extern void __fastcall D2Client_CancelPendingNpcInteract(void);
+    D2Client_CancelPendingNpcInteract();
     sub_6FAC9760();
     sub_6FAC8D00();
     g_nInteractingNpcGUID = 0;
@@ -1478,20 +1428,93 @@ static int __cdecl NPCMENU_BackToMainMenu()
     return 1;
 }
 
+extern uint8_t gnLocalPlayerCharClass;
+static bool NPCMENU_IsQuestCompleted(int nQuestStateFlag);
+
+uint16_t __fastcall NPCMENU_PickIntroStringId(int32_t nNpcClassId, int32_t bMarkShown)
+{
+    for (int i = 0; i < 45; ++i) {
+        if (g_aNpcGossipDefs[i].dwNpcClassId == static_cast<uint32_t>(nNpcClassId)) {
+            if (bMarkShown) {
+                g_aNpcGossipDefs[i].bIntroShown = 1u;
+            }
+            const D2NpcGossipLineStrc* pLines = g_aNpcGossipDefs[i].pLines;
+            const uint32_t nCount = g_aNpcGossipDefs[i].nLineCount;
+            if (!pLines || nCount == 0u) {
+                return 0xFFFFu;
+            }
+            if (nCount >= 2u && pLines[1].nCharClassFilter == static_cast<int32_t>(gnLocalPlayerCharClass)) {
+                return pLines[1].wStringId;
+            }
+            return pLines[0].wStringId;
+        }
+    }
+    return 0xFFFFu;
+}
+
+uint16_t __fastcall NPCMENU_PickGossipStringId(int32_t nNpcClassId)
+{
+    for (int i = 0; i < 45; ++i) {
+        if (g_aNpcGossipDefs[i].dwNpcClassId == static_cast<uint32_t>(nNpcClassId)) {
+            const D2NpcGossipLineStrc* pLines = g_aNpcGossipDefs[i].pLines;
+            const uint32_t nCount = g_aNpcGossipDefs[i].nLineCount;
+            if (!pLines || nCount == 0u) {
+                return 0xFFFFu;
+            }
+            const uint32_t uStart = (s_abNpcDefaultIntroShown[i] != 0u || nCount <= 2u) ? 0u : 2u;
+            uint16_t awEligible[24] = {};
+            uint32_t nEligible = 0u;
+            for (uint32_t k = uStart; k < nCount && nEligible < 24u; ++k) {
+                const D2NpcGossipLineStrc& rLine = pLines[k];
+                if (rLine.nCharClassFilter != 7 && rLine.nCharClassFilter != static_cast<int32_t>(gnLocalPlayerCharClass)) {
+                    continue;
+                }
+                if (rLine.bRequireQuestDone != 0u && !NPCMENU_IsQuestCompleted(rLine.nQuestFilterId)) {
+                    continue;
+                }
+                if (rLine.bBeforeQuestOrAvail != 0 && NPCMENU_IsQuestCompleted(rLine.nQuestFilterId)) {
+                    continue;
+                }
+                awEligible[nEligible++] = rLine.wStringId;
+            }
+            if (nEligible > 0u) {
+                const uint32_t uPick = g_aNpcGossipDefs[i].dwLastPicked++ % nEligible;
+                return awEligible[uPick];
+            }
+            return pLines[(uStart < nCount) ? uStart : 0u].wStringId;
+        }
+    }
+    return 0xFFFFu;
+}
+
+void __fastcall NPCMENU_MarkIntroShownIfMatches(int32_t nNpcClassId, uint16_t wStringId)
+{
+    if (wStringId == 0xFFFFu) return;
+    for (int i = 0; i < 45; ++i) {
+        if (g_aNpcGossipDefs[i].dwNpcClassId == static_cast<uint32_t>(nNpcClassId)) {
+            const D2NpcGossipLineStrc* pLines = g_aNpcGossipDefs[i].pLines;
+            const uint32_t nCount = g_aNpcGossipDefs[i].nLineCount;
+            if (pLines && nCount > 0u && s_abNpcDefaultIntroShown[i] == 0u) {
+                if (pLines[0].wStringId == wStringId || (nCount >= 2u && pLines[1].wStringId == wStringId)) {
+                    g_aNpcGossipDefs[i].bIntroShown = 1u;
+                }
+            }
+            return;
+        }
+    }
+}
+
 static int __cdecl NPCMENU_OnTalkIntro()
 {
     D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
     sub_6FAC84B0();
-    for (int i = 0; i < 45; ++i) {
-        if (g_aNpcGossipDefs[i].wNpcClassId == static_cast<uint16_t>(g_nInteractingNpcClassId)) {
-            const uint16_t wIntroId = g_aNpcGossipDefs[i].wIntroIds[0];
-            g_aNpcGossipDefs[i].bIntroShown = 1;
-            if (wIntroId != 0) {
-                D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wIntroId);
-                return 1;
-            }
-            break;
+    const uint16_t wIntroId = NPCMENU_PickIntroStringId(g_nInteractingNpcClassId, 1);
+    if (wIntroId != 0xFFFFu) {
+        if (g_nInteractingNpcGUID != 0) {
+            MSG_SendByte2Dwords(0x31u, static_cast<uint32_t>(g_nInteractingNpcGUID), wIntroId);
         }
+        D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wIntroId);
+        return 1;
     }
     D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
     return 1;
@@ -1501,6 +1524,11 @@ static int __cdecl NPCMENU_OnTalkGossip()
 {
     D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
     sub_6FAC84B0();
+    const uint16_t wGossipId = NPCMENU_PickGossipStringId(g_nInteractingNpcClassId);
+    if (wGossipId != 0xFFFFu) {
+        D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wGossipId);
+        return 1;
+    }
     D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
     return 1;
 }
@@ -1511,7 +1539,11 @@ static int __cdecl NPCMENU_OnTalkQuestTopic()
     D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
     sub_6FAC84B0();
     if (kSlot < s_nNpcQuestTopicCount && s_awNpcQuestTopics[kSlot] != 0) {
-        D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, s_awNpcQuestTopics[kSlot]);
+        const uint16_t wSpeechId = s_awNpcQuestTopics[kSlot];
+        if (g_nInteractingNpcGUID != 0) {
+            MSG_SendByte2Dwords(0x31u, static_cast<uint32_t>(g_nInteractingNpcGUID), wSpeechId);
+        }
+        D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wSpeechId);
     } else {
         D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
     }
@@ -1607,8 +1639,8 @@ int __stdcall sub_6FACBE50(int bFromSubMenu)
 
     bool bShowIntro = false;
     for (int i = 0; i < 45; ++i) {
-        if (g_aNpcGossipDefs[i].wNpcClassId == static_cast<uint16_t>(g_nInteractingNpcClassId)) {
-            if (g_aNpcGossipDefs[i].bIntroShown == 0 && g_aNpcGossipDefs[i].wIntroIds[0] != 0) {
+        if (g_aNpcGossipDefs[i].dwNpcClassId == static_cast<uint32_t>(g_nInteractingNpcClassId)) {
+            if (g_aNpcGossipDefs[i].bIntroShown == 0u && g_aNpcGossipDefs[i].pLines != nullptr && g_aNpcGossipDefs[i].nLineCount > 0u) {
                 bShowIntro = true;
             }
             break;
@@ -1626,7 +1658,8 @@ int __stdcall sub_6FACBE50(int bFromSubMenu)
         NPCMENU_OnTalkQuestTopic<4>, NPCMENU_OnTalkQuestTopic<5>,
     };
     for (int32_t t = 0; t < s_nNpcQuestTopicCount && t < 6; ++t) {
-        if (const Unicode* wszTopic = D2LANG_GetStringFromTblIndex(static_cast<short>(s_awNpcQuestTopics[t]))) {
+        const uint16_t wTitleId = NPCMENU_LookupQuestTopicTitleId(s_awNpcQuestTopics[t]);
+        if (const Unicode* wszTopic = D2LANG_GetStringFromTblIndex(static_cast<short>(wTitleId))) {
             if (wszTopic->ch != 0) {
                 DIALOG_AppendLine(g_pNpcSubDialog, 0, wszTopic, 18, 0, 1, s_apfnTopicSlots[t], 1);
             }

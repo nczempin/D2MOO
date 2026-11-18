@@ -1411,6 +1411,7 @@ int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap)
     extern void  __cdecl sub_6FAC9AF0(void);
     if (D2Client_IsNpcGossipSpeechOpen() != 0) {
         D2Client_CloseNpcGossipSpeech();
+        sub_6FAC9AF0();
         bClosedAny = 1;
     }
     if (DIALOG_GetActiveDialog() != nullptr || gaPanelStates[D2PANEL_NPCMENU] != 0) {
@@ -2578,16 +2579,19 @@ extern int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg);
 extern void    __stdcall  QUESTLOG_OnPanelMouseUp(void* pMsg);
 extern int     __stdcall  sub_6FACCF00(D2UnitStrc* pNpcUnit);
 
+extern int32_t __fastcall D2Client_AdvanceOrCloseNpcSpeech(void);
+
 static bool UI_HandleNpcDialogClick(int32_t mx, int32_t my)
 {
     (void)mx;
     (void)my;
     if (D2Client_IsNpcGossipSpeechOpen() != 0) {
-        D2Client_CloseNpcGossipSpeech();
-        if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr) {
-            sub_6FACCF00(g_pTradeNpcUnit);
-        } else {
-            UI_CloseActiveNpcMenuAndCancel();
+        if (D2Client_AdvanceOrCloseNpcSpeech() == 0) {
+            if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr) {
+                sub_6FACCF00(g_pTradeNpcUnit);
+            } else {
+                UI_CloseActiveNpcMenuAndCancel();
+            }
         }
         return true;
     }

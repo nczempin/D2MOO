@@ -573,7 +573,7 @@ void __stdcall DIALOG_ConsumeMsgAndOptionalCancel(void* pMsg, int bInvokeCancel)
         if (!pDialog) {
             return;
         }
-        if (pDialog->dwFrameCount >= 1 && pDialog->pfnCancel) {
+        if (pDialog->dwFrameCount >= 1 && pDialog->dwCreationTick + 80 <= GetTickCount() && pDialog->pfnCancel) {
             extern DWORD g_dwPanelCloseCooldownTick;
             pDialog->pfnCancel();
             UI_StartPanelCloseClickCooldown();
@@ -902,7 +902,7 @@ void __stdcall DIALOG_OnReturnKey(void* pMsg)
     if (!pDialog) {
         return;
     }
-    if (pDialog->dwFrameCount < 1 || DIALOG_IsIgnoredMenuHotkey(pDialog, VK_RETURN)) {
+    if (pDialog->dwFrameCount < 1 || pDialog->dwCreationTick + 80 > GetTickCount() || DIALOG_IsIgnoredMenuHotkey(pDialog, VK_RETURN)) {
         return;
     }
     if (pDialog->nSelectedIndex >= 0 && pDialog->nSelectedIndex < pDialog->nLineCount) {

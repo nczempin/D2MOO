@@ -2074,8 +2074,15 @@ int32_t __fastcall D2Client_CheckUnitSkillOrInteractRange(D2UnitStrc* pUnit, D2U
         ? UNITS_GetRightSkill(pUnit)
         : UNITS_GetLeftSkill(pUnit);
 
+    const bool bFriendlyTownNpc =
+        (pTargetUnit->dwUnitType == UNIT_MONSTER) &&
+        (D2COMMON_11017_CheckUnitIfConsumeable(pTargetUnit, 0) != 0 ||
+         (STATLIST_GetUnitAlignment(pTargetUnit) == UNIT_ALIGNMENT_GOOD &&
+          D2Client_IsInTownOrTownSkillRestricted_6FB0B900(pUnit, 0) != 0));
+
     int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, "..\\Source\\D2Client\\Unit\\UnitMode.cpp", 918);
-    if (nSkillId >= 0
+    if (!bFriendlyTownNpc
+        && nSkillId >= 0
         && nSkillId < sgptDataTables->nSkillsTxtRecordCount
         && sgptDataTables->pSkillsTxt[nSkillId].wSrvDoFunc == 19) // Throw
     {
@@ -2673,25 +2680,33 @@ void __fastcall D2Client_ExecuteLocalPlayerTargetedAction(int32_t nMode, int32_t
 
         if (nTargetUnitType == UNIT_PLAYER || nTargetUnitType == UNIT_MONSTER)
         {
-            D2SkillStrc* pSkill = (gpPlayerUnit->dwFlags & 0x80)
-                ? UNITS_GetRightSkill(gpPlayerUnit)
-                : UNITS_GetLeftSkill(gpPlayerUnit);
-
-            int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, "..\\Source\\D2Client\\Unit\\UnitMode.cpp", 991);
-            if (nSkillId >= 0 && nSkillId < sgptDataTables->nSkillsTxtRecordCount)
+            const bool bFriendlyTownMonster =
+                (nTargetUnitType == UNIT_MONSTER) &&
+                (D2COMMON_11017_CheckUnitIfConsumeable(pTarget, 0) != 0 ||
+                 (STATLIST_GetUnitAlignment(pTarget) == UNIT_ALIGNMENT_GOOD &&
+                  D2Client_IsInTownOrTownSkillRestricted_6FB0B900(gpPlayerUnit, 0) != 0));
+            if (!bFriendlyTownMonster)
             {
-                D2SkillsTxt* pSkillsTxt = &sgptDataTables->pSkillsTxt[nSkillId];
-                if (pSkillsTxt && pSkillsTxt->nRange != 1 && pSkillsTxt->nRange != 3)
+                D2SkillStrc* pSkill = (gpPlayerUnit->dwFlags & 0x80)
+                    ? UNITS_GetRightSkill(gpPlayerUnit)
+                    : UNITS_GetLeftSkill(gpPlayerUnit);
+
+                int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, "..\\Source\\D2Client\\Unit\\UnitMode.cpp", 991);
+                if (nSkillId >= 0 && nSkillId < sgptDataTables->nSkillsTxtRecordCount)
                 {
-                    if (nTargetUnitType == UNIT_PLAYER)
+                    D2SkillsTxt* pSkillsTxt = &sgptDataTables->pSkillsTxt[nSkillId];
+                    if (pSkillsTxt && pSkillsTxt->nRange != 1 && pSkillsTxt->nRange != 3)
                     {
-                        D2Client_TryAttackOrCastOnPlayer(UNIT_PLAYER, dwTargetUnitId);
+                        if (nTargetUnitType == UNIT_PLAYER)
+                        {
+                            D2Client_TryAttackOrCastOnPlayer(UNIT_PLAYER, dwTargetUnitId);
+                        }
+                        else
+                        {
+                            D2Client_TryAttackOrCastOnMonster(UNIT_MONSTER, dwTargetUnitId);
+                        }
+                        return;
                     }
-                    else
-                    {
-                        D2Client_TryAttackOrCastOnMonster(UNIT_MONSTER, dwTargetUnitId);
-                    }
-                    return;
                 }
             }
         }
@@ -2993,16 +3008,69 @@ void __fastcall D2Client_ProcessQueuedPlayerAction(D2UnitStrc* pUnit)
         const uint32_t dwActionCode = pUnit->pPlayerData->unk0xA8[43];
         const int32_t  nTargetType  = static_cast<int32_t>(pUnit->pPlayerData->unk0xA8[44]);
         const uint32_t dwTargetGUID = pUnit->pPlayerData->unk0xA8[45];
+
+        D2UnitStrc* pTarget = D2Client_FindServerSideUnit(dwTargetGUID, nTargetType);
+        if (!pTarget)
+        {
+            pUnit->pPlayerData->unk0xA8[42] = 0;
+            pUnit->pPlayerData->unk0xA8[43] = 0;
+            pUnit->pPlayerData->unk0xA8[44] = 0;
+            pUnit->pPlayerData->unk0xA8[45] = 0;
+            return;
+        }
+
+        const bool bPlayerMoving =
+            (pUnit->dwAnimMode == PLRMODE_WALK ||
+             pUnit->dwAnimMode == PLRMODE_RUN  ||
+             pUnit->dwAnimMode == PLRMODE_TOWNWALK);
+
+        bool bInRange = false;
+        if (dwActionCode == 0x13u)
+        {
+            if (nTargetType == UNIT_OBJECT)
+            {
+                bInRange = UNITS_IsObjectInInteractRange(pUnit, pTarget) != 0 &&
+                           UNITS_TestCollisionBetweenInteractingUnits(pUnit, pTarget, 0x0804) == 0;
+            }
+            else
+            {
+                bInRange = (UNITS_GetDistanceToOtherUnit(pUnit, pTarget) <= 4);
+            }
+        }
+        else
+        {
+            bInRange = (D2Client_CheckUnitSkillOrInteractRange(pUnit, pTarget) != 0);
+        }
+
+        if (!bInRange)
+        {
+            if (bPlayerMoving)
+            {
+                // Still walking/running toward the queued target; wait until in range.
+                return;
+            }
+
+            // Movement ended; allow slight stop tolerance for 0x13 interact, else cancel unreachable queue.
+            if (dwActionCode == 0x13u && nTargetType != UNIT_OBJECT &&
+                UNITS_GetDistanceToOtherUnit(pUnit, pTarget) <= 6)
+            {
+                bInRange = true;
+            }
+            else
+            {
+                pUnit->pPlayerData->unk0xA8[42] = 0;
+                pUnit->pPlayerData->unk0xA8[43] = 0;
+                pUnit->pPlayerData->unk0xA8[44] = 0;
+                pUnit->pPlayerData->unk0xA8[45] = 0;
+                return;
+            }
+        }
+
         pUnit->pPlayerData->unk0xA8[42] = 0;
         pUnit->pPlayerData->unk0xA8[43] = 0;
         pUnit->pPlayerData->unk0xA8[44] = 0;
         pUnit->pPlayerData->unk0xA8[45] = 0;
 
-        D2UnitStrc* pTarget = D2Client_FindServerSideUnit(dwTargetGUID, nTargetType);
-        if (!pTarget)
-        {
-            return;
-        }
         if (dwActionCode == 0x13u)
         {
             D2Client_InteractWithServerUnit(nTargetType, dwTargetGUID);

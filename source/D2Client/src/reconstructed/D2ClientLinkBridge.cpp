@@ -4352,9 +4352,39 @@ static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
         return;
     }
 
+    const wchar_t* p = wszSrc;
+    // Strip leading "<scrollSpeedDigits>\n" header line present on voiced .tbl speeches (1.12a: 0x6FB207D0..0x6FB208ED)
+    {
+        const wchar_t* q = p;
+        bool bHasDigit = false;
+        bool bOnlyDigitsAndWs = true;
+        while (*q && *q != L'\n' && *q != L'\r')
+        {
+            if (*q >= L'0' && *q <= L'9')
+            {
+                bHasDigit = true;
+            }
+            else if (*q != L' ' && *q != L'\t')
+            {
+                bOnlyDigitsAndWs = false;
+                break;
+            }
+            ++q;
+        }
+        if (bHasDigit && bOnlyDigitsAndWs && (*q == L'\n' || *q == L'\r'))
+        {
+            while (*q == L'\r' || *q == L'\n')
+            {
+                ++q;
+            }
+            p = q;
+        }
+    }
+
+    const Font ePrevFont = D2Win_10127_SetFont(static_cast<Font>(8)); // D2FONT_FONTFORMAL12 (1.12a: 0x6FB20320)
+
     wchar_t wszCur[96] = {};
     int32_t nCurLen = 0;
-    const wchar_t* p = wszSrc;
     while (*p && s_nNpcGossipLineCount < 48)
     {
         if (*p == L'\r')
@@ -4364,6 +4394,10 @@ static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
         }
         if (*p == L'\n')
         {
+            while (nCurLen > 0 && (wszCur[nCurLen - 1] == L' ' || wszCur[nCurLen - 1] == L'\t'))
+            {
+                --nCurLen;
+            }
             wszCur[nCurLen] = 0;
             if (nCurLen > 0 || (s_nNpcGossipLineCount > 0 && s_awszNpcGossipLines[s_nNpcGossipLineCount - 1][0] != 0))
             {
@@ -4374,7 +4408,8 @@ static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
             ++p;
             continue;
         }
-        while (*p == L' ' && nCurLen == 0)
+        // Always advance past horizontal whitespace (both leading and inter-word)!
+        while (*p == L' ' || *p == L'\t')
         {
             ++p;
         }
@@ -4384,12 +4419,26 @@ static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
         }
         wchar_t wszWord[64] = {};
         int32_t nWordLen = 0;
-        while (*p && *p != L' ' && *p != L'\n' && *p != L'\r' && nWordLen < 62)
+        while (*p && *p != L' ' && *p != L'\t' && *p != L'\n' && *p != L'\r' && nWordLen < 62)
         {
             wszWord[nWordLen++] = *p++;
         }
         wszWord[nWordLen] = 0;
-        if (nCurLen > 0 && nCurLen + 1 + nWordLen > 54)
+
+        wchar_t wszCandidate[96] = {};
+        if (nCurLen > 0)
+        {
+            wcsncpy(wszCandidate, wszCur, static_cast<size_t>(nCurLen));
+            wszCandidate[nCurLen] = L' ';
+            wcsncpy(&wszCandidate[nCurLen + 1], wszWord, static_cast<size_t>(94 - nCurLen));
+        }
+        else
+        {
+            wcsncpy(wszCandidate, wszWord, 95);
+        }
+
+        const int32_t nCandPx = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszCandidate));
+        if (nCurLen > 0 && (nCandPx > 380 || nCurLen + 1 + nWordLen > 78))
         {
             wszCur[nCurLen] = 0;
             wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
@@ -4410,10 +4459,61 @@ static void WrapNpcSpeechIntoLines(const wchar_t* wszSrc)
     }
     if (nCurLen > 0 && s_nNpcGossipLineCount < 48)
     {
-        wszCur[nCurLen] = 0;
-        wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
+        while (nCurLen > 0 && (wszCur[nCurLen - 1] == L' ' || wszCur[nCurLen - 1] == L'\t'))
+        {
+            --nCurLen;
+        }
+        if (nCurLen > 0)
+        {
+            wszCur[nCurLen] = 0;
+            wcsncpy(s_awszNpcGossipLines[s_nNpcGossipLineCount++], wszCur, 95);
+        }
     }
+    while (s_nNpcGossipLineCount > 0 && s_awszNpcGossipLines[s_nNpcGossipLineCount - 1][0] == 0)
+    {
+        --s_nNpcGossipLineCount;
+    }
+    D2Win_10127_SetFont(ePrevFont);
 }
+
+static bool IsValidTblSpeechString(const Unicode* pStr)
+{
+    if (!pStr || pStr[0].ch == 0)
+    {
+        return false;
+    }
+    const wchar_t* wsz = reinterpret_cast<const wchar_t*>(pStr);
+    // Guard against D2Lang missing-key sentinel ("<Key>\n-not xlated call ken")
+    static const char kBadSub[] = "not xlated";
+    for (size_t i = 0; wsz[i] != 0; ++i)
+    {
+        size_t m = 0;
+        while (kBadSub[m] != '\0' && wsz[i + m] != 0)
+        {
+            wchar_t ch = wsz[i + m];
+            if (ch >= L'A' && ch <= L'Z')
+            {
+                ch = static_cast<wchar_t>(ch - L'A' + L'a');
+            }
+            if (ch != static_cast<wchar_t>(kBadSub[m]))
+            {
+                break;
+            }
+            ++m;
+        }
+        if (kBadSub[m] == '\0')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+extern uint16_t __fastcall NPCMENU_PickGossipStringId(int32_t nNpcClassId);
+extern void __fastcall NPCMENU_MarkIntroShownIfMatches(int32_t nNpcClassId, uint16_t wStringId);
+
+static uint16_t s_awPendingAutoSpeeches[8] = {};
+static int32_t  s_nPendingAutoSpeechCount  = 0;
 
 void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallbackClassId)
 {
@@ -4429,61 +4529,53 @@ void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallback
     }
     s_wszNpcGossipTitle[63] = 0;
 
-    const char* szTblKey1 = nullptr;
-    const char* szTblKey2 = nullptr;
     const wchar_t* wszFallback = L"Greetings, traveler. Stay vigilant against the Prime Evils.";
-
     switch (nCls)
     {
-    case 148: szTblKey1 = "AkaraAct1Intro";   szTblKey2 = "AkaraGossip1";   wszFallback = L"I am Akara, High Priestess of the Sisterhood of the Sightless Eye. Welcome to our camp, traveler."; break;
-    case MONSTER_CHARSI: szTblKey1 = "CharsiAct1Intro"; szTblKey2 = "CharsiGossip1"; wszFallback = L"Hi there! I'm Charsi, the blacksmith here in camp. It's good to see some strong adventurers around here."; break;
-    case 147: szTblKey1 = "GheedAct1Intro";   szTblKey2 = "GheedGossip1";   wszFallback = L"Good day to you, partner! I'm Gheed, and I can already tell I'll be your best friend in this forsaken camp."; break;
-    case MONSTER_KASHYA: szTblKey1 = "KashyaAct1Intro"; szTblKey2 = "KashyaGossip1"; wszFallback = L"My Rogue scouts have reported abominations pouring out of the Monastery. Prove your worth in battle, outlander."; break;
+    case 148: wszFallback = L"I am Akara, High Priestess of the Sisterhood of the Sightless Eye. Welcome to our camp, traveler."; break;
+    case MONSTER_CHARSI: wszFallback = L"Hi there! I'm Charsi, the blacksmith here in camp. It's good to see some strong adventurers around here."; break;
+    case 147: wszFallback = L"Good day to you, partner! I'm Gheed, and I can already tell I'll be your best friend in this forsaken camp."; break;
+    case MONSTER_KASHYA: wszFallback = L"My Rogue scouts have reported abominations pouring out of the Monastery. Prove your worth in battle, outlander."; break;
     case MONSTER_WARRIV1:
-    case MONSTER_WARRIV2: szTblKey1 = "WarrivAct1Intro"; szTblKey2 = "WarrivGossip1"; wszFallback = L"Greetings. Once the road through the Monastery gate is clear, my caravan can take you east to Lut Gholein."; break;
+    case MONSTER_WARRIV2: wszFallback = L"Greetings. Once the road through the Monastery gate is clear, my caravan can take you east to Lut Gholein."; break;
     case MONSTER_CAIN1:
     case MONSTER_CAIN2:
     case MONSTER_CAIN3:
     case MONSTER_CAIN4:
     case MONSTER_CAIN5:
-    case MONSTER_CAIN6: szTblKey1 = "CainAct1Gossip1"; szTblKey2 = "CainGossip1"; wszFallback = L"Stay awhile and listen! Should you find any items of mysterious origin, bring them to me for identification."; break;
-    case 176: szTblKey1 = "AtmaAct2Intro";    szTblKey2 = "AtmaGossip1";    wszFallback = L"Welcome to Lut Gholein, stranger. Rest here if you are weary from the desert sands."; break;
-    case 177: szTblKey1 = "DrognanAct2Intro"; szTblKey2 = "DrognanGossip1"; wszFallback = L"Dark magic stirs beneath the sands of Aranoch. Prepare your arcane defenses carefully."; break;
-    case 178: szTblKey1 = "FaraAct2Intro";    szTblKey2 = "FaraGossip1";    wszFallback = L"As a former paladin of Zakarum, I tend the wounded and forge weapons for those who fight the darkness."; break;
-    case 198: szTblKey1 = "GreizAct2Intro";   szTblKey2 = "GreizGossip1";   wszFallback = L"My desert mercenaries are the finest spearmen in Lut Gholein—for the right price."; break;
-    case 199: szTblKey1 = "ElzixAct2Intro";   szTblKey2 = "ElzixGossip1";   wszFallback = L"Looking for a bargain, friend? Feel free to browse my wares—or test your luck gambling."; break;
-    case 202: szTblKey1 = "LysanderAct2Intro";szTblKey2 = "LysanderGossip1";wszFallback = L"Speak up! Too many exploding potions have left my hearing worse for wear, but my elixirs are unmatched."; break;
+    case MONSTER_CAIN6: wszFallback = L"Stay awhile and listen! Should you find any items of mysterious origin, bring them to me for identification."; break;
+    case 176: wszFallback = L"Welcome to Lut Gholein, stranger. Rest here if you are weary from the desert sands."; break;
+    case 177: wszFallback = L"Dark magic stirs beneath the sands of Aranoch. Prepare your arcane defenses carefully."; break;
+    case 178: wszFallback = L"As a former paladin of Zakarum, I tend the wounded and forge weapons for those who fight the darkness."; break;
+    case 198: wszFallback = L"My desert mercenaries are the finest spearmen in Lut Gholein—for the right price."; break;
+    case 199: wszFallback = L"Looking for a bargain, friend? Feel free to browse my wares—or test your luck gambling."; break;
+    case 202: wszFallback = L"Speak up! Too many exploding potions have left my hearing worse for wear, but my elixirs are unmatched."; break;
     case MONSTER_MESHIF1:
-    case MONSTER_MESHIF2: szTblKey1 = "MeshifAct2Intro"; szTblKey2 = "MeshifGossip1"; wszFallback = L"My ship stands ready at the docks whenever you need passage across the Twin Seas."; break;
-    case 255: szTblKey1 = "OrmusAct3Intro";   szTblKey2 = "OrmusGossip1";   wszFallback = L"You now speak to Ormus. Once he was a great mage, and now he lives like a rat in a sinking vessel."; break;
-    case 253: szTblKey1 = "HratliAct3Intro";  szTblKey2 = "HratliGossip1";  wszFallback = L"Welcome to the Kurast Docks. My enchantment keeps the jungle horrors at bay, and my forge keeps blades sharp."; break;
-    case 254: szTblKey1 = "AlkorAct3Intro";   szTblKey2 = "AlkorGossip1";   wszFallback = L"What do you want? Don't touch my alchemical apparatus unless you are buying potions or gambling!"; break;
-    case 252: szTblKey1 = "AshearaAct3Intro"; szTblKey2 = "AshearaGossip1"; wszFallback = L"My Iron Wolves are masters of elemental sorcery and stand ready to fight beside you."; break;
+    case MONSTER_MESHIF2: wszFallback = L"My ship stands ready at the docks whenever you need passage across the Twin Seas."; break;
+    case 255: wszFallback = L"You now speak to Ormus. Once he was a great mage, and now he lives like a rat in a sinking vessel."; break;
+    case 253: wszFallback = L"Welcome to the Kurast Docks. My enchantment keeps the jungle horrors at bay, and my forge keeps blades sharp."; break;
+    case 254: wszFallback = L"What do you want? Don't touch my alchemical apparatus unless you are buying potions or gambling!"; break;
+    case 252: wszFallback = L"My Iron Wolves are masters of elemental sorcery and stand ready to fight beside you."; break;
     case MONSTER_TYRAEL1:
     case MONSTER_TYRAEL2:
-    case MONSTER_TYRAEL3: szTblKey1 = "TyraelAct4Gossip1"; szTblKey2 = "TyraelGossip1"; wszFallback = L"The hour grows late, mortal. Strike down the Lords of Hell before Sanctuary falls into eternal shadow."; break;
-    case 405: szTblKey1 = "JamellaGossip1";   szTblKey2 = "JamellaIntro";   wszFallback = L"The Light watches over the Pandemonium Fortress. May my healing and scrolls aid your crusade."; break;
-    case 257: szTblKey1 = "HalbuGossip1";     szTblKey2 = "HalbuIntro";     wszFallback = L"Keep your armor sound and your weapons tempered before descending to the River of Flame."; break;
-    case MONSTER_LARZUK:  szTblKey1 = "LarzukIntro";     szTblKey2 = "LarzukGossip1"; wszFallback = L"Harrogath will never kneel to Baal! Check my anvil if you need northern steel."; break;
-    case 513: szTblKey1 = "MalahIntro";       szTblKey2 = "MalahGossip1";   wszFallback = L"Welcome to Harrogath, outlander. Come to me whenever the bitter cold of Mount Arreat wounds you."; break;
-    case MONSTER_DREHYA:  szTblKey1 = "AnyaGossip1";     szTblKey2 = "DrehyaGossip1"; wszFallback = L"Thank you for rescuing me from Nihlathak's icy prison. All of my wares are yours to browse."; break;
-    case MONSTER_QUAL_KEHK: szTblKey1 = "Qual-KehkIntro"; szTblKey2 = "QualKehkGossip1"; wszFallback = L"My Barbarian warriors thirst to avenge their fallen brothers on the slopes of Mount Arreat."; break;
+    case MONSTER_TYRAEL3: wszFallback = L"The hour grows late, mortal. Strike down the Lords of Hell before Sanctuary falls into eternal shadow."; break;
+    case 405: wszFallback = L"The Light watches over the Pandemonium Fortress. May my healing and scrolls aid your crusade."; break;
+    case 257: wszFallback = L"Keep your armor sound and your weapons tempered before descending to the River of Flame."; break;
+    case MONSTER_LARZUK:  wszFallback = L"Harrogath will never kneel to Baal! Check my anvil if you need northern steel."; break;
+    case 513: wszFallback = L"Welcome to Harrogath, outlander. Come to me whenever the bitter cold of Mount Arreat wounds you."; break;
+    case MONSTER_DREHYA:  wszFallback = L"Thank you for rescuing me from Nihlathak's icy prison. All of my wares are yours to browse."; break;
+    case MONSTER_QUAL_KEHK: wszFallback = L"My Barbarian warriors thirst to avenge their fallen brothers on the slopes of Mount Arreat."; break;
     default: break;
     }
 
     const wchar_t* wszChosen = nullptr;
-    const char* aProbeKeys[2] = { szTblKey1, szTblKey2 };
-    for (int k = 0; k < 2 && !wszChosen; ++k)
+    const uint16_t wGossipId = NPCMENU_PickGossipStringId(nCls);
+    if (wGossipId != 0xFFFFu)
     {
-        if (aProbeKeys[k] != nullptr)
+        const Unicode* pTblStr = D2LANG_GetStringFromTblIndex(static_cast<short>(wGossipId));
+        if (IsValidTblSpeechString(pTblStr))
         {
-            char szMutableKey[64] = {};
-            strncpy(szMutableKey, aProbeKeys[k], 63);
-            const Unicode* pTblStr = nullptr;
-            if (D2LANG_GetTblIndex(szMutableKey, &pTblStr) >= 0 && pTblStr && pTblStr[0].ch != 0)
-            {
-                wszChosen = reinterpret_cast<const wchar_t*>(pTblStr);
-            }
+            wszChosen = reinterpret_cast<const wchar_t*>(pTblStr);
         }
     }
     if (!wszChosen)
@@ -4492,6 +4584,7 @@ void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallback
     }
 
     WrapNpcSpeechIntoLines(wszChosen);
+    s_nNpcGossipScroll = 0;
     s_bNpcGossipOpen = 1;
 }
 
@@ -4508,10 +4601,11 @@ void __fastcall D2Client_OpenNpcSpeechByTblId(D2UnitStrc* pNpc, int32_t nFallbac
     }
     s_wszNpcGossipTitle[63] = 0;
 
-    const Unicode* pSpeechUni = wStringId ? D2LANG_GetStringFromTblIndex(static_cast<short>(wStringId)) : nullptr;
-    if (pSpeechUni && pSpeechUni[0].ch != 0)
+    const Unicode* pSpeechUni = (wStringId != 0xFFFFu) ? D2LANG_GetStringFromTblIndex(static_cast<short>(wStringId)) : nullptr;
+    if (IsValidTblSpeechString(pSpeechUni))
     {
         WrapNpcSpeechIntoLines(reinterpret_cast<const wchar_t*>(pSpeechUni));
+        s_nNpcGossipScroll = 0;
         s_bNpcGossipOpen = 1;
         return;
     }
@@ -4522,6 +4616,30 @@ void __fastcall D2Client_CloseNpcGossipSpeech(void)
 {
     s_bNpcGossipOpen = 0;
     s_nNpcGossipScroll = 0;
+    s_nPendingAutoSpeechCount = 0;
+}
+
+int32_t __fastcall D2Client_AdvanceOrCloseNpcSpeech(void)
+{
+    extern int32_t __fastcall MSG_SendByte2Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2);
+    if (s_nPendingAutoSpeechCount > 0 && g_bInteractingWithNpc != 0)
+    {
+        const uint16_t wNext = s_awPendingAutoSpeeches[0];
+        for (int32_t i = 0; i + 1 < s_nPendingAutoSpeechCount; ++i)
+        {
+            s_awPendingAutoSpeeches[i] = s_awPendingAutoSpeeches[i + 1];
+        }
+        --s_nPendingAutoSpeechCount;
+        NPCMENU_MarkIntroShownIfMatches(g_nInteractingNpcClassId, wNext);
+        if (g_nInteractingNpcGUID != 0)
+        {
+            MSG_SendByte2Dwords(0x31u, static_cast<uint32_t>(g_nInteractingNpcGUID), wNext);
+        }
+        D2Client_OpenNpcSpeechByTblId(g_pTradeNpcUnit, g_nInteractingNpcClassId, wNext);
+        return 1;
+    }
+    D2Client_CloseNpcGossipSpeech();
+    return 0;
 }
 
 int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void)
@@ -4562,12 +4680,14 @@ void __fastcall D2Client_DrawNpcGossipSpeech(void)
     const int32_t nTitleW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle));
     D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle), nLeft + (nBoxW - nTitleW) / 2, nTop + 24, 4, 0);
 
+    D2Win_10127_SetFont(static_cast<Font>(8)); // D2FONT_FONTFORMAL12 (1.12a: 0x6FB20320)
     for (int32_t i = 0; i < nVisibleLines && (s_nNpcGossipScroll + i) < s_nNpcGossipLineCount; ++i)
     {
         const Unicode* pLine = reinterpret_cast<const Unicode*>(s_awszNpcGossipLines[s_nNpcGossipScroll + i]);
         const int32_t nLineW = D2Win_10121_GetTextWidth(pLine);
         D2Win_10117_DrawText(pLine, nLeft + (nBoxW - nLineW) / 2, nTop + 46 + i * 18, 0, 0);
     }
+    D2Win_10127_SetFont(D2FONT_FONT16);
 }
 
 // Interactive Gold Amount Popup (Mode 1 = Drop Gold, Mode 2 = Deposit to Stash, Mode 3 = Withdraw from Stash)
@@ -5486,22 +5606,69 @@ extern int32_t __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uin
 struct D2DialogStrc;
 extern D2DialogStrc* __cdecl DIALOG_GetActiveDialog(void);
 extern int  __stdcall  sub_6FACCF00(D2UnitStrc* pNpcUnit);
+extern void __cdecl    sub_6FAC9760(void);
 extern void __fastcall NPCMENU_SetServerSpeechTopics(const uint16_t* pwTopics, int32_t nCount);
+extern uint32_t gdwClientGameTick;
+
+static uint32_t s_dwPendingNpcInteractGuid = 0;
+static uint32_t s_dwPendingNpcInteractTick = 0;
+
+void __fastcall D2Client_CancelPendingNpcInteract(void)
+{
+    s_dwPendingNpcInteractGuid = 0;
+}
 
 void __fastcall D2Client_InteractWithNPC_6FAE30C0(struct D2UnitStrc * a0)
 {
     if (!a0) return;
-    MSG_SendByte2Dwords(0x13u, UNIT_MONSTER, a0->dwUnitId);
-    MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, a0->dwUnitId);
     g_pTradeNpcUnit = a0;
-    g_bInteractingWithNpc = 1;
-    g_nInteractingNpcGUID = static_cast<int32_t>(a0->dwUnitId);
     g_nInteractingNpcClassId = a0->dwClassId;
     gdwActiveInteractNpcGUID = static_cast<int32_t>(a0->dwUnitId);
     D2Client_SetNpcHireSubmenu(0);
     D2Client_CloseNpcGossipSpeech();
     NPCMENU_SetServerSpeechTopics(nullptr, 0);
-    sub_6FACCF00(a0);
+
+    // Wait for server S2C 0x27 confirmation before sending 0x2F or opening the client NPC menu,
+    // ensuring D2Game has allocated pInteractInfo inside interact range (<= 6 subtiles).
+    if (gpPlayerUnit && UNITS_GetDistanceToOtherUnit(gpPlayerUnit, a0) > 4)
+    {
+        MSG_SendByte2Dwords(gbAlwaysRun ? 0x04u : 0x02u, UNIT_MONSTER, a0->dwUnitId);
+    }
+    MSG_SendByte2Dwords(0x13u, UNIT_MONSTER, a0->dwUnitId);
+    s_dwPendingNpcInteractGuid = a0->dwUnitId;
+    s_dwPendingNpcInteractTick = gdwClientGameTick;
+}
+
+void __fastcall D2Client_TickPendingNpcInteract(void)
+{
+    if (s_dwPendingNpcInteractGuid == 0)
+    {
+        return;
+    }
+    if (!gpPlayerUnit ||
+        gaPanelStates[D2PANEL_NPCMENU] != 0 ||
+        gaPanelStates[D2PANEL_NPCSHOP] != 0 ||
+        DIALOG_GetActiveDialog() != nullptr ||
+        D2Client_IsNpcGossipSpeechOpen() != 0)
+    {
+        s_dwPendingNpcInteractGuid = 0;
+        return;
+    }
+
+    const uint32_t dt = gdwClientGameTick - s_dwPendingNpcInteractTick;
+    if (dt == 4u || dt == 18u)
+    {
+        // Close any minor client-vs-server walk drift before re-sending C2S 0x13.
+        MSG_SendByte2Dwords(gbAlwaysRun ? 0x04u : 0x02u, UNIT_MONSTER, s_dwPendingNpcInteractGuid);
+    }
+    else if (dt == 10u || dt == 24u || dt == 34u)
+    {
+        MSG_SendByte2Dwords(0x13u, UNIT_MONSTER, s_dwPendingNpcInteractGuid);
+    }
+    else if (dt >= 42u)
+    {
+        s_dwPendingNpcInteractGuid = 0;
+    }
 }
 int __fastcall D2Client_IsCommandHeld(int a0)
 {
@@ -5574,7 +5741,11 @@ void __fastcall D2Client_OnNpcInfoPacket(unsigned char * a0)
     }
 
     if (nUnitType != UNIT_MONSTER || dwNpcGuid == 0) return;
-    MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, dwNpcGuid);
+    s_dwPendingNpcInteractGuid = 0;
+    if (g_bInteractingWithNpc == 0 || g_nInteractingNpcGUID != static_cast<int32_t>(dwNpcGuid))
+    {
+        MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, dwNpcGuid);
+    }
     D2UnitStrc* pNpc = D2Client_FindServerSideUnit(dwNpcGuid, UNIT_MONSTER);
     if (pNpc)
     {
@@ -5586,24 +5757,73 @@ void __fastcall D2Client_OnNpcInfoPacket(unsigned char * a0)
     gdwActiveInteractNpcGUID = static_cast<int32_t>(dwNpcGuid);
 
     // Parse S2C 0x27 D2MessageListStrc (+0x06: nCount, +0x08 + 4*i: { nMenu, pad, wStringId })
-    // Only nMenu == 1 (SCROLLMENU_MENU) entries are short Talk submenu topic labels.
+    // nMenu == 0: auto-play scroll speech on NPC click; nMenu == 2 (or 1): active quest topic in Talk submenu.
     const uint8_t nMsgCount = a0[6];
+    uint16_t awAutoSpeeches[8] = {};
+    int32_t  nAutoCount = 0;
     uint16_t awTopics[6] = {};
-    int32_t nTopics = 0;
+    int32_t  nTopics = 0;
     for (uint8_t i = 0; i < nMsgCount && i < 8; ++i)
     {
         const uint8_t nMenuType = a0[8 + i * 4];
         uint16_t wStrId = 0;
         memcpy(&wStrId, a0 + 10 + i * 4, sizeof(uint16_t));
-        if (wStrId != 0 && nMenuType == 1 && nTopics < 6)
+        if (wStrId == 0xFFFFu)
         {
-            awTopics[nTopics++] = wStrId;
+            continue;
+        }
+        if (nMenuType == 0)
+        {
+            if (nAutoCount < 8)
+            {
+                // Insertion-sort ascending by wStrId (matching TEXT_SortTextNodeListByStringId)
+                int32_t pos = nAutoCount;
+                while (pos > 0 && awAutoSpeeches[pos - 1] > wStrId)
+                {
+                    awAutoSpeeches[pos] = awAutoSpeeches[pos - 1];
+                    --pos;
+                }
+                awAutoSpeeches[pos] = wStrId;
+                ++nAutoCount;
+            }
+        }
+        else if ((nMenuType == 2 || nMenuType == 1) && nTopics < 6)
+        {
+            int32_t pos = nTopics;
+            while (pos > 0 && awTopics[pos - 1] > wStrId)
+            {
+                awTopics[pos] = awTopics[pos - 1];
+                --pos;
+            }
+            awTopics[pos] = wStrId;
+            ++nTopics;
         }
     }
     NPCMENU_SetServerSpeechTopics(awTopics, nTopics);
-    if (gaPanelStates[D2PANEL_NPCSHOP] == 0 && pNpc)
+    if (gaPanelStates[D2PANEL_NPCSHOP] == 0)
     {
-        if (DIALOG_GetActiveDialog() == nullptr && D2Client_IsNpcGossipSpeechOpen() == 0)
+        if (D2Client_IsNpcGossipSpeechOpen() != 0)
+        {
+            // Keep currently displayed scroll speech open while updating topics from follow-up S2C 0x27.
+            return;
+        }
+        if (nAutoCount > 0)
+        {
+            if (DIALOG_GetActiveDialog() != nullptr)
+            {
+                sub_6FAC9760();
+            }
+            s_nPendingAutoSpeechCount = 0;
+            for (int32_t i = 1; i < nAutoCount && s_nPendingAutoSpeechCount < 8; ++i)
+            {
+                s_awPendingAutoSpeeches[s_nPendingAutoSpeechCount++] = awAutoSpeeches[i];
+            }
+            const uint16_t wFirst = awAutoSpeeches[0];
+            NPCMENU_MarkIntroShownIfMatches(g_nInteractingNpcClassId, wFirst);
+            MSG_SendByte2Dwords(0x31u, dwNpcGuid, wFirst);
+            D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wFirst);
+        }
+        else if (pNpc && DIALOG_GetActiveDialog() == nullptr)
         {
             sub_6FACCF00(pNpc);
         }
@@ -5919,6 +6139,7 @@ void __fastcall D2Client_SendLocationSkillPacket_6FB6EC60(struct D2UnitStrc * a0
 }
 void __fastcall D2Client_SendPacket01_WalkToLocation_6FB6ED00(int a0, int a1)
 {
+    s_dwPendingNpcInteractGuid = 0;
     uint8_t pkt[5]; pkt[0] = 0x01; uint16_t x = (uint16_t)a0, y = (uint16_t)a1; memcpy(&pkt[1], &x, 2); memcpy(&pkt[3], &y, 2); MSG_SendPacket(pkt, 5);
 }
 void __fastcall D2Client_SendPacket02_WalkToEntity_6FB6E730(int a0, unsigned int a1)
@@ -5927,6 +6148,7 @@ void __fastcall D2Client_SendPacket02_WalkToEntity_6FB6E730(int a0, unsigned int
 }
 void __fastcall D2Client_SendPacket03_RunToLocation_6FB6ED30(int a0, int a1)
 {
+    s_dwPendingNpcInteractGuid = 0;
     uint8_t pkt[5]; pkt[0] = 0x03; uint16_t x = (uint16_t)a0, y = (uint16_t)a1; memcpy(&pkt[1], &x, 2); memcpy(&pkt[3], &y, 2); MSG_SendPacket(pkt, 5);
 }
 void __fastcall D2Client_SendPacket04_RunToEntity_6FB6E770(int a0, unsigned int a1)
