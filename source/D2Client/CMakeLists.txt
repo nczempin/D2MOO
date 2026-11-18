@@ -21,6 +21,7 @@ target_link_libraries(${D2ClientImplName}
 target_sources(${D2ClientImplName}
   PRIVATE
     src/D2Client.cpp
+    src/reconstructed/CORE_WinMain.cpp
     src/reconstructed/DRAW_dLightMap.cpp
     src/reconstructed/ENGINE_Gfx.cpp
     src/reconstructed/GAME_Game.cpp
@@ -34,12 +35,16 @@ target_sources(${D2ClientImplName}
     src/reconstructed/Sound_SoundHdr.cpp
     src/reconstructed/UI_automap.cpp
     src/reconstructed/UI_CmdTbl.cpp
+    src/reconstructed/UI_dialog.cpp
     src/reconstructed/UI_Hireables.cpp
     src/reconstructed/UI_inv.cpp
     src/reconstructed/UI_npcmenu.cpp
+    src/reconstructed/UI_options.cpp
     src/reconstructed/UI_QuestLog.cpp
     src/reconstructed/UI_showitems.cpp
     src/reconstructed/UI_SkillDesc.cpp
+    src/reconstructed/UI_SkillTree.cpp
+    src/reconstructed/UI_spellsel.cpp
     src/reconstructed/UI_text.cpp
     src/reconstructed/UI_ui.cpp
     src/reconstructed/UI_useitem.cpp
@@ -50,6 +55,7 @@ target_sources(${D2ClientImplName}
     src/reconstructed/UNIT_Monster.cpp
     src/reconstructed/UNIT_Object.cpp
     src/reconstructed/UNIT_Player.cpp
+    src/reconstructed/UNIT_PlayerList.cpp
     src/reconstructed/UNIT_PlrSkills.cpp
     src/reconstructed/UNIT_UnitMode.cpp
     src/reconstructed/View.cpp

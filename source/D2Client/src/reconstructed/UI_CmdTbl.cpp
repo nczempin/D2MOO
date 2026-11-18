@@ -377,19 +377,6 @@ void __fastcall CLIENT_SetRealmStatusValue(int32_t nValue)
     gnRealmStatusValue = nValue;
 }
 
-// 1.12a: 0x6FB4E940 (__stdcall, Exported D2Client.#10002)
-void __stdcall D2Client_10002_SetRealmInfo(int32_t bIsExpansion, const char* szRealmName, int32_t nStatus)
-{
-    gbIsExpansionClient = bIsExpansion;
-    strncpy(gszRealmName, szRealmName, 0xC8);
-    gnRealmStatusValue = nStatus;
-}
-
-// 1.12a: 0x6FB4E980 (__stdcall, Exported D2Client.#10001)
-int32_t __stdcall D2Client_10001_GetRealmStatusValue(void)
-{
-    return gnRealmStatusValue;
-}
 
 // 1.12a: 0x6FB4E990 (__fastcall)
 int32_t __fastcall CLIENT_GetCurrentFrameTick(void)

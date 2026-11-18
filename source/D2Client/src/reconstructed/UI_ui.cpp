@@ -275,7 +275,7 @@ D2UnitStrc*     __stdcall  sub_6FACEB20(D2UnitStrc* pUnit);
 int             __fastcall sub_6FACEAC0(D2UnitStrc* pUnit);
 void            __stdcall  sub_6FB235B0();
 void            __stdcall  sub_6FB34E90();
-void            __cdecl    sub_6FB13290();
+void            __cdecl    DIALOG_CloseActive();
 void            __cdecl    sub_6FACADF0();
 void            __fastcall CURSOR_WarpMousePosition(int32_t nNewMouseX, int32_t nNewMouseY);
 void            __fastcall CURSOR_Init(void);
@@ -2485,7 +2485,7 @@ void __stdcall UI_CloseMercInteract()
     sub_6FB235B0();
     if (g_pMercMenuDialogWidget != nullptr) {
         if (g_bMercMenuActive != 0) {
-            sub_6FB13290();
+            DIALOG_CloseActive();
             if (g_pMercMenuDialogWidget != nullptr) {
                 reinterpret_cast<void(__thiscall*)(void*, int32_t)>((*reinterpret_cast<void***>(g_pMercMenuDialogWidget))[0])(g_pMercMenuDialogWidget, 1);
             }

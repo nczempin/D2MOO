@@ -411,7 +411,7 @@ void __fastcall PLAYER_UpdateCameraOffsets(void)
 }
 
 // 0x6FB2CA10 (GAME/Game.cpp)
-void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender)
+void __fastcall VIEW_RenderViewportForCustomLoop(int32_t bSkipWorldRender)
 {
     D2ViewportStrc* pViewport = static_cast<D2ViewportStrc*>(gpClientViewport);
     if (gpClientPlayer == nullptr || pViewport == nullptr)

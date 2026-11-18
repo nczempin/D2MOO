@@ -91,6 +91,12 @@ void __cdecl FOG_DestroyMemoryPoolSystem(void* pMemoryPoolSystem)
 	D2_MAYBE_UNUSED(pMemoryPoolSystem);
 }
 
+// 1.12a: 0x6FF6B490 (#10144)
+void __cdecl FOG_CompactMemoryPoolSystem(void* pMemoryPoolSystem)
+{
+	D2_MAYBE_UNUSED(pMemoryPoolSystem);
+}
+
 // 1.10f: 0x6FF5A4A0 (#10145)
 // 1.12a: 0x6FF6AFC0 (#10145)
 void __cdecl FOG_SetMemoryPoolSystemMode(void* pMemoryPoolSystem, BOOL bFreePoolAlloc)

@@ -802,9 +802,6 @@ uint8_t gabBeltSlotReady[16] = {};
 D2CellFileStrc* gapCursorCellFiles[16] = {};
 unsigned char (__fastcall* gapfnObjectClientFunctions[32])(D2UnitStrc*) = {};
 unsigned char gbAct3ObjectSoundPreloaded = {};
-int gbActLoadedFlag = {};
-int gbActUnloadedFlag = {};
-int gbAlwaysRun = {};
 int gbAutomapCenters = 1;
 int gbAutomapLeft = {};
 int gbAutomapLeftAlign2 = {};
@@ -824,11 +821,9 @@ int gbEnvironmentIsNightCycle = {};
 int gbEquippedItemComponentChanged = {};
 int gbGoldDialogOpen = {};
 int gbGreenBloodEnabled = {};
-int gbIsLadderClient = {};
 int gbMultiplayerGame = {};
 int gbNpcSpeechEnabled = 1;
 int gbRunKeyHeld = {};
-int gbRunLock = {};
 int gbRunWalkToggle = {};
 int gbSkillSelectPopupOpen = {};
 int gbSoundDebugOverlay_6FBCC2D0 = {};
@@ -5283,10 +5278,6 @@ int __fastcall D2Client_GetUnitY_6FAB15C0(struct D2UnitStrc * a0)
 {
     return a0 ? UNITS_GetYPosition(a0) : 0;
 }
-int __fastcall D2Client_HitTestMiniPanel(int a0)
-{
-    (void)a0; return 0;
-}
 void __fastcall D2Client_InteractWithNPC_6FAE30C0(struct D2UnitStrc * a0)
 {
     (void)a0;
@@ -5802,22 +5793,6 @@ struct D2UnitStrc * __stdcall DEBUG_GetUnitFromTypeAndGUID(unsigned int a0, unsi
 {
     return D2Client_FindServerSideUnit(a1, a0);
 }
-void * __stdcall DIALOG_Create(int a0, int a1, void * a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10)
-{
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7; (void)a8; (void)a9; (void)a10; return nullptr;
-}
-void __fastcall DIALOG_Destroy(void * a0)
-{
-    (void)a0;
-}
-void __fastcall DIALOG_Draw(void * a0)
-{
-    (void)a0;
-}
-void __fastcall DIALOG_SetLineText(void * a0, int a1, struct Unicode const * a2, int a3, int a4, int a5, int a6, int a7)
-{
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7;
-}
 void __fastcall DLIGHTMAP_RemoveUnitLight(struct D2GfxLightStrc * a0)
 {
     if (a0) LIGHTMAP_DestroyLightNode((D2LightNodeStrc*)a0);
@@ -5833,35 +5808,6 @@ struct D2MonStats2Txt * __fastcall ENGINE_GetMonStats2TxtRecord(int a0)
 int __fastcall ENGINE_GetMonStatsRecordCount(void)
 {
     return sgptDataTables ? sgptDataTables->nMonStatsTxtRecordCount : 0;
-}
-struct D2MonStatsTxt * __fastcall ENGINE_GetMonStatsTxtRecord(int a0)
-{
-    return DATATBLS_GetMonStatsTxtRecord(a0);
-}
-void __fastcall GAME_ClearAllOpenPanels(void)
-{
-    UI_CloseAllPanels();
-}
-int __fastcall GAME_HasFourButtonMouse(void)
-{
-    return 0;
-}
-int __fastcall GAME_HasMouseWheelA(void)
-{
-    return 0;
-}
-int __fastcall GAME_HasMouseWheelB(void)
-{
-    return 0;
-}
-int __fastcall GAME_HasThreeButtonMouse(void)
-{
-    return 0;
-}
-void __fastcall GAME_LoadAct(unsigned char a0, unsigned int a1, unsigned short a2, unsigned int a3)
-{
-    void (*pfnLoadAct)(uint8_t, uint32_t, uint32_t, uint32_t) = &GAME_LoadAct;
-    pfnLoadAct(a0, (uint32_t)a2, a1, a3);
 }
 int __fastcall GAME_ShouldHideCursor(void)
 {
@@ -6520,10 +6466,6 @@ void __stdcall UI_CloseConflictingPanels(int a0, int a1)
 {
     (void)a0; (void)a1; UI_CloseAllPanels();
 }
-void __stdcall UI_CloseEscOptionsMenu(int a0)
-{
-    (void)a0;
-}
 int __stdcall UI_HandleBeltMouseClick(struct D2WinMsgStrc * a0)
 {
     (void)a0; return 0;
@@ -6539,10 +6481,6 @@ struct D2CellFileStrc * __fastcall UI_LoadPanelCelAsset(char const * a0)
 struct D2CellFileStrc * __fastcall UI_LoadPanelCellFile(char const * a0)
 {
     return a0 ? UI_LoadGlobalUICellFile(a0) : nullptr;
-}
-void __fastcall UI_OpenEscOptionsMenu(int a0, int a1)
-{
-    (void)a0; (void)a1;
 }
 void __stdcall UI_OpenGoldDialog(int a0)
 {

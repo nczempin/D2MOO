@@ -69,14 +69,14 @@ UnimplementedOrdinal_10056=UnimplementedOrdinal @10056;   FOG_10056 @10056 NONAM
 UnimplementedOrdinal_10057=UnimplementedOrdinal @10057;   FOG_10057 @10057 NONAME
 UnimplementedOrdinal_10058=UnimplementedOrdinal @10058;   FOG_10058 @10058 NONAME
 UnimplementedOrdinal_10059=UnimplementedOrdinal @10059;   FOG_10059 @10059 NONAME
-UnimplementedOrdinal_10060=UnimplementedOrdinal @10060;   FOG_10060 @10060 NONAME
-UnimplementedOrdinal_10061=UnimplementedOrdinal @10061;   FOG_10061 @10061 NONAME
-UnimplementedOrdinal_10062=UnimplementedOrdinal @10062;   FOG_10062 @10062 NONAME
-UnimplementedOrdinal_10063=UnimplementedOrdinal @10063;   FOG_10063 @10063 NONAME
-UnimplementedOrdinal_10064=UnimplementedOrdinal @10064;   FOG_10064 @10064 NONAME
-UnimplementedOrdinal_10065=UnimplementedOrdinal @10065;   FOG_10065 @10065 NONAME
-UnimplementedOrdinal_10066=UnimplementedOrdinal @10066;   FOG_10066 @10066 NONAME
-UnimplementedOrdinal_10067=UnimplementedOrdinal @10067;   FOG_10067 @10067 NONAME
+    DATATBLS_CreateDataArray @10060 NONAME
+    DATATBLS_DestroyDataArray @10061 NONAME
+    DATATBLS_InitDataArray @10062 NONAME
+    DATATBLS_ResetDataArray @10063 NONAME
+    DATATBLS_AllocDataArrayElement @10064 NONAME
+    DATATBLS_FreeDataArrayElement @10065 NONAME
+    DATATBLS_GetDataArrayElementChecked @10066 NONAME
+    DATATBLS_TryGetDataArrayElement @10067 NONAME
 UnimplementedOrdinal_10068=UnimplementedOrdinal @10068;   FOG_10068 @10068 NONAME
 UnimplementedOrdinal_10069=UnimplementedOrdinal @10069;   FOG_10069 @10069 NONAME
 UnimplementedOrdinal_10070=UnimplementedOrdinal @10070;   FOG_10070 @10070 NONAME
@@ -107,7 +107,7 @@ UnimplementedOrdinal_10081=UnimplementedOrdinal @10081;   FOG_10081 @10081 NONAM
     FOG_AsyncDataGetBufferSize @10095 NONAME
     FOG_AsyncDataSetResults @10096 NONAME
     FOG_AsyncDataFree @10097 NONAME
-UnimplementedOrdinal_10098=UnimplementedOrdinal @10098;   FOG_10098 @10098 NONAME ; NOOP, same as 10192
+    FOG_AsyncDataNoop @10098 NONAME
     FOG_AsyncDataSetPriority @10099 NONAME
     FOG_AsyncDataHandlePriorityChanges @10100 NONAME
     FOG_MPQSetConfig @10101 NONAME
@@ -121,7 +121,7 @@ UnimplementedOrdinal_10098=UnimplementedOrdinal @10098;   FOG_10098 @10098 NONAM
     FOG_CloseFile @10109 NONAME
     FOG_ReadFile @10110 NONAME
     FOG_WriteFile @10111 NONAME
-UnimplementedOrdinal_10112=UnimplementedOrdinal @10112;   FOG_10112 @10112 NONAME
+    FOG_SetFilePointer @10112 NONAME
 UnimplementedOrdinal_10113=UnimplementedOrdinal @10113;   FOG_10113 @10113 NONAME
     FOG_CreatePathHierarchy @10114 NONAME
     FOG_GetSavePath @10115 NONAME
@@ -153,7 +153,7 @@ UnimplementedOrdinal_10140=UnimplementedOrdinal @10140;   FOG_10140 @10140 NONAM
 UnimplementedOrdinal_10141=UnimplementedOrdinal @10141;   FOG_10141 @10141 NONAME
     FOG_CreateNewPoolSystem @10142 NONAME
     FOG_DestroyMemoryPoolSystem @10143 NONAME
-UnimplementedOrdinal_10144=UnimplementedOrdinal @10144;   FOG_10144 @10144 NONAME
+    FOG_CompactMemoryPoolSystem @10144 NONAME
 	FOG_SetMemoryPoolSystemMode @10145;   FOG_10145 @10145 NONAME
 UnimplementedOrdinal_10146=UnimplementedOrdinal @10146;   FOG_10146 @10146 NONAME
     FOG_GetMemoryUsage @10147 NONAME
@@ -198,7 +198,7 @@ UnimplementedOrdinal_10185=UnimplementedOrdinal @10185;   FOG_10185 @10185 NONAM
 UnimplementedOrdinal_10188=UnimplementedOrdinal @10188;   FOG_10188 @10188 NONAME
 UnimplementedOrdinal_10189=UnimplementedOrdinal @10189;   FOG_10189 @10189 NONAME
 UnimplementedOrdinal_10190=UnimplementedOrdinal @10190;   FOG_10190 @10190 NONAME
-UnimplementedOrdinal_10191=UnimplementedOrdinal @10191;   FOG_10191 @10191 NONAME
+    FOG_IsSlowLegacyCPU @10191 NONAME
 UnimplementedOrdinal_10192=UnimplementedOrdinal @10192;   FOG_10192 @10192 NONAME
 UnimplementedOrdinal_10193=UnimplementedOrdinal @10193;   FOG_10193 @10193 NONAME
 UnimplementedOrdinal_10194=UnimplementedOrdinal @10194;   FOG_10194 @10194 NONAME

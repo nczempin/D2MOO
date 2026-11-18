@@ -393,7 +393,7 @@ struct D2UnitGfxDataStrc
 // ============================================================================
 
 // ENGINE/Gfx.cpp globals
-static D2CofCacheTableStrc g_MonsterCofCache;  // 0x6FBB1B08 (size 0x80C)
+D2CofCacheTableStrc g_MonsterCofCache;  // 0x6FBB1B08 (size 0x80C)
 static D2CofCacheTableStrc g_PlayerCofCache;   // 0x6FBB2318 (size 0x80C, +0x04 = 1, +0x08 = -1)
 static uint8_t  g_bHighlightGreen   = 0;       // 0x6FBB2B28
 static uint8_t  g_bHighlightYellow  = 0;       // 0x6FBB2B29
@@ -1260,6 +1260,21 @@ void __fastcall GFX_UpdateActCofCache(int nAct)
         GFX_LoadPackedCofArchive(&g_PlayerCofCache, "DATA\\GLOBAL\\chars_cof.d2");
         g_PlayerCofCache.nLoadedActIndex = 1;
     }
+}
+
+// 1.12a: 0x6FB41550
+void __fastcall GFX_FreeComponentCellData(D2UnitStrc* pUnit, int nComponent)
+{
+    if (!pUnit || nComponent < 0 || nComponent >= 16) {
+        return;
+    }
+    D2GfxDataStrc tGfxData;
+    memset(&tGfxData, 0, sizeof(tGfxData));
+    tGfxData.nUnitType  = *(int*)pUnit;
+    tGfxData.nClassId   = D2UnitView(pUnit)->dwClassId;
+    tGfxData.nComponent = (uint8_t)nComponent;
+    tGfxData.nMode      = D2UnitView(pUnit)->dwAnimMode;
+    D2CMP_SpriteFreeAsyncLoads(&tGfxData);
 }
 
 // 1.12a: 0x6FB415B0

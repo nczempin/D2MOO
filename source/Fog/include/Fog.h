@@ -145,6 +145,21 @@ struct AsyncDataEventSlot  // sizeof(0x0C)
 };
 
 
+struct D2FogDataArrayStrc // sizeof(0x120)
+{
+	char szName[0x100];      // 0x000
+	int32_t nCapacity;       // 0x100
+	int32_t nElementSize;    // 0x104
+	BOOL bInitialized;       // 0x108
+	int32_t nFirstFreeIndex; // 0x10C
+	int32_t nLastUsedIndex;  // 0x110
+	int32_t nActiveCount;    // 0x114
+	uint16_t wNextGeneration;// 0x118
+	uint16_t wPad11A;        // 0x11A
+	uint8_t* pElements;      // 0x11C
+};
+static_assert(sizeof(D2FogDataArrayStrc) == 0x120, "D2FogDataArrayStrc must be 0x120 bytes");
+
 struct QServer;
 
 #pragma pack()
@@ -180,6 +195,14 @@ FOG_DLL_DECL void __fastcall FOG_FreePool(void* pMemPool, void* pFree, const cha
 FOG_DLL_DECL void* __fastcall FOG_ReallocPool(void* pMemPool, void* pMemory, int nSize, const char* szFile, int nLine, int n0);						//Fog.#10047
 FOG_DLL_DECL void __fastcall FOG_10050_EnterCriticalSection(_Acquires_lock_(*_Curr_) CRITICAL_SECTION* pCriticalSection, int nLine);				//Fog.#10050
 FOG_DLL_DECL int32_t __fastcall FOG_10055_GetSyncTime();																							//Fog.#10055
+FOG_DLL_DECL D2FogDataArrayStrc* __fastcall DATATBLS_CreateDataArray(const char* szName, int32_t nCapacity, int32_t nElementSize);					//Fog.#10060
+FOG_DLL_DECL void __fastcall DATATBLS_DestroyDataArray(D2FogDataArrayStrc* pArray);																	//Fog.#10061
+FOG_DLL_DECL void __fastcall DATATBLS_InitDataArray(D2FogDataArrayStrc* pArray);																	//Fog.#10062
+FOG_DLL_DECL void __fastcall DATATBLS_ResetDataArray(D2FogDataArrayStrc* pArray);																	//Fog.#10063
+FOG_DLL_DECL int32_t __fastcall DATATBLS_AllocDataArrayElement(D2FogDataArrayStrc* pArray);															//Fog.#10064
+FOG_DLL_DECL void __fastcall DATATBLS_FreeDataArrayElement(D2FogDataArrayStrc* pArray, int32_t hElement);											//Fog.#10065
+FOG_DLL_DECL void* __fastcall DATATBLS_GetDataArrayElementChecked(D2FogDataArrayStrc* pArray, int32_t hElement);									//Fog.#10066
+FOG_DLL_DECL void* __fastcall DATATBLS_TryGetDataArrayElement(D2FogDataArrayStrc* pArray, int32_t hElement);										//Fog.#10067
 // Noop, same as 10048, 10049, 10053, 10054, 10146, 10194, 10195, 10196, 10197, 10220, 10221, 10225, 10232, 10240, 10241, 10242
 FOG_DLL_DECL void __fastcall FOG_10082_Noop();																										//Fog.#10082
 FOG_DLL_DECL float __stdcall FOG_10083_Cos_LUT(int16_t index);																						//Fog.#10083
@@ -198,6 +221,7 @@ FOG_DLL_DECL void* __fastcall FOG_AsyncDataGetBuffer(AsyncData* pAsyncData);				
 FOG_DLL_DECL DWORD __fastcall FOG_AsyncDataGetBufferSize(AsyncData* pAsyncData);																	//Fog.#10095
 FOG_DLL_DECL void __fastcall FOG_AsyncDataSetResults(AsyncData* pAsyncData, void* pBuffer, int nBufferSize);										//Fog.#10096
 FOG_DLL_DECL void __fastcall FOG_AsyncDataFree(AsyncData* pAsyncData);																				//Fog.#10097
+FOG_DLL_DECL int32_t __fastcall FOG_AsyncDataNoop();																								//Fog.#10098
 FOG_DLL_DECL void __fastcall FOG_AsyncDataSetPriority(AsyncData* pAsyncData, int nPriority);														//Fog.#10099
 FOG_DLL_DECL void __fastcall FOG_AsyncDataHandlePriorityChanges(BOOL bPostpone);																	//Fog.#10100
 FOG_DLL_DECL BOOL __fastcall FOG_MPQSetConfig(int dwDirectAccessFlags, int bEnableSeekOptimization);												//Fog.#10101
@@ -211,6 +235,7 @@ FOG_DLL_DECL BOOL __fastcall FOG_DeleteFileA(LPCSTR lpFileName);																
 FOG_DLL_DECL BOOL __fastcall FOG_CloseFile(HANDLE hFILE);																							//Fog.#10109
 FOG_DLL_DECL BOOL __fastcall FOG_ReadFile(HANDLE hFile, void* lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);		//Fog.#10110
 FOG_DLL_DECL BOOL __fastcall FOG_WriteFile(HANDLE hFile, const void* lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);	//Fog.#10111
+FOG_DLL_DECL DWORD __fastcall FOG_SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod);				//Fog.#10112
 FOG_DLL_DECL BOOL __fastcall FOG_CreatePathHierarchy(char* szPath);																					//Fog.#10114
 FOG_DLL_DECL size_t __fastcall FOG_GetSavePath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10115
 FOG_DLL_DECL BOOL __fastcall FOG_GetInstallPath(char* pPathBuffer, size_t nBufferSize);																//Fog.#10116
@@ -218,6 +243,7 @@ FOG_DLL_DECL BOOL __fastcall FOG_UseDirect();																										//Fog.#10
 FOG_DLL_DECL uint16_t __stdcall FOG_ComputeStringCRC16(const char* szString);																		//Fog.#10137
 FOG_DLL_DECL void __cdecl FOG_CreateNewPoolSystem(void** pMemPoolSystem, const char* szName, uint32_t nPools, uint32_t nUnused);					//Fog.#10142
 FOG_DLL_DECL void __cdecl FOG_DestroyMemoryPoolSystem(void* pMemoryPoolSystem);																		//Fog.#10143
+FOG_DLL_DECL void __cdecl FOG_CompactMemoryPoolSystem(void* pMemoryPoolSystem);																		//Fog.#10144
 FOG_DLL_DECL void __cdecl FOG_SetMemoryPoolSystemMode(void* pMemoryPoolSystem, BOOL bFreePoolAlloc);												//Fog.#10145
 FOG_DLL_DECL DWORD __cdecl FOG_GetMemoryUsage(void*);																								//Fog.#10147
 FOG_DLL_DECL QServer* __stdcall FOG_InitializeServer(int nServerType, int nNumQueues, int nPort, int a4, void* pfValidate, void* pfOnConnect, void* pfOnDisconnect, void* pfReadPacket); //Fog.#10149
@@ -247,6 +273,7 @@ FOG_DLL_DECL int __stdcall FOG_10182_Return(void*);																									//Fo
 FOG_DLL_DECL int __stdcall FOG_10183_Return(void*, int);																							//Fog.#10183
 FOG_DLL_DECL int __stdcall FOG_10186(void* pServer, int nIndex, int nValue);																		//Fog.#10186
 FOG_DLL_DECL int __fastcall FOG_10187(void* pServer, int a2, int a3);																				//Fog.#10187
+FOG_DLL_DECL BOOL __stdcall FOG_IsSlowLegacyCPU();																									//Fog.#10191
 FOG_DLL_DECL void __stdcall FOG_10207(D2BinFileStrc* pBinFile, D2BinFieldStrc* pBinField, void* pTxt, int nRecordCount, int nRecordSize);			//Fog.#10207
 FOG_DLL_DECL D2BinFileStrc* __stdcall FOG_CreateBinFile(void* pDataBuffer, int nBufferSize);														//Fog.#10208
 FOG_DLL_DECL void __stdcall FOG_FreeBinFile(D2BinFileStrc* pBinFile);																				//Fog.#10209
@@ -269,6 +296,7 @@ FOG_DLL_DECL uint32_t __stdcall FOG_PopCount(void* pData, size_t dwSize);							
 FOG_DLL_DECL void __fastcall FOG_10233(const char*, int);																							//Fog.#10233
 FOG_DLL_DECL uint32_t __stdcall FOG_LeadingZeroesCount(uint32_t nValue);																			//Fog.#10252
 FOG_DLL_DECL char* __stdcall FOG_10255(void* pLinker, int nId, int a3);																				//Fog.#10255
+FOG_DLL_DECL const char* __cdecl FOG_GetCallerReturnAddress();																						//Fog.#10265
 
 
 #define D2_ALLOC(size) FOG_Alloc((size), __FILE__, __LINE__, 0)

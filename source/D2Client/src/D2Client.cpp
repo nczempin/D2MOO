@@ -129,7 +129,7 @@ struct D2ViewportStrc;
 D2ViewportStrc* __fastcall VIEW_AllocViewport(void);
 void __fastcall VIEW_FreeViewport(D2ViewportStrc* pViewport);
 void __fastcall VIEW_SetViewportRect(D2ViewportStrc* pViewport, int32_t nLeft, int32_t nTop, int32_t nRight, int32_t nBottom);
-void __fastcall GAME_RenderFrame(int32_t bSkipWorldRender);
+void __fastcall VIEW_RenderViewportForCustomLoop(int32_t bSkipWorldRender);
 void __cdecl GFXUTIL_InitDirectionTables();
 void __fastcall GFX_UpdateActCofCache(int nAct);
 void __cdecl GFX_FreeMonsterCofCache();
@@ -3817,7 +3817,7 @@ static void RenderInGameFrame()
 	SyncReconstructedClientGlobals();
 
 	// 1. Reconstructed 1.12a Isometric World Renderer (View.cpp -> GAME_Wall2 / Floor / Env / ENGINE_Gfx)
-	GAME_RenderFrame(0);
+	VIEW_RenderViewportForCustomLoop(0);
 
 	// 2. Reconstructed 1.12a UI & HUD Renderer (UI_ui.cpp -> Automap, Orbs, ControlBar, Panels, Shop, Tooltips, Cursor)
 	UI_RenderHUD();

@@ -6,6 +6,7 @@
 #include <objbase.h>
 #include <ctime>
 #include <cstring>
+#include <intrin.h>
 
 static BOOL gdwFogUseDirect = FALSE;
 static BOOL gbExpansionChecked = FALSE;
@@ -498,10 +499,34 @@ int __fastcall FOG_IsExpansion()
 		}
 
 		SStrCopy(szPath, "d2exp.mpq", sizeof(szPath));
-		if (GetFileAttributesA(szPath) != INVALID_FILE_ATTRIBUTES)
+		if (GetFileAttributesA("d2exp.mpq") != INVALID_FILE_ATTRIBUTES)
 		{
 			gbIsExpansion = TRUE;
 		}
 	}
 	return gbIsExpansion;
+}
+
+// 1.12a: Fog.0x6FF64D50 (#10098)
+int32_t __fastcall FOG_AsyncDataNoop()
+{
+	return 0;
+}
+
+// 1.12a: Fog.0x6FF6EE20 (#10112)
+DWORD __fastcall FOG_SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod)
+{
+	return SetFilePointer(hFile, lDistanceToMove, lpDistanceToMoveHigh, dwMoveMethod);
+}
+
+// 1.12a: Fog.0x6FF5E920 (#10191)
+BOOL __stdcall FOG_IsSlowLegacyCPU()
+{
+	return FALSE;
+}
+
+// 1.12a: Fog.0x6FF5F9B0 (#10265)
+const char* __cdecl FOG_GetCallerReturnAddress()
+{
+	return static_cast<const char*>(_ReturnAddress());
 }

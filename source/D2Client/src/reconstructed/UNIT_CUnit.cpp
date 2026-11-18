@@ -135,9 +135,9 @@ int32_t        gnScreenHeight           = 600;     // 0x6FB8C6E4
 int32_t        gnMouseX                 = 0;       // 0x6FBB1638
 int32_t        gnMouseY                 = 0;       // 0x6FBB1634
 #define gnMouseCursorX gnMouseX
-int32_t        gnGameType               = 0;       // 0x6FBCBFF8
-uint8_t        gnClientDifficulty       = 0;       // 0x6FBCBFF4
-int32_t        gbIsExpansion            = 0;       // 0x6FBB330C
+extern int32_t        gnGameType;       // 0x6FBCBFF8
+extern uint8_t        gnClientDifficulty;       // 0x6FBCBFF4
+extern int32_t        gbIsExpansion;       // 0x6FBB330C
 extern int32_t gaPanelStates[38];                  // 0x6FBB2B58
 #define gbHideGroundItems (gaPanelStates[13])
 int32_t        gnAutomapRefreshState    = 0;       // 0x6FBCC2F4
