@@ -1785,6 +1785,8 @@ static void __fastcall SCMD_Handler58_OpenUIDialog(uint8_t* pPacket)
     }
 }
 
+extern int32_t g_bServerClosingTradeUi;
+
 static void __fastcall SCMD_Handler77_UpdateUI(uint8_t* pPacket)
 {
     if (!pPacket)
@@ -1800,7 +1802,9 @@ static void __fastcall SCMD_Handler77_UpdateUI(uint8_t* pPacket)
         UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         break;
     case 0x11: // UPDATEUI_CLOSESTASH
+        g_bServerClosingTradeUi = 1;
         UI_SetPanelState(D2PANEL_STASH, 1, 0);
+        g_bServerClosingTradeUi = 0;
         INV_SetPanelMode(0);
         break;
     case 0x15: // UPDATEUI_OPENCUBE
@@ -1809,9 +1813,11 @@ static void __fastcall SCMD_Handler77_UpdateUI(uint8_t* pPacket)
         UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         break;
     case 0x0C: // UPDATEUI_CLOSETRADE
+        g_bServerClosingTradeUi = 1;
         UI_SetPanelState(D2PANEL_STASH, 1, 0);
         UI_SetPanelState(D2PANEL_CUBE, 1, 0);
         UI_SetPanelState(D2PANEL_NPCSHOP, 1, 0);
+        g_bServerClosingTradeUi = 0;
         INV_SetPanelMode(0);
         break;
     default:

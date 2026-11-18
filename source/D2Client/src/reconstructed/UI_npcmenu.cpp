@@ -949,7 +949,9 @@ int __cdecl sub_6FAC8BF0()
 void __cdecl sub_6FAC8D00()
 {
     if (g_bInteractingWithNpc) {
-        MSG_SendByte2Dwords(0x30, 1, g_nInteractingNpcGUID);
+        if (g_nInteractingNpcGUID != 0) {
+            MSG_SendByte2Dwords(0x30, 1, g_nInteractingNpcGUID);
+        }
         g_bInteractingWithNpc = 0;
     }
 }

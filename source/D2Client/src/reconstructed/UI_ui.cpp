@@ -1433,20 +1433,6 @@ int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap)
             continue;
         }
         if (gaPanelStates[i] != 0) {
-            if (i == D2PANEL_NPCSHOP && g_nInteractingNpcGUID != 0) {
-                MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, static_cast<uint32_t>(g_nInteractingNpcGUID));
-                g_bInteractingWithNpc = 0;
-                g_nInteractingNpcGUID = 0;
-                g_nInteractingNpcClassId = 0;
-                g_pTradeNpcUnit = nullptr;
-            }
-            if (i == D2PANEL_STASH) {
-                MSG_SendByte3Words(0x4Fu, 0x12u, 0u, 0u);
-            } else if (i == D2PANEL_CUBE) {
-                MSG_SendByte3Words(0x4Fu, 0x17u, 0u, 0u);
-            } else if (i == D2PANEL_WAYPOINT && g_dwActiveWaypointGuid != 0u) {
-                MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, 0u);
-            }
             UI_SetPanelState(i, 1, 0);
             bClosedAny = 1;
         }
@@ -2069,17 +2055,39 @@ int32_t __fastcall UI_PreparePanelOpen(int32_t nAction /*eax*/, int32_t nPanelId
     if (gaPanelStates[D2PANEL_ESCMENU] && nPanelId != D2PANEL_ESCMENU) {
         gaPanelStates[D2PANEL_ESCMENU] = 0;
     }
-    extern void  __cdecl sub_6FAC9760(void);
-    if ((gaPanelStates[D2PANEL_NPCMENU] || DIALOG_GetActiveDialog() != nullptr) &&
-        nPanelId != D2PANEL_NPCMENU && nPanelId != D2PANEL_NPCSHOP) {
-        sub_6FAC9760();
+    extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+    extern void    __cdecl    sub_6FAC9AF0(void);
+    if ((gaPanelStates[D2PANEL_NPCMENU] || DIALOG_GetActiveDialog() != nullptr || D2Client_IsNpcGossipSpeechOpen() != 0) &&
+        nPanelId != D2PANEL_NPCMENU && nPanelId != D2PANEL_NPCSHOP && nPanelId != D2PANEL_MODITEM) {
+        sub_6FAC9AF0();
         gaPanelStates[D2PANEL_NPCMENU] = 0;
     }
-    if (UI_IsLeftSidePanel(nPanelId)) {
-        static const int32_t kLeftPanels[] = {
-            D2PANEL_CHAR, D2PANEL_NPCSHOP, D2PANEL_MODITEM, D2PANEL_QUEST,
-            D2PANEL_WAYPOINT, 0x14, D2PANEL_PARTY, D2PANEL_STASH, D2PANEL_CUBE, D2PANEL_MERCINV
-        };
+    if (gaPanelStates[D2PANEL_MSGLOG] != 0 && nPanelId != D2PANEL_MSGLOG &&
+        nPanelId != D2PANEL_AUTOMAP && nPanelId != D2PANEL_MINIPANEL &&
+        nPanelId != D2PANEL_SHOWITEMS && nPanelId != D2PANEL_BELT) {
+        UI_SetPanelState(D2PANEL_MSGLOG, 1, 0);
+    }
+    static const int32_t kLeftPanels[] = {
+        D2PANEL_CHAR, D2PANEL_NPCSHOP, D2PANEL_MODITEM, D2PANEL_QUEST,
+        D2PANEL_WAYPOINT, 0x14, D2PANEL_PARTY, D2PANEL_STASH, D2PANEL_CUBE, D2PANEL_MERCINV
+    };
+    if (nPanelId == D2PANEL_MSGLOG) {
+        for (size_t i = 0; i < sizeof(kLeftPanels) / sizeof(kLeftPanels[0]); ++i) {
+            int32_t nOther = kLeftPanels[i];
+            if (gaPanelStates[nOther] != 0) {
+                UI_SetPanelState(nOther, 1, 0);
+            }
+        }
+        if (gaPanelStates[D2PANEL_INVENTORY] != 0) {
+            UI_SetPanelState(D2PANEL_INVENTORY, 1, 0);
+        }
+        if (gaPanelStates[D2PANEL_SKILLTREE] != 0) {
+            UI_SetPanelState(D2PANEL_SKILLTREE, 1, 0);
+        }
+        if (gaPanelStates[D2PANEL_SKILLSELECT] != 0) {
+            UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+        }
+    } else if (UI_IsLeftSidePanel(nPanelId)) {
         for (size_t i = 0; i < sizeof(kLeftPanels) / sizeof(kLeftPanels[0]); ++i) {
             int32_t nOther = kLeftPanels[i];
             if (nOther != nPanelId && gaPanelStates[nOther] != 0) {
@@ -2095,16 +2103,50 @@ int32_t __fastcall UI_PreparePanelOpen(int32_t nAction /*eax*/, int32_t nPanelId
     return 1;
 }
 
+int32_t g_bServerClosingTradeUi = 0;
+
 // 1.12a: 0x6FB3E960 (__fastcall)
 // Performs panel-specific cleanup when a UI panel transitions from open (1) to closed (0)
 void __fastcall UI_OnPanelClosed(int32_t nPanelId /*eax*/)
 {
+    extern void __cdecl sub_6FAC9AF0(void);
+    extern int  g_bHoradricCubeClosedLocally;
     if (nPanelId == D2PANEL_QUEST) {
         QUESTLOG_ClosePanel(0);
-    } else if (nPanelId == D2PANEL_NPCSHOP || nPanelId == D2PANEL_CUBE || nPanelId == D2PANEL_STASH) {
+    } else if (nPanelId == D2PANEL_NPCMENU) {
+        sub_6FAC9AF0();
+    } else if (nPanelId == D2PANEL_NPCSHOP || nPanelId == D2PANEL_MODITEM) {
         g_nInvPanelMode = 0;
-        if (nPanelId == D2PANEL_NPCSHOP) {
-            gnCursorState = 0;
+        gnCursorState = 0;
+        sub_6FAC9AF0();
+    } else if (nPanelId == D2PANEL_STASH) {
+        g_nInvPanelMode = 0;
+        if (!g_bServerClosingTradeUi) {
+            MSG_SendByte3Words(0x4Fu, 0x12u, 0u, 0u);
+        }
+    } else if (nPanelId == D2PANEL_CUBE) {
+        g_nInvPanelMode = 0;
+        if (!g_bServerClosingTradeUi && !g_bHoradricCubeClosedLocally) {
+            MSG_SendByte3Words(0x4Fu, 0x17u, 0u, 0u);
+        }
+        g_bHoradricCubeClosedLocally = 0;
+    } else if (nPanelId == D2PANEL_WAYPOINT) {
+        if (g_dwActiveWaypointGuid != 0u) {
+            MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, 0u);
+            g_dwActiveWaypointGuid = 0u;
+        }
+    } else if (nPanelId == D2PANEL_INVENTORY) {
+        if (gaPanelStates[D2PANEL_NPCSHOP] != 0) {
+            UI_SetPanelState(D2PANEL_NPCSHOP, 1, 0);
+        }
+        if (gaPanelStates[D2PANEL_MODITEM] != 0) {
+            UI_SetPanelState(D2PANEL_MODITEM, 1, 0);
+        }
+        if (gaPanelStates[D2PANEL_STASH] != 0) {
+            UI_SetPanelState(D2PANEL_STASH, 1, 0);
+        }
+        if (gaPanelStates[D2PANEL_CUBE] != 0) {
+            UI_SetPanelState(D2PANEL_CUBE, 1, 0);
         }
     } else if (nPanelId == D2PANEL_SKILLSELECT) {
         g_nSpeedBarSide = 0;
@@ -2816,9 +2858,6 @@ static bool UI_DispatchHudOrPanelClick(D2ReconWinMsgViewStrc* pRawMsg, bool bLef
                 const int32_t nBaseX = (nW >= 800) ? 80 : 0;
                 const int32_t nBaseY = (nH >= 600) ? 60 : 0;
                 if (mx >= nBaseX + 260 && mx <= nBaseX + 308 && my >= nBaseY + 382 && my <= nBaseY + 424) {
-                    if (g_dwActiveWaypointGuid != 0u) {
-                        MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, 0u);
-                    }
                     UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
                     return true;
                 }
@@ -2848,7 +2887,9 @@ static bool UI_DispatchHudOrPanelClick(D2ReconWinMsgViewStrc* pRawMsg, bool bLef
                         const int32_t nWpBit = kActWpBitBase[nActIdx] + i;
                         const bool bUnlocked = ((g_qwUnlockedWaypointsMask >> nWpBit) & 1ULL) != 0ULL || (nActIdx == 0 && i == 0);
                         if (bUnlocked) {
-                            MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, kActWpLevels[nActIdx][i]);
+                            const uint32_t dwWpGuid = g_dwActiveWaypointGuid;
+                            g_dwActiveWaypointGuid = 0u;
+                            MSG_SendByte2Dwords(0x49u, dwWpGuid, kActWpLevels[nActIdx][i]);
                             UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
                         }
                         return true;

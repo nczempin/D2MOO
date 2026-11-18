@@ -3925,13 +3925,15 @@ void __stdcall INV_OnNpcShopMouseUp(D2WinMsgStrc* pMsg)
 // Closes the Horadric Cube session locally and sends C2S 0x4F (subcommand 0x17: Close Horadric Cube) if needed.
 void __stdcall INV_CloseHoradricCubeSession()
 {
+    extern int32_t __fastcall MSG_SendByte3Words(uint8_t bOpcode, uint16_t w1, uint16_t w2, uint16_t w3);
     if (g_bHoradricCubeOpen)
     {
-        g_bHoradricCubeOpen = FALSE;
+        UI_SetPanelState(26 /* D2PANEL_CUBE */, 1, FALSE);
+        return;
     }
     if (!g_bHoradricCubeClosedLocally)
     {
-        NET_SendByteAndTwoDwords(0x4F, 0x17, 0);
+        MSG_SendByte3Words(0x4Fu, 0x17u, 0u, 0u);
     }
     g_bHoradricCubeClosedLocally = FALSE;
 }
@@ -4286,24 +4288,15 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
     {
         if (g_bNpcShopPanelOpen)
         {
-            if (g_bInteractedWithNpc && g_nInteractedNpcGUID != 0)
-            {
-                NET_SendByteAndTwoDwords(0x30u, 1u, (uint32_t)g_nInteractedNpcGUID);
-            }
-            g_bInteractedWithNpc = FALSE;
             UI_SetPanelState(0x0C /* D2PANEL_NPCSHOP */, 1, FALSE);
-            g_nInvPanelMode = 0;
         }
         else if (g_bStashPanelOpen)
         {
             UI_SetPanelState(25 /* D2PANEL_STASH */, 1, FALSE);
-            g_nInvPanelMode = 0;
         }
         else if (g_bHoradricCubeOpen)
         {
-            INV_CloseHoradricCubeSession();
             UI_SetPanelState(26 /* D2PANEL_CUBE */, 1, FALSE);
-            g_nInvPanelMode = 0;
         }
         else if (g_bMercInvOpen)
         {
