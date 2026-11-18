@@ -24,6 +24,97 @@ struct Unicode { uint16_t ch; };
 
 #include "D2ClientReconstructed.h"
 
+
+struct D2UnitStrc;
+struct D2InventoryStrc;
+
+#ifndef D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#define D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#pragma pack(push, 1)
+struct D2ReconItemDataViewStrc
+{
+    uint8_t pad00[0x45];
+    uint8_t nInvPage; // +0x45
+};
+struct D2ReconObjectDataViewStrc
+{
+    void*   pObjectTxt; // +0x00
+    uint8_t nShrineNo;  // +0x04
+};
+struct D2ReconUnitViewStrc
+{
+    uint32_t dwUnitType;                // +0x00
+    int32_t  dwClassId;                 // +0x04
+    void*    pMemoryPool;               // +0x08
+    uint32_t dwUnitId;                  // +0x0C
+    int32_t  dwAnimMode;                // +0x10
+    void*    pUnitData;                 // +0x14
+    int32_t  nAct;                      // +0x18
+    void*    pDrlgAct;                  // +0x1C
+    uint32_t dwSeed[2];                 // +0x20
+    uint32_t dwInitSeed;                // +0x28
+    void*    pDynamicPath;              // +0x2C
+    void*    pAnimSeq;                  // +0x30
+    uint32_t dwSeqFrameCount;           // +0x34
+    int32_t  dwSeqFrame;                // +0x38
+    uint32_t dwSeqSpeed;                // +0x3C
+    uint32_t dwSeqMode;                 // +0x40
+    int32_t  nSeqCurrentFramePrecise;   // +0x44
+    int32_t  dwFrameCountPrecise;       // +0x48
+    int16_t  wAnimSpeed;                // +0x4C
+    uint8_t  nActionFrame;              // +0x4E
+    uint8_t  unk0x4F;                   // +0x4F
+    void*    pAnimData;                 // +0x50
+    void*    pGfxData;                  // +0x54
+    void*    pGfxDataCopy;              // +0x58
+    void*    pStatListEx;               // +0x5C
+    D2InventoryStrc* pInventory;        // +0x60
+    void*    pLight;                    // +0x64
+    uint32_t dwStartLight;              // +0x68
+    int32_t  nPaletteIndex;             // +0x6C
+    void*    pUnitSfxSlot;              // +0x70
+    uint8_t  pad74[0x8C - 0x74];        // +0x74..+0x8B
+    uint16_t nLastClickX;               // +0x8C
+    uint16_t nLastClickY;               // +0x8E
+    uint8_t  pad90[0xA8 - 0x90];        // +0x90..+0xA7
+    void*    pSkills;                   // +0xA8
+    uint8_t  padAC[0xC4 - 0xAC];        // +0xAC..+0xC3
+    uint32_t dwFlags;                   // +0xC4
+    uint32_t dwFlagEx;                  // +0xC8
+    uint8_t  padCC[0xE4 - 0xCC];        // +0xCC..+0xE3
+    D2UnitStrc* pListNext;              // +0xE4
+    D2UnitStrc* pRoomNext;              // +0xE8
+    void*    pMsgFirst;                 // +0xEC
+    void*    pMsgLast;                  // +0xF0
+};
+static_assert(sizeof(D2ReconUnitViewStrc) == 0xF4, "D2ReconUnitViewStrc must be 0xF4 bytes");
+struct D2ReconWinMsgViewStrc
+{
+    HWND     hWnd;         // +0x00
+    uint32_t uMsg;         // +0x04
+    union
+    {
+        int32_t wParam;    // +0x08
+        struct
+        {
+            uint16_t wParamLow;  // +0x08
+            int16_t  wWheelDelta;// +0x0A
+        };
+    };
+    uint16_t nX;           // +0x0C
+    uint16_t nY;           // +0x0E
+    uint32_t dwKeyFlags;   // +0x10
+    int32_t  nField14;     // +0x14
+    int32_t  bHandled;     // +0x18
+    int32_t  nReturnValue; // +0x1C
+};
+#pragma pack(pop)
+static inline D2ReconUnitViewStrc* D2UnitView(D2UnitStrc* p) { return reinterpret_cast<D2ReconUnitViewStrc*>(p); }
+static inline const D2ReconUnitViewStrc* D2UnitView(const D2UnitStrc* p) { return reinterpret_cast<const D2ReconUnitViewStrc*>(p); }
+static inline D2ReconWinMsgViewStrc* D2MsgView(void* p) { return reinterpret_cast<D2ReconWinMsgViewStrc*>(p); }
+#endif
+
+
 struct D2WindowMsgStrc
 {
     HWND hWnd;              // +0x00
@@ -275,1256 +366,6 @@ int32_t __stdcall CURSOR_OnRButtonUpReset(D2WindowMsgStrc* pMsg); // 0x6FB4EE90
 int32_t __stdcall CMDTBL_OnKeyDown(D2WindowMsgStrc* pMsg);        // 0x6FB4F7A0
 int32_t __stdcall CMDTBL_OnKeyUp(D2WindowMsgStrc* pMsg);          // 0x6FB4F6C0
 
-// ============================================================================
-// Part 1: Monster Skill Client Functions (0x6FB4C580..0x6FB4E820)
-//         Continuation of ..\Source\D2Client\SKILLS\SkillsMon.cpp
-// ============================================================================
-
-// 1.12a: 0x6FB4C580 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_TargetCoordsAndEndAtAction(D2UnitStrc* pUnit)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nX = SKILLS_GetParam1(pSkill);
-        int32_t nY = SKILLS_GetParam2(pSkill);
-        if (nX && nY)
-        {
-            PATH_SetTargetPos(*(void**)((uint8_t*)pUnit + 0x2C), nX, nY);
-            UNITS_SetTargetUnitForDynamicUnit(pUnit, NULL);
-        }
-    }
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4C5F0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_ReturnOneA(void)
-{
-    return 1;
-}
-
-// 1.12a: 0x6FB4C610 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_ReturnOneB(void)
-{
-    return 1;
-}
-
-// 1.12a: 0x6FB4C630 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_SpawnLoopSoundAndMissile(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    if (*((uint8_t*)pUnit + 0x24) == 0 && (*((uint8_t*)pUnit + 0xC4) & 0x08) == 0)
-        return 0;
-
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileId >= 0)
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, 0, 0, 0, 0, 0);
-    return 1;
-}
-
-// 1.12a: 0x6FB4C6B0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_MinionSpawner(D2UnitStrc* pUnit)
-{
-    int32_t nSpawnId = 0, nSpawnCount = 0, nSpawnMode = 0;
-    MONSTERS_GetMinionSpawnInfo(pUnit, &nSpawnId, &nSpawnCount, &nSpawnMode);
-    if (nSpawnId < 0)
-        return 0;
-
-    D2MonStatsTxt* pMonStats = (D2MonStatsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xA78)) + nSpawnId * 0x1A8);
-    if (!pMonStats)
-        return 0;
-
-    extern void __fastcall UNIT_LoadMonsterPaletteAssets(int32_t nClassId, int32_t nZero, uint8_t* pComponents); // 0x6FAE1F70
-    uint8_t aComponents[16] = { 0 };
-    UNIT_LoadMonsterPaletteAssets(nSpawnId, 0, aComponents);
-    UNITS_ChangeAnimMode(pUnit, nSpawnMode);
-
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4C770 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_MinionSpawner(D2UnitStrc* pUnit)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nSpawnId = 0;
-        MONSTERS_GetMinionSpawnInfo(pUnit, &nSpawnId, &nFrameNo, &nFrameCount);
-        if (nSpawnId >= 0)
-        {
-            if ((D2MonStatsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xA78)) + nSpawnId * 0x1A8) != NULL)
-            {
-                extern void __stdcall PARTICLE_SpawnOverlayOrEffect(D2UnitStrc* pUnit, int32_t nArg1, int32_t nArg2, int32_t nArg3); // 0x6FB75BA0
-                PARTICLE_SpawnOverlayOrEffect(pUnit, 0, 1, 0);
-            }
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4C800 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_PlaySkillSoundAndSaveTarget(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern int32_t __fastcall SKILLS_SaveTargetCoordsToSkill(D2UnitStrc* pUnit, D2SkillStrc* pSkill); // 0x6FAFC4C0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    if (!SKILLS_SaveTargetCoordsToSkill(pUnit, pSkill))
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4C890 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_CastMissileAtSavedCoords(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-        extern void __stdcall SKILLS_LaunchMissileAtCoords(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nTargetX, int32_t nTargetY, int32_t nZero); // 0x6FAFC460
-        D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-        if (pSkillsTxt)
-        {
-            int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-            if (nMissileId > 0)
-            {
-                int32_t nTargetY = SKILLS_GetParam2(pSkill);
-                int32_t nTargetX = SKILLS_GetParam1(pSkill);
-                SKILLS_LaunchMissileAtCoords(pUnit, nMissileId, nSkillId, nSkillLevel, nTargetX, nTargetY, 0);
-            }
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4C930 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_FingerMageSpider(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, 0x2CE) != nSkillId)
-        return 0;
-
-    extern int32_t __fastcall SKILLS_SaveTargetUnitToSkill(D2UnitStrc* pUnit, D2SkillStrc* pSkill); // 0x6FAFC6A0
-    if (!SKILLS_SaveTargetUnitToSkill(pUnit, pSkill))
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-    SKILLS_SetParam3(pSkill, 0);
-    return 1;
-}
-
-// 1.12a: 0x6FB4C9A0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_FingerMageSpider(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    if (SKILLS_GetSkillIdFromSkill(pSkill, __FILE__, 0x2EA) != nSkillId)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        extern void __stdcall SKILLS_SpawnHomingMissileFromSkill(D2UnitStrc* pUnit, D2SkillStrc* pSkill, int32_t nSkillId, int32_t nSkillLevel, int32_t nZero); // 0x6FAFD3D0
-        SKILLS_SpawnHomingMissileFromSkill(pUnit, pSkill, nSkillId, nSkillLevel, 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4CA00 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_DiabloColdTouch(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileId < 0 || nMissileId >= *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-        return 0;
-
-    if (pUnit)
-    {
-        int32_t nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-        int32_t nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, 1, nX, nY, 0, 0, 0);
-    }
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4CAD0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_SubmergeToggle(D2UnitStrc* pUnit)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    int32_t nFlags = SKILLS_GetFlags(pSkill);
-    if ((nFlags & 0x04) == 0)
-    {
-        UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-        return nFrameNo != 0;
-    }
-
-    SKILLS_SetFlags(pSkill, nFlags & ~0x04);
-    int32_t nMode = *((int32_t*)pUnit + 4);
-    if (nMode == 15) // MONMODE_SKILL3 -> submerge
-    {
-        UNITS_ChangeAnimMode(pUnit, 5); // MONMODE_SEQUENCE / submerged
-        STATLIST_SetUnitStat(pUnit, 0xAC, 1, 0);
-        return 1;
-    }
-    if (nMode == 16) // MONMODE_SKILL4 -> emerge
-    {
-        UNITS_ChangeAnimMode(pUnit, 1); // MONMODE_NEUTRAL
-        STATLIST_SetUnitStat(pUnit, 0xAC, 0, 0);
-    }
-    return 1;
-}
-
-// 1.12a: 0x6FB4CB90 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_MaggotEgg(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    if (!pUnit)
-        return 0;
-    if (nSkillId >= 0 && nSkillId < *(int32_t*)((uint8_t*)sgptDataTables + 0xB98))
-    {
-        D2SkillsTxt* pSkillsTxt = (D2SkillsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xB88)) + nSkillId * 0x23C);
-        if (pSkillsTxt && *(int32_t*)((uint8_t*)pSkillsTxt + 0x188) != 0)
-        {
-            D2SkillStrc* pSkill = SKILLS_GetHighestLevelSkillFromUnitAndId(pUnit, nSkillId);
-            if (pSkill)
-            {
-                if (nSkillLevel <= 0)
-                    nSkillLevel = SKILLS_GetLevel(pUnit, pSkill, 1);
-                int32_t nVal = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)((uint8_t*)pSkillsTxt + 0x188), nSkillId, nSkillLevel);
-                if (nVal != 0)
-                {
-                    int32_t nMaxLife = STATLIST_GetMaxLifeFromUnit(pUnit);
-                    if (nMaxLife <= 0)
-                        nMaxLife = 1;
-                    STATLIST_SetBaseStat2(*(D2StatListStrc**)((uint8_t*)pUnit + 0x5C), 6, 1, 0, pUnit);
-                    STATLIST_SetBaseStat2(*(D2StatListStrc**)((uint8_t*)pUnit + 0x5C), 7, nMaxLife, 0, pUnit);
-                }
-            }
-        }
-    }
-    D2SkillStrc* pUsedSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pUsedSkill)
-        return 0;
-    SKILLS_SetFlags(pUsedSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4CD30 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_QueenSpit(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-        extern void __stdcall SKILLS_LaunchMissileFromOffset(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nOffsetX, int32_t nOffsetY, int32_t nZero); // 0x6FAFCE10
-        D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-        if (!pSkillsTxt)
-            return 0;
-        int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-        if (nMissileId < 0 || nMissileId >= *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-            return 0;
-        int32_t nOffset = *(int32_t*)((uint8_t*)pSkillsTxt + 0x154);
-        int32_t nNegOffset = -nOffset;
-        SKILLS_LaunchMissileFromOffset(pUnit, nMissileId, nSkillId, nSkillLevel, nNegOffset, nNegOffset, 0);
-        SKILLS_LaunchMissileFromOffset(pUnit, nMissileId, nSkillId, nSkillLevel, nNegOffset, nOffset, 0);
-        SKILLS_LaunchMissileFromOffset(pUnit, nMissileId, nSkillId, nSkillLevel, nOffset, nNegOffset, 0);
-        SKILLS_LaunchMissileFromOffset(pUnit, nMissileId, nSkillId, nSkillLevel, nOffset, nOffset, 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4CE10 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_MephistoLightningOrFrostNova(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-        extern void __stdcall SKILLS_LaunchNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nVel); // 0x6FAFCC70
-        extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-        D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-        if (!pSkillsTxt)
-            return 0;
-        int16_t nNovaMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x40);
-        if (nNovaMissileId >= 0)
-            SKILLS_LaunchNovaMissiles(pUnit, nNovaMissileId, nSkillId, nSkillLevel, 0);
-
-        int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-        if (nMissileId < 0)
-            return 0;
-
-        int32_t nX = 0, nY = 0;
-        if (pUnit)
-        {
-            nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-            nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-        }
-        int32_t nTargetX = SKILLS_GetParam1(pSkill);
-        int32_t nTargetY = SKILLS_GetParam2(pSkill);
-        if (!nTargetX || !nTargetY)
-        {
-            extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-            if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-            {
-                nTargetX = nX + 1;
-                nTargetY = nY + 1;
-            }
-        }
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX, nY, nTargetX, nTargetY, 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4CFB0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_DiabloFirestorm(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    if (nSkillId < 0 || nSkillId >= *(int32_t*)((uint8_t*)sgptDataTables + 0xB98))
-        return 0;
-    D2SkillsTxt* pSkillsTxt = (D2SkillsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xB88)) + nSkillId * 0x23C);
-    if (!pSkillsTxt)
-        return 0;
-
-    int16_t nMissileA = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileA >= 0 && nMissileA < *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-    {
-        int16_t nMissileB = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3E);
-        if (nMissileB >= 0 && nMissileB < *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-        {
-            if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-            {
-                int32_t nTargetX = SKILLS_GetParam1(pSkill);
-                int32_t nTargetY = SKILLS_GetParam2(pSkill);
-                if (!nTargetX || !nTargetY)
-                {
-                    extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-                    if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-                        return 0;
-                }
-                int32_t nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                    ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                    : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-                int32_t nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                    ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                    : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-                int32_t nDx = nTargetX - nX;
-                int32_t nDy = nTargetY - nY;
-                extern void __stdcall SKILLS_RotateVector2D(int32_t* pDx, int32_t* pDy, int32_t nAngle); // 0x6FAFD340
-                extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-                int32_t nStreams = SKILLS_EvaluateSkillFormula(pUnit, *(uint32_t*)((uint8_t*)pSkillsTxt + 0x188), nSkillId, nSkillLevel);
-                if (nStreams > 1)
-                    SKILLS_RotateVector2D(&nDx, &nDy, -8 * nStreams);
-
-                for (int32_t i = 0; i < nStreams; ++i)
-                {
-                    int32_t nDestX = nX + nDx;
-                    int32_t nDestY = nY + nDy;
-                    D2UnitStrc* pMissile = MISSILE_CreateClientMissile(nMissileA, pUnit, nSkillId, nSkillLevel, nX, nY, nDestX, nDestY, 0);
-                    if (pMissile)
-                    {
-                        MISSILE_CreateClientMissile(nMissileB, pUnit, nSkillId, nSkillLevel, nX, nY, nDestX, nDestY, 0);
-                        PATH_SetTargetPos(*(void**)((uint8_t*)pMissile + 0x2C), nDestX, nDestY);
-                        UNITS_SetTargetUnitForDynamicUnit(pMissile, pMissile);
-                    }
-                    SKILLS_RotateVector2D(&nDx, &nDy, 16);
-                }
-            }
-            UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-            return nFrameNo != 0;
-        }
-    }
-    return 0;
-}
-
-// 1.12a: 0x6FB4D270 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_DiabloLaser(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern int32_t __fastcall SKILLS_SaveTargetCoordsToSkill(D2UnitStrc* pUnit, D2SkillStrc* pSkill); // 0x6FAFC4C0
-    if (!SKILLS_SaveTargetCoordsToSkill(pUnit, pSkill))
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-    return 1;
-}
-
-// 1.12a: 0x6FB4D2D0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_DiabloLaser(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-
-    int32_t nFlags = SKILLS_GetFlags(pSkill);
-    if ((nFlags & 0x04) != 0)
-        SKILLS_SetFlags(pSkill, nFlags | 0x02);
-
-    if ((SKILLS_GetFlags(pSkill) & 0x02) != 0)
-    {
-        int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-        if (nMissileId < 0 || nMissileId >= *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-            return 0;
-
-        int32_t nTargetX = SKILLS_GetParam1(pSkill);
-        int32_t nTargetY = SKILLS_GetParam2(pSkill);
-        if (nTargetX && nTargetY)
-        {
-            extern void __stdcall SKILLS_LaunchMissileWithVelocity(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nTargetX, int32_t nTargetY, int32_t nVel); // 0x6FAFCAD0
-            SKILLS_LaunchMissileWithVelocity(pUnit, nMissileId, nSkillId, nSkillLevel, nTargetX, nTargetY, 1);
-            UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-            return nFrameNo != 0;
-        }
-        return 0;
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4D3F0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_DiabloWallOfFire(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern void __stdcall SKILLS_LaunchNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nVel); // 0x6FAFCC70
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-
-    int16_t nNovaMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x40);
-    if (nNovaMissileId >= 0)
-        SKILLS_LaunchNovaMissiles(pUnit, nNovaMissileId, nSkillId, 1, *(int32_t*)((uint8_t*)pSkillsTxt + 0x154));
-
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    SKILLS_SetFlags(pSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4D480 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_DiabloWallOfFire(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __stdcall SKILLS_LaunchNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nVel); // 0x6FAFCC70
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-
-    int16_t nMissileA = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileA >= 0)
-    {
-        int16_t nMissileB = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3E);
-        if (nMissileB >= 0)
-        {
-            D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-            if (!pSkill)
-                return 0;
-            if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-            {
-                int32_t nParamA = *(int32_t*)((uint8_t*)pSkillsTxt + 0x154);
-                int32_t nParamB = *(int32_t*)((uint8_t*)pSkillsTxt + 0x158);
-                int32_t nMaxVel = nParamA + (nSkillLevel - 1) * nParamB;
-                int32_t nMinVel = nParamB / 2;
-                if (nMinVel < 1)
-                    nMinVel = 1;
-                if (nMinVel < nMaxVel)
-                {
-                    int32_t nCurVel = nMinVel;
-                    int32_t nDoubleVel = nMinVel * 2;
-                    do
-                    {
-                        SKILLS_LaunchNovaMissiles(pUnit, nMissileA, nSkillId, nSkillLevel, nCurVel);
-                        if (nCurVel >= nMaxVel - nMinVel)
-                            SKILLS_LaunchNovaMissiles(pUnit, nMissileB, nSkillId, nSkillLevel, nDoubleVel + 1);
-                        else
-                            SKILLS_LaunchNovaMissiles(pUnit, nMissileA, nSkillId, nSkillLevel, nDoubleVel + 1);
-                        nCurVel += nMinVel;
-                        nDoubleVel += nMinVel * 2;
-                    } while (nCurVel < nMaxVel);
-                }
-                SKILLS_LaunchNovaMissiles(pUnit, nMissileB, nSkillId, nSkillLevel, nMaxVel);
-            }
-            UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-            return nFrameNo != 0;
-        }
-    }
-    return 0;
-}
-
-// 1.12a: 0x6FB4D620 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_SpawnMissileOnTargetUnit(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x40);
-    if (nMissileId < 0)
-        return 0;
-
-    int32_t nTargetType = PATH_GetTargetType(*(void**)((uint8_t*)pUnit + 0x2C));
-    D2UnitStrc* pTarget = PATH_GetTargetUnit(*(void**)((uint8_t*)pUnit + 0x2C));
-    D2UnitStrc* pFound = UNIT_FindUnitById((int32_t)(uintptr_t)pTarget, nTargetType);
-    if (pFound)
-    {
-        int32_t nX = (*((uint32_t*)pFound) <= 3 || *((uint32_t*)pFound) == 5)
-            ? PATH_GetXPosition(*(void**)((uint8_t*)pFound + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pFound + 0x2C) + 0x0C);
-        int32_t nY = (*((uint32_t*)pFound) <= 3 || *((uint32_t*)pFound) == 5)
-            ? PATH_GetYPosition(*(void**)((uint8_t*)pFound + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pFound + 0x2C) + 0x10);
-        SKILLS_SetParam1(pSkill, nX);
-        SKILLS_SetParam2(pSkill, nY);
-        int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-        if (nSoundId > 0)
-            UNIT_PlaySound(pUnit, nSoundId);
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX, nY, 0, 0, 0);
-        SKILLS_SetFlags(pSkill, 1);
-        return 1;
-    }
-    SKILLS_SetParam1(pSkill, 0);
-    SKILLS_SetParam2(pSkill, 0);
-    return 0;
-}
-
-// 1.12a: 0x6FB4D740 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_SpawnMissileAtSavedCoords(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileId < 0)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nX = SKILLS_GetParam1(pSkill);
-        int32_t nY = SKILLS_GetParam2(pSkill);
-        if (!nX || !nY)
-            return 0;
-        if (DUNGEON_FindRoomBySubtileCoordinates(*(void**)((uint8_t*)pUnit + 0x08), nX, nY))
-            MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX, nY, 0, 0, 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4D850 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_VileMotherSpawn(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileId < 0)
-        return 0;
-
-    int32_t nTargetX = SKILLS_GetParam1(pSkill);
-    int32_t nTargetY = SKILLS_GetParam2(pSkill);
-    if (!nTargetX || !nTargetY)
-    {
-        extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-        if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-            return 0;
-    }
-
-    int32_t nSpawnId = 0, nSpawnCount = 0, nSpawnMode = 0;
-    MONSTERS_GetMinionSpawnInfo(pUnit, &nSpawnId, &nSpawnCount, &nSpawnMode);
-    if (nSpawnId >= 0 && (D2MonStatsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xA78)) + nSpawnId * 0x1A8) != NULL)
-    {
-        extern void __fastcall UNIT_LoadMonsterPaletteAssets(int32_t nClassId, int32_t nZero, uint8_t* pComponents); // 0x6FAE1F70
-        uint8_t aComponents[16] = { 0 };
-        UNIT_LoadMonsterPaletteAssets(nSpawnId, 0, aComponents);
-    }
-
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-
-    D2RoomStrc* pRoom = UNITS_GetRoom(pUnit);
-    if (pRoom && !D2Common_10611(pRoom, nTargetX, nTargetY))
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nTargetX, nTargetY, 0, 0, 0);
-
-    SKILLS_SetFlags(pSkill, 1);
-    return 1;
-}
-
-// 1.12a: 0x6FB4D9F0 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_EvilHutSpawner(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileA = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileA >= 0)
-    {
-        int16_t nMissileB = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3E);
-        if (nMissileB >= 0 && *(int16_t*)((uint8_t*)pSkillsTxt + 0x40) >= 0)
-        {
-            if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-            {
-                int32_t nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                    ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                    : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-                int32_t nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-                    ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-                    : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-                int32_t nTargetX = SKILLS_GetParam1(pSkill);
-                int32_t nTargetY = SKILLS_GetParam2(pSkill);
-                if (!nTargetX || !nTargetY)
-                {
-                    extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-                    if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-                    {
-                        nTargetX = nX + 1;
-                        nTargetY = nY + 1;
-                    }
-                }
-                D2UnitStrc* pMissileA = MISSILE_CreateClientMissile(nMissileA, pUnit, nSkillId, nSkillLevel, nX, nY, nTargetX, nTargetY, 0);
-                if (pMissileA)
-                {
-                    PATH_SetTargetPos(*(void**)((uint8_t*)pMissileA + 0x2C), nTargetX, nTargetY);
-                    D2UnitStrc* pMissileB = MISSILE_CreateClientMissile(nMissileB, pUnit, nSkillId, nSkillLevel, nX, nY, nTargetX, nTargetY, 0);
-                    if (pMissileB)
-                        PATH_SetTargetPos(*(void**)((uint8_t*)pMissileB + 0x2C), nTargetX, nTargetY);
-                }
-            }
-            UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-            return nFrameNo != 0;
-        }
-    }
-    return 0;
-}
-
-// 1.12a: 0x6FB4DC00 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_MosquitoDrain(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern void __stdcall PARTICLE_SpawnOverlayOrEffect(D2UnitStrc* pUnit, int32_t nArg1, int32_t nArg2, int32_t nArg3); // 0x6FB75BA0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nTargetType = PATH_GetTargetType(*(void**)((uint8_t*)pUnit + 0x2C));
-        D2UnitStrc* pTarget = PATH_GetTargetUnit(*(void**)((uint8_t*)pUnit + 0x2C));
-        D2UnitStrc* pFound = UNIT_FindUnitById((int32_t)(uintptr_t)pTarget, nTargetType);
-        if (!pFound || UNITS_IsInMovingMode(pFound))
-            return 0;
-        if (!*((int32_t*)pFound + 3))
-            return 0;
-
-        int32_t nCount = SKILLS_GetParam1(pSkill);
-        if (nCount == 1)
-            PARTICLE_SpawnOverlayOrEffect(pUnit, 0, 1, 0);
-        if (nCount < *(int32_t*)((uint8_t*)pSkillsTxt + 0x154))
-        {
-            SKILLS_SetParam1(pSkill, nCount + 1);
-            UNITS_SetAnimActionFrame(pUnit, 1);
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4DD10 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_RegurgitatorEat(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern void __stdcall PARTICLE_SpawnRegurgitatorCorpseEffect(D2UnitStrc* pUnit, D2UnitStrc* pCorpse, int32_t nZero); // 0x6FB75DF0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-
-    int32_t nTargetType = PATH_GetTargetType(*(void**)((uint8_t*)pUnit + 0x2C));
-    D2UnitStrc* pTarget = PATH_GetTargetUnit(*(void**)((uint8_t*)pUnit + 0x2C));
-    D2UnitStrc* pCorpse = UNIT_FindUnitById((int32_t)(uintptr_t)pTarget, nTargetType);
-    if (pCorpse && *((int32_t*)pCorpse + 4) == 12) // MONMODE_DEAD
-    {
-        if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-        {
-            int32_t nStep = SKILLS_GetParam1(pSkill);
-            int32_t nMaxStep = *(int32_t*)((uint8_t*)pSkillsTxt + 0x154);
-            if (nStep < nMaxStep)
-            {
-                int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x88);
-                if (nSoundId > 0)
-                    UNIT_PlaySound(pUnit, nSoundId);
-                int32_t nNextStep = nStep + 1;
-                SKILLS_SetParam1(pSkill, nNextStep);
-                UNITS_SetAnimActionFrame(pUnit, 2);
-                if (nNextStep == nMaxStep)
-                {
-                    *((uint32_t*)pCorpse + 0x31) &= ~0x00000004u;
-                    PARTICLE_SpawnRegurgitatorCorpseEffect(pUnit, pCorpse, 0);
-                }
-            }
-        }
-        UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-        return nFrameNo != 0;
-    }
-    return 0;
-}
-
-// 1.12a: 0x6FB4DE90 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_SuicideMinionExplode(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __stdcall SKILLS_LaunchNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nVel); // 0x6FAFCC70
-
-    if (!SKILLS_GetSkillsTxtRecord(nSkillId))
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        if (STATLIST_UnitGetItemStatOrSkillStatValue(pUnit, 0xD2, 0))
-            SKILLS_LaunchNovaMissiles(pUnit, 0x63, nSkillId, nSkillLevel, 0);
-        if (STATLIST_UnitGetItemStatOrSkillStatValue(pUnit, 0xD0, 0))
-            SKILLS_LaunchNovaMissiles(pUnit, 0xF3, nSkillId, nSkillLevel, 0);
-
-        UNITS_ChangeAnimMode(pUnit, 12); // MONMODE_DEAD
-        *((uint32_t*)pUnit + 0x31) &= ~0x00000004u;
-        int32_t nClassId = *((int32_t*)pUnit + 1);
-        if (nClassId == 0x208 || nClassId == 0x209)
-        {
-            extern void __stdcall PARTICLE_SpawnSuicideMinionGore(D2UnitStrc* pUnit, int32_t nGoreType, int32_t nZero); // 0x6FB75BA0 / 0x6FB75FA0
-            PARTICLE_SpawnSuicideMinionGore(pUnit, 3, 0);
-            PARTICLE_SpawnSuicideMinionGore(pUnit, 4, 0);
-        }
-        else
-        {
-            extern void __stdcall PARTICLE_SpawnSuicideMinionGore(D2UnitStrc* pUnit, int32_t nGoreType, int32_t nZero);
-            for (int32_t i = 0; i < 6; ++i)
-                PARTICLE_SpawnSuicideMinionGore(pUnit, 1, 0);
-            for (int32_t i = 0; i < 6; ++i)
-                PARTICLE_SpawnSuicideMinionGore(pUnit, 2, 0);
-            PARTICLE_SpawnSuicideMinionGore(pUnit, 0, 0);
-        }
-        return 0;
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E010 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_CatapultSiegeShot(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nTargetX = SKILLS_GetParam1(pSkill);
-        int32_t nTargetY = SKILLS_GetParam2(pSkill);
-        int32_t nMissileId = SKILLS_GetParam3(pSkill);
-        if (!nTargetX || !nTargetY)
-        {
-            extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-            if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-                return 0;
-        }
-        if (nMissileId < 0 || nMissileId >= *(int32_t*)((uint8_t*)sgptDataTables + 0xB94))
-            return 0;
-        int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x88);
-        if (nSoundId > 0)
-            UNIT_PlaySound(pUnit, nSoundId);
-
-        int32_t nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-        int32_t nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-        D2UnitStrc* pMissile = MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX - 4, nY - 6, nTargetX, nTargetY, 0);
-        if (pMissile)
-            PATH_SetTargetPos(*(void**)((uint8_t*)pMissile + 0x2C), nTargetX, nTargetY);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E170 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_AncientsWhirlwind(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    if (!pUnit)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-
-    int32_t nFlags = SKILLS_GetFlags(pSkill);
-    if ((nFlags & 0x02) != 0)
-    {
-        if (!UNITS_IsInMovingMode(pUnit))
-        {
-            SKILLS_SetFlags(pSkill, 0);
-            return 0;
-        }
-        int32_t nNextSoundTick = SKILLS_GetParam4(pSkill);
-        if (nNextSoundTick <= gnClientLoopCount)
-        {
-            int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-            if (nSoundId > 0)
-                UNIT_PlaySound(pUnit, nSoundId);
-            SKILLS_SetParam4(pSkill, gnClientLoopCount + 20);
-        }
-        return 1;
-    }
-    if ((nFlags & 0x01) != 0)
-    {
-        int32_t nX = SKILLS_GetParam1(pSkill);
-        int32_t nY = SKILLS_GetParam2(pSkill);
-        SKILLS_SetParam4(pSkill, gnClientLoopCount);
-        extern void __stdcall PLAYER_StartMoveToTarget(D2UnitStrc* pUnit, int32_t nZero1, int32_t nZero2, int32_t nX, int32_t nY, int32_t nMode); // 0x6FB08DC0
-        PLAYER_StartMoveToTarget(pUnit, 0, 0, nX, nY, *(uint8_t*)((uint8_t*)pSkillsTxt + 0x35));
-        SKILLS_SetFlags(pSkill, 0x22);
-    }
-    return 1;
-}
-
-// 1.12a: 0x6FB4E260 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_BaalTentacleOrFesteringAppendages(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nTargetId = SKILLS_GetParam1(pSkill);
-        int32_t nTargetType = SKILLS_GetParam2(pSkill);
-        if (nTargetId != -1)
-        {
-            D2UnitStrc* pTarget = UNIT_FindUnitById(nTargetId, nTargetType);
-            if (pTarget)
-            {
-                int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-                if (nMissileId >= 0)
-                {
-                    int32_t nX = (*((uint32_t*)pTarget) <= 3 || *((uint32_t*)pTarget) == 5)
-                        ? PATH_GetXPosition(*(void**)((uint8_t*)pTarget + 0x2C))
-                        : *(int32_t*)(*(uint8_t**)((uint8_t*)pTarget + 0x2C) + 0x0C);
-                    int32_t nY = (*((uint32_t*)pTarget) <= 3 || *((uint32_t*)pTarget) == 5)
-                        ? PATH_GetYPosition(*(void**)((uint8_t*)pTarget + 0x2C))
-                        : *(int32_t*)(*(uint8_t**)((uint8_t*)pTarget + 0x2C) + 0x10);
-                    MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX, nY, 0, 0, 0);
-                }
-                int32_t nSpawnId = 0, nSpawnCount = 0, nSpawnMode = 0;
-                MONSTERS_GetMinionSpawnInfo(pUnit, &nSpawnId, &nSpawnCount, &nSpawnMode);
-                if (nSpawnId >= 0 && (D2MonStatsTxt*)((uint8_t*)(*(void**)((uint8_t*)sgptDataTables + 0xA78)) + nSpawnId * 0x1A8) != NULL)
-                {
-                    extern void __fastcall UNIT_LoadMonsterPaletteAssets(int32_t nClassId, int32_t nZero, uint8_t* pComponents); // 0x6FAE1F70
-                    uint8_t aComponents[16] = { 0 };
-                    UNIT_LoadMonsterPaletteAssets(nSpawnId, 0, aComponents);
-                }
-            }
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E430 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_NihlathakCorpseExplosion(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern void __stdcall PARTICLE_SpawnCorpseExplosionGore(D2UnitStrc* pCorpse, int32_t nGoreType, int32_t nZero); // 0x6FB75BA0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nTargetId = SKILLS_GetParam1(pSkill);
-        int32_t nTargetType = SKILLS_GetParam2(pSkill);
-        if (nTargetId != -1)
-        {
-            D2UnitStrc* pCorpse = UNIT_FindUnitById(nTargetId, nTargetType);
-            if (!pCorpse || *((int32_t*)pCorpse + 4) != 12)
-                return 0;
-            *((uint32_t*)pCorpse + 0x31) &= ~0x00000004u;
-            int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x88);
-            if (nSoundId > 0)
-                UNIT_PlaySound(pCorpse, nSoundId);
-            for (int32_t i = 0; i < 6; ++i)
-                PARTICLE_SpawnCorpseExplosionGore(pCorpse, 1, 0);
-            for (int32_t i = 0; i < 6; ++i)
-                PARTICLE_SpawnCorpseExplosionGore(pCorpse, 2, 0);
-            PARTICLE_SpawnCorpseExplosionGore(pCorpse, 0, 0);
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E550 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_OverseerWhip(D2UnitStrc* pUnit, int32_t nSkillId)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __fastcall UNIT_FindUnitById(int32_t nUnitId, int32_t nUnitType); // 0x6FACF9C0
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern void __stdcall PARTICLE_SpawnOverlayOrEffect(D2UnitStrc* pUnit, int32_t nArg1, int32_t nArg2, int32_t nArg3); // 0x6FB75BA0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nTargetId = SKILLS_GetParam1(pSkill);
-        int32_t nTargetType = SKILLS_GetParam2(pSkill);
-        if (nTargetId != -1)
-        {
-            D2UnitStrc* pTarget = UNIT_FindUnitById(nTargetId, nTargetType);
-            if (!pTarget)
-                return 0;
-            int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x88);
-            if (nSoundId > 0)
-                UNIT_PlaySound(pTarget, nSoundId);
-            PARTICLE_SpawnOverlayOrEffect(pTarget, 0, 1, 0);
-        }
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E630 (__fastcall)
-int32_t __fastcall SKILLSMON_CltSt_BaalNova(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __fastcall UNIT_PlaySound(D2UnitStrc* pUnit, uint16_t nSoundId); // 0x6FAE7D00
-    extern void __stdcall SKILLS_LaunchBaalNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nCount, int32_t nVel); // 0x6FAFCDB0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    int16_t nSoundId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x84);
-    if (nSoundId > 0)
-        UNIT_PlaySound(pUnit, nSoundId);
-
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x40);
-    if (nMissileId >= 0)
-        SKILLS_LaunchBaalNovaMissiles(pUnit, nMissileId, nSkillId, 1, *(int32_t*)((uint8_t*)pSkillsTxt + 0x154), *(int32_t*)((uint8_t*)pSkillsTxt + 0x158));
-
-    SKILLS_SetFlags(pSkill, 1);
-    void* pMonSeq = DATATBLS_GetMonSeqTxtRecordFromUnit(pUnit);
-    if (!pMonSeq)
-        return 1;
-    int32_t nFrameCount = 0, nDirCount = 0;
-    D2Common_11066(pUnit, pMonSeq, &nFrameCount, &nDirCount);
-    int32_t nStep = (nFrameCount << 8) / 64;
-    if (nStep <= 0)
-        nStep = 1;
-    SKILLS_SetParam3(pSkill, nStep);
-    SKILLS_SetParam4(pSkill, nStep);
-    return 1;
-}
-
-// 1.12a: 0x6FB4E710 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_BaalNova(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern void __stdcall SKILLS_LaunchBaalNovaMissiles(D2UnitStrc* pUnit, int32_t nMissileId, int32_t nSkillId, int32_t nSkillLevel, int32_t nCount, int32_t nVel); // 0x6FAFCDB0
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    int32_t nCurPos = *((int32_t*)pUnit + 0x10);
-    int32_t nNextTrigger = SKILLS_GetParam4(pSkill);
-    int32_t nStep = SKILLS_GetParam3(pSkill);
-    if (nStep <= 0)
-        return 0;
-    if (nCurPos >= nNextTrigger)
-    {
-        do
-        {
-            nNextTrigger += nStep;
-        } while (nCurPos >= nNextTrigger);
-        SKILLS_SetParam4(pSkill, nNextTrigger);
-        int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-        if (nMissileId < 0)
-            return 0;
-        SKILLS_LaunchBaalNovaMissiles(pUnit, nMissileId, nSkillId, nSkillLevel, *(int32_t*)((uint8_t*)pSkillsTxt + 0x154), 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
-
-// 1.12a: 0x6FB4E820 (__fastcall)
-int32_t __fastcall SKILLSMON_CltDo_BaalColdMissiles(D2UnitStrc* pUnit, int32_t nSkillId, int32_t nSkillLevel)
-{
-    int32_t nFrameNo = 0, nFrameCount = 0;
-    if (!pUnit)
-        return 0;
-    extern D2SkillsTxt* __fastcall SKILLS_GetSkillsTxtRecord(int32_t nSkillId); // 0x6FAFC270
-    extern D2UnitStrc* __stdcall MISSILE_CreateClientMissile(int32_t nMissileId, D2UnitStrc* pOwner, int32_t nSkillId, int32_t nSkillLevel, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nParam); // 0x6FAFC400
-
-    D2SkillsTxt* pSkillsTxt = SKILLS_GetSkillsTxtRecord(nSkillId);
-    if (!pSkillsTxt)
-        return 0;
-    int16_t nMissileId = *(int16_t*)((uint8_t*)pSkillsTxt + 0x3C);
-    if (nMissileId < 0)
-        return 0;
-    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
-    if (!pSkill)
-        return 0;
-
-    if ((SKILLS_GetFlags(pSkill) & 0x04) != 0)
-    {
-        int32_t nX = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x0C);
-        int32_t nY = (*((uint32_t*)pUnit) <= 3 || *((uint32_t*)pUnit) == 5)
-            ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C))
-            : *(int32_t*)(*(uint8_t**)((uint8_t*)pUnit + 0x2C) + 0x10);
-        int32_t nTargetX = SKILLS_GetParam1(pSkill);
-        int32_t nTargetY = SKILLS_GetParam2(pSkill);
-        if (!nTargetX || !nTargetY)
-        {
-            extern int32_t __fastcall SKILLS_GetUnitTargetCoords(D2UnitStrc* pUnit, int32_t* pX, int32_t* pY); // 0x6FAFC980
-            if (!SKILLS_GetUnitTargetCoords(pUnit, &nTargetX, &nTargetY))
-            {
-                nTargetX = nX + 1;
-                nTargetY = nY + 1;
-            }
-        }
-        MISSILE_CreateClientMissile(nMissileId, pUnit, nSkillId, nSkillLevel, nX, nY, nTargetX, nTargetY, 0);
-    }
-    UNITS_GetShiftedFrameMetrics(pUnit, &nFrameNo, &nFrameCount);
-    return nFrameNo != 0;
-}
 
 // ============================================================================
 // Part 2: Client Realm / Exported Ordinals & S2C Monster AI Update (0x6FB4E930..0x6FB4EA7A)
@@ -1996,7 +837,7 @@ void __fastcall CURSOR_SyncCursorItemState(void)
     if (!gpPlayerUnit)
         return;
 
-    D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60));
+    D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(D2UnitView(gpPlayerUnit)->pInventory);
     if (pCursorItem)
     {
         if (gnCursorState != 2)
@@ -2083,7 +924,7 @@ void __fastcall CURSOR_Draw(void)
         return;
     }
 
-    D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60));
+    D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(D2UnitView(gpPlayerUnit)->pInventory);
     if (!pCursorItem)
     {
         gnCursorState = 1;
@@ -2115,7 +956,7 @@ void __fastcall CURSOR_DrawLockedItemTooltip(void)
     if (!gbCursorTooltipLocked || !gpPlayerUnit)
         return;
 
-    D2InventoryStrc* pInv = *(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60);
+    D2InventoryStrc* pInv = D2UnitView(gpPlayerUnit)->pInventory;
     if (!pInv)
         return;
 
@@ -2144,7 +985,7 @@ void __fastcall CURSOR_DrawLockedItemTooltip(void)
     }
     else
     {
-        uint8_t nPage = *(uint8_t*)(*(uint8_t**)((uint8_t*)gpCursorLockedItem + 0x14) + 0x45);
+        uint8_t nPage = reinterpret_cast<D2ReconItemDataViewStrc*>(D2UnitView(gpCursorLockedItem)->pUnitData)->nInvPage;
         if (nPage == 0)
             INV_GetItemGridScreenRect(gpPlayerUnit, gpCursorLockedItem, &rcSlot, 2);
         else if (nPage == 4)
@@ -3546,7 +2387,7 @@ void __fastcall CMDTBL_OnBeltShowDown(void)
 {
     if (!gpPlayerUnit)
         return;
-    D2UnitStrc* pBeltItem = INV_GetItemFromBodyLoc(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60), 8);
+    D2UnitStrc* pBeltItem = INV_GetItemFromBodyLoc(D2UnitView(gpPlayerUnit)->pInventory, 8);
     if (!pBeltItem || !ITEMS_CheckItemTypeId(pBeltItem, 0x13))
         return;
     extern void __fastcall UI_TogglePanelWithRule(int32_t nPanelIdx, int32_t bState, int32_t nArg); // 0x6FB3EF00
@@ -3659,7 +2500,7 @@ void __fastcall CMDTBL_OnUseBeltSlot4Down(void)
     if (!gbEscMenuOpen && gpPlayerUnit && *((int32_t*)gpPlayerUnit + 4) != 17 && gabBeltSlotReady[3] == 1)
     {
         int32_t bShiftHeld = GetKeyState(VK_SHIFT) & 0x8000;
-        PANEL_UseBeltPotionSlot(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60), gpPlayerUnit, bShiftHeld, 3);
+        PANEL_UseBeltPotionSlot(D2UnitView(gpPlayerUnit)->pInventory, gpPlayerUnit, bShiftHeld, 3);
     }
 }
 
@@ -3671,7 +2512,7 @@ void __fastcall CMDTBL_OnUseBeltSlot3Down(void)
     if (!gbEscMenuOpen && gpPlayerUnit && *((int32_t*)gpPlayerUnit + 4) != 17 && gabBeltSlotReady[2] == 1)
     {
         int32_t bShiftHeld = GetKeyState(VK_SHIFT) & 0x8000;
-        PANEL_UseBeltPotionSlot(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60), gpPlayerUnit, bShiftHeld, 2);
+        PANEL_UseBeltPotionSlot(D2UnitView(gpPlayerUnit)->pInventory, gpPlayerUnit, bShiftHeld, 2);
     }
 }
 
@@ -3683,7 +2524,7 @@ void __fastcall CMDTBL_OnUseBeltSlot2Down(void)
     if (!gbEscMenuOpen && gpPlayerUnit && *((int32_t*)gpPlayerUnit + 4) != 17 && gabBeltSlotReady[1] == 1)
     {
         int32_t bShiftHeld = GetKeyState(VK_SHIFT) & 0x8000;
-        PANEL_UseBeltPotionSlot(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60), gpPlayerUnit, bShiftHeld, 1);
+        PANEL_UseBeltPotionSlot(D2UnitView(gpPlayerUnit)->pInventory, gpPlayerUnit, bShiftHeld, 1);
     }
 }
 
@@ -3695,7 +2536,7 @@ void __fastcall CMDTBL_OnUseBeltSlot1Down(void)
     if (!gbEscMenuOpen && gpPlayerUnit && *((int32_t*)gpPlayerUnit + 4) != 17 && gabBeltSlotReady[0] == 1)
     {
         int32_t bShiftHeld = GetKeyState(VK_SHIFT) & 0x8000;
-        PANEL_UseBeltPotionSlot(*(D2InventoryStrc**)((uint8_t*)gpPlayerUnit + 0x60), gpPlayerUnit, bShiftHeld, 0);
+        PANEL_UseBeltPotionSlot(D2UnitView(gpPlayerUnit)->pInventory, gpPlayerUnit, bShiftHeld, 0);
     }
 }
 

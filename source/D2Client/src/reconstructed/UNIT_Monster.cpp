@@ -18,6 +18,13 @@
 #include "Units/Units.h"
 #include "Units/UnitRoom.h"
 #include "Units/Monster.h"
+#include "Units/Missile.h"
+#include "D2Monsters.h"
+
+extern D2UnitStrc* __fastcall D2Client_CreateClientMissile(D2MissileStrc* pMissileParams); // 0x6FAD4B20
+extern D2UnitStrc* __fastcall D2Client_ClearActionFrameAndGetTarget(D2UnitStrc* pUnit);    // 0x6FACF5B0
+extern int32_t __fastcall CLTSKILL_DoUsedSkill(D2UnitStrc* pUnit);                         // 0x6FB00150
+extern void __stdcall CLTSKILL_ProcessActiveStatesDoFuncs(D2UnitStrc* pUnit);               // 0x6FAFD9F0
 #include "D2StatList.h"
 #include "D2Skills.h"
 #include "D2Inventory.h"
@@ -751,11 +758,11 @@ void __fastcall D2Client_FreeMonsterAuxClientData(D2MonsterDataStrc* pMonsterDat
     if (!pMonsterData)
         return;
 
-    void* pAux = *(void**)((uint8_t*)pMonsterData + 0x2C);
+    void* pAux = pMonsterData->wszMonName;
     if (pAux)
     {
         FOG_FreeClientMemory(pAux, __FILE__, 102, 0);
-        *(void**)((uint8_t*)pMonsterData + 0x2C) = nullptr;
+        pMonsterData->wszMonName = nullptr;
     }
 }
 
@@ -1173,11 +1180,84 @@ void __fastcall D2Client_SpawnMonsterAttackFrameMissile(D2UnitStrc* pUnit, int32
 }
 
 // 1.12a: 0x6FAE5F20
+// 1.12a: 0x6FAE5D10
+void __fastcall D2Client_SpawnMonsterAttackMissile(D2UnitStrc* pUnit)
+{
+    if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
+        return;
+
+    const int32_t nMissileId = D2Common_11050(pUnit, TRUE);
+    if (nMissileId < 0)
+        return;
+
+    D2MissileStrc missileParams = {};
+    missileParams.dwFlags    = (nMissileId >= 63 && nMissileId <= 66) ? 0x34u : 0x20u;
+    if (nMissileId >= 63 && nMissileId <= 66)
+    {
+        missileParams.nLoops = 2;
+    }
+    missileParams.pOwner      = pUnit;
+    missileParams.pOrigin     = pUnit;
+    missileParams.nMissile    = nMissileId;
+    missileParams.nSkillLevel = 1;
+
+    D2UnitStrc* pTarget = D2Client_ClearActionFrameAndGetTarget(pUnit);
+    if (pTarget != nullptr)
+    {
+        missileParams.nTargetX = UNITS_GetXPosition(pTarget);
+        missileParams.nTargetY = UNITS_GetYPosition(pTarget);
+    }
+    else if (pUnit->pDynamicPath != nullptr)
+    {
+        missileParams.nTargetX = D2COMMON_10175_PathGetFirstPointX(pUnit->pDynamicPath);
+        missileParams.nTargetY = D2COMMON_10176_PathGetFirstPointY(pUnit->pDynamicPath);
+    }
+    else
+    {
+        return;
+    }
+
+    D2Client_CreateClientMissile(&missileParams);
+}
+
+// 1.12a: 0x6FAE5F20
 void __fastcall D2Client_ProcessMonsterSkillOrSeqFrameEvents(D2UnitStrc* pUnit)
 {
     if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
         return;
-    // Evaluates AnimData frame event triggers (1 = Melee/Missile, 2 = Missile, 3 = Sound, 4 = Skill)
+
+    D2SkillStrc* pSkill = UNITS_GetUsedSkill(pUnit);
+    if (!pSkill || !sgptDataTables || !sgptDataTables->pSkillsTxt)
+        return;
+
+    const int32_t nSkillId = SKILLS_GetSkillIdFromSkill(pSkill, "..\\Source\\D2Client\\UNIT\\Monster.cpp", 948);
+    if (nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
+        return;
+
+    const D2SkillsTxt* pSkillsTxt = &sgptDataTables->pSkillsTxt[nSkillId];
+    const uint32_t dwSkillFlags = SKILLS_GetFlags(pSkill);
+    BOOL bCheckActionFrame = TRUE;
+
+    const uint8_t nEvent = pUnit->nActionFrame;
+    if (nEvent == 4)
+    {
+        pUnit->nActionFrame = 0;
+        CLTSKILL_DoUsedSkill(pUnit);
+        return;
+    }
+    if (bCheckActionFrame && (pUnit->dwFlags & UNITFLAG_SKSRVDOFUNC) == 0 && (nEvent == 1 || nEvent == 2 || nEvent == 3))
+    {
+        pUnit->nActionFrame = 0;
+        CLTSKILL_DoUsedSkill(pUnit);
+        return;
+    }
+    (void)dwSkillFlags;
+
+    const int16_t nSrvDo = static_cast<int16_t>(pSkillsTxt->wSrvDoFunc);
+    if (nSrvDo == 95 || nSrvDo == 126 || nSrvDo == 152)
+    {
+        CLTSKILL_DoUsedSkill(pUnit);
+    }
 }
 
 // 1.12a: 0x6FAE6100
@@ -1186,8 +1266,13 @@ void __fastcall D2Client_UpdateMonsterUnitPerTick(D2UnitStrc* pUnit)
     if (!pUnit || pUnit->dwUnitType != UNIT_MONSTER)
         return;
 
-    D2Client_StepMonsterAnimationMode(pUnit);
     D2Client_ProcessMonsterSkillOrSeqFrameEvents(pUnit);
+    D2Client_StepMonsterAnimationMode(pUnit);
+    D2Client_SpawnMonsterAttackMissile(pUnit);
+    if (STATES_IsAnyGfxStateFlagSet(pUnit))
+    {
+        CLTSKILL_ProcessActiveStatesDoFuncs(pUnit);
+    }
 }
 
 // ============================================================================

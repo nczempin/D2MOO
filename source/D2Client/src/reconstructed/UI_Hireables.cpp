@@ -168,6 +168,97 @@ struct D2WindowMsgStrc
 
 #include "D2ClientReconstructed.h"
 
+
+struct D2UnitStrc;
+struct D2InventoryStrc;
+
+#ifndef D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#define D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#pragma pack(push, 1)
+struct D2ReconItemDataViewStrc
+{
+    uint8_t pad00[0x45];
+    uint8_t nInvPage; // +0x45
+};
+struct D2ReconObjectDataViewStrc
+{
+    void*   pObjectTxt; // +0x00
+    uint8_t nShrineNo;  // +0x04
+};
+struct D2ReconUnitViewStrc
+{
+    uint32_t dwUnitType;                // +0x00
+    int32_t  dwClassId;                 // +0x04
+    void*    pMemoryPool;               // +0x08
+    uint32_t dwUnitId;                  // +0x0C
+    int32_t  dwAnimMode;                // +0x10
+    void*    pUnitData;                 // +0x14
+    int32_t  nAct;                      // +0x18
+    void*    pDrlgAct;                  // +0x1C
+    uint32_t dwSeed[2];                 // +0x20
+    uint32_t dwInitSeed;                // +0x28
+    void*    pDynamicPath;              // +0x2C
+    void*    pAnimSeq;                  // +0x30
+    uint32_t dwSeqFrameCount;           // +0x34
+    int32_t  dwSeqFrame;                // +0x38
+    uint32_t dwSeqSpeed;                // +0x3C
+    uint32_t dwSeqMode;                 // +0x40
+    int32_t  nSeqCurrentFramePrecise;   // +0x44
+    int32_t  dwFrameCountPrecise;       // +0x48
+    int16_t  wAnimSpeed;                // +0x4C
+    uint8_t  nActionFrame;              // +0x4E
+    uint8_t  unk0x4F;                   // +0x4F
+    void*    pAnimData;                 // +0x50
+    void*    pGfxData;                  // +0x54
+    void*    pGfxDataCopy;              // +0x58
+    void*    pStatListEx;               // +0x5C
+    D2InventoryStrc* pInventory;        // +0x60
+    void*    pLight;                    // +0x64
+    uint32_t dwStartLight;              // +0x68
+    int32_t  nPaletteIndex;             // +0x6C
+    void*    pUnitSfxSlot;              // +0x70
+    uint8_t  pad74[0x8C - 0x74];        // +0x74..+0x8B
+    uint16_t nLastClickX;               // +0x8C
+    uint16_t nLastClickY;               // +0x8E
+    uint8_t  pad90[0xA8 - 0x90];        // +0x90..+0xA7
+    void*    pSkills;                   // +0xA8
+    uint8_t  padAC[0xC4 - 0xAC];        // +0xAC..+0xC3
+    uint32_t dwFlags;                   // +0xC4
+    uint32_t dwFlagEx;                  // +0xC8
+    uint8_t  padCC[0xE4 - 0xCC];        // +0xCC..+0xE3
+    D2UnitStrc* pListNext;              // +0xE4
+    D2UnitStrc* pRoomNext;              // +0xE8
+    void*    pMsgFirst;                 // +0xEC
+    void*    pMsgLast;                  // +0xF0
+};
+static_assert(sizeof(D2ReconUnitViewStrc) == 0xF4, "D2ReconUnitViewStrc must be 0xF4 bytes");
+struct D2ReconWinMsgViewStrc
+{
+    HWND     hWnd;         // +0x00
+    uint32_t uMsg;         // +0x04
+    union
+    {
+        int32_t wParam;    // +0x08
+        struct
+        {
+            uint16_t wParamLow;  // +0x08
+            int16_t  wWheelDelta;// +0x0A
+        };
+    };
+    uint16_t nX;           // +0x0C
+    uint16_t nY;           // +0x0E
+    uint32_t dwKeyFlags;   // +0x10
+    int32_t  nField14;     // +0x14
+    int32_t  bHandled;     // +0x18
+    int32_t  nReturnValue; // +0x1C
+};
+#pragma pack(pop)
+static inline D2ReconUnitViewStrc* D2UnitView(D2UnitStrc* p) { return reinterpret_cast<D2ReconUnitViewStrc*>(p); }
+static inline const D2ReconUnitViewStrc* D2UnitView(const D2UnitStrc* p) { return reinterpret_cast<const D2ReconUnitViewStrc*>(p); }
+static inline D2ReconWinMsgViewStrc* D2MsgView(void* p) { return reinterpret_cast<D2ReconWinMsgViewStrc*>(p); }
+#endif
+
+
 struct D2RosterRelationStrc
 {
     int32_t nUnitGuid;          // +0x00
@@ -1528,8 +1619,8 @@ void __fastcall ENV_DrawUnitDebugTargetCrosshair(D2UnitStrc* pUnit)
         FOG_DisplayHalt(FOG_GetErrorLocation(97), "..\\Source\\D2Client\\UI\\Hireables.cpp", 97);
         exit(-1);
     }
-    int32_t nX = *(uint16_t*)((uint8_t*)pUnit + 0x8C);
-    int32_t nY = *(uint16_t*)((uint8_t*)pUnit + 0x8E);
+    int32_t nX = D2UnitView(pUnit)->nLastClickX;
+    int32_t nY = D2UnitView(pUnit)->nLastClickY;
     DUNGEON_GameSubtileToClientCoords(&nY, &nX);
     int32_t nScreenX = nY + gnViewportShiftOffsetX - gnCameraScreenSkewX;
     int32_t nScreenY = nX - gnCameraScreenSkewY;
@@ -1550,21 +1641,21 @@ int32_t __fastcall ENV_CheckUnitLineOfSight(D2UnitStrc* pUnit)
     D2UnitStrc* pPlayer = gpPlayerUnit;
     if (!pPlayer || pPlayer == pUnit)
     {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC8) |= 0x80;
+        D2UnitView(pUnit)->dwFlagEx |= 0x80;
         return 1;
     }
     D2RoomStrc* pRoom = UNITS_GetRoom(pPlayer);
     if (pRoom && !DRLG_GetLOSDrawFromLevelId(DUNGEON_GetLevelIdFromRoom(pRoom)))
     {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC8) |= 0x80;
+        D2UnitView(pUnit)->dwFlagEx |= 0x80;
         return 1;
     }
     if (!UNITS_TestCollisionWithUnit(pPlayer, pUnit, 2))
     {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC8) |= 0x80;
+        D2UnitView(pUnit)->dwFlagEx |= 0x80;
         return 1;
     }
-    *(uint32_t*)((uint8_t*)pUnit + 0xC8) &= ~0x80u;
+    D2UnitView(pUnit)->dwFlagEx &= ~0x80u;
     return 0;
 }
 
@@ -1593,7 +1684,7 @@ void __stdcall ENV_DrawUnitInViewport(int32_t bForceDraw, D2UnitStrc* pUnit, uin
 
     if (ENV_CheckUnitLineOfSight(pUnit) || bForceDraw)
     {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC4) |= 0x10000000;
+        D2UnitView(pUnit)->dwFlags |= 0x10000000;
 
         const int32_t nScreenX = pViewport[1] - pViewport[9] + nClientX;
         const int32_t nScreenY = pViewport[2] - pViewport[10] + nClientY;
@@ -2374,7 +2465,7 @@ D2UnitStrc* __stdcall HIREABLES_GetLocalCursorItem()
     {
         return nullptr;
     }
-    return INVENTORY_GetCursorItem(*(void**)((uint8_t*)pPlayer + 0x60));
+    return INVENTORY_GetCursorItem(D2UnitView(pPlayer)->pInventory);
 }
 
 // 1.12a: 0x6FB6CF30
@@ -2564,7 +2655,7 @@ D2CellFileStrc* __stdcall HIREABLES_GetOrLoadPetPortraitCellFile(
     int32_t nFoundGuid = -1;
     if (pPlayerUnit)
     {
-        int32_t nOwnerGuid = *(int32_t*)((uint8_t*)pPlayerUnit + 0x0C);
+        int32_t nOwnerGuid = D2UnitView(pPlayerUnit)->dwUnitId;
         for (D2PetInfoStrc* pPet = g_pPetInfoList; pPet; pPet = pPet->pNext)
         {
             if (pPet->nPetType == nPetType && pPet->nOwnerGuid == nOwnerGuid && pPet->nOmitDraw == 0)
@@ -2595,7 +2686,7 @@ D2CellFileStrc* __stdcall HIREABLES_GetOrLoadPetPortraitCellFile(
 void __stdcall HIREABLES_DrawMercenaryName(D2UnitStrc* pMercUnit, int32_t nX, int32_t nY)
 {
     const Unicode* pName = nullptr;
-    int32_t nMercGuid = pMercUnit ? *(int32_t*)((uint8_t*)pMercUnit + 0x0C) : -1;
+    int32_t nMercGuid = pMercUnit ? D2UnitView(pMercUnit)->dwUnitId : -1;
     for (D2PetInfoStrc* pPet = g_pPetInfoList; pPet; pPet = pPet->pNext)
     {
         if (pPet->nPetType == 7 && (nMercGuid == -1 || pPet->nUnitGuid == nMercGuid))
@@ -2725,7 +2816,7 @@ int32_t __stdcall HIREABLES_DrawStackedSummonPortrait_Mode2(
     int32_t* pLabelY,
     int32_t* pStaggerOffset)
 {
-    int32_t nOwnerGuid = pPlayerUnit ? *(int32_t*)((uint8_t*)pPlayerUnit + 0x0C) : -1;
+    int32_t nOwnerGuid = pPlayerUnit ? D2UnitView(pPlayerUnit)->dwUnitId : -1;
     int32_t nCount = 0;
     for (D2PetInfoStrc* pPet = g_pPetInfoList; pPet; pPet = pPet->pNext)
     {
@@ -2828,7 +2919,7 @@ int32_t __stdcall HIREABLES_DrawPartyMemberPortraits(
     {
         return 0;
     }
-    int32_t nLocalGuid = *(int32_t*)((uint8_t*)pPlayerUnit + 0x0C);
+    int32_t nLocalGuid = D2UnitView(pPlayerUnit)->dwUnitId;
     D2RosterUnitStrc* pLocalRoster = ROSTER_FindByUnitGuid(nLocalGuid);
     uint16_t wLocalParty = pLocalRoster ? pLocalRoster->wPartyId : 0xFFFF;
     if (wLocalParty == 0xFFFF)

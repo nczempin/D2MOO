@@ -175,7 +175,10 @@ extern void __fastcall OBJECT_InitShrineVisual(D2UnitStrc* pUnit);              
 extern void __fastcall ITEM_InitClientItem(D2UnitStrc* pUnit, int32_t nX, int32_t nY, int32_t bFlag, int32_t nMode); // 0x6FB46270
 extern void __fastcall ITEM_FreeClientItem(D2UnitStrc* pUnit);                                  // 0x6FB45F20
 extern void __fastcall MISSILE_InitClientMissile(D2UnitStrc* pUnit, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY); // 0x6FAD1B80
-extern void __fastcall MISSILE_FreeClientMissile(D2UnitStrc* pUnit);                            // 0x6FAD28A0
+extern void __fastcall MISSILE_FreeClientMissile(D2UnitStrc* pUnit);
+struct D2UnitGfxDataStrc;
+extern D2UnitGfxDataStrc* __fastcall GFX_AllocUnitGfxData(void);
+extern void __fastcall GFX_FreeUnitGfxData(D2UnitStrc* pUnit);                            // 0x6FAD28A0
 extern void __fastcall DLIGHTMAP_RemoveUnitLight(D2GfxLightStrc* pLight);                       // 0x6FB0E500
 extern void __fastcall SCMD_FreeUnitPacketQueue(D2UnitStrc* pUnit);                             // 0x6FB142B0
 extern D2UnitStrc* __fastcall SELECT_GetSelectedUnit(void);                                     // 0x6FB1ECA0
@@ -2109,6 +2112,7 @@ void __stdcall D2Client_DestroyAndFreeUnit(D2UnitStrc* pUnit)
 
     case UNIT_MISSILE:
         MISSILE_FreeClientMissile(pUnit);
+        GFX_FreeUnitGfxData(pUnit);
         break;
 
     case UNIT_ITEM:
@@ -2334,6 +2338,10 @@ D2UnitStrc* __stdcall D2Client_InitializeUnitInstance(
     pUnit->dwUnitId    = dwUnitGUID;
     pUnit->dwTickCount = 0;
     pUnit->pMemoryPool = nullptr;
+    if (pUnit->pGfxData == nullptr)
+    {
+        pUnit->pGfxData = reinterpret_cast<D2GfxDataStrc*>(GFX_AllocUnitGfxData());
+    }
 
     D2ActiveRoomStrc* pRoom = nullptr;
     if (nX != 0 || nY != 0)
@@ -2472,6 +2480,10 @@ D2UnitStrc* __stdcall D2Client_AllocClientPlayerUnit(
     pUnit->dwUnitId    = dwUnitGUID;
     pUnit->dwTickCount = 0;
     pUnit->pMemoryPool = nullptr;
+    if (pUnit->pGfxData == nullptr)
+    {
+        pUnit->pGfxData = reinterpret_cast<D2GfxDataStrc*>(GFX_AllocUnitGfxData());
+    }
 
     D2ActiveRoomStrc* pRoom = nullptr;
     if (nX != 0 || nY != 0)

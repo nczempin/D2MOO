@@ -29,6 +29,7 @@ target_sources(${D2ClientImplName}
     src/reconstructed/Msg.cpp
     src/reconstructed/SCmd.cpp
     src/reconstructed/Select.cpp
+    src/reconstructed/SKILLS_Classes.cpp
     src/reconstructed/SKILLS_Skills.cpp
     src/reconstructed/Sound_SoundHdr.cpp
     src/reconstructed/UI_automap.cpp
@@ -44,6 +45,8 @@ target_sources(${D2ClientImplName}
     src/reconstructed/UI_useitem.cpp
     src/reconstructed/UNIT_CUnit.cpp
     src/reconstructed/UNIT_Item.cpp
+    src/reconstructed/UNIT_Missile.cpp
+    src/reconstructed/UNIT_MissileHandlers.cpp
     src/reconstructed/UNIT_Monster.cpp
     src/reconstructed/UNIT_Object.cpp
     src/reconstructed/UNIT_Player.cpp

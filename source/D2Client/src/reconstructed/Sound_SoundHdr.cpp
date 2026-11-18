@@ -17,6 +17,119 @@
 #include <stdio.h>
 #include <string.h>
 
+
+struct D2UnitStrc;
+struct D2InventoryStrc;
+
+#ifndef D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#define D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#pragma pack(push, 1)
+struct D2ReconItemDataViewStrc
+{
+    uint8_t pad00[0x45];
+    uint8_t nInvPage; // +0x45
+};
+struct D2ReconObjectDataViewStrc
+{
+    void*   pObjectTxt; // +0x00
+    uint8_t nShrineNo;  // +0x04
+};
+struct D2ReconUnitViewStrc
+{
+    uint32_t dwUnitType;                // +0x00
+    int32_t  dwClassId;                 // +0x04
+    void*    pMemoryPool;               // +0x08
+    uint32_t dwUnitId;                  // +0x0C
+    int32_t  dwAnimMode;                // +0x10
+    void*    pUnitData;                 // +0x14
+    int32_t  nAct;                      // +0x18
+    void*    pDrlgAct;                  // +0x1C
+    uint32_t dwSeed[2];                 // +0x20
+    uint32_t dwInitSeed;                // +0x28
+    void*    pDynamicPath;              // +0x2C
+    void*    pAnimSeq;                  // +0x30
+    uint32_t dwSeqFrameCount;           // +0x34
+    int32_t  dwSeqFrame;                // +0x38
+    uint32_t dwSeqSpeed;                // +0x3C
+    uint32_t dwSeqMode;                 // +0x40
+    int32_t  nSeqCurrentFramePrecise;   // +0x44
+    int32_t  dwFrameCountPrecise;       // +0x48
+    int16_t  wAnimSpeed;                // +0x4C
+    uint8_t  nActionFrame;              // +0x4E
+    uint8_t  unk0x4F;                   // +0x4F
+    void*    pAnimData;                 // +0x50
+    void*    pGfxData;                  // +0x54
+    void*    pGfxDataCopy;              // +0x58
+    void*    pStatListEx;               // +0x5C
+    D2InventoryStrc* pInventory;        // +0x60
+    void*    pLight;                    // +0x64
+    uint32_t dwStartLight;              // +0x68
+    int32_t  nPaletteIndex;             // +0x6C
+    void*    pUnitSfxSlot;              // +0x70
+    uint8_t  pad74[0x8C - 0x74];        // +0x74..+0x8B
+    uint16_t nLastClickX;               // +0x8C
+    uint16_t nLastClickY;               // +0x8E
+    uint8_t  pad90[0xA8 - 0x90];        // +0x90..+0xA7
+    void*    pSkills;                   // +0xA8
+    uint8_t  padAC[0xC4 - 0xAC];        // +0xAC..+0xC3
+    uint32_t dwFlags;                   // +0xC4
+    uint32_t dwFlagEx;                  // +0xC8
+    uint8_t  padCC[0xE4 - 0xCC];        // +0xCC..+0xE3
+    D2UnitStrc* pListNext;              // +0xE4
+    D2UnitStrc* pRoomNext;              // +0xE8
+    void*    pMsgFirst;                 // +0xEC
+    void*    pMsgLast;                  // +0xF0
+};
+static_assert(sizeof(D2ReconUnitViewStrc) == 0xF4, "D2ReconUnitViewStrc must be 0xF4 bytes");
+struct D2ReconWinMsgViewStrc
+{
+    HWND     hWnd;         // +0x00
+    uint32_t uMsg;         // +0x04
+    union
+    {
+        int32_t wParam;    // +0x08
+        struct
+        {
+            uint16_t wParamLow;  // +0x08
+            int16_t  wWheelDelta;// +0x0A
+        };
+    };
+    uint16_t nX;           // +0x0C
+    uint16_t nY;           // +0x0E
+    uint32_t dwKeyFlags;   // +0x10
+    int32_t  nField14;     // +0x14
+    int32_t  bHandled;     // +0x18
+    int32_t  nReturnValue; // +0x1C
+};
+#pragma pack(pop)
+static inline D2ReconUnitViewStrc* D2UnitView(D2UnitStrc* p) { return reinterpret_cast<D2ReconUnitViewStrc*>(p); }
+static inline const D2ReconUnitViewStrc* D2UnitView(const D2UnitStrc* p) { return reinterpret_cast<const D2ReconUnitViewStrc*>(p); }
+static inline D2ReconWinMsgViewStrc* D2MsgView(void* p) { return reinterpret_cast<D2ReconWinMsgViewStrc*>(p); }
+#endif
+
+struct D2TileLibraryEntryStrc;
+
+#pragma pack(push, 1)
+struct D2ReconFloorTileStrc
+{
+    D2TileLibraryEntryStrc* pTileLibEntry; // +0x00
+    uint32_t dwTileFlags;                  // +0x04
+    int32_t  nSubtileX;                    // +0x08
+    int32_t  nSubtileY;                    // +0x0C
+    int32_t  nScreenX;                     // +0x10
+    int32_t  nScreenY;                     // +0x14
+};
+struct D2ReconTileGridStrc
+{
+    void*    pWalls;      // +0x00
+    void*    pRoofs;      // +0x04
+    D2ReconFloorTileStrc* pFloors; // +0x08
+    int32_t  nWallCount;  // +0x0C
+    int32_t  nFloorCount; // +0x10
+};
+#pragma pack(pop)
+
+
 // ----------------------------------------------------------------------------
 // Forward Declarations & Engine Structures
 // ----------------------------------------------------------------------------
@@ -846,7 +959,7 @@ void __fastcall FLOOR_DrawRoomFloorTile(
         }
     }
 
-    uint32_t dwTileFlags = *(uint32_t*)((uint8_t*)pFloorTileData + 0x04);
+    uint32_t dwTileFlags = static_cast<const D2ReconFloorTileStrc*>(pFloorTileData)->dwTileFlags;
     if ((dwTileFlags & 0x201) != 0)
     {
         return;
@@ -879,15 +992,15 @@ void __fastcall FLOOR_DrawRoomFloorPass(D2ActiveRoomStrc* pRoom, int32_t bClipBo
         return;
     }
 
-    uint8_t* pFloorArray = *(uint8_t**)((uint8_t*)pTileGrid + 0x08);
-    int32_t nFloorCount = *(int32_t*)((uint8_t*)pTileGrid + 0x10);
+    D2ReconFloorTileStrc* pFloorArray = static_cast<D2ReconTileGridStrc*>(pTileGrid)->pFloors;
+    int32_t nFloorCount = static_cast<D2ReconTileGridStrc*>(pTileGrid)->nFloorCount;
     for (int32_t i = 0; i < nFloorCount; ++i)
     {
-        uint8_t* pTile = pFloorArray + i * 0x18;
-        int32_t nSubtileX = *(int32_t*)(pTile + 0x08);
-        int32_t nSubtileY = *(int32_t*)(pTile + 0x0C);
-        int32_t nScreenX  = *(int32_t*)(pTile + 0x10) - VIEWPORT_GetOffsetX();
-        int32_t nScreenY  = *(int32_t*)(pTile + 0x14) - VIEWPORT_GetOffsetY();
+        D2ReconFloorTileStrc* pTile = &pFloorArray[i];
+        int32_t nSubtileX = pTile->nSubtileX;
+        int32_t nSubtileY = pTile->nSubtileY;
+        int32_t nScreenX  = pTile->nScreenX - VIEWPORT_GetOffsetX();
+        int32_t nScreenY  = pTile->nScreenY - VIEWPORT_GetOffsetY();
         FLOOR_DrawRoomFloorTile(pRoom, pTile, nScreenX, nScreenY, nSubtileX, nSubtileY, bClipBounds);
     }
 }
@@ -1426,7 +1539,7 @@ int32_t __fastcall CHARSTATS_GetPassiveWeaponBlockBonus(D2UnitStrc* pPlayer)
         return 0;
     }
 
-    void* pInventory = *(void**)((uint8_t*)pPlayer + 0x60);
+    void* pInventory = D2UnitView(pPlayer)->pInventory;
     if (!pInventory)
     {
         return 0;
@@ -1549,8 +1662,8 @@ int32_t __fastcall CHARSTATS_CalcChanceToHit(D2UnitStrc* pPlayer, int32_t* pnAtt
 // 1.12a: 0x6FB1B100 (__fastcall)
 int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg)
 {
-    int32_t nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int32_t nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nMouseX = D2MsgView(pMsg)->nX;
+    int32_t nMouseY = D2MsgView(pMsg)->nY;
     int32_t nOx = g_nLeftPanelOffsetX;
     int32_t nTopY = -g_nLeftPanelOffsetY;
 
@@ -1653,8 +1766,8 @@ void __stdcall CHARSTATS_DrawPanel()
             szPlrName = pPlayerData;
         }
     }
-    const int32_t nClassId = (*(int32_t*)((uint8_t*)pPlayer + 0x04) >= 0 && *(int32_t*)((uint8_t*)pPlayer + 0x04) < 7)
-        ? *(int32_t*)((uint8_t*)pPlayer + 0x04)
+    const int32_t nClassId = (D2UnitView(pPlayer)->dwClassId >= 0 && D2UnitView(pPlayer)->dwClassId < 7)
+        ? D2UnitView(pPlayer)->dwClassId
         : 0;
     static const char* const kClassNames[7] = {
         "Amazon", "Sorceress", "Necromancer", "Paladin", "Barbarian", "Druid", "Assassin"
@@ -1818,8 +1931,8 @@ void __stdcall CHARSTATS_DrawPanel()
 // 1.12a: 0x6FB1C0A0 (__fastcall)
 int32_t __fastcall CHARSTATS_HandleMouseUp(void* pMsg)
 {
-    int32_t nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int32_t nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nMouseX = D2MsgView(pMsg)->nX;
+    int32_t nMouseY = D2MsgView(pMsg)->nY;
     int32_t nOx = g_nLeftPanelOffsetX;
     int32_t nTopY = -g_nLeftPanelOffsetY;
 
@@ -2010,7 +2123,7 @@ void __stdcall WARDEN_TickClient()
     {
         g_dwWardenLastTick = dwNow;
         D2UnitStrc* pPlayer = PLAYER_GetLocalPlayer();
-        int32_t nUnitId = pPlayer ? *(int32_t*)((uint8_t*)pPlayer + 0x0C) : 0;
+        int32_t nUnitId = pPlayer ? D2UnitView(pPlayer)->dwUnitId : 0;
         g_pWardenModule->pfTick(g_pWardenModuleInstance, nUnitId, 0);
     }
 }

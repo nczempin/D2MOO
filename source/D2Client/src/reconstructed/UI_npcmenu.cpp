@@ -13,6 +13,97 @@
 
 #include "D2ClientReconstructed.h"
 
+
+struct D2UnitStrc;
+struct D2InventoryStrc;
+
+#ifndef D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#define D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#pragma pack(push, 1)
+struct D2ReconItemDataViewStrc
+{
+    uint8_t pad00[0x45];
+    uint8_t nInvPage; // +0x45
+};
+struct D2ReconObjectDataViewStrc
+{
+    void*   pObjectTxt; // +0x00
+    uint8_t nShrineNo;  // +0x04
+};
+struct D2ReconUnitViewStrc
+{
+    uint32_t dwUnitType;                // +0x00
+    int32_t  dwClassId;                 // +0x04
+    void*    pMemoryPool;               // +0x08
+    uint32_t dwUnitId;                  // +0x0C
+    int32_t  dwAnimMode;                // +0x10
+    void*    pUnitData;                 // +0x14
+    int32_t  nAct;                      // +0x18
+    void*    pDrlgAct;                  // +0x1C
+    uint32_t dwSeed[2];                 // +0x20
+    uint32_t dwInitSeed;                // +0x28
+    void*    pDynamicPath;              // +0x2C
+    void*    pAnimSeq;                  // +0x30
+    uint32_t dwSeqFrameCount;           // +0x34
+    int32_t  dwSeqFrame;                // +0x38
+    uint32_t dwSeqSpeed;                // +0x3C
+    uint32_t dwSeqMode;                 // +0x40
+    int32_t  nSeqCurrentFramePrecise;   // +0x44
+    int32_t  dwFrameCountPrecise;       // +0x48
+    int16_t  wAnimSpeed;                // +0x4C
+    uint8_t  nActionFrame;              // +0x4E
+    uint8_t  unk0x4F;                   // +0x4F
+    void*    pAnimData;                 // +0x50
+    void*    pGfxData;                  // +0x54
+    void*    pGfxDataCopy;              // +0x58
+    void*    pStatListEx;               // +0x5C
+    D2InventoryStrc* pInventory;        // +0x60
+    void*    pLight;                    // +0x64
+    uint32_t dwStartLight;              // +0x68
+    int32_t  nPaletteIndex;             // +0x6C
+    void*    pUnitSfxSlot;              // +0x70
+    uint8_t  pad74[0x8C - 0x74];        // +0x74..+0x8B
+    uint16_t nLastClickX;               // +0x8C
+    uint16_t nLastClickY;               // +0x8E
+    uint8_t  pad90[0xA8 - 0x90];        // +0x90..+0xA7
+    void*    pSkills;                   // +0xA8
+    uint8_t  padAC[0xC4 - 0xAC];        // +0xAC..+0xC3
+    uint32_t dwFlags;                   // +0xC4
+    uint32_t dwFlagEx;                  // +0xC8
+    uint8_t  padCC[0xE4 - 0xCC];        // +0xCC..+0xE3
+    D2UnitStrc* pListNext;              // +0xE4
+    D2UnitStrc* pRoomNext;              // +0xE8
+    void*    pMsgFirst;                 // +0xEC
+    void*    pMsgLast;                  // +0xF0
+};
+static_assert(sizeof(D2ReconUnitViewStrc) == 0xF4, "D2ReconUnitViewStrc must be 0xF4 bytes");
+struct D2ReconWinMsgViewStrc
+{
+    HWND     hWnd;         // +0x00
+    uint32_t uMsg;         // +0x04
+    union
+    {
+        int32_t wParam;    // +0x08
+        struct
+        {
+            uint16_t wParamLow;  // +0x08
+            int16_t  wWheelDelta;// +0x0A
+        };
+    };
+    uint16_t nX;           // +0x0C
+    uint16_t nY;           // +0x0E
+    uint32_t dwKeyFlags;   // +0x10
+    int32_t  nField14;     // +0x14
+    int32_t  bHandled;     // +0x18
+    int32_t  nReturnValue; // +0x1C
+};
+#pragma pack(pop)
+static inline D2ReconUnitViewStrc* D2UnitView(D2UnitStrc* p) { return reinterpret_cast<D2ReconUnitViewStrc*>(p); }
+static inline const D2ReconUnitViewStrc* D2UnitView(const D2UnitStrc* p) { return reinterpret_cast<const D2ReconUnitViewStrc*>(p); }
+static inline D2ReconWinMsgViewStrc* D2MsgView(void* p) { return reinterpret_cast<D2ReconWinMsgViewStrc*>(p); }
+#endif
+
+
 struct D2UnitStrc;
 struct D2RoomStrc;
 struct D2CellFileStrc;
@@ -693,8 +784,8 @@ int32_t __fastcall sub_6FB12BB0(D2DialogStrc* pDialog, void* pMsg)
     if (!pDialog) {
         return -1;
     }
-    int nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int nMouseX = D2MsgView(pMsg)->nX;
+    int nMouseY = D2MsgView(pMsg)->nY;
     int nAccumY = 0;
     for (int i = 0; i < pDialog->nLineCount; ++i) {
         D2DialogLineStrc* pLine = &pDialog->aLines[i];
@@ -890,8 +981,8 @@ void __fastcall sub_6FB12F40(D2DialogStrc* pDialog)
 // 1.12a: 0x6FB13120 (register: eax=pMsg, stack: bInvokeCancel)
 void __stdcall sub_6FB13120(void* pMsg, int bInvokeCancel)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     if (bInvokeCancel) {
         D2DialogStrc* pDialog = g_pActiveDialog;
@@ -910,8 +1001,8 @@ void __stdcall sub_6FB13120(void* pMsg, int bInvokeCancel)
 void __stdcall sub_6FB13180(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
-    int nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int nMouseX = D2MsgView(pMsg)->nX;
+    int nMouseY = D2MsgView(pMsg)->nY;
     if (gaPanelStates[D2PANEL_MINIPANEL]) {
         int nHalfW = gnScreenWidth / 2;
         int nScreenH = gnScreenHeight;
@@ -921,8 +1012,8 @@ void __stdcall sub_6FB13180(void* pMsg)
             return;
         }
     }
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     if (!pDialog) {
         FOG_DisplayHalt("%s", UnimplementedOrdinal_10265(0x123));
@@ -1039,13 +1130,13 @@ void __stdcall sub_6FB13540(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (pDialog && pDialog->dwCreationTick + 80 > GetTickCount()) {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
         return;
     }
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1211,8 +1302,8 @@ D2DialogStrc* __stdcall sub_6FB13800(
 // 1.12a: 0x6FB13AA0 (__stdcall)
 void __stdcall sub_6FB13AA0(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1283,7 +1374,7 @@ void __stdcall sub_6FB13C00(void* pMsg)
             return;
         }
     }
-    int nKey = *(int32_t*)((uint8_t*)pMsg + 0x08);
+    int nKey = D2MsgView(pMsg)->wParam;
     if (sub_6FB134E0(pDialog, nKey)) {
         return;
     }
@@ -1292,8 +1383,8 @@ void __stdcall sub_6FB13C00(void* pMsg)
     } else if (nKey == VK_ESCAPE) {
         sub_6FB13540(pMsg);
     } else if (pDialog->bBlockUnhandledKeys == 1) {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
     }
 }
@@ -1301,8 +1392,8 @@ void __stdcall sub_6FB13C00(void* pMsg)
 // 1.12a: 0x6FB13CB0 (__stdcall)
 void __stdcall sub_6FB13CB0(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1320,8 +1411,8 @@ void __stdcall sub_6FB13CB0(void* pMsg)
 // 1.12a: 0x6FB13D30 (__stdcall)
 void __stdcall sub_6FB13D30(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1339,8 +1430,8 @@ void __stdcall sub_6FB13D30(void* pMsg)
 // 1.12a: 0x6FB13DB0 (__stdcall)
 void __stdcall sub_6FB13DB0(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1358,8 +1449,8 @@ void __stdcall sub_6FB13DB0(void* pMsg)
 // 1.12a: 0x6FB13E30 (__stdcall)
 void __stdcall sub_6FB13E30(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
@@ -1377,7 +1468,7 @@ void __stdcall sub_6FB13E30(void* pMsg)
 // 1.12a: 0x6FB13EB0 (__stdcall)
 void __stdcall sub_6FB13EB0(void* pMsg)
 {
-    int16_t nWheelDelta = *(int16_t*)((uint8_t*)pMsg + 0x0A);
+    int16_t nWheelDelta = D2MsgView(pMsg)->wWheelDelta;
     int nSteps = nWheelDelta / 120;
     if (nWheelDelta != 0 && nSteps != 0) {
         D2DialogStrc* pDialog = g_pActiveDialog;
@@ -1392,8 +1483,8 @@ void __stdcall sub_6FB13EB0(void* pMsg)
         }
         sub_6FB13BB0(pDialog, nSteps > 0 ? -1 : 1);
     }
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
 }
 
@@ -1406,32 +1497,32 @@ void __stdcall sub_6FB13F60(void* pMsg)
         exit(-1);
     }
     if (pDialog->dwCreationTick + 80 > GetTickCount()) {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
         return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnLButtonDown(pNode->pWidget, pMsg) == 1) {
-            *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-            *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+            D2MsgView(pMsg)->bHandled = 1;
+            D2MsgView(pMsg)->nReturnValue = 0;
             SMsgBreakHandlerChain(pMsg);
             return;
         }
     }
     pDialog->bMousePressedInDialog = 1;
     if (sub_6FB13B40(pDialog, pMsg)) {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
         return;
     }
-    int nMouseX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int nMouseY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int nMouseX = D2MsgView(pMsg)->nX;
+    int nMouseY = D2MsgView(pMsg)->nY;
     if (nMouseX >= pDialog->nPosX - 4 && nMouseX <= pDialog->nPosX + pDialog->nWidth + 4 &&
         nMouseY >= pDialog->nPosY - 4 && nMouseY <= pDialog->nPosY + pDialog->nHeight + 4) {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
         return;
     }
@@ -1443,13 +1534,13 @@ void __stdcall sub_6FB13F60(void* pMsg)
             return;
         }
         if (gaPanelStates[D2PANEL_NEWSTATS] && UI_HitTestNewStatBtn640(nMouseX, gnViewportShiftMode, nMouseY)) {
-            *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-            *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+            D2MsgView(pMsg)->bHandled = 1;
+            D2MsgView(pMsg)->nReturnValue = 0;
             SMsgBreakHandlerChain(pMsg);
         }
         if (gaPanelStates[D2PANEL_NEWSKILLS] && UI_HitTestNewSkillBtn640(nMouseX, gnViewportShiftMode, nMouseY)) {
-            *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-            *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+            D2MsgView(pMsg)->bHandled = 1;
+            D2MsgView(pMsg)->nReturnValue = 0;
             SMsgBreakHandlerChain(pMsg);
         }
         return;
@@ -1459,8 +1550,8 @@ void __stdcall sub_6FB13F60(void* pMsg)
         exit(-1);
     }
     pDialog->pfnCancel();
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
 }
 
@@ -1473,8 +1564,8 @@ void __stdcall sub_6FB14120(void* pMsg)
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnMouseMove(pNode->pWidget, pMsg) == 1) {
-            *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-            *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+            D2MsgView(pMsg)->bHandled = 1;
+            D2MsgView(pMsg)->nReturnValue = 0;
             SMsgBreakHandlerChain(pMsg);
             return;
         }
@@ -1593,7 +1684,7 @@ void __fastcall sub_6FAC26D0(D2UnitStrc* pUnit)
 void __fastcall sub_6FAC26F0(D2UnitStrc* pUnit)
 {
     if (pUnit) {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC4) |= 0x40;
+        D2UnitView(pUnit)->dwFlags |= 0x40;
     }
 }
 
@@ -1607,7 +1698,7 @@ int __stdcall sub_6FAC2730(D2UnitStrc* pUnit)
 void __fastcall sub_6FAC2760(D2UnitStrc* pUnit)
 {
     if (pUnit) {
-        *(uint32_t*)((uint8_t*)pUnit + 0xC4) &= ~0x40;
+        D2UnitView(pUnit)->dwFlags &= ~0x40;
     }
 }
 
@@ -1681,9 +1772,9 @@ void __cdecl sub_6FAC2B30()
 // 1.12a: 0x6FAC2B50 (register: eax=pUnit)
 void __fastcall sub_6FAC2B50(D2UnitStrc* pUnit)
 {
-    if (pUnit && *(void**)((uint8_t*)pUnit + 0x2C)) {
-        PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C));
-        PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C));
+    if (pUnit && D2UnitView(pUnit)->pDynamicPath) {
+        PATH_GetXPosition(D2UnitView(pUnit)->pDynamicPath);
+        PATH_GetYPosition(D2UnitView(pUnit)->pDynamicPath);
     }
 }
 
@@ -1738,8 +1829,8 @@ void __fastcall sub_6FAC30A0(D2UnitStrc* pUnit)
 // 1.12a: 0x6FAC3100 (register: eax=pUnit)
 void __fastcall sub_6FAC3100(D2UnitStrc* pUnit)
 {
-    if (pUnit && *(void**)((uint8_t*)pUnit + 0x2C)) {
-        MISSILE_SetTargetX(pUnit, PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C)));
+    if (pUnit && D2UnitView(pUnit)->pDynamicPath) {
+        MISSILE_SetTargetX(pUnit, PATH_GetXPosition(D2UnitView(pUnit)->pDynamicPath));
     }
 }
 
@@ -2106,13 +2197,13 @@ void __cdecl sub_6FAC5820()
 // 1.12a: 0x6FAC5B50 (register: eax=pUnit)
 int __fastcall sub_6FAC5B50(D2UnitStrc* pUnit)
 {
-    return pUnit ? *(int32_t*)((uint8_t*)pUnit + 0x10) : 0;
+    return pUnit ? D2UnitView(pUnit)->dwAnimMode : 0;
 }
 
 // 1.12a: 0x6FAC5B80 (register: eax=pUnit)
 int __fastcall sub_6FAC5B80(D2UnitStrc* pUnit)
 {
-    return pUnit ? *(int32_t*)((uint8_t*)pUnit + 0x04) : -1;
+    return pUnit ? D2UnitView(pUnit)->dwClassId : -1;
 }
 
 // 1.12a: 0x6FAC5BA0 (__stdcall)
@@ -2174,7 +2265,7 @@ int __stdcall sub_6FAC5E60(D2UnitStrc* pUnit, uint16_t nMask)
 // 1.12a: 0x6FAC5F90 (register: eax=pUnit)
 int __fastcall sub_6FAC5F90(D2UnitStrc* pUnit)
 {
-    return pUnit ? *(int32_t*)((uint8_t*)pUnit + 0x00) : -1;
+    return pUnit ? D2UnitView(pUnit)->dwUnitType : -1;
 }
 
 // 1.12a: 0x6FAC5FC0 (register: eax=pMissile)
@@ -2189,26 +2280,26 @@ void __fastcall sub_6FAC5FC0(D2UnitStrc* pMissile)
 // 1.12a: 0x6FAC6220 (register: eax=pUnit)
 int __fastcall sub_6FAC6220(D2UnitStrc* pUnit)
 {
-    return (pUnit && *(void**)((uint8_t*)pUnit + 0x2C)) ? PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C)) : 0;
+    return (pUnit && D2UnitView(pUnit)->pDynamicPath) ? PATH_GetXPosition(D2UnitView(pUnit)->pDynamicPath) : 0;
 }
 
 // 1.12a: 0x6FAC62B0 (register: eax=pUnit)
 int __fastcall sub_6FAC62B0(D2UnitStrc* pUnit)
 {
-    return (pUnit && *(void**)((uint8_t*)pUnit + 0x2C)) ? PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C)) : 0;
+    return (pUnit && D2UnitView(pUnit)->pDynamicPath) ? PATH_GetYPosition(D2UnitView(pUnit)->pDynamicPath) : 0;
 }
 
 // 1.12a: 0x6FAC6340 (__stdcall)
 int __stdcall sub_6FAC6340(D2UnitStrc* pUnit, int nType)
 {
-    void* pPath = pUnit ? *(void**)((uint8_t*)pUnit + 0x2C) : nullptr;
+    void* pPath = pUnit ? D2UnitView(pUnit)->pDynamicPath : nullptr;
     return pPath ? PATH_GetMaxDistance(pPath) : 0;
 }
 
 // 1.12a: 0x6FAC6390 (__stdcall)
 int __stdcall sub_6FAC6390(D2UnitStrc* pUnit, int nX, int nY)
 {
-    void* pPath = pUnit ? *(void**)((uint8_t*)pUnit + 0x2C) : nullptr;
+    void* pPath = pUnit ? D2UnitView(pUnit)->pDynamicPath : nullptr;
     return pPath ? PATH_GetType(pPath) : 0;
 }
 
@@ -2234,9 +2325,9 @@ int __fastcall sub_6FAC66C0(D2UnitStrc* pUnit)
 int __fastcall sub_6FAC67B0(D2UnitStrc* pUnit)
 {
     D2RoomStrc* pRoom = UNITS_GetRoom(pUnit);
-    if (!pRoom || !*(void**)((uint8_t*)pUnit + 0x2C)) return 0;
-    int nX = PATH_GetXPosition(*(void**)((uint8_t*)pUnit + 0x2C));
-    int nY = PATH_GetYPosition(*(void**)((uint8_t*)pUnit + 0x2C));
+    if (!pRoom || !D2UnitView(pUnit)->pDynamicPath) return 0;
+    int nX = PATH_GetXPosition(D2UnitView(pUnit)->pDynamicPath);
+    int nY = PATH_GetYPosition(D2UnitView(pUnit)->pDynamicPath);
     return COLLISION_CheckMask(pRoom, nX, nY, 1);
 }
 
@@ -2273,8 +2364,8 @@ int __stdcall sub_6FAC6DC0(int a1, int a2)
 // 1.12a: 0x6FAC6E30 (register: eax=pUnit)
 void __fastcall sub_6FAC6E30(D2UnitStrc* pUnit)
 {
-    if (pUnit && *(void**)((uint8_t*)pUnit + 0x2C)) {
-        PATH_SetFootprintCollisionMask(*(void**)((uint8_t*)pUnit + 0x2C), 0);
+    if (pUnit && D2UnitView(pUnit)->pDynamicPath) {
+        PATH_SetFootprintCollisionMask(D2UnitView(pUnit)->pDynamicPath, 0);
     }
 }
 
@@ -2385,7 +2476,7 @@ void __fastcall sub_6FAC7D10(int nNpcGUID, int nNpcClassId, int bInteracting)
 // 1.12a: 0x6FAC7D50 (register: eax=pNpcUnit)
 int __fastcall sub_6FAC7D50(D2UnitStrc* pNpcUnit)
 {
-    int nClassId = pNpcUnit ? *(int32_t*)((uint8_t*)pNpcUnit + 0x04) : -1;
+    int nClassId = pNpcUnit ? D2UnitView(pNpcUnit)->dwClassId : -1;
     for (int i = 0; i < 48; ++i) {
         if (g_aNpcMenuDefs[i].nNpcClassId == nClassId) {
             return i;
@@ -2555,7 +2646,7 @@ void __cdecl sub_6FAC82A0()
 void __fastcall sub_6FAC8360(D2UnitStrc* pNpcUnit)
 {
     if (!pNpcUnit) return;
-    D2InventoryStrc* pInv = *(D2InventoryStrc**)((uint8_t*)pNpcUnit + 0x60);
+    D2InventoryStrc* pInv = D2UnitView(pNpcUnit)->pInventory;
     if (pInv) {
         INVENTORY_RemoveInventoryItems(pInv);
     }
@@ -3147,8 +3238,8 @@ int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit)
     g_nActiveNpcMenuIdx = nMenuIdx;
     if (pNpcUnit) {
         g_bInteractingWithNpc = 1;
-        g_nInteractingNpcGUID = *(int32_t*)((uint8_t*)pNpcUnit + 0x0C);
-        g_nInteractingNpcClassId = *(int32_t*)((uint8_t*)pNpcUnit + 0x04);
+        g_nInteractingNpcGUID = D2UnitView(pNpcUnit)->dwUnitId;
+        g_nInteractingNpcClassId = D2UnitView(pNpcUnit)->dwClassId;
     }
     if (!g_pPentagramCel) {
         g_pPentagramCel = ARCHIVE_LoadCellFileDefault("DATA\\GLOBAL\\UI\\CURSOR\\Pentspin", 0);
@@ -3282,7 +3373,7 @@ void* __stdcall sub_6FACDF10(void* pRawPeImage)
 D2UnitStrc* __fastcall sub_6FACE1C0(D2UnitStrc* pUnit)
 {
     if (!pUnit) return nullptr;
-    D2InventoryStrc* pInv = *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60);
+    D2InventoryStrc* pInv = D2UnitView(pUnit)->pInventory;
     if (!pInv) return nullptr;
     for (D2UnitStrc* pItem = INVENTORY_GetFirstItem(pInv); pItem; pItem = INVENTORY_GetNextItem(pItem)) {
         if (INVENTORY_UnitIsItem(pItem)) return pItem;
@@ -3403,7 +3494,7 @@ void __stdcall sub_6FACE4D0(void (__fastcall* pfnCallback)(D2UnitStrc*))
 {
     D2UnitStrc** ppTable = &gapServerSideUnitHashTables[0][0];
     for (int i = 0; i < 6 * 128; ++i) {
-        for (D2UnitStrc* pUnit = ppTable[i]; pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE4)) {
+        for (D2UnitStrc* pUnit = ppTable[i]; pUnit; pUnit = D2UnitView(pUnit)->pListNext) {
             pfnCallback(pUnit);
         }
     }
@@ -3426,8 +3517,8 @@ D2UnitStrc* __fastcall sub_6FACE550(int nUnitGUID, int nUnitType)
 {
     D2UnitStrc** ppTable = (nUnitGUID < 0) ? &gapClientSideUnitHashTables[0][0] : &gapServerSideUnitHashTables[0][0];
     uint32_t dwHash = static_cast<uint32_t>(nUnitGUID) & 0x7F;
-    for (D2UnitStrc* pUnit = ppTable[nUnitType * 128 + dwHash]; pUnit; pUnit = *(D2UnitStrc**)((uint8_t*)pUnit + 0xE4)) {
-        if (*(int32_t*)((uint8_t*)pUnit + 0x0C) == nUnitGUID) {
+    for (D2UnitStrc* pUnit = ppTable[nUnitType * 128 + dwHash]; pUnit; pUnit = D2UnitView(pUnit)->pListNext) {
+        if (D2UnitView(pUnit)->dwUnitId == nUnitGUID) {
             return pUnit;
         }
     }
@@ -3450,8 +3541,8 @@ D2UnitStrc* __fastcall sub_6FACE5A0(int nUnitGUID, int nUnitType)
 D2UnitStrc* __fastcall sub_6FACE5B0(D2UnitStrc* pClientUnit)
 {
     if (!pClientUnit) return nullptr;
-    int nType = *(int32_t*)((uint8_t*)pClientUnit + 0x00);
-    int nGUID = *(int32_t*)((uint8_t*)pClientUnit + 0x0C);
+    int nType = D2UnitView(pClientUnit)->dwUnitType;
+    int nGUID = D2UnitView(pClientUnit)->dwUnitId;
     return DEBUG_GetUnitFromTypeAndGUID(nType, nGUID);
 }
 
@@ -3470,7 +3561,7 @@ D2LevelsTxt* __stdcall sub_6FACE990(D2RoomStrc* pRoom)
 // 1.12a: 0x6FACE9C0 (register: eax=pUnit)
 int __fastcall sub_6FACE9C0(D2UnitStrc* pUnit)
 {
-    return pUnit ? *(int32_t*)((uint8_t*)pUnit + 0x10) : 0;
+    return pUnit ? D2UnitView(pUnit)->dwAnimMode : 0;
 }
 
 // 1.12a: 0x6FACE9E0 (register: eax=pUnit)
@@ -3503,7 +3594,7 @@ void __fastcall sub_6FACEA60(D2UnitStrc* pUnit)
 // 1.12a: 0x6FACEAA0 (register: eax=pUnit)
 int __fastcall sub_6FACEAA0(D2UnitStrc* pUnit)
 {
-    return pUnit ? *(int32_t*)((uint8_t*)pUnit + 0x04) : -1;
+    return pUnit ? D2UnitView(pUnit)->dwClassId : -1;
 }
 
 // 1.12a: 0x6FACEAC0 (register: eax=pUnit)
@@ -3521,7 +3612,7 @@ D2RoomStrc* __fastcall sub_6FACEB00(D2UnitStrc* pUnit)
 // 1.12a: 0x6FACEB20 (__stdcall)
 D2UnitStrc* __stdcall sub_6FACEB20(D2UnitStrc* pUnit)
 {
-    D2InventoryStrc* pInv = pUnit ? *(D2InventoryStrc**)((uint8_t*)pUnit + 0x60) : nullptr;
+    D2InventoryStrc* pInv = pUnit ? D2UnitView(pUnit)->pInventory : nullptr;
     return pInv ? INVENTORY_GetCursorItem(pInv) : nullptr;
 }
 

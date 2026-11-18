@@ -262,6 +262,10 @@ extern int __fastcall GFX_ValidateUnitGfxData(D2UnitStrc* pUnit, D2GfxDataStrc* 
 extern int __fastcall GFX_SetupUnitComponentGfxData(D2UnitStrc* pUnit, D2GfxDataStrc* pOutGfxData, int nComponent, int nDirection, int nFrame, const char* szWeaponClass, int bAsync, int bForceLoad);
 extern int __fastcall GFXUTIL_EngineDirToCofDir(int nEngineDir, int nCofDirections);
 extern void __fastcall GFX_InitUnitCompositeGfx(D2UnitStrc* pUnit);
+extern D2UnitStrc* __fastcall D2Client_CreateClientMissile(struct D2MissileStrc* pMissileInit);
+extern void __fastcall D2Client_DispatchMissileCltDoFunc(D2UnitStrc* pMissile);
+extern int32_t __fastcall D2Client_DestroyClientMissile(D2UnitStrc* pMissile, D2UnitStrc* pTarget, int32_t bForceExpire);
+extern D2UnitStrc* __fastcall D2Client_SpawnClientMissileAtCoords(D2UnitStrc* pOwner, int32_t nMissileId, int32_t nX, int32_t nY, int32_t nSkillId, int32_t nSkillLevel);
 extern void __fastcall GFX_FreeUnitGfxData(D2UnitStrc* pUnit);
 extern void __fastcall GFX_AttachOverlayToUnit(D2UnitStrc* pUnit, int nOverlayId, int bPreDrawOverride);
 extern void __fastcall GFX_DrawItemUnit(D2UnitStrc* pItem, int nXPos, int nYPos, uint32_t dwGamma, int nScreenMode);
@@ -629,8 +633,6 @@ uint8_t gbPacketItemActionTable[32] = { 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00
 int32_t gCharBarkSoundIndices_6FBA2068[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 D2CharVoiceEntryStrc gCharVoiceTable_6FBA1BC0[7] = {};
 uint8_t gAutomapColors[256] = {};
-void (__fastcall* gCltMissileDoFuncTable[128])(D2UnitStrc*) = {};
-int (__fastcall* gCltMissileHitFuncTable[128])(D2UnitStrc*, D2UnitStrc*, int, int) = {};
 D2KeyBindingStrc gKeyBindings[114] = {};
 D2MonUModHandlerStrc gMonUModHandlers_6FBAA220[64] = {};
 D2MonsterModeCallbackStrc gMonsterModeCallbacks_6FBA61C8[16] = {};
@@ -2244,7 +2246,7 @@ void __fastcall D2Client_ClearPlayerMapWaypoints_6FAE0490(struct D2UnitStrc * a0
 }
 struct D2UnitStrc * __fastcall D2Client_CreateClientMissile_6FAD4B20(struct D2ClientMissileParamStrc * a0)
 {
-    (void)a0; return nullptr;
+    return a0 ? D2Client_CreateClientMissile(reinterpret_cast<struct D2MissileStrc*>(a0)) : nullptr;
 }
 void __fastcall D2Client_DispatchItemModeChange_6FB45810(struct D2UnitStrc * a0, int a1)
 {
@@ -5327,7 +5329,7 @@ void __fastcall D2Client_OnItemAnimSequenceFinished_6FB450B0(struct D2UnitStrc *
 }
 int __fastcall D2Client_OnMissileAnimSequenceFinished_6FAD2F50(struct D2UnitStrc * a0)
 {
-    (void)a0; return 0;
+    return a0 ? D2Client_DestroyClientMissile(a0, nullptr, 1) : 0;
 }
 void __fastcall D2Client_OnMonsterAnimSequenceFinished_6FAE5D10(struct D2UnitStrc * a0)
 {
@@ -5754,7 +5756,7 @@ void __fastcall D2Client_UpdateItemUnitPerTick_6FB468F0(struct D2UnitStrc * a0)
 }
 void __fastcall D2Client_UpdateMissileUnitPerTick_6FAD3520(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) D2Client_DispatchMissileCltDoFunc(a0);
 }
 void __fastcall D2Client_UpdateMonsterUnitPerTick_6FAE6100(struct D2UnitStrc * a0)
 {
@@ -5764,9 +5766,25 @@ void __fastcall D2Client_UpdateObjectPerTick(struct D2UnitStrc * a0)
 {
     if (a0) D2Client_UpdateObjectUnitPerTick(a0);
 }
+extern int32_t __fastcall CLTSKILL_DoUsedSkill(struct D2UnitStrc* pUnit);
+extern void __stdcall CLTSKILL_ProcessActiveStatesDoFuncs(struct D2UnitStrc* pUnit);
 void __fastcall D2Client_UpdatePlayerUnitPerTick_6FB0D140(struct D2UnitStrc * a0)
 {
-    if (a0) UNITS_UpdateFrame(a0);
+    if (!a0) return;
+    UNITS_UpdateFrame(a0);
+    if ((a0->dwFlags & UNITFLAG_SKSRVDOFUNC) == 0)
+    {
+        const uint8_t nEvent = a0->nActionFrame;
+        if (nEvent == 1 || nEvent == 2 || nEvent == 3)
+        {
+            a0->nActionFrame = 0;
+            CLTSKILL_DoUsedSkill(a0);
+        }
+    }
+    if (STATES_IsAnyGfxStateFlagSet(a0))
+    {
+        CLTSKILL_ProcessActiveStatesDoFuncs(a0);
+    }
 }
 void __stdcall D2Client_UpdateUnitAnimGraphics_6FB42000(struct D2UnitStrc * a0, int a1)
 {
@@ -6007,27 +6025,12 @@ void __fastcall LIGHTMAP_SampleSubTileRGB(struct D2ActiveRoomStrc * a0, unsigned
 }
 struct D2UnitStrc * __stdcall MISSILE_CreateClientMissile(int a0, struct D2UnitStrc * a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7; (void)a8; return nullptr;
+    (void)a6; (void)a7; (void)a8;
+    return a1 ? D2Client_SpawnClientMissileAtCoords(a1, a0, a4, a5, a2, a3) : nullptr;
 }
 int __fastcall MISSILE_DrawSpecial(struct D2UnitStrc * a0)
 {
     (void)a0; return 0;
-}
-void __fastcall MISSILE_FreeClientMissile(struct D2UnitStrc * a0)
-{
-    if (!a0) return;
-    if (gpClientAct && UNITS_GetRoom(a0)) UNITROOM_RemoveUnitFromRoom(a0);
-    if (a0->pDynamicPath) { PATH_FreeDynamicPath(a0->pMemoryPool, a0->pDynamicPath); a0->pDynamicPath = nullptr; }
-    MISSILE_FreeMissileData(a0);
-    GFX_FreeUnitGfxData(a0);
-}
-void __fastcall MISSILE_InitClientMissile(struct D2UnitStrc * a0, struct D2ActiveRoomStrc * a1, int a2, int a3)
-{
-    if (!a0) return;
-    if (!a0->pStatListEx) STATLIST_AllocStatListEx(a0, 0, nullptr, nullptr);
-    D2Client_InitMissileUnitDataAndPath(a0, a2, a3, 0);
-    if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1);
-    GFX_InitUnitCompositeGfx(a0);
 }
 int __fastcall MONSTER_CanBeConsumed(struct D2UnitStrc * a0)
 {

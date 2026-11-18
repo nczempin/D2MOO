@@ -2098,7 +2098,7 @@ int32_t __fastcall sub_6FB34680(D2EditBoxImplStrc* pThis, void* _edx, D2MsgStrc*
 // Calling convention: __thiscall (ecx = D2EditBoxImplStrc* this, int32_t nArg)
 int32_t __fastcall sub_6FB34690(D2EditBoxImplStrc* pThis, void* _edx, int32_t nArg)
 {
-    // Sets *(int32_t*)((uint8_t*)pThis + 0x3E) = 1 and returns 0.
+    // Sets pThis->bActive (offset +0x3E) = 1 and returns 0.
     return 0;
 }
 

@@ -111,6 +111,10 @@ D2UnitStrc* __stdcall D2Client_AllocClientMonsterUnit(const D2MonsterSpawnDescSt
 D2UnitStrc* __fastcall D2Client_CreateClientSideUnit(int32_t nX, int32_t nY, int32_t nClassId, uint32_t nUnitType, int32_t nMode);
 void __stdcall D2Client_TeleportUnitToCoordinates(D2UnitStrc* pUnit, int32_t nX, int32_t nY, int32_t bTeleportEffect);
 void __stdcall D2Client_UpdateAllUnitsPerTick(void);
+struct D2SkillStartRequestStrc;
+extern int32_t __fastcall CLTSKILL_StartSkillAtCoords(D2UnitStrc* pUnit, D2SkillStartRequestStrc* pReq);
+extern int32_t __fastcall CLTSKILL_StartSkillOnTargetUnit(D2UnitStrc* pUnit, D2SkillStartRequestStrc* pReq);
+extern D2UnitStrc* __fastcall SELECT_GetSelectedUnit(void);
 D2UnitStrc* __stdcall D2Client_GetLocalPlayerUnit();
 void __fastcall D2Client_SetLocalPlayerUnit(D2UnitStrc* pPlayerUnit);
 D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitGUID, uint32_t nUnitType);
@@ -2981,6 +2985,15 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 					{
 						g_bHasPendingInteract = false;
 						UNITMODE_SendActionPacket(0x06u, 0, 0, UNIT_MONSTER, pHovered->dwUnitId);
+						if (gpPlayerUnit)
+						{
+							D2SkillStrc* pLeftSkill = UNITS_GetLeftSkill(gpPlayerUnit);
+							const int32_t nSkId = pLeftSkill ? SKILLS_GetSkillIdFromSkill(pLeftSkill, __FILE__, __LINE__) : 0;
+							const int32_t nSkLvl = pLeftSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pLeftSkill, TRUE) : 1;
+							struct LocalSkillReq { int32_t nSkillId; uint32_t dwOwner; int32_t nType; uint32_t dwGUID; int32_t r0; int32_t nLvl; int32_t r1; } req = { nSkId, D2UnitInvalidGUID, UNIT_MONSTER, pHovered->dwUnitId, 0, nSkLvl > 0 ? nSkLvl : 1, 0 };
+							gpPlayerUnit->dwFlags &= ~UNITFLAG_SKSRVDOFUNC;
+							CLTSKILL_StartSkillOnTargetUnit(gpPlayerUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+						}
 					}
 					return 0;
 				}
@@ -2991,6 +3004,17 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 			ScreenPointToSubtile(mx, my, &nClickSubX, &nClickSubY);
 			if (nClickSubX > 0 && nClickSubY > 0)
 			{
+				if ((GetKeyState(VK_SHIFT) & 0x8000) != 0 && gpPlayerUnit && !DUNGEON_IsRoomInTown(UNITS_GetRoom(gpPlayerUnit)))
+				{
+					MSG_SendByteWordWord(0x05u, static_cast<uint16_t>(nClickSubX), static_cast<uint16_t>(nClickSubY));
+					D2SkillStrc* pLeftSkill = UNITS_GetLeftSkill(gpPlayerUnit);
+					const int32_t nSkId = pLeftSkill ? SKILLS_GetSkillIdFromSkill(pLeftSkill, __FILE__, __LINE__) : 0;
+					const int32_t nSkLvl = pLeftSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pLeftSkill, TRUE) : 1;
+					struct LocalSkillReq { int32_t nSkillId; uint32_t dwOwner; int32_t nX; int32_t nY; int32_t r0; int32_t nLvl; int32_t r1; } req = { nSkId, D2UnitInvalidGUID, nClickSubX, nClickSubY, 0, nSkLvl > 0 ? nSkLvl : 1, 0 };
+					gpPlayerUnit->dwFlags &= ~UNITFLAG_SKSRVDOFUNC;
+					CLTSKILL_StartSkillAtCoords(gpPlayerUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+					return 0;
+				}
 				const int32_t nStartX = (gnServerSubX > 0) ? gnServerSubX : gnAuthServerSubX;
 				const int32_t nStartY = (gnServerSubY > 0) ? gnServerSubY : gnAuthServerSubY;
 				g_vInteractivePath.clear();
@@ -3010,11 +3034,32 @@ static LRESULT CALLBACK D2Client_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		}
 		else
 		{
+			D2UnitStrc* pRightTarget = SELECT_GetSelectedUnit();
+			if (pRightTarget && pRightTarget->dwUnitType == UNIT_MONSTER && !IsTownNpcMonster(pRightTarget) && gpPlayerUnit && !DUNGEON_IsRoomInTown(UNITS_GetRoom(gpPlayerUnit)))
+			{
+				UNITMODE_SendActionPacket(0x0Du, 0, 0, UNIT_MONSTER, pRightTarget->dwUnitId);
+				D2SkillStrc* pRightSkill = UNITS_GetRightSkill(gpPlayerUnit);
+				const int32_t nSkId = pRightSkill ? SKILLS_GetSkillIdFromSkill(pRightSkill, __FILE__, __LINE__) : 0;
+				const int32_t nSkLvl = pRightSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pRightSkill, TRUE) : 1;
+				struct LocalSkillReq { int32_t nSkillId; uint32_t dwOwner; int32_t nType; uint32_t dwGUID; int32_t r0; int32_t nLvl; int32_t r1; } req = { nSkId, D2UnitInvalidGUID, UNIT_MONSTER, pRightTarget->dwUnitId, 0, nSkLvl > 0 ? nSkLvl : 1, 0 };
+				gpPlayerUnit->dwFlags &= ~UNITFLAG_SKSRVDOFUNC;
+				CLTSKILL_StartSkillOnTargetUnit(gpPlayerUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+				return 0;
+			}
 			int32_t nCastSubX = 0, nCastSubY = 0;
 			ScreenPointToSubtile(mx, my, &nCastSubX, &nCastSubY);
 			if (nCastSubX > 0 && nCastSubY > 0)
 			{
 				SendRightSkillLocation(static_cast<uint16_t>(nCastSubX), static_cast<uint16_t>(nCastSubY));
+				if (gpPlayerUnit)
+				{
+					D2SkillStrc* pRightSkill = UNITS_GetRightSkill(gpPlayerUnit);
+					const int32_t nSkId = pRightSkill ? SKILLS_GetSkillIdFromSkill(pRightSkill, __FILE__, __LINE__) : 0;
+					const int32_t nSkLvl = pRightSkill ? SKILLS_GetSkillLevel(gpPlayerUnit, pRightSkill, TRUE) : 1;
+					struct LocalSkillReq { int32_t nSkillId; uint32_t dwOwner; int32_t nX; int32_t nY; int32_t r0; int32_t nLvl; int32_t r1; } req = { nSkId, D2UnitInvalidGUID, nCastSubX, nCastSubY, 0, nSkLvl > 0 ? nSkLvl : 1, 0 };
+					gpPlayerUnit->dwFlags &= ~UNITFLAG_SKSRVDOFUNC;
+					CLTSKILL_StartSkillAtCoords(gpPlayerUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+				}
 			}
 		}
 		return 0;

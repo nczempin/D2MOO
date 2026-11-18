@@ -33,8 +33,30 @@
 #include <D2DataTbls.h>
 #include <D2BitManip.h>
 #include <D2QuestRecord.h>
+#include <D2Seed.h>
+#include <Units/Missile.h>
 
 #include "D2ClientReconstructed.h"
+
+struct D2SkillStartReqSCmdStrc
+{
+    int32_t  nSkillId;
+    uint32_t dwItemOwnerGUID;
+    int32_t  nTargetXOrType;
+    uint32_t dwTargetYOrGUID;
+    int32_t  nReserved10;
+    int32_t  nSkillLevel;
+    int32_t  nReserved18;
+};
+
+struct D2SkillStartRequestStrc;
+extern D2UnitStrc* gpPlayerUnit;
+extern D2UnitStrc* __fastcall D2Client_CreateClientMissile(D2MissileStrc* pMissileParams);
+extern int32_t __fastcall CLTSKILL_StartSkillAtCoords(D2UnitStrc* pUnit, D2SkillStartRequestStrc* pReq);
+extern int32_t __fastcall CLTSKILL_StartSkillOnTargetUnit(D2UnitStrc* pUnit, D2SkillStartRequestStrc* pReq);
+extern int32_t __fastcall CLTSKILL_TriggerProcSkill(D2UnitStrc* pUnit, D2UnitStrc* pTarget, int32_t nSkillId, int32_t nSkillLevel, int32_t nTargetX, int32_t nTargetY, int32_t bPlayDoSound);
+extern void __fastcall CLTSKILL_ExecuteSkillCltPrgFunc0WithTempTarget(D2UnitStrc* pUnit, D2UnitStrc* pOverrideTargetUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t nOverrideX, int32_t nOverrideY, uint8_t nOverrideSeedByte);
+extern void __fastcall CLTSKILL_ExecuteFinishingMoveCharges(D2UnitStrc* pUnit, D2UnitStrc* pOverrideTargetUnit, int32_t nSkillId, int32_t nSkillLevel, int32_t nOverrideX, int32_t nOverrideY, int32_t nChargeCount);
 
 typedef D2ActiveRoomStrc D2RoomStrc;
 
@@ -1495,32 +1517,164 @@ static void __fastcall SCMD_Handler42_ClearCursor(uint8_t* pPacket)
     }
 }
 
+// 1.12a: 0x6FB17740
 static void __fastcall SCMD_Handler4C_UnitSkillOnTarget(uint8_t* pPacket)
 {
     const uint8_t  nUnitType    = pPacket[1];
-    const uint32_t dwUnitGUID   = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const uint8_t  nTargetType  = pPacket[10];
-    const uint32_t dwTargetGUID = *reinterpret_cast<uint32_t*>(&pPacket[11]);
-
-    D2UnitStrc* pUnit   = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
-    D2UnitStrc* pTarget = UNIT_FindClientUnit(static_cast<int32_t>(dwTargetGUID), nTargetType);
-    if (pUnit != nullptr)
-    {
-        UNITMODE_DispatchClientEvent(pUnit, 0x03, 0, 0, pTarget, 0, 0);
-    }
-}
-
-static void __fastcall SCMD_Handler4D_UnitCastSkill(uint8_t* pPacket)
-{
-    const uint8_t  nUnitType  = pPacket[1];
-    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
-    const int32_t  nX         = *reinterpret_cast<uint16_t*>(&pPacket[11]);
-    const int32_t  nY         = *reinterpret_cast<uint16_t*>(&pPacket[13]);
+    const uint32_t dwUnitGUID   = *reinterpret_cast<const uint32_t*>(&pPacket[2]);
+    const uint16_t wSkillId     = *reinterpret_cast<const uint16_t*>(&pPacket[6]);
+    const uint8_t  nSkillLevel  = pPacket[8];
+    const uint8_t  nTargetType  = pPacket[9];
+    const uint32_t dwTargetGUID = *reinterpret_cast<const uint32_t*>(&pPacket[10]);
 
     D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
     if (pUnit != nullptr)
     {
-        UNITMODE_DispatchClientEvent(pUnit, 0x02, nX, nY, nullptr, 0, 0);
+        D2SkillStartReqSCmdStrc req = {};
+        req.nSkillId        = wSkillId;
+        req.dwItemOwnerGUID = D2UnitInvalidGUID;
+        req.nTargetXOrType  = nTargetType;
+        req.dwTargetYOrGUID = dwTargetGUID;
+        req.nSkillLevel     = nSkillLevel;
+        CLTSKILL_StartSkillOnTargetUnit(pUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+    }
+}
+
+// 1.12a: 0x6FB176D0
+static void __fastcall SCMD_Handler4D_UnitCastSkill(uint8_t* pPacket)
+{
+    const uint8_t  nUnitType   = pPacket[1];
+    const uint32_t dwUnitGUID  = *reinterpret_cast<const uint32_t*>(&pPacket[2]);
+    const int32_t  nSkillId    = *reinterpret_cast<const int32_t*>(&pPacket[6]);
+    const uint8_t  nSkillLevel = pPacket[10];
+    const int32_t  nX          = *reinterpret_cast<const uint16_t*>(&pPacket[11]);
+    const int32_t  nY          = *reinterpret_cast<const uint16_t*>(&pPacket[13]);
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit != nullptr)
+    {
+        D2SkillStartReqSCmdStrc req = {};
+        req.nSkillId        = nSkillId;
+        req.dwItemOwnerGUID = D2UnitInvalidGUID;
+        req.nTargetXOrType  = nX;
+        req.dwTargetYOrGUID = static_cast<uint32_t>(nY);
+        req.nSkillLevel     = nSkillLevel;
+        CLTSKILL_StartSkillAtCoords(pUnit, reinterpret_cast<D2SkillStartRequestStrc*>(&req));
+    }
+}
+
+// 1.12a: 0x6FB17150
+static void __fastcall SCMD_Handler73_MissileData(uint8_t* pPacket)
+{
+    const uint16_t wMissileId    = *reinterpret_cast<const uint16_t*>(&pPacket[5]);
+    const int32_t  nX            = *reinterpret_cast<const int32_t*>(&pPacket[7]);
+    const int32_t  nY            = *reinterpret_cast<const int32_t*>(&pPacket[11]);
+    const int32_t  nTargetX      = *reinterpret_cast<const int32_t*>(&pPacket[15]);
+    const int32_t  nTargetY      = *reinterpret_cast<const int32_t*>(&pPacket[19]);
+    const uint16_t wCurrentFrame = *reinterpret_cast<const uint16_t*>(&pPacket[23]);
+    const uint8_t  nOwnerType    = pPacket[25];
+    const uint32_t dwOwnerGUID   = *reinterpret_cast<const uint32_t*>(&pPacket[26]);
+    const uint8_t  nSkillLevel   = pPacket[30];
+    const uint8_t  nPiercePct    = pPacket[31];
+
+    D2MissileStrc missileParams = {};
+    missileParams.dwFlags    = 0x40000001u;
+    missileParams.pOwner     = gpPlayerUnit;
+    missileParams.nMissile   = wMissileId;
+    missileParams.nX         = nX;
+    missileParams.nY         = nY;
+    missileParams.nSkillLevel = nSkillLevel;
+
+    if (nTargetX != 0 && nTargetY != 0)
+    {
+        missileParams.dwFlags  = 0x40000021u;
+        missileParams.nTargetX = nTargetX;
+        missileParams.nTargetY = nTargetY;
+    }
+
+    D2UnitStrc* pMissile = D2Client_CreateClientMissile(&missileParams);
+    if (pMissile != nullptr)
+    {
+        UNITS_StoreOwnerTypeAndGUID(pMissile, nOwnerType, dwOwnerGUID);
+        if (nPiercePct != 0)
+        {
+            STATLIST_SetUnitStat(pMissile, STAT_PIERCE_IDX, nPiercePct, 0);
+        }
+        MISSILE_SetCurrentFrame(pMissile, wCurrentFrame);
+        const int32_t nMaxFrames = pMissile->dwFrameCountPrecise >> 8;
+        const int32_t nRandFrame = (nMaxFrames > 0) ? SEED_RollLimitedRandomNumber(&pMissile->pSeed, nMaxFrames) : 0;
+        pMissile->nSeqCurrentFramePrecise = nRandFrame << 8;
+    }
+}
+
+// 1.12a: 0x6FB17660
+static void __fastcall SCMD_Handler99_SkillTriggeredAtUnit(uint8_t* pPacket)
+{
+    const uint8_t  nAttackerType  = pPacket[1];
+    const uint32_t dwAttackerGUID = *reinterpret_cast<const uint32_t*>(&pPacket[2]);
+    const uint16_t wSkillId       = *reinterpret_cast<const uint16_t*>(&pPacket[6]);
+    const uint8_t  nSkillLevel    = pPacket[8];
+    const uint8_t  nTargetType    = pPacket[9];
+    const uint32_t dwTargetGUID   = *reinterpret_cast<const uint32_t*>(&pPacket[10]);
+    const uint16_t wPlaySound     = *reinterpret_cast<const uint16_t*>(&pPacket[14]);
+
+    D2UnitStrc* pAttacker = UNIT_FindClientUnit(static_cast<int32_t>(dwAttackerGUID), nAttackerType);
+    if (pAttacker == nullptr)
+    {
+        return;
+    }
+    D2UnitStrc* pTarget = UNIT_FindClientUnit(static_cast<int32_t>(dwTargetGUID), nTargetType);
+    if (pTarget != nullptr)
+    {
+        CLTSKILL_TriggerProcSkill(pAttacker, pTarget, wSkillId, nSkillLevel, 0, 0, wPlaySound);
+    }
+}
+
+// 1.12a: 0x6FB17600
+static void __fastcall SCMD_Handler9A_SkillTriggeredAtCoord(uint8_t* pPacket)
+{
+    const uint8_t  nAttackerType  = pPacket[1];
+    const uint32_t dwAttackerGUID = *reinterpret_cast<const uint32_t*>(&pPacket[2]);
+    const uint16_t wSkillId       = *reinterpret_cast<const uint16_t*>(&pPacket[6]);
+    const uint8_t  nSkillLevel    = pPacket[10];
+    const uint16_t wTargetX       = *reinterpret_cast<const uint16_t*>(&pPacket[11]);
+    const uint16_t wTargetY       = *reinterpret_cast<const uint16_t*>(&pPacket[13]);
+    const uint16_t wPlaySound     = *reinterpret_cast<const uint16_t*>(&pPacket[15]);
+
+    D2UnitStrc* pAttacker = UNIT_FindClientUnit(static_cast<int32_t>(dwAttackerGUID), nAttackerType);
+    if (pAttacker != nullptr && wTargetX != 0 && wTargetY != 0)
+    {
+        CLTSKILL_TriggerProcSkill(pAttacker, nullptr, wSkillId, nSkillLevel, wTargetX, wTargetY, wPlaySound);
+    }
+}
+
+// 1.12a: 0x6FB17520
+static void __fastcall SCMD_HandlerA3_AuraStatSkill(uint8_t* pPacket)
+{
+    const uint8_t  nArgByte     = pPacket[1];
+    const int16_t  nSkillId     = *reinterpret_cast<const int16_t*>(&pPacket[2]);
+    const int16_t  nSkillLevel  = *reinterpret_cast<const int16_t*>(&pPacket[4]);
+    const uint8_t  nUnitType    = pPacket[6];
+    const uint32_t dwUnitGUID   = *reinterpret_cast<const uint32_t*>(&pPacket[7]);
+    const uint8_t  nTargetType  = pPacket[11];
+    const uint32_t dwTargetGUID = *reinterpret_cast<const uint32_t*>(&pPacket[12]);
+    const int32_t  nOverrideX   = *reinterpret_cast<const int32_t*>(&pPacket[16]);
+    const int32_t  nOverrideY   = *reinterpret_cast<const int32_t*>(&pPacket[20]);
+
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr || !sgptDataTables || nSkillId < 0 || nSkillId >= sgptDataTables->nSkillsTxtRecordCount || !sgptDataTables->pSkillsTxt)
+    {
+        return;
+    }
+    D2UnitStrc* pTarget = UNIT_FindClientUnit(static_cast<int32_t>(dwTargetGUID), nTargetType);
+    const D2SkillsTxt& sk = sgptDataTables->pSkillsTxt[nSkillId];
+    if ((sk.dwFlags[0] & SKILLSFLAG_FINISHING) != 0)
+    {
+        CLTSKILL_ExecuteFinishingMoveCharges(pUnit, pTarget, nSkillId, nSkillLevel, nOverrideX, nOverrideY, nArgByte);
+    }
+    else
+    {
+        CLTSKILL_ExecuteSkillCltPrgFunc0WithTempTarget(pUnit, pTarget, nSkillId, nSkillLevel, nOverrideX, nOverrideY, nArgByte);
     }
 }
 
@@ -2064,7 +2218,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x70 */ { nullptr,                                1,  nullptr },
     /* 0x71 */ { nullptr,                                1,  nullptr },
     /* 0x72 */ { nullptr,                                1,  nullptr },
-    /* 0x73 */ { SCMD_Handler_NoOp,                     32,  nullptr }, // 0x6FB15460: MissileData
+    /* 0x73 */ { SCMD_Handler73_MissileData,            32,  nullptr }, // 0x6FB17150: MissileData
     /* 0x74 */ { SCMD_Handler74_PlayerCorpseAssign,     10,  nullptr }, // 0x6FB152E0: PlayerCorpseAssign
     /* 0x75 */ { SCMD_Handler75_PlayerPartyInfo,        13,  nullptr }, // 0x6FB15FE0: PlayerPartyInfo
     /* 0x76 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB17C70: PlayerInSight
@@ -2102,8 +2256,8 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x96 */ { SCMD_Handler96_WalkVerify,              9,  nullptr }, // 0x6FB15EC0
     /* 0x97 */ { SCMD_Handler97_WeaponSwitch,            1,  nullptr }, // 0x6FB16DB0: WeaponSwitch
     /* 0x98 */ { SCMD_Handler_NoOp,                      7,  nullptr }, // 0x6FB14BB0: EvilUrn
-    /* 0x99 */ { SCMD_Handler4C_UnitSkillOnTarget,      16,  nullptr }, // 0x6FB153F0: SkillTriggeredAtUnit
-    /* 0x9A */ { SCMD_Handler4D_UnitCastSkill,          17,  nullptr }, // 0x6FB15380: SkillTriggeredAtCoord
+    /* 0x99 */ { SCMD_Handler99_SkillTriggeredAtUnit,   16,  nullptr }, // 0x6FB17660: SkillTriggeredAtUnit
+    /* 0x9A */ { SCMD_Handler9A_SkillTriggeredAtCoord,  17,  nullptr }, // 0x6FB17600: SkillTriggeredAtCoord
     /* 0x9B */ { SCMD_Handler9B_MercReviveCost,          7,  nullptr }, // 0x6FB14FC0: MercReviveCost
     /* 0x9C */ { SCMD_Handler9C_ItemActionWorld,        -1,  nullptr }, // 0x6FB165F0
     /* 0x9D */ { SCMD_Handler9D_ItemActionOwned,        -1,  nullptr }, // 0x6FB16DE0
@@ -2112,7 +2266,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0xA0 */ { SCMD_Handler9E_A2_MercAttr,            10,  nullptr }, // 0x6FB17330: MercAttrDword
     /* 0xA1 */ { SCMD_Handler9E_A2_MercAttr,             7,  nullptr }, // 0x6FB17330: MercAddExpByte
     /* 0xA2 */ { SCMD_Handler9E_A2_MercAttr,             8,  nullptr }, // 0x6FB17330: MercAddExpWord
-    /* 0xA3 */ { SCMD_Handler_NoOp,                     24,  nullptr }, // 0x6FB15590: AuraStatSkill
+    /* 0xA3 */ { SCMD_HandlerA3_AuraStatSkill,          24,  nullptr }, // 0x6FB17520: AuraStatSkill
     /* 0xA4 */ { SCMD_Handler_NoOp,                      3,  nullptr }, // 0x6FB14E90: BaalWaveClassId
     /* 0xA5 */ { SCMD_Handler_NoOp,                      8,  nullptr }, // 0x6FB17500: StateSkillEffect
     /* 0xA6 */ { nullptr,                               -1,  nullptr }, // 0xA6: UnusedVar

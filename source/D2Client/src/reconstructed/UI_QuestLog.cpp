@@ -25,6 +25,97 @@
 #include <Drlg/D2DrlgDrlg.h>
 #include <D2Unicode.h>
 
+
+struct D2UnitStrc;
+struct D2InventoryStrc;
+
+#ifndef D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#define D2_RECON_UNIT_TYPED_VIEW_DEFINED
+#pragma pack(push, 1)
+struct D2ReconItemDataViewStrc
+{
+    uint8_t pad00[0x45];
+    uint8_t nInvPage; // +0x45
+};
+struct D2ReconObjectDataViewStrc
+{
+    void*   pObjectTxt; // +0x00
+    uint8_t nShrineNo;  // +0x04
+};
+struct D2ReconUnitViewStrc
+{
+    uint32_t dwUnitType;                // +0x00
+    int32_t  dwClassId;                 // +0x04
+    void*    pMemoryPool;               // +0x08
+    uint32_t dwUnitId;                  // +0x0C
+    int32_t  dwAnimMode;                // +0x10
+    void*    pUnitData;                 // +0x14
+    int32_t  nAct;                      // +0x18
+    void*    pDrlgAct;                  // +0x1C
+    uint32_t dwSeed[2];                 // +0x20
+    uint32_t dwInitSeed;                // +0x28
+    void*    pDynamicPath;              // +0x2C
+    void*    pAnimSeq;                  // +0x30
+    uint32_t dwSeqFrameCount;           // +0x34
+    int32_t  dwSeqFrame;                // +0x38
+    uint32_t dwSeqSpeed;                // +0x3C
+    uint32_t dwSeqMode;                 // +0x40
+    int32_t  nSeqCurrentFramePrecise;   // +0x44
+    int32_t  dwFrameCountPrecise;       // +0x48
+    int16_t  wAnimSpeed;                // +0x4C
+    uint8_t  nActionFrame;              // +0x4E
+    uint8_t  unk0x4F;                   // +0x4F
+    void*    pAnimData;                 // +0x50
+    void*    pGfxData;                  // +0x54
+    void*    pGfxDataCopy;              // +0x58
+    void*    pStatListEx;               // +0x5C
+    D2InventoryStrc* pInventory;        // +0x60
+    void*    pLight;                    // +0x64
+    uint32_t dwStartLight;              // +0x68
+    int32_t  nPaletteIndex;             // +0x6C
+    void*    pUnitSfxSlot;              // +0x70
+    uint8_t  pad74[0x8C - 0x74];        // +0x74..+0x8B
+    uint16_t nLastClickX;               // +0x8C
+    uint16_t nLastClickY;               // +0x8E
+    uint8_t  pad90[0xA8 - 0x90];        // +0x90..+0xA7
+    void*    pSkills;                   // +0xA8
+    uint8_t  padAC[0xC4 - 0xAC];        // +0xAC..+0xC3
+    uint32_t dwFlags;                   // +0xC4
+    uint32_t dwFlagEx;                  // +0xC8
+    uint8_t  padCC[0xE4 - 0xCC];        // +0xCC..+0xE3
+    D2UnitStrc* pListNext;              // +0xE4
+    D2UnitStrc* pRoomNext;              // +0xE8
+    void*    pMsgFirst;                 // +0xEC
+    void*    pMsgLast;                  // +0xF0
+};
+static_assert(sizeof(D2ReconUnitViewStrc) == 0xF4, "D2ReconUnitViewStrc must be 0xF4 bytes");
+struct D2ReconWinMsgViewStrc
+{
+    HWND     hWnd;         // +0x00
+    uint32_t uMsg;         // +0x04
+    union
+    {
+        int32_t wParam;    // +0x08
+        struct
+        {
+            uint16_t wParamLow;  // +0x08
+            int16_t  wWheelDelta;// +0x0A
+        };
+    };
+    uint16_t nX;           // +0x0C
+    uint16_t nY;           // +0x0E
+    uint32_t dwKeyFlags;   // +0x10
+    int32_t  nField14;     // +0x14
+    int32_t  bHandled;     // +0x18
+    int32_t  nReturnValue; // +0x1C
+};
+#pragma pack(pop)
+static inline D2ReconUnitViewStrc* D2UnitView(D2UnitStrc* p) { return reinterpret_cast<D2ReconUnitViewStrc*>(p); }
+static inline const D2ReconUnitViewStrc* D2UnitView(const D2UnitStrc* p) { return reinterpret_cast<const D2ReconUnitViewStrc*>(p); }
+static inline D2ReconWinMsgViewStrc* D2MsgView(void* p) { return reinterpret_cast<D2ReconWinMsgViewStrc*>(p); }
+#endif
+
+
 // =============================================================================
 // External Imports (D2Common, D2Gfx, D2Win, D2Lang, D2CMP, Fog, Storm)
 // =============================================================================
@@ -1147,20 +1238,20 @@ void __stdcall QUESTLOG_SelectPlayerCurrentActTab(void)
 // 1.12a: 0x6FB713E0 (__stdcall)
 void __stdcall QUESTLOG_OnAlertButtonMouseDown(void* pMsg)
 {
-    uint16_t wX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    uint16_t wY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    uint16_t wX = D2MsgView(pMsg)->nX;
+    uint16_t wY = D2MsgView(pMsg)->nY;
     if (QUESTLOG_HitTestQuestAlertButton(wX, wY))
     {
         g_bAlertBtnPressed = 1;
         SOUND_PlaySoundEffect(0, 0, 0, 0); // ebx = 4 (SOUND_BUTTON)
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
     }
     else
     {
         g_bAlertBtnPressed = 0;
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 0;
+        D2MsgView(pMsg)->bHandled = 0;
     }
 }
 
@@ -1215,8 +1306,8 @@ void __stdcall QUESTLOG_OnPanelMouseDown(void* pMsg)
         return;
     }
 
-    int32_t nX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int32_t nY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nX = D2MsgView(pMsg)->nX;
+    int32_t nY = D2MsgView(pMsg)->nY;
     if (nX > g_nScreenWidth / 2)
     {
         return;
@@ -1258,8 +1349,8 @@ void __stdcall QUESTLOG_OnPanelMouseDown(void* pMsg)
                         SOUND_PlaySoundEffect(0, 0, 0, 0);
                     }
                 }
-                *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-                *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+                D2MsgView(pMsg)->bHandled = 1;
+                D2MsgView(pMsg)->nReturnValue = 0;
                 SMsgBreakHandlerChain(pMsg);
                 return;
             }
@@ -1276,8 +1367,8 @@ void __stdcall QUESTLOG_OnPanelMouseDown(void* pMsg)
         }
     }
 
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
+    D2MsgView(pMsg)->bHandled = 1;
     SMsgBreakHandlerChain(pMsg);
 }
 
@@ -1553,8 +1644,8 @@ void __stdcall QUESTLOG_TogglePanel(int32_t bCenterCursor)
 // 1.12a: 0x6FB72410 (__stdcall)
 void __stdcall QUESTLOG_OnAlertButtonMouseUp(void* pMsg)
 {
-    *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-    *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+    D2MsgView(pMsg)->bHandled = 1;
+    D2MsgView(pMsg)->nReturnValue = 0;
     SMsgBreakHandlerChain(pMsg);
     QUESTLOG_ClosePanel(1);
     UI_SetPanelState(15, 1, 0);
@@ -1564,8 +1655,8 @@ void __stdcall QUESTLOG_OnAlertButtonMouseUp(void* pMsg)
 // 1.12a: 0x6FB72440 (__stdcall)
 void __stdcall QUESTLOG_OnPanelMouseUp(void* pMsg)
 {
-    int32_t nX = *(uint16_t*)((uint8_t*)pMsg + 0x0C);
-    int32_t nY = *(uint16_t*)((uint8_t*)pMsg + 0x0E);
+    int32_t nX = D2MsgView(pMsg)->nX;
+    int32_t nY = D2MsgView(pMsg)->nY;
     int32_t nRelX = nX - g_nLeftPanelOffsetX;
     int32_t nRelY = nY + g_nLeftPanelOffsetY;
 
@@ -1601,8 +1692,8 @@ void __stdcall QUESTLOG_OnPanelMouseUp(void* pMsg)
     int32_t nMaxY = (D2GFX_GetResolutionMode() == 2) ? (g_nScreenHeight - 0x2F) : (g_nScreenHeight - 0x31);
     if (nX <= g_nScreenWidth / 2 && nY <= nMaxY)
     {
-        *(int32_t*)((uint8_t*)pMsg + 0x18) = 1;
-        *(int32_t*)((uint8_t*)pMsg + 0x1C) = 0;
+        D2MsgView(pMsg)->bHandled = 1;
+        D2MsgView(pMsg)->nReturnValue = 0;
         SMsgBreakHandlerChain(pMsg);
     }
 }
