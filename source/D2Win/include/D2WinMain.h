@@ -130,4 +130,4 @@ D2WIN_DLL_DECL signed int __stdcall D2Win_10033(D2WinControlStrc* a1, int a2);
 //D2Win.0x6F8AE530 (#10035)
 D2WIN_DLL_DECL int __stdcall CONTROL_GetType(D2WinControlStrc* pControl);
 //D2Win.0x6F8AE540
-D2WinControlStrc* __stdcall sub_6F8AE540();
+D2WinControlStrc* __stdcall MAINWINDOW_GetCapturedControl();

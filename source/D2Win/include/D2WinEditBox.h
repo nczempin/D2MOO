@@ -53,9 +53,9 @@ int __fastcall D2Win_10082(D2WinEditBoxStrc* pEditBox);
 //D2Win.0x6F8A6F70
 int32_t __fastcall D2Win_10074(D2WinEditBoxStrc* pEditBox, uint8_t a2);
 //D2Win.0x6F8A7970
-void __fastcall sub_6F8A7970(D2WinEditBoxStrc* pEditBox);
+void __fastcall EDITBOX_DeleteSelection(D2WinEditBoxStrc* pEditBox);
 //D2Win.0x6F8A7AB0
-int __fastcall sub_6F8A7AB0(D2WinEditBoxStrc* pEditBox, char a2);
+int __fastcall EDITBOX_HandleKeyDown(D2WinEditBoxStrc* pEditBox, char a2);
 //D2Win.0x6F8A80A0
 void __fastcall D2Win_10081(D2WinEditBoxStrc* pEditBox, int32_t a2);
 //D2Win.0x6F8A80F0
@@ -67,22 +67,22 @@ const Unicode* __fastcall D2Win_10077_EDITBOX_GetText(D2WinEditBoxStrc* pEditBox
 //D2Win.0x6F8A8230
 void __fastcall D2Win_10080_EDITBOX_SetNextEditBox(D2WinEditBoxStrc* pEditBox, D2WinEditBoxStrc* pNext);
 //D2Win.0x6F8A82D0
-int32_t __fastcall sub_6F8A82D0(D2WinControlStrc* pControl);
+int32_t __fastcall EDITBOX_DrawSingleLine(D2WinControlStrc* pControl);
 //D2Win.0x6F8A86C0
-int32_t __fastcall sub_6F8A86C0(D2WinControlStrc* pControl);
+int32_t __fastcall EDITBOX_DrawMultiLine(D2WinControlStrc* pControl);
 //D2Win.0x6F8A8D60
-void __fastcall sub_6F8A8D60(D2WinEditBoxStrc* pEditBox, int32_t* a2, int32_t* a3);
+void __fastcall EDITBOX_CalcMultiLineCaretCoords(D2WinEditBoxStrc* pEditBox, int32_t* a2, int32_t* a3);
 //D2Win.0x6F8A9120
-int __stdcall sub_6F8A9120(SMSGHANDLER_PARAMS* pMsg);
+int __stdcall EDITBOX_HandleMouseDownSingleLine(SMSGHANDLER_PARAMS* pMsg);
 //D2Win.0x6F8A93A0
 int __stdcall EDITBOX_HandleMouseUp(SMSGHANDLER_PARAMS* pMsg);
 //D2Win.0x6F8A9410
-int32_t __fastcall sub_6F8A9410(SMSGHANDLER_PARAMS* pMsg, int32_t nX, int32_t nY);
+int32_t __fastcall EDITBOX_HitTestMultiLineCaret(SMSGHANDLER_PARAMS* pMsg, int32_t nX, int32_t nY);
 //D2Win.0x6F8A97D0
-int __stdcall sub_6F8A97D0(SMSGHANDLER_PARAMS* pMsg);
+int __stdcall EDITBOX_HandleMouseDownMultiLine(SMSGHANDLER_PARAMS* pMsg);
 //D2Win.0x6F8A9850
 bool __stdcall D2Win_10078_IsNumber(int32_t nUnused1, int32_t nUnused2, char* szChar);
 //D2Win.0x6F8A9870
 bool __stdcall D2Win_10079_IsLetter(int nUnused1, int nUnused2, char* szChar);
 //D2Win.0x6F8A98A0
-void __fastcall sub_6F8A98A0(D2WinEditBoxStrc* pEditBox);
+void __fastcall EDITBOX_UpdateScrollOffset(D2WinEditBoxStrc* pEditBox);

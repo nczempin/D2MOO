@@ -232,10 +232,10 @@ const D2CompItemTableEntryStrc stru_6F8BC1D8[255] =
 };
 
 
-D2CofDataStrc* __fastcall sub_6F8A1250(D2GfxInfoStrc* pGfxInfo, unsigned int nClass, unsigned int nMode, int* a4, int* a5, int a6);
+D2CofDataStrc* __fastcall COMP_LoadCofData(D2GfxInfoStrc* pGfxInfo, unsigned int nClass, unsigned int nMode, int* a4, int* a5, int a6);
 
 //D2Win.0x6F8A1000
-void __fastcall sub_6F8A1000(D2CompositeUnitStrc* pCompositeUnit, D2GfxDataStrc* pGfxData)
+void __fastcall COMP_SetupComponentGfxData(D2CompositeUnitStrc* pCompositeUnit, D2GfxDataStrc* pGfxData)
 {
 	pGfxData->nUnitIndex = pCompositeUnit->nUnitIndex;
 	pGfxData->nMode = pCompositeUnit->nMode;
@@ -258,7 +258,7 @@ void __fastcall sub_6F8A1000(D2CompositeUnitStrc* pCompositeUnit, D2GfxDataStrc*
 
 	int v19 = 0;
 	int v20 = 0;
-	D2CofDataStrc* pCofData = sub_6F8A1250(pGfxInfo, pCompositeUnit->nUnitIndex, pCompositeUnit->nMode, &v20, &v19, dword_6F8BC154[pCompositeUnit->nWClassTokenIndex]);
+	D2CofDataStrc* pCofData = COMP_LoadCofData(pGfxInfo, pCompositeUnit->nUnitIndex, pCompositeUnit->nMode, &v20, &v19, dword_6F8BC154[pCompositeUnit->nWClassTokenIndex]);
 	D2_ASSERT(pCofData);
 
 	const uint8_t* pLayer = reinterpret_cast<const uint8_t*>(&pCofData[1]);
@@ -313,7 +313,7 @@ void __fastcall sub_6F8A1000(D2CompositeUnitStrc* pCompositeUnit, D2GfxDataStrc*
 }
 
 //D2Win.0x6F8A1250
-D2CofDataStrc* __fastcall sub_6F8A1250(D2GfxInfoStrc* pGfxInfo, unsigned int nClass, unsigned int nMode, int* a4, int* a5, int a6)
+D2CofDataStrc* __fastcall COMP_LoadCofData(D2GfxInfoStrc* pGfxInfo, unsigned int nClass, unsigned int nMode, int* a4, int* a5, int a6)
 {
 	(void)a4;
 	(void)a5;
@@ -419,7 +419,7 @@ D2CofDataStrc* __fastcall sub_6F8A1250(D2GfxInfoStrc* pGfxInfo, unsigned int nCl
 }
 
 //D2Win.0x6F8A15E0
-void __fastcall sub_6F8A15E0(D2CompositeUnitStrc* pCompositeUnit)
+void __fastcall COMP_DrawShadowAndSelectionBg(D2CompositeUnitStrc* pCompositeUnit)
 {
 	D2_ASSERT(pCompositeUnit);
 
@@ -476,7 +476,7 @@ void __fastcall sub_6F8A15E0(D2CompositeUnitStrc* pCompositeUnit)
 		gfxData.nComponent = static_cast<uint8_t>(nComponent);
 		gfxData.nDirection = nDir;
 		gfxData.nFrame = nFrame;
-		sub_6F8A1000(pCompositeUnit, &gfxData);
+		COMP_SetupComponentGfxData(pCompositeUnit, &gfxData);
 		gfxData.fFlags |= 2u;
 		if (D2CMP_SpriteValidate(&gfxData, 0, TRUE) && gfxData.pCurrentCell)
 		{
@@ -501,7 +501,7 @@ void __fastcall sub_6F8A15E0(D2CompositeUnitStrc* pCompositeUnit)
 			gfxData.nDirection = pCompositeUnit->unk0x04;
 			gfxData.pCellFile = nullptr;
 			gfxData.nFrame = nFrame;
-			sub_6F8A1000(pCompositeUnit, &gfxData);
+			COMP_SetupComponentGfxData(pCompositeUnit, &gfxData);
 			gfxData.fFlags |= 2u;
 			TEXTURE_CelDrawShadow(&gfxData, nXpos, nYpos);
 		}
@@ -509,7 +509,7 @@ void __fastcall sub_6F8A15E0(D2CompositeUnitStrc* pCompositeUnit)
 }
 
 //D2Win.0x6F8A1890
-BOOL __fastcall sub_6F8A1890(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma)
+BOOL __fastcall COMP_DrawCharacterLayers(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma)
 {
 	D2_ASSERT(pCompositeUnit);
 
@@ -596,7 +596,7 @@ BOOL __fastcall sub_6F8A1890(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma)
 		gfxData.pCellFile = nullptr;
 		gfxData.nFrame = nFrame;
 		gfxData.nComponent = nComponent;
-		sub_6F8A1000(pCompositeUnit, &gfxData);
+		COMP_SetupComponentGfxData(pCompositeUnit, &gfxData);
 		gfxData.fFlags |= 2u;
 
 		uint8_t* pPalette = nullptr;
@@ -659,7 +659,7 @@ BOOL __fastcall sub_6F8A1890(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma)
 }
 
 //D2Win.0x6F8A1D10
-BOOL __fastcall sub_6F8A1D10(D2CompositeUnitStrc* pCompositeUnit)
+BOOL __fastcall COMP_DrawCharacterLabel(D2CompositeUnitStrc* pCompositeUnit)
 {
 	D2_ASSERT(pCompositeUnit);
 
@@ -755,7 +755,7 @@ BOOL __fastcall sub_6F8A1D10(D2CompositeUnitStrc* pCompositeUnit)
 }
 
 //D2Win.0x6F8A2040
-void __stdcall sub_6F8A2040(const Unicode* a1, int a2, int a3, void(__fastcall* a4)(const Unicode*))
+void __stdcall COMP_ForEachUnicodeEntry(const Unicode* a1, int a2, int a3, void(__fastcall* a4)(const Unicode*))
 {
 	const Unicode* v4 = a1;
 	for (int i = 0; i < a3; ++i)
@@ -766,7 +766,7 @@ void __stdcall sub_6F8A2040(const Unicode* a1, int a2, int a3, void(__fastcall* 
 }
 
 //D2Win.0x6F8A2070
-BOOL __fastcall sub_6F8A2070(D2CompositeUnitStrc* pCompositeUnit)
+BOOL __fastcall COMP_DrawDebugBounds(D2CompositeUnitStrc* pCompositeUnit)
 {
 	D2_ASSERT(pCompositeUnit);
 
@@ -1085,7 +1085,7 @@ BOOL __fastcall D2Win_10143(D2CompositeUnitStrc* pCompositeUnit, int nMode)
 }
 
 //D2Win.0x6F8A2CE0
-void* __stdcall sub_6F8A2CE0(HD2ARCHIVE hArchive, const char* szName, D2BinFieldStrc* pBinField, int* pRecordCount, int nRecordSize)
+void* __stdcall COMP_CompileOrLoadBinTable(HD2ARCHIVE hArchive, const char* szName, D2BinFieldStrc* pBinField, int* pRecordCount, int nRecordSize)
 {
 	char szFilename[260] = {};
 
@@ -1134,7 +1134,7 @@ void* __stdcall sub_6F8A2CE0(HD2ARCHIVE hArchive, const char* szName, D2BinField
 }
 
 //D2Win.0x6F8A2E70
-int __fastcall sub_6F8A2E70(HD2ARCHIVE hArchive)
+int __fastcall COMP_LoadItemTables(HD2ARCHIVE hArchive)
 {
 	D2BinFieldStrc pItemFields[] =
 	{
@@ -1152,9 +1152,9 @@ int __fastcall sub_6F8A2E70(HD2ARCHIVE hArchive)
 		{ "end", TXTFIELD_NONE, 0, 0, nullptr },
 	};
 
-	uint8_t* pWeapons = static_cast<uint8_t*>(sub_6F8A2CE0(hArchive, "weapons", pItemFields, &dword_6F8C1504, 424));
-	uint8_t* pArmor = static_cast<uint8_t*>(sub_6F8A2CE0(hArchive, "armor", pItemFields, &dword_6F8C150C, 424));
-	uint8_t* pMisc = static_cast<uint8_t*>(sub_6F8A2CE0(hArchive, "misc", pItemFields, &dword_6F8C1514, 424));
+	uint8_t* pWeapons = static_cast<uint8_t*>(COMP_CompileOrLoadBinTable(hArchive, "weapons", pItemFields, &dword_6F8C1504, 424));
+	uint8_t* pArmor = static_cast<uint8_t*>(COMP_CompileOrLoadBinTable(hArchive, "armor", pItemFields, &dword_6F8C150C, 424));
+	uint8_t* pMisc = static_cast<uint8_t*>(COMP_CompileOrLoadBinTable(hArchive, "misc", pItemFields, &dword_6F8C1514, 424));
 
 	dword_6F8C14F8 = dword_6F8C1504 + dword_6F8C150C + dword_6F8C1514;
 	uint8_t* pCombined = static_cast<uint8_t*>(FOG_AllocPool(nullptr, 424 * dword_6F8C14F8, __FILE__, __LINE__, 0));
@@ -1194,7 +1194,7 @@ int __fastcall sub_6F8A2E70(HD2ARCHIVE hArchive)
 }
 
 //D2Win.0x6F8A32B0
-BOOL __stdcall sub_6F8A32B0(int a1, int nItemType)
+BOOL __stdcall COMP_CheckItemTypeEquivalence(int a1, int nItemType)
 {
 	if (!nItemType)
 	{
@@ -1247,7 +1247,7 @@ void __stdcall D2Win_10159(D2CellFileStrc* pSquelchCelFile, D2CellFileStrc* pSel
 }
 
 //D2Win.0x6F8A3570
-int __fastcall sub_6F8A3570(D2CompositeUnitStrc* pCompositeUnit)
+int __fastcall COMP_UpdateAnimationCof(D2CompositeUnitStrc* pCompositeUnit)
 {
 	D2_ASSERT(pCompositeUnit);
 
@@ -1264,7 +1264,7 @@ int __fastcall sub_6F8A3570(D2CompositeUnitStrc* pCompositeUnit)
 
 	int v4 = 0;
 
-	if (sub_6F8A1250(pGfxInfo, pCompositeUnit->nUnitIndex, pCompositeUnit->nMode, &v4, &v4, dword_6F8BC154[pCompositeUnit->nWClassTokenIndex]))
+	if (COMP_LoadCofData(pGfxInfo, pCompositeUnit->nUnitIndex, pCompositeUnit->nMode, &v4, &v4, dword_6F8BC154[pCompositeUnit->nWClassTokenIndex]))
 	{
 		return 1;
 	}
@@ -1273,14 +1273,14 @@ int __fastcall sub_6F8A3570(D2CompositeUnitStrc* pCompositeUnit)
 	pCompositeUnit->nUnitIndex = 7;
 	pCompositeUnit->nWClassTokenIndex = 1;
 
-	D2CofDataStrc* pCurrCofData = sub_6F8A1250(pGfxInfo, 7u, 5u, &v4, &v4, dword_6F8BC154[1]);
+	D2CofDataStrc* pCurrCofData = COMP_LoadCofData(pGfxInfo, 7u, 5u, &v4, &v4, dword_6F8BC154[1]);
 
 	D2_ASSERT(pCurrCofData);
 	return 1;
 }
 
 //D2Win.0x6F8A3680
-int __cdecl sub_6F8A3680()
+int __cdecl COMP_EnsureItemTypesLoaded()
 {
 	if (dword_6F8FD674)
 	{
@@ -1319,7 +1319,7 @@ int __cdecl sub_6F8A3680()
 	};
 
 	dword_6F8FD240 = FOG_AllocLinker(__FILE__, __LINE__);
-	gpItemTypesTxt_6F8FD244 = static_cast<D2ItemTypesTxt*>(sub_6F8A2CE0(D2Win_GetArchive(), "itemtypes", pItemTypesFields, &unk_6F8FD248, sizeof(D2ItemTypesTxt)));
+	gpItemTypesTxt_6F8FD244 = static_cast<D2ItemTypesTxt*>(COMP_CompileOrLoadBinTable(D2Win_GetArchive(), "itemtypes", pItemTypesFields, &unk_6F8FD248, sizeof(D2ItemTypesTxt)));
 
 	D2BinFieldStrc pHitClassFields[] =
 	{
@@ -1328,8 +1328,8 @@ int __cdecl sub_6F8A3680()
 	};
 
 	dword_6F8FD238 = FOG_AllocLinker(__FILE__, __LINE__);
-	dword_6F8FD234 = sub_6F8A2CE0(D2Win_GetArchive(), "hitclass", pHitClassFields, nullptr, 4);
-	sub_6F8A2E70(D2Win_GetArchive());
+	dword_6F8FD234 = COMP_CompileOrLoadBinTable(D2Win_GetArchive(), "hitclass", pHitClassFields, nullptr, 4);
+	COMP_LoadItemTables(D2Win_GetArchive());
 
 	stru_6F8C1520[1].dwItemCode = ' til';
 	stru_6F8C1520[1].nWClass = dword_6F8BCF98[0];
@@ -1352,11 +1352,11 @@ int __cdecl sub_6F8A3680()
 			: *reinterpret_cast<const uint32_t*>(pRow + 128);
 		const uint16_t wItemType = *reinterpret_cast<const uint16_t*>(pRow + 286);
 
-		bool bValid = (sub_6F8A32B0(wItemType, 45)
-			|| sub_6F8A32B0(wItemType, 3)
-			|| sub_6F8A32B0(wItemType, 51)
-			|| sub_6F8A32B0(wItemType, 37))
-			&& !sub_6F8A32B0(wItemType, 75);
+		bool bValid = (COMP_CheckItemTypeEquivalence(wItemType, 45)
+			|| COMP_CheckItemTypeEquivalence(wItemType, 3)
+			|| COMP_CheckItemTypeEquivalence(wItemType, 51)
+			|| COMP_CheckItemTypeEquivalence(wItemType, 37))
+			&& !COMP_CheckItemTypeEquivalence(wItemType, 75);
 
 		bool bAlreadyPresent = false;
 		for (int j = 0; j < nNextIdx; ++j)
@@ -1372,8 +1372,8 @@ int __cdecl sub_6F8A3680()
 		{
 			int nSlot = nNextIdx;
 			while (nSlot < 255 && (
-				(sub_6F8A32B0(stru_6F8BC1D8[nSlot].nItemType, 45) && sub_6F8A32B0(wItemType, 45))
-				|| (sub_6F8A32B0(stru_6F8BC1D8[nSlot].nItemType, 50) && sub_6F8A32B0(wItemType, 50))
+				(COMP_CheckItemTypeEquivalence(stru_6F8BC1D8[nSlot].nItemType, 45) && COMP_CheckItemTypeEquivalence(wItemType, 45))
+				|| (COMP_CheckItemTypeEquivalence(stru_6F8BC1D8[nSlot].nItemType, 50) && COMP_CheckItemTypeEquivalence(wItemType, 50))
 				|| stru_6F8C1520[nSlot].dwItemCode != 0))
 			{
 				++nSlot;
@@ -1422,7 +1422,7 @@ int __cdecl sub_6F8A3680()
 }
 
 //D2Win.0x6F8A3DC0
-int __fastcall sub_6F8A3DC0(BYTE* a1, int a2)
+int __fastcall COMP_ResolveWeaponClassToken(BYTE* a1, int a2)
 {
 	const uint8_t bRight = a1[5];
 	const uint8_t bLeft = a1[6];
@@ -1444,7 +1444,7 @@ int __fastcall sub_6F8A3DC0(BYTE* a1, int a2)
 			}
 		}
 
-		if (((v4 == 13 || v4 == 14) && a2 != 6) || sub_6F8A32B0(stru_6F8C1520[bRight].nItemType, 50))
+		if (((v4 == 13 || v4 == 14) && a2 != 6) || COMP_CheckItemTypeEquivalence(stru_6F8C1520[bRight].nItemType, 50))
 		{
 			v4 = stru_6F8BC1D8[bRight].nWClass;
 		}
@@ -1454,7 +1454,7 @@ int __fastcall sub_6F8A3DC0(BYTE* a1, int a2)
 	if (bLeft != 0xFF)
 	{
 		v7 = bDual ? dword_6F8FD250[bLeft] : stru_6F8C1520[bLeft].nWClass;
-		if (((v7 == 13 || v7 == 14) && a2 != 6) || sub_6F8A32B0(stru_6F8C1520[bLeft].nItemType, 50))
+		if (((v7 == 13 || v7 == 14) && a2 != 6) || COMP_CheckItemTypeEquivalence(stru_6F8C1520[bLeft].nItemType, 50))
 		{
 			v7 = stru_6F8BC1D8[bLeft].nWClass;
 		}
@@ -1548,11 +1548,11 @@ int __fastcall sub_6F8A3DC0(BYTE* a1, int a2)
 }
 
 //D2Win.0x6F8A4020
-void __fastcall sub_6F8A4020(int a1, BYTE* a2)
+void __fastcall COMP_RemapPreviewAppearance(int a1, BYTE* a2)
 {
 	auto RemapByType = [&](int nTargetType, bool bModulo3)
 	{
-		if (sub_6F8A32B0(stru_6F8BC1D8[*a2].nItemType, nTargetType))
+		if (COMP_CheckItemTypeEquivalence(stru_6F8BC1D8[*a2].nItemType, nTargetType))
 		{
 			for (int i = 0; i < dword_6F8FD230; ++i)
 			{
@@ -1578,7 +1578,7 @@ void __fastcall sub_6F8A4020(int a1, BYTE* a2)
 		RemapByType(51, true);
 	}
 
-	if (a1 == 0 && !sub_6F8A32B0(stru_6F8C1520[*a2].nItemType, 37))
+	if (a1 == 0 && !COMP_CheckItemTypeEquivalence(stru_6F8C1520[*a2].nItemType, 37))
 	{
 		RemapByType(37, false);
 	}
@@ -1594,12 +1594,12 @@ D2CompositeUnitStrc* __stdcall D2Win_10144(unsigned int nUnitIndex, int nMode, B
 	D2_ASSERT(pGfxInfo);
 
 	pCompositeUnit->pGfxInfo = pGfxInfo;
-	sub_6F8A3680();
+	COMP_EnsureItemTypesLoaded();
 
 	pCompositeUnit->nUnitIndex = nUnitIndex;
 	if (nUnitIndex < 7)
 	{
-		const int nWClass = sub_6F8A3DC0(pComponents, nUnitIndex);
+		const int nWClass = COMP_ResolveWeaponClassToken(pComponents, nUnitIndex);
 		pCompositeUnit->nWClassTokenIndex = nWClass;
 		if (!nWClass)
 		{
@@ -1620,7 +1620,7 @@ D2CompositeUnitStrc* __stdcall D2Win_10144(unsigned int nUnitIndex, int nMode, B
 		const BYTE nComp = pComponents[i];
 		if (nComp && nComp < dword_6F8FD230 && nComp != 0xFF)
 		{
-			sub_6F8A4020(i, &pComponents[i]);
+			COMP_RemapPreviewAppearance(i, &pComponents[i]);
 			pCompositeUnit->dwArmorType[i] = stru_6F8C1520[pComponents[i]].dwItemCode;
 			pCompositeUnit->nItemType[i] = stru_6F8C1520[pComponents[i]].nItemType;
 		}
@@ -1636,7 +1636,7 @@ D2CompositeUnitStrc* __stdcall D2Win_10144(unsigned int nUnitIndex, int nMode, B
 		pCompositeUnit->unk0x28[i] = (nColor != 0xFF) ? (nColor - 1) : 0xFF;
 	}
 
-	if (!sub_6F8A3570(pCompositeUnit) || D2Win_10143(pCompositeUnit, nMode))
+	if (!COMP_UpdateAnimationCof(pCompositeUnit) || D2Win_10143(pCompositeUnit, nMode))
 	{
 		pCompositeUnit->unk0xC8 = nullptr;
 		pCompositeUnit->pNext = dword_6F8FD650;
@@ -1663,7 +1663,7 @@ void __stdcall D2Win_10145(D2CompositeUnitStrc* pCompositeUnit, unsigned int nUn
 	pCompositeUnit->nUnitIndex = nUnitIndex;
 	if (nUnitIndex < 7)
 	{
-		const int nWClass = sub_6F8A3DC0(a4, nUnitIndex);
+		const int nWClass = COMP_ResolveWeaponClassToken(a4, nUnitIndex);
 		pCompositeUnit->nWClassTokenIndex = nWClass;
 		if (!nWClass)
 		{
@@ -1683,7 +1683,7 @@ void __stdcall D2Win_10145(D2CompositeUnitStrc* pCompositeUnit, unsigned int nUn
 		pCompositeUnit->nItemType[i] = 1;
 		if (a4[i] && a4[i] < 255u)
 		{
-			sub_6F8A4020(i, &a4[i]);
+			COMP_RemapPreviewAppearance(i, &a4[i]);
 			pCompositeUnit->dwArmorType[i] = stru_6F8C1520[a4[i]].dwItemCode;
 			pCompositeUnit->nItemType[i] = stru_6F8C1520[a4[i]].nItemType;
 		}
@@ -1699,7 +1699,7 @@ void __stdcall D2Win_10145(D2CompositeUnitStrc* pCompositeUnit, unsigned int nUn
 		pCompositeUnit->unk0x28[i] = (nColor != 0xFF) ? (nColor - 1) : 0xFF;
 	}
 
-	if (sub_6F8A3570(pCompositeUnit))
+	if (COMP_UpdateAnimationCof(pCompositeUnit))
 	{
 		D2Win_10143(pCompositeUnit, nMode);
 	}
@@ -1833,7 +1833,7 @@ void __stdcall D2Win_10158(D2CompositeUnitStrc* pCompositeUnit, uint8_t a2, uint
 }
 
 //D2Win.0x6F8A4B10
-int __fastcall sub_6F8A4B10(const char* szName, int nIndex)
+int __fastcall COMP_LoadColorShiftPalette(const char* szName, int nIndex)
 {
 	char szPath[256] = {};
 	wsprintfA(szPath, "Data\\Global\\Items\\Palette\\%s.dat", szName);
@@ -1854,18 +1854,18 @@ int __fastcall sub_6F8A4B10(const char* szName, int nIndex)
 //D2Win.0x6F8A46E0 (#10157)
 void __stdcall D2Win_10157()
 {
-	sub_6F8A4B10("grey", 1);
-	sub_6F8A4B10("grey2", 2);
-	sub_6F8A4B10("gold", 3);
-	sub_6F8A4B10("brown", 4);
-	sub_6F8A4B10("greybrown", 5);
-	sub_6F8A4B10("invgrey", 6);
-	sub_6F8A4B10("invgrey2", 7);
-	sub_6F8A4B10("invgreybrown", 8);
+	COMP_LoadColorShiftPalette("grey", 1);
+	COMP_LoadColorShiftPalette("grey2", 2);
+	COMP_LoadColorShiftPalette("gold", 3);
+	COMP_LoadColorShiftPalette("brown", 4);
+	COMP_LoadColorShiftPalette("greybrown", 5);
+	COMP_LoadColorShiftPalette("invgrey", 6);
+	COMP_LoadColorShiftPalette("invgrey2", 7);
+	COMP_LoadColorShiftPalette("invgreybrown", 8);
 }
 
 //D2Win.0x6F8A4C10
-void __stdcall sub_6F8A4C10()
+void __stdcall COMP_RebuildPreviewColorMaps()
 {
 	constexpr uint8_t byte_6F8BC194[] =
 	{

@@ -82,7 +82,7 @@ struct D2CompositeUnitStrc
 static_assert(sizeof(D2CompositeUnitStrc) == 0x234, "D2CompositeUnitStrc size must be 0x234");
 
 
-void __stdcall sub_6F8A4C10();
+void __stdcall COMP_RebuildPreviewColorMaps();
 void __stdcall D2Win_10157();
 D2CompositeUnitStrc* __stdcall D2Win_10144(unsigned int nUnitIndex, int nMode, BYTE* pComponents, BYTE* pComponentsColors);
 void __stdcall D2Win_10145(D2CompositeUnitStrc* pCompositeUnit, unsigned int nUnitIndex, int nMode, BYTE* a4, BYTE* a5);
@@ -102,9 +102,9 @@ void __stdcall D2Win_10159(D2CellFileStrc* pSquelchCelFile, D2CellFileStrc* pSel
 const char* __stdcall D2Win_10161(int a1, int a2, int a3, BOOL bSoftCore);
 int __stdcall D2Win_10169(D2CompositeUnitStrc* pCompositeUnit);
 BOOL __fastcall D2Win_10143(D2CompositeUnitStrc* pCompositeUnit, int nMode);
-void __fastcall sub_6F8A15E0(D2CompositeUnitStrc* pCompositeUnit);
-BOOL __fastcall sub_6F8A1890(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma);
-BOOL __fastcall sub_6F8A1D10(D2CompositeUnitStrc* pCompositeUnit);
-BOOL __fastcall sub_6F8A2070(D2CompositeUnitStrc* pCompositeUnit);
+void __fastcall COMP_DrawShadowAndSelectionBg(D2CompositeUnitStrc* pCompositeUnit);
+BOOL __fastcall COMP_DrawCharacterLayers(D2CompositeUnitStrc* pCompositeUnit, DWORD dwGamma);
+BOOL __fastcall COMP_DrawCharacterLabel(D2CompositeUnitStrc* pCompositeUnit);
+BOOL __fastcall COMP_DrawDebugBounds(D2CompositeUnitStrc* pCompositeUnit);
 void __stdcall D2Win_10142_CompUnitDestroy(D2CompositeUnitStrc* pCompositeUnit, int a2);
 const char* __stdcall D2Win_10160_GetPlayerTitle(int a1, int a2, BOOL bSoftCore);

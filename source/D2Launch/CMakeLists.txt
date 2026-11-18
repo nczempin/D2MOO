@@ -1,4 +1,3 @@
-
 D2MOO_prepare_targets(D2Launch)
 
 target_link_libraries(${D2LaunchImplName}
@@ -17,7 +16,8 @@ target_link_libraries(${D2LaunchImplName}
 
 target_sources(${D2LaunchImplName}
   PRIVATE
-    src/D2Launch.cpp
+    src/MainMenus.cpp
+    src/CharSel.cpp
 
     include/D2Launch.h
 )

@@ -324,7 +324,7 @@ int32_t __fastcall BUTTON_Draw(D2WinControlStrc* pControl)
 
 	if (pButton->pfUpdateHoverState)
 	{
-		if (sub_6F8AE540())
+		if (MAINWINDOW_GetCapturedControl())
 		{
 			pButton->isButtonHovered = 0;
 		}

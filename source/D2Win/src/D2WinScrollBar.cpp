@@ -90,7 +90,7 @@ int32_t __fastcall SCROLLBAR_SetTextBox(D2WinScrollBarStrc* pScrollBar, D2WinTex
 }
 
 //D2Win.0x6F8AF240
-int32_t __fastcall sub_6F8AF240(SMSGHANDLER_PARAMS* pMsg, D2WinScrollBarStrc* pScrollBar, int32_t a3)
+int32_t __fastcall SCROLLBAR_StepPosition(SMSGHANDLER_PARAMS* pMsg, D2WinScrollBarStrc* pScrollBar, int32_t a3)
 {
 	D2_ASSERT(pScrollBar->controlHeader.nType == D2WIN_SCROLLBAR);
 

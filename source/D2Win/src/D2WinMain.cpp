@@ -828,18 +828,18 @@ void __stdcall D2Win_10019()
 
 		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
-			sub_6F8A15E0(i);
+			COMP_DrawShadowAndSelectionBg(i);
 		}
 
 		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
-			sub_6F8A1890(i, -1);
+			COMP_DrawCharacterLayers(i, -1);
 		}
 
 		for (D2CompositeUnitStrc* i = D2Win_10147(); i; i = D2Win_10148(i))
 		{
-			sub_6F8A1D10(i);
-			sub_6F8A2070(i);
+			COMP_DrawCharacterLabel(i);
+			COMP_DrawDebugBounds(i);
 		}
 
 		if (dword_6F8FE278)
@@ -1067,7 +1067,7 @@ void __stdcall D2Win_COMMANDS_VirtualKey_6F8ADB50(SMSGHANDLER_PARAMS* pMsg)
 			{
 				if ((D2WinEditBoxStrc*)i == dword_6F8FE25C)
 				{
-					if (sub_6F8A7AB0(dword_6F8FE25C, pMsg->wParam))
+					if (EDITBOX_HandleKeyDown(dword_6F8FE25C, pMsg->wParam))
 					{
 						SMsgBreakHandlerChain(pMsg);
 						// Should we return SMsgBreakHandlerChain's result?$
@@ -1080,7 +1080,7 @@ void __stdcall D2Win_COMMANDS_VirtualKey_6F8ADB50(SMSGHANDLER_PARAMS* pMsg)
 		}
 		else
 		{
-			if (sub_6F8A7AB0(dword_6F8FE25C, pMsg->wParam))
+			if (EDITBOX_HandleKeyDown(dword_6F8FE25C, pMsg->wParam))
 			{
 				SMsgBreakHandlerChain(pMsg);
 				// Should we return SMsgBreakHandlerChain's result?
@@ -1437,7 +1437,7 @@ void __stdcall D2Win_COMMANDS_MouseWheel_6F8AE220(SMSGHANDLER_PARAMS* pMsg)
 		}
 		while (pControl);
 
-		if (pScrollBar && sub_6F8AF240(pMsg, (D2WinScrollBarStrc*)pScrollBar, nIncrement))
+		if (pScrollBar && SCROLLBAR_StepPosition(pMsg, (D2WinScrollBarStrc*)pScrollBar, nIncrement))
 		{
 			SMsgBreakHandlerChain(pMsg);
 			// Should we return SMsgBreakHandlerChain's result?
@@ -1509,7 +1509,7 @@ int __stdcall CONTROL_GetType(D2WinControlStrc* pControl)
 }
 
 //D2Win.0x6F8AE540
-D2WinControlStrc* __stdcall sub_6F8AE540()
+D2WinControlStrc* __stdcall MAINWINDOW_GetCapturedControl()
 {
 	return dword_6F8FE264;
 }

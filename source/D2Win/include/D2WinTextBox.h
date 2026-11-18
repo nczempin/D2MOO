@@ -49,7 +49,7 @@ struct D2WinTextBoxStrc
 //D2Win.0x6F8AFAA0
 D2WinTextBoxStrc* __fastcall D2Win_10042_TEXTBOX_Create(int nX, int nY, int nWidth, int nHeight, int a5, int a6, D2CellFileStrc* pCellFile, int(__stdcall* a8)(SMSGHANDLER_PARAMS*), unsigned int dwTextBoxFlags, int a10, int a11);
 //D2Win.0x6F8AFCC0
-void __fastcall sub_6F8AFCC0(Font nFontSize);
+void __fastcall TEXTBOX_UpdateLineSpacingForFont(Font nFontSize);
 //D2Win.0x6F8AFDC0
 int __fastcall D2Win_10043_TEXTBOX_Destroy(D2WinTextBoxStrc* pTextBox);
 //D2Win.0x6F8AFE30

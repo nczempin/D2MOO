@@ -22,8 +22,8 @@ void __fastcall D2Win_10180(D2WinTimerStrc* pTimer);
 //D2Win.0x6F8B1C30
 void __fastcall D2Win_10182(D2WinTimerStrc* pTimer);
 //D2Win.0x6F8B1C60
-int32_t __fastcall sub_6F8B1C60(D2WinControlStrc* pControl);
+int32_t __fastcall TIMER_UpdateSecondsTimeout(D2WinControlStrc* pControl);
 //D2Win.0x6F8B1CF0
-int32_t __fastcall sub_6F8B1CF0(D2WinControlStrc* pControl);
+int32_t __fastcall TIMER_UpdateMillisRepeating(D2WinControlStrc* pControl);
 //D2Win.0x6F8B1D70
 int32_t __stdcall TIMER_HandleVirtualKeyInput(SMSGHANDLER_PARAMS* pMsg);

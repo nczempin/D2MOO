@@ -62,19 +62,19 @@ bool byte_6F8FE21A;
 
 
 //D2Win.0x6F8A9B00
-void __stdcall sub_6F8A9B00()
+void __stdcall FONT_ClearFramedTextBuffer()
 {
 	memset(gszFramedText_Buffer_6F8FD9F0, 0, sizeof(gszFramedText_Buffer_6F8FD9F0));
 }
 
 //D2Win.0x6F8A9B20
-void __stdcall sub_6F8A9B20()
+void __stdcall FONT_ClearColorCodeBuffer()
 {
 	memset(gColorCodeUnicodeChar_6F8FE208, 0, sizeof(gColorCodeUnicodeChar_6F8FE208));
 }
 
 //D2Win.0x6F8A9B40
-void __stdcall sub_6F8A9B40()
+void __stdcall FONT_ClearMonsterIndicatorBuffer()
 {
 	memset(gMonsterIndicatorCodeUnicodeChar_6F8FE204, 0, sizeof(gMonsterIndicatorCodeUnicodeChar_6F8FE204));
 }
@@ -97,7 +97,7 @@ void __fastcall D2Win_10115_FONT()
 	case LANGUAGE_ITALIAN:
 		strcpy_s(byte_6F8FD9D8, "Latin\\");
 		dword_6F8BDB2C = 16;
-		dword_6F8FE20C = sub_6F8AA100;
+		dword_6F8FE20C = FONT_GetAsciiGlyph;
 		break;
 
 	case LANGUAGE_JAPANESE:
@@ -105,13 +105,13 @@ void __fastcall D2Win_10115_FONT()
 		dword_6F8BDB2C = 15;
 		dword_6F8BDB30 = 5;
 		strcpy_s(byte_6F8FD9D8, "JPN\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 
 	case LANGUAGE_KOREAN:
 		dword_6F8BDB30 = 5;
 		strcpy_s(byte_6F8FD9D8, "KOR\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 
 	case LANGUAGE_CHINESESIN:
@@ -120,30 +120,30 @@ void __fastcall D2Win_10115_FONT()
 		dword_6F8BDB28 = 14;
 		dword_6F8BDB2C = 14;
 		strcpy_s(byte_6F8FD9D8, "CHI\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 
 	case LANGUAGE_POLISH:
 		dword_6F8BDB28 = 13;
 		dword_6F8BDB2C = 13;
 		strcpy_s(byte_6F8FD9D8, "LATIN2\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 
 	case LANGUAGE_RUSSIAN:
 		strcpy_s(byte_6F8FD9D8, "CYR\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 
 	case LANGUAGE_ENGLISHKOR:
 		byte_6F8FE21A = 1;
 		strcpy_s(byte_6F8FD9D8, "LATIN\\");
-		dword_6F8FE20C = sub_6F8AA100;
+		dword_6F8FE20C = FONT_GetAsciiGlyph;
 		break;
 
 	default:
 		strcpy_s(byte_6F8FD9D8, "Latin\\");
-		dword_6F8FE20C = sub_6F8AA140;
+		dword_6F8FE20C = FONT_FindUnicodeGlyph;
 		break;
 	}
 
@@ -153,7 +153,7 @@ void __fastcall D2Win_10115_FONT()
 
 		D2Win_FONT_6F8A9DC0(1, szFile, 79);
 		stru_6F8FD8C0[1].pCellFile = ARCHIVE_LoadCellFile(szFile, 0);
-		sub_6F8A9E90(1);
+		FONT_LoadFontResource(1);
 	}
 
 	if (!ghCellfileFontMonsterIndicators_6F8FD9EC)
@@ -199,7 +199,7 @@ void __fastcall D2Win_FONT_6F8A9DC0(int nFont, char* pBuffer, int nLength)
 }
 
 //D2Win.0x6F8A9E90
-void __fastcall sub_6F8A9E90(int a1)
+void __fastcall FONT_LoadFontResource(int a1)
 {
 	char szFilename[80] = {};
 	char szPath[260] = {};
@@ -272,7 +272,7 @@ Font __fastcall D2Win_10127_SetFont(Font nFontSize)
 
 			D2Win_FONT_6F8A9DC0(nFontSize, szFile, 79);
 			stru_6F8FD8C0[nFontSize].pCellFile = ARCHIVE_LoadCellFile(szFile, 0);
-			sub_6F8A9E90(nFontSize);
+			FONT_LoadFontResource(nFontSize);
 			stru_6F8FD8C0[nFontSize].dwShiftedTickCount = dwShiftedTickCount;
 		}
 
@@ -297,11 +297,11 @@ Font __fastcall D2Win_10127_SetFont(Font nFontSize)
 		{
 			if (nFontSize != D2FONT_FONTINGAMECHAT)
 			{
-				dword_6F8FE20C = sub_6F8AA100;
+				dword_6F8FE20C = FONT_GetAsciiGlyph;
 			}
 			else
 			{
-				dword_6F8FE20C = sub_6F8AA140;
+				dword_6F8FE20C = FONT_FindUnicodeGlyph;
 			}
 		}
 	}
@@ -310,7 +310,7 @@ Font __fastcall D2Win_10127_SetFont(Font nFontSize)
 }
 
 //D2Win.0x6F8AA100
-D2CharStrc* __fastcall sub_6F8AA100(Unicode wszChar)
+D2CharStrc* __fastcall FONT_GetAsciiGlyph(Unicode wszChar)
 {
 	if (wszChar <= 0xFF)
 	{
@@ -323,7 +323,7 @@ D2CharStrc* __fastcall sub_6F8AA100(Unicode wszChar)
 }
 
 //D2Win.0x6F8AA140
-D2CharStrc* __fastcall sub_6F8AA140(Unicode wszChar)
+D2CharStrc* __fastcall FONT_FindUnicodeGlyph(Unicode wszChar)
 {
 	D2FontCacheStrc* pFontCache = &stru_6F8FD8C0[gnFontSize_6F8BDB24];
 
@@ -502,7 +502,7 @@ void __fastcall D2Win_10119_DrawCroppedText(const Unicode* wszText, int32_t nX, 
 }
 
 //D2Win.0x6F8AA510
-void __fastcall sub_6F8AA510(const Unicode* wszText, int32_t nX, int32_t nY, int32_t a4, int32_t a5, int32_t a6)
+void __fastcall FONT_DrawTextClipped(const Unicode* wszText, int32_t nX, int32_t nY, int32_t a4, int32_t a5, int32_t a6)
 {
 	// TODO: Names
 	D2GfxDataStrc gfxData = {};
@@ -599,7 +599,7 @@ void __stdcall D2Win_10124()
 		return;
 	}
 
-	int32_t v1 = sub_6F8AA910(gszFramedText_Buffer_6F8FD9F0) + 8;
+	int32_t v1 = FONT_GetMaxLineWidth(gszFramedText_Buffer_6F8FD9F0) + 8;
 
 	int32_t nScreenWidth = 0;
 	int32_t nScreenHeight = 0;
@@ -658,7 +658,7 @@ void __stdcall D2Win_10124()
 			v24 = D2FONT_FONT6;
 		}
 
-		v1 = sub_6F8AA910(gszFramedText_Buffer_6F8FD9F0) + 8;
+		v1 = FONT_GetMaxLineWidth(gszFramedText_Buffer_6F8FD9F0) + 8;
 	}
 
 	const int32_t v11 = D2Clamp(v6, 0, nScreenWidth - v1);
@@ -684,7 +684,7 @@ void __stdcall D2Win_10124()
 		D2GFX_DrawBox(v11, v13 - v5, v11 + v1, v13, 0, DRAWMODE_TRANS75);
 	}
 
-	sub_6F8AA9E0(
+	FONT_DrawMultiLineText(
 		gszFramedText_Buffer_6F8FD9F0,
 		v11,
 		v13 - dword_6F8BDB30 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10,
@@ -699,7 +699,7 @@ void __stdcall D2Win_10124()
 }
 
 //D2Win.0x6F8AA910
-int __fastcall sub_6F8AA910(const Unicode* pStr)
+int __fastcall FONT_GetMaxLineWidth(const Unicode* pStr)
 {
 	// TODO: Names
 	D2_ASSERT(pStr);
@@ -758,13 +758,13 @@ int __fastcall sub_6F8AA910(const Unicode* pStr)
 }
 
 //D2Win.0x6F8AA9E0
-void __fastcall sub_6F8AA9E0(const Unicode* wszText, int32_t nX, int32_t nY, int32_t a4, int32_t nGlobalPaletteShift, int32_t a6)
+void __fastcall FONT_DrawMultiLineText(const Unicode* wszText, int32_t nX, int32_t nY, int32_t a4, int32_t nGlobalPaletteShift, int32_t a6)
 {
 	// TODO: Names
 	int32_t v6 = nX;
 	if (a6)
 	{
-		v6 += (a4 - sub_6F8AABB0(wszText)) >> 1;
+		v6 += (a4 - FONT_GetSingleLineWidth(wszText)) >> 1;
 	}
 
 	D2GfxDataStrc gfxData = {};
@@ -789,7 +789,7 @@ void __fastcall sub_6F8AA9E0(const Unicode* wszText, int32_t nX, int32_t nY, int
 				v6 = nX;
 				if (a6)
 				{
-					v6 += ((a4 - sub_6F8AABB0(v10)) >> 1);
+					v6 += ((a4 - FONT_GetSingleLineWidth(v10)) >> 1);
 				}
 
 				nY += dword_6F8BDB28 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / -10;
@@ -843,7 +843,7 @@ void __fastcall sub_6F8AA9E0(const Unicode* wszText, int32_t nX, int32_t nY, int
 }
 
 //D2Win.0x6F8AABB0
-int __fastcall sub_6F8AABB0(const Unicode* pStr)
+int __fastcall FONT_GetSingleLineWidth(const Unicode* pStr)
 {
 	// TODO: Names
 	D2_ASSERT(pStr);
@@ -911,11 +911,11 @@ void __fastcall D2Win_10117_DrawText(const Unicode* wszText, int nX, int nY, int
 {
 	if (bCentered)
 	{
-		sub_6F8AA9E0(wszText, nX, nY, sub_6F8AA910(wszText) + 8, nColor, bCentered);
+		FONT_DrawMultiLineText(wszText, nX, nY, FONT_GetMaxLineWidth(wszText) + 8, nColor, bCentered);
 	}
 	else
 	{
-		sub_6F8AA9E0(wszText, nX, nY, 0, nColor, bCentered);
+		FONT_DrawMultiLineText(wszText, nX, nY, 0, nColor, bCentered);
 	}
 }
 
@@ -926,13 +926,13 @@ void __fastcall D2Win_10118_DrawBlendedText(const Unicode* wszText, int32_t nX, 
 	int32_t v21 = 0;
 	if (bCentered)
 	{
-		v21 = sub_6F8AA910(wszText) + 8;
+		v21 = FONT_GetMaxLineWidth(wszText) + 8;
 	}
 
 	int32_t v7 = nX;
 	if (bCentered)
 	{
-		v7 += ((v21 - sub_6F8AABB0(wszText)) >> 1);
+		v7 += ((v21 - FONT_GetSingleLineWidth(wszText)) >> 1);
 	}
 
 	D2GfxDataStrc gfxData = {};
@@ -959,7 +959,7 @@ void __fastcall D2Win_10118_DrawBlendedText(const Unicode* wszText, int32_t nX, 
 				v7 = nX;
 				if (bCentered)
 				{
-					v7 += ((v21 - sub_6F8AABB0(v11)) >> 1);
+					v7 += ((v21 - FONT_GetSingleLineWidth(v11)) >> 1);
 				}
 
 				nY += -16 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10;
@@ -1090,7 +1090,7 @@ void __fastcall D2Win_10132(const Unicode* wszText, int nX, int nY, DWORD dwColo
 	}
 
 	D2GFX_DrawBox(nX, nY - nTextHeight, nX + nTextWidth, nY, dwColor, eDrawMode);
-	sub_6F8AA9E0(wszText, nX, nY - 3 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10, nTextWidth, nColor, 1);
+	FONT_DrawMultiLineText(wszText, nX, nY - 3 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10, nTextWidth, nColor, 1);
 }
 
 //D2Win.0x6F8AB1B0 (#10133)
@@ -1098,7 +1098,7 @@ void __fastcall D2Win_10133(const Unicode* pText, int nX, int nY, DWORD dwColor,
 {
 	nY += 2;
 
-	int nRectWidth = sub_6F8AA910(pText);
+	int nRectWidth = FONT_GetMaxLineWidth(pText);
 	int nRectHeight = stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight;
 
 	int nScreenWidth = 0;
@@ -1121,13 +1121,13 @@ void __fastcall D2Win_10133(const Unicode* pText, int nX, int nY, DWORD dwColor,
 	}
 
 	D2GFX_DrawBox(nX, nY - nRectHeight, nX + nRectWidth, nY, dwColor, eDrawMode);
-	sub_6F8AA9E0(pText, nX, nY - 2, nRectWidth, nPaletteShift, 1);
+	FONT_DrawMultiLineText(pText, nX, nY - 2, nRectWidth, nPaletteShift, 1);
 }
 
 //D2Win.0x6F8AB260 (#1031)
 void __fastcall D2Win_10131_GetTextDimensions(const Unicode* pText, int* pWidth, int* pHeight)
 {
-	*pWidth = sub_6F8AA910(pText);
+	*pWidth = FONT_GetMaxLineWidth(pText);
 
 	D2_ASSERT(pText);
 
@@ -1172,7 +1172,7 @@ unsigned int __fastcall D2Win_10128(uint8_t a1)
 }
 
 //D2Win.0x6F8AB360
-void __fastcall sub_6F8AB360(const Unicode* pStr, int nX, int nY, int nBoxWidth, DWORD dwColor, DrawMode eDrawMode, int nPaletteShift)
+void __fastcall FONT_DrawBoxedMultiLineText(const Unicode* pStr, int nX, int nY, int nBoxWidth, DWORD dwColor, DrawMode eDrawMode, int nPaletteShift)
 {
 	//TODO: Names
 	D2_ASSERT(pStr);
@@ -1211,7 +1211,7 @@ void __fastcall sub_6F8AB360(const Unicode* pStr, int nX, int nY, int nBoxWidth,
 	}
 
 	D2GFX_DrawBox(nX - 4, v13 + v15 - v18, nX - 4 + nBoxWidth, v13, dwColor, eDrawMode);
-	sub_6F8AA9E0(pStr, nX, v13 - 2, 0, nPaletteShift, 0);
+	FONT_DrawMultiLineText(pStr, nX, v13 - 2, 0, nPaletteShift, 0);
 }
 
 //D2Win.0x6F8AB480 (#10134)
@@ -1321,7 +1321,7 @@ void __fastcall D2Win_10120(const Unicode* wszText, int nX, int nY, int a4, int 
 			D2GFX_DrawBox(v12, v13 - nTextHeight, v8 + v12, v13, 0, DRAWMODE_TRANS75);
 		}
 
-		sub_6F8AA9E0(wszText, v12, v13 - 3 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10, v8, a4, 1);
+		FONT_DrawMultiLineText(wszText, v12, v13 - 3 * stru_6F8FD8C0[gnFontSize_6F8BDB24].pFontInfo[1]->nHeight / 10, v8, a4, 1);
 	}
 }
 

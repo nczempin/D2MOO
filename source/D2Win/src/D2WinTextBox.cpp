@@ -74,7 +74,7 @@ D2WinTextBoxStrc* __fastcall D2Win_10042_TEXTBOX_Create(int32_t nX, int32_t nY, 
 		pTextBox->field_98 = 0;
 	}
 
-	sub_6F8AFCC0(pTextBox->eFont);
+	TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 	pTextBox->field_A8 = dword_6F8BE238;
 
@@ -94,7 +94,7 @@ D2WinTextBoxStrc* __fastcall D2Win_10042_TEXTBOX_Create(int32_t nX, int32_t nY, 
 		SCROLLBAR_SetTextBox(pTextBox->pScrollBar, pTextBox);
 
 		D2Win_10127_SetFont(pTextBox->eFont);
-		sub_6F8AFCC0(pTextBox->eFont);
+		TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 		const int32_t nTextHeight = D2Win_10125();
 		const int32_t nPosition = std::max((pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44 - (pTextBox->field_A8 + nTextHeight)) / (pTextBox->field_A8 + nTextHeight + pTextBox->field_A4), 1);
@@ -108,7 +108,7 @@ D2WinTextBoxStrc* __fastcall D2Win_10042_TEXTBOX_Create(int32_t nX, int32_t nY, 
 }
 
 //D2Win.0x6F8AFCC0
-void __fastcall sub_6F8AFCC0(Font nFontSize)
+void __fastcall TEXTBOX_UpdateLineSpacingForFont(Font nFontSize)
 {
 	switch (STRTABLE_GetLanguage())
 	{
@@ -303,7 +303,7 @@ int32_t __fastcall D2Win_10051_Helper(D2WinTextBoxStrc* pTextBox, const Unicode*
 		D2Win_10127_SetFont(pTextBox->eFont);
 
 		const int32_t v35 = pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44;
-		sub_6F8AFCC0(pTextBox->eFont);
+		TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 		const int32_t v36 = D2Win_10125();
 		if (i > (v35 - (pTextBox->field_A8 + v36)) / (pTextBox->field_A8 + v36 + pTextBox->field_A4) + 1)
@@ -335,7 +335,7 @@ int32_t __fastcall D2Win_10051_Helper(D2WinTextBoxStrc* pTextBox, const Unicode*
 		D2Win_10127_SetFont(pTextBox->eFont);
 
 		const int32_t v42 = pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44;
-		sub_6F8AFCC0(pTextBox->eFont);
+		TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 		const int32_t v43 = D2Win_10125();
 		SCROLLBAR_SetMaxSteps(pTextBox->pScrollBar, pTextBox->nNumLines - (v42 - (pTextBox->field_A8 + v43)) / (pTextBox->field_A8 + v43 + pTextBox->field_A4) - 1);
@@ -523,7 +523,7 @@ int32_t __fastcall D2Win_10198(D2WinTextBoxStrc* pTextBox, const Unicode* pText,
 	if (pTextBox->pScrollBar)
 	{
 		D2Win_10127_SetFont(pTextBox->eFont);
-		sub_6F8AFCC0(pTextBox->eFont);
+		TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 		const int32_t nTextHeight = D2Win_10125();
 		SCROLLBAR_SetMaxSteps(pTextBox->pScrollBar, pTextBox->nNumLines - (pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44 - (pTextBox->field_A8 + nTextHeight)) / (pTextBox->field_A8 + nTextHeight + pTextBox->field_A4) - 1);
 	}
@@ -682,7 +682,7 @@ int32_t __fastcall D2Win_10055(D2WinTextBoxStrc* pTextBox)
 	D2_ASSERT(pTextBox->controlHeader.nType == D2WIN_TEXTBOX);
 
 	D2Win_10127_SetFont(pTextBox->eFont);
-	sub_6F8AFCC0(pTextBox->eFont);
+	TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 	const int32_t nTextHeight = D2Win_10125();
 	return (pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44 - (pTextBox->field_A8 + nTextHeight)) / (pTextBox->field_A8 + nTextHeight + pTextBox->field_A4) + 1;
@@ -875,14 +875,14 @@ int32_t __fastcall TEXTBOX_Draw(D2WinControlStrc* pControl)
 		TEXTURE_CelDraw(&gfxData, pTextBox->controlHeader.nImageX, pTextBox->controlHeader.nImageY - 1, -1u, DRAWMODE_NORMAL, 0);
 	}
 
-	sub_6F8AFCC0(pTextBox->eFont);
+	TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 	D2Win_10127_SetFont(pTextBox->eFont);
 
 	// TODO: v51, v8, v49, v48, v16, v34
 	const int32_t v51 = pTextBox->field_40 + pTextBox->controlHeader.nImageX;
 	int32_t nY = pTextBox->field_44 + pTextBox->controlHeader.nImageY - pTextBox->controlHeader.nHeight + D2Win_10125();
 
-	sub_6F8AFCC0(pTextBox->eFont);
+	TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 	const int32_t v8 = pTextBox->field_A8 + D2Win_10125();
 	int32_t v49 = pTextBox->controlHeader.nHeight - 2 * pTextBox->field_44;
@@ -1000,12 +1000,12 @@ int32_t __fastcall TEXTBOX_Draw(D2WinControlStrc* pControl)
 				}
 				else
 				{
-					sub_6F8AB360(wszText, nX, nY, nBoxWidth, nColor, DRAWMODE_NORMAL, pCurrentLine->field_14 != 4 ? pCurrentLine->field_14 : 0);
+					FONT_DrawBoxedMultiLineText(wszText, nX, nY, nBoxWidth, nColor, DRAWMODE_NORMAL, pCurrentLine->field_14 != 4 ? pCurrentLine->field_14 : 0);
 				}
 			}
 			else if (pTextBox->dwTextBoxFlags & 0x40)
 			{
-				sub_6F8AA510(pCurrentLine->pColumns[i], nX, nY, pCurrentLine->field_14, pTextBox->field_9C, nBoxWidth);
+				FONT_DrawTextClipped(pCurrentLine->pColumns[i], nX, nY, pCurrentLine->field_14, pTextBox->field_9C, nBoxWidth);
 			}
 			else if (pTextBox->dwTextBoxFlags & 0x80)
 			{
@@ -1049,7 +1049,7 @@ int32_t __stdcall TEXTBOX_HandleMouseDown(SMSGHANDLER_PARAMS* pMsg)
 	if (pTextBox->dwTextBoxFlags & 1)
 	{
 		D2Win_10127_SetFont(pTextBox->eFont);
-		sub_6F8AFCC0(pTextBox->eFont);
+		TEXTBOX_UpdateLineSpacingForFont(pTextBox->eFont);
 
 		pTextBox->nCurrentLine = (gMousePosition_6F8FE234.y + pTextBox->controlHeader.nHeight - pTextBox->controlHeader.nImageY - pTextBox->field_44) / (pTextBox->field_A8 + D2Win_10125()) + pTextBox->nLine;
 
