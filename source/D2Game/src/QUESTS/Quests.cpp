@@ -89,7 +89,7 @@
 uint8_t byte_6FD31270;
 
 
-#define dword_6FD4DC34 1
+int32_t dword_6FD4DC34 = 0;
 
 constexpr D2QuestInitTableStrc gpQuestInitTable[] =
 {
