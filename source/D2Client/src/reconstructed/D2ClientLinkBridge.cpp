@@ -671,7 +671,7 @@ unsigned char g_bClassicVictoryScreen = {};
 unsigned char g_bCutsceneActive = {};
 int g_bDiabloSealActive = {};
 int g_bEscMenuActive = {};
-int g_bExpansionChar = 1;
+#pragma comment(linker, "/alternatename:?g_bExpansionChar@@3HA=?gbIsExpansion@@3HA")
 int g_bForceMediumLightQuality = 1;
 int g_bHoradricAnimPlaying = {};
 int g_bHoradricCubeClosedLocally = {};
@@ -4129,6 +4129,8 @@ void __fastcall D2Client_ClearMercForHireList(void)
     g_dwMercReviveCost = 0;
 }
 
+extern void __fastcall NPCMENU_RefreshHireSubDialog(void);
+
 void __fastcall D2Client_AddMercForHireEntry(uint16_t wNameIdx, uint32_t dwMercSeed)
 {
     for (int32_t i = 0; i < g_nMercForHireCount; ++i)
@@ -4136,6 +4138,7 @@ void __fastcall D2Client_AddMercForHireEntry(uint16_t wNameIdx, uint32_t dwMercS
         if (g_aMercForHireEntries[i].dwMercSeed == dwMercSeed)
         {
             g_aMercForHireEntries[i].wNameIdx = wNameIdx;
+            NPCMENU_RefreshHireSubDialog();
             return;
         }
     }
@@ -4144,6 +4147,7 @@ void __fastcall D2Client_AddMercForHireEntry(uint16_t wNameIdx, uint32_t dwMercS
         g_aMercForHireEntries[g_nMercForHireCount].wNameIdx = wNameIdx;
         g_aMercForHireEntries[g_nMercForHireCount].dwMercSeed = dwMercSeed;
         ++g_nMercForHireCount;
+        NPCMENU_RefreshHireSubDialog();
     }
 }
 
@@ -4151,6 +4155,28 @@ void __fastcall D2Client_SetMercReviveInfo(uint16_t wDeadNameIdx, uint32_t dwRev
 {
     g_wMercDeadNameIdx = wDeadNameIdx;
     g_dwMercReviveCost = dwReviveCost;
+}
+
+void __fastcall D2Client_FormatMercForHireRow(int32_t nIdx, wchar_t* wszOut, int32_t nMaxChars)
+{
+    if (!wszOut || nMaxChars <= 0) return;
+    wszOut[0] = 0;
+    if (nIdx < 0 || nIdx >= g_nMercForHireCount) return;
+    const uint16_t wNameIdx = g_aMercForHireEntries[nIdx].wNameIdx;
+    const uint32_t dwSeed   = g_aMercForHireEntries[nIdx].dwMercSeed;
+    const Unicode* pNameUni = wNameIdx ? D2LANG_GetStringFromTblIndex(static_cast<short>(wNameIdx)) : nullptr;
+    const wchar_t* wszName  = (pNameUni && pNameUni[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pNameUni) : L"Mercenary";
+    D2HirelingInitStrc tHireInit = {};
+    const int32_t nMercAct = MONSTERS_GetActFromHirelingTxt(gbIsExpansion, 0, wNameIdx);
+    if (gpPlayerUnit && MONSTERS_HirelingInit(gbIsExpansion, gpPlayerUnit, static_cast<int>(dwSeed), nMercAct, gnClientDifficulty, &tHireInit))
+    {
+        _snwprintf(wszOut, static_cast<size_t>(nMaxChars - 1), L"%ls - Lvl %d (%d Gold)", wszName, tHireInit.nLevel, tHireInit.nGold);
+    }
+    else
+    {
+        _snwprintf(wszOut, static_cast<size_t>(nMaxChars - 1), L"%ls", wszName);
+    }
+    wszOut[nMaxChars - 1] = 0;
 }
 
 extern Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc * a0);
@@ -4469,6 +4495,29 @@ void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallback
     s_bNpcGossipOpen = 1;
 }
 
+void __fastcall D2Client_OpenNpcSpeechByTblId(D2UnitStrc* pNpc, int32_t nFallbackClassId, uint16_t wStringId)
+{
+    const Unicode* pTitleUni = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
+    if (pTitleUni && pTitleUni[0].ch != 0)
+    {
+        wcsncpy(s_wszNpcGossipTitle, reinterpret_cast<const wchar_t*>(pTitleUni), 63);
+    }
+    else
+    {
+        wcsncpy(s_wszNpcGossipTitle, L"Townsperson", 63);
+    }
+    s_wszNpcGossipTitle[63] = 0;
+
+    const Unicode* pSpeechUni = wStringId ? D2LANG_GetStringFromTblIndex(static_cast<short>(wStringId)) : nullptr;
+    if (pSpeechUni && pSpeechUni[0].ch != 0)
+    {
+        WrapNpcSpeechIntoLines(reinterpret_cast<const wchar_t*>(pSpeechUni));
+        s_bNpcGossipOpen = 1;
+        return;
+    }
+    D2Client_OpenNpcGossipSpeech(pNpc, nFallbackClassId);
+}
+
 void __fastcall D2Client_CloseNpcGossipSpeech(void)
 {
     s_bNpcGossipOpen = 0;
@@ -4494,39 +4543,31 @@ void __fastcall D2Client_ScrollNpcGossipSpeech(int32_t nDeltaLines)
 
 void __fastcall D2Client_DrawNpcGossipSpeech(void)
 {
+    extern void __fastcall UI_DrawBoxPiecesFrame(RECT* pRect);
     if (!s_bNpcGossipOpen)
     {
         return;
     }
     const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
     const int32_t nVisibleLines = (s_nNpcGossipLineCount > 9) ? 9 : ((s_nNpcGossipLineCount > 2) ? s_nNpcGossipLineCount : 2);
-    const int32_t nBoxW = 440;
-    const int32_t nBoxH = 68 + nVisibleLines * 18;
+    const int32_t nBoxW = 444;
+    const int32_t nBoxH = 56 + nVisibleLines * 18;
     const int32_t nLeft = (nW - nBoxW) / 2;
     const int32_t nTop  = 74;
 
-    D2GFX_DrawBox(nLeft, nTop, nLeft + nBoxW, nTop + nBoxH, 0x00u, DRAWMODE_TRANS75);
-    RECT rcFrame = { nLeft, nTop, nLeft + nBoxW, nTop + nBoxH };
-    D2GFX_UtilRect(&rcFrame, 0x0Du);
+    RECT rcFrame = { nLeft, nTop, nLeft + nBoxW - 1, nTop + nBoxH - 1 };
+    UI_DrawBoxPiecesFrame(&rcFrame);
 
-    D2Win_10127_SetFont(D2FONT_FONT24);
+    D2Win_10127_SetFont(D2FONT_FONT16);
     const int32_t nTitleW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle));
     D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(s_wszNpcGossipTitle), nLeft + (nBoxW - nTitleW) / 2, nTop + 24, 4, 0);
 
-    D2Win_10127_SetFont(D2FONT_FONT16);
     for (int32_t i = 0; i < nVisibleLines && (s_nNpcGossipScroll + i) < s_nNpcGossipLineCount; ++i)
     {
         const Unicode* pLine = reinterpret_cast<const Unicode*>(s_awszNpcGossipLines[s_nNpcGossipScroll + i]);
         const int32_t nLineW = D2Win_10121_GetTextWidth(pLine);
         D2Win_10117_DrawText(pLine, nLeft + (nBoxW - nLineW) / 2, nTop + 46 + i * 18, 0, 0);
     }
-
-    D2Win_10127_SetFont(D2FONT_FONT6);
-    const wchar_t* wszHint = (s_nNpcGossipLineCount > 9)
-        ? L"Wheel/Arrows: Scroll   -   Click or Space: Continue"
-        : L"Click or Space to Continue";
-    const int32_t nHintW = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(wszHint));
-    D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(wszHint), nLeft + (nBoxW - nHintW) / 2, nTop + nBoxH - 8, 5, 0);
 }
 
 // Interactive Gold Amount Popup (Mode 1 = Drop Gold, Mode 2 = Deposit to Stash, Mode 3 = Withdraw from Stash)
@@ -5442,6 +5483,11 @@ extern uint32_t g_dwActiveWaypointGuid;
 extern int32_t gdwActiveInteractNpcGUID;
 extern int32_t __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3);
 
+struct D2DialogStrc;
+extern D2DialogStrc* __cdecl DIALOG_GetActiveDialog(void);
+extern int  __stdcall  sub_6FACCF00(D2UnitStrc* pNpcUnit);
+extern void __fastcall NPCMENU_SetServerSpeechTopics(const uint16_t* pwTopics, int32_t nCount);
+
 void __fastcall D2Client_InteractWithNPC_6FAE30C0(struct D2UnitStrc * a0)
 {
     if (!a0) return;
@@ -5454,7 +5500,8 @@ void __fastcall D2Client_InteractWithNPC_6FAE30C0(struct D2UnitStrc * a0)
     gdwActiveInteractNpcGUID = static_cast<int32_t>(a0->dwUnitId);
     D2Client_SetNpcHireSubmenu(0);
     D2Client_CloseNpcGossipSpeech();
-    UI_SetPanelState(D2PANEL_NPCMENU, 0, 0);
+    NPCMENU_SetServerSpeechTopics(nullptr, 0);
+    sub_6FACCF00(a0);
 }
 int __fastcall D2Client_IsCommandHeld(int a0)
 {
@@ -5506,10 +5553,27 @@ void __fastcall D2Client_OnMonsterAnimSequenceFinished_6FAE5D10(struct D2UnitStr
 }
 void __fastcall D2Client_OnNpcInfoPacket(unsigned char * a0)
 {
-    if (!a0 || a0[1] != UNIT_MONSTER) return;
+    if (!a0) return;
+    const uint8_t nUnitType = a0[1];
     uint32_t dwNpcGuid = 0;
     memcpy(&dwNpcGuid, a0 + 2, sizeof(uint32_t));
-    if (dwNpcGuid == 0) return;
+
+    // S2C 0x27 for UNIT_OBJECT (e.g. Moldy Tome / Pedestal scroll message): display scroll speech directly
+    if (nUnitType == UNIT_OBJECT)
+    {
+        if (a0[6] > 0)
+        {
+            uint16_t wScrollStrId = 0;
+            memcpy(&wScrollStrId, a0 + 10, sizeof(uint16_t));
+            if (wScrollStrId != 0)
+            {
+                D2Client_OpenNpcSpeechByTblId(nullptr, 0, wScrollStrId);
+            }
+        }
+        return;
+    }
+
+    if (nUnitType != UNIT_MONSTER || dwNpcGuid == 0) return;
     MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, dwNpcGuid);
     D2UnitStrc* pNpc = D2Client_FindServerSideUnit(dwNpcGuid, UNIT_MONSTER);
     if (pNpc)
@@ -5520,11 +5584,29 @@ void __fastcall D2Client_OnNpcInfoPacket(unsigned char * a0)
     g_bInteractingWithNpc = 1;
     g_nInteractingNpcGUID = static_cast<int32_t>(dwNpcGuid);
     gdwActiveInteractNpcGUID = static_cast<int32_t>(dwNpcGuid);
-    D2Client_SetNpcHireSubmenu(0);
-    D2Client_CloseNpcGossipSpeech();
-    if (gaPanelStates[D2PANEL_NPCSHOP] == 0)
+
+    // Parse S2C 0x27 D2MessageListStrc (+0x06: nCount, +0x08 + 4*i: { nMenu, pad, wStringId })
+    // Only nMenu == 1 (SCROLLMENU_MENU) entries are short Talk submenu topic labels.
+    const uint8_t nMsgCount = a0[6];
+    uint16_t awTopics[6] = {};
+    int32_t nTopics = 0;
+    for (uint8_t i = 0; i < nMsgCount && i < 8; ++i)
     {
-        UI_SetPanelState(D2PANEL_NPCMENU, 0, 0);
+        const uint8_t nMenuType = a0[8 + i * 4];
+        uint16_t wStrId = 0;
+        memcpy(&wStrId, a0 + 10 + i * 4, sizeof(uint16_t));
+        if (wStrId != 0 && nMenuType == 1 && nTopics < 6)
+        {
+            awTopics[nTopics++] = wStrId;
+        }
+    }
+    NPCMENU_SetServerSpeechTopics(awTopics, nTopics);
+    if (gaPanelStates[D2PANEL_NPCSHOP] == 0 && pNpc)
+    {
+        if (DIALOG_GetActiveDialog() == nullptr && D2Client_IsNpcGossipSpeechOpen() == 0)
+        {
+            sub_6FACCF00(pNpc);
+        }
     }
 }
 void __fastcall D2Client_OnObjectAnimEnd(struct D2UnitStrc * a0)
@@ -6336,7 +6418,7 @@ extern void __fastcall D2Client_ChangeUnitModeWithHitOverlayAndSound(D2UnitStrc*
 
 int __fastcall NPCMENU_IsActive(void)
 {
-    return (gaPanelStates[D2PANEL_NPCMENU] != 0 || D2Client_IsNpcGossipSpeechOpen() != 0) ? 1 : 0;
+    return (DIALOG_GetActiveDialog() != nullptr || gaPanelStates[D2PANEL_NPCMENU] != 0 || D2Client_IsNpcGossipSpeechOpen() != 0) ? 1 : 0;
 }
 void __fastcall NPCMENU_ResetState(void)
 {

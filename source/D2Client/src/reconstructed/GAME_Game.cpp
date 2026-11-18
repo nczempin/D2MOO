@@ -4451,6 +4451,19 @@ static bool Autotest_ComputeWalkablePath(int32_t rawStartX, int32_t rawStartY, i
     GAME_PrestreamTownAndAdjacentWilderness(static_cast<int32_t>(g_dwCurrentTownLevelId ? g_dwCurrentTownLevelId : LEVEL_ROGUEENCAMPMENT));
     Autotest_StreamNeighborhoodAroundTile(rawStartX / 5, rawStartY / 5, 24);
     Autotest_StreamNeighborhoodAroundTile(rawGoalX / 5, rawGoalY / 5, 28);
+    {
+        const int32_t tMinX = (rawStartX < rawGoalX ? rawStartX : rawGoalX) / 5 - 12;
+        const int32_t tMaxX = (rawStartX > rawGoalX ? rawStartX : rawGoalX) / 5 + 12;
+        const int32_t tMinY = (rawStartY < rawGoalY ? rawStartY : rawGoalY) / 5 - 12;
+        const int32_t tMaxY = (rawStartY > rawGoalY ? rawStartY : rawGoalY) / 5 + 12;
+        for (int32_t ty = tMinY; ty <= tMaxY; ty += 8)
+        {
+            for (int32_t tx = tMinX; tx <= tMaxX; tx += 8)
+            {
+                if (tx > 0 && ty > 0) D2Client_SafeStreamRoomAtTile(tx, ty, 0);
+            }
+        }
+    }
 
     int32_t startX = rawStartX, startY = rawStartY;
     int32_t goalX = rawGoalX, goalY = rawGoalY;
@@ -4535,7 +4548,7 @@ static bool Autotest_ComputeWalkablePath(int32_t rawStartX, int32_t rawStartY, i
                 q.push(nIdx);
             }
         }
-        if (reachedIdx < 0 && pass == 1 && bestFallbackDistSq <= 9)
+        if (reachedIdx < 0 && pass == 1 && bestFallbackIdx != startIdx && bestFallbackDistSq <= 100)
         {
             reachedIdx = bestFallbackIdx;
         }
@@ -4696,7 +4709,7 @@ static D2UnitStrc* Autotest_FindTownVendor()
             if (nCls != 148 && nCls != 154 && nCls != 147) continue;
             const int64_t dx = static_cast<int64_t>(UNITS_GetXPosition(pU) - px);
             const int64_t dy = static_cast<int64_t>(UNITS_GetYPosition(pU) - py);
-            const int64_t d2 = dx * dx + dy * dy;
+            const int64_t d2 = (dx * dx + dy * dy) * ((nCls == 148) ? 1LL : 2LL);
             if (d2 < nBestD2)
             {
                 nBestD2 = d2;
@@ -4987,6 +5000,10 @@ static void Autotest_WriteReportJson(const char* szOutDir, uint32_t dwVendorShop
     {
         ExitProcess(2);
     }
+    if (dwVendorShopItems == 0u)
+    {
+        ExitProcess(3);
+    }
 }
 
 void __fastcall D2Client_RunNativeAutotestTick(void)
@@ -5035,6 +5052,7 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
         {
             gbAlwaysRun = 1;
             Autotest_CaptureBmp(s_szOutDir, "native_step1_hud.bmp");
+            GAME_PrestreamTownAndAdjacentWilderness(LEVEL_ROGUEENCAMPMENT);
             s_dwVendorGuid = 0;
             s_vPath.clear();
             s_uPathIdx = 0;
@@ -5046,6 +5064,31 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
                 Autotest_FindNearestWalkableSubtile(gx, gy, 6, &gx, &gy);
                 Autotest_ComputeWalkablePath(UNITS_GetXPosition(gpPlayerUnit), UNITS_GetYPosition(gpPlayerUnit), gx, gy, s_vPath);
             }
+            else if (gpClientAct && gpClientAct->pDrlg)
+            {
+                if (D2DrlgLevelStrc* pTownLvl = DRLG_GetLevel(gpClientAct->pDrlg, LEVEL_ROGUEENCAMPMENT))
+                {
+                    const int32_t aProbePts[5][2] = {
+                        { (pTownLvl->nPosX + pTownLvl->nWidth / 2) * 5,       (pTownLvl->nPosY + pTownLvl->nHeight / 2) * 5       },
+                        { (pTownLvl->nPosX + pTownLvl->nWidth / 3) * 5,       (pTownLvl->nPosY + pTownLvl->nHeight / 3) * 5       },
+                        { (pTownLvl->nPosX + (pTownLvl->nWidth * 2) / 3) * 5, (pTownLvl->nPosY + pTownLvl->nHeight / 3) * 5       },
+                        { (pTownLvl->nPosX + (pTownLvl->nWidth * 2) / 3) * 5, (pTownLvl->nPosY + (pTownLvl->nHeight * 2) / 3) * 5 },
+                        { (pTownLvl->nPosX + pTownLvl->nWidth / 3) * 5,       (pTownLvl->nPosY + (pTownLvl->nHeight * 2) / 3) * 5 },
+                    };
+                    int32_t curX = UNITS_GetXPosition(gpPlayerUnit);
+                    int32_t curY = UNITS_GetYPosition(gpPlayerUnit);
+                    for (int p = 0; p < 5; ++p)
+                    {
+                        int32_t wx = aProbePts[p][0], wy = aProbePts[p][1];
+                        Autotest_FindNearestWalkableSubtile(wx, wy, 18, &wx, &wy);
+                        std::vector<POINT> vSeg;
+                        Autotest_ComputeWalkablePath(curX, curY, wx, wy, vSeg);
+                        for (const POINT& pt : vSeg) s_vPath.push_back(pt);
+                        curX = wx;
+                        curY = wy;
+                    }
+                }
+            }
             s_dwPhaseTick = dwTick;
             s_dwStepSentTick = 0;
             s_nPhase = 1;
@@ -5055,21 +5098,50 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
     case 1:
     {
         D2UnitStrc* pVendor = (s_dwVendorGuid != 0) ? D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER) : Autotest_FindTownVendor();
-        if (!pVendor)
-        {
-            if ((dwTick - s_dwPhaseTick) >= 40u) { s_dwPhaseTick = dwTick; s_nPhase = 2; }
-            break;
-        }
-        if (s_dwVendorGuid == 0)
+        if (pVendor && s_dwVendorGuid == 0)
         {
             s_dwVendorGuid = pVendor->dwUnitId;
+            s_vPath.clear();
             int32_t gx = UNITS_GetXPosition(pVendor), gy = UNITS_GetYPosition(pVendor);
             Autotest_FindNearestWalkableSubtile(gx, gy, 6, &gx, &gy);
             Autotest_ComputeWalkablePath(UNITS_GetXPosition(gpPlayerUnit), UNITS_GetYPosition(gpPlayerUnit), gx, gy, s_vPath);
             s_uPathIdx = 0;
             s_dwStepSentTick = 0;
+            s_nInteractSubStage = 0;
         }
-        if (gaPanelStates[8] != 0 || (dwTick - s_dwPhaseTick) >= 260u)
+        if (!pVendor)
+        {
+            if (s_uPathIdx < s_vPath.size() && (dwTick - s_dwPhaseTick) < 320u)
+            {
+                const int32_t dx = UNITS_GetXPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].x;
+                const int32_t dy = UNITS_GetYPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].y;
+                if (s_dwStepSentTick == 0)
+                {
+                    Autotest_StreamNeighborhoodAroundTile(s_vPath[s_uPathIdx].x / 5, s_vPath[s_uPathIdx].y / 5, 24);
+                    MSG_ResetLastSentPacket();
+                    D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, s_vPath[s_uPathIdx].x, static_cast<uint32_t>(s_vPath[s_uPathIdx].y), 3, TRUE);
+                    s_dwStepSentTick = dwTick;
+                }
+                else if ((dx * dx + dy * dy) <= 25 || (dwTick - s_dwStepSentTick) >= 12u)
+                {
+                    ++s_uPathIdx;
+                    s_dwStepSentTick = 0;
+                }
+            }
+            else
+            {
+                s_dwPhaseTick = dwTick;
+                s_nPhase = 2;
+            }
+            break;
+        }
+        if (gaPanelStates[8] != 0)
+        {
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 2;
+            break;
+        }
+        if ((dwTick - s_dwPhaseTick) >= 320u)
         {
             D2Client_InteractWithNPC_6FAE30C0(pVendor);
             s_dwPhaseTick = dwTick;
@@ -5087,7 +5159,7 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
                 D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, s_vPath[s_uPathIdx].x, static_cast<uint32_t>(s_vPath[s_uPathIdx].y), 3, TRUE);
                 s_dwStepSentTick = dwTick;
             }
-            else if ((dx * dx + dy * dy) <= 25 || (dwTick - s_dwStepSentTick) >= 14u)
+            else if ((dx * dx + dy * dy) <= 25 || (dwTick - s_dwStepSentTick) >= 18u)
             {
                 ++s_uPathIdx;
                 s_dwStepSentTick = 0;
@@ -5097,6 +5169,7 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
         {
             MSG_ResetLastSentPacket();
             D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, UNIT_MONSTER, s_dwVendorGuid, 4, TRUE);
+            MSG_SendByte2Dwords(0x13u, UNIT_MONSTER, s_dwVendorGuid);
             s_dwStepSentTick = dwTick;
             s_nInteractSubStage = 1;
         }
@@ -5104,7 +5177,7 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
         {
             const int32_t vdx = UNITS_GetXPosition(gpPlayerUnit) - UNITS_GetXPosition(pVendor);
             const int32_t vdy = UNITS_GetYPosition(gpPlayerUnit) - UNITS_GetYPosition(pVendor);
-            if (((vdx * vdx + vdy * vdy) <= 36 && (dwTick - s_dwStepSentTick) >= 4u) || (dwTick - s_dwStepSentTick) >= 14u)
+            if (((vdx * vdx + vdy * vdy) <= 49 && (dwTick - s_dwStepSentTick) >= 6u) || (dwTick - s_dwStepSentTick) >= 45u)
             {
                 MSG_ResetLastSentPacket();
                 D2Client_InteractWithNPC_6FAE30C0(pVendor);
@@ -5118,18 +5191,13 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
     case 2:
         if ((dwTick - s_dwPhaseTick) >= 4u)
         {
-            UI_SetPanelState(8, 0, 0);
+            extern int __cdecl sub_6FAC9D00(void);
             Autotest_CaptureBmp(s_szOutDir, "native_step2_npc_dialog.bmp");
-            D2UnitStrc* pVendor = (s_dwVendorGuid != 0) ? D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER) : nullptr;
-            const uint32_t dwMenuAction = (pVendor && pVendor->dwClassId == 147) ? 2u : 1u;
             if (s_dwVendorGuid != 0)
             {
                 MSG_ResetLastSentPacket();
-                MSG_SendByte3Dwords(0x38u, dwMenuAction, s_dwVendorGuid, 0u);
+                sub_6FAC9D00();
             }
-            UI_SetPanelState(8, 1, 0);
-            g_nInvPanelMode = (dwMenuAction == 2u) ? 2 : 1;
-            UI_SetPanelState(12, 0, 0);
             s_dwPhaseTick = dwTick;
             s_nPhase = 3;
         }
@@ -5151,15 +5219,8 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
             s_dwVendorShopItems = dwShopCount;
             Autotest_SimulateClick(120, 102);
             Autotest_CaptureBmp(s_szOutDir, "native_step3_vendor_trade.bmp");
-            if (s_dwVendorGuid != 0)
-            {
-                MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, s_dwVendorGuid);
-            }
-            g_bInteractingWithNpc = 0;
-            g_nInteractingNpcGUID = 0;
-            g_nInteractingNpcClassId = 0;
-            gdwActiveInteractNpcGUID = 0;
-            g_pTradeNpcUnit = nullptr;
+            extern void __cdecl sub_6FAC9AF0(void);
+            sub_6FAC9AF0();
             UI_SetPanelState(12, 1, 0);
             UI_CloseOpenPanelsCount(0);
             s_dwPhaseTick = dwTick;
@@ -5185,7 +5246,10 @@ void __fastcall D2Client_RunNativeAutotestTick(void)
             UI_SetPanelState(4, 1, 0);
             UI_SetPanelState(2, 1, 0);
             QUESTLOG_TogglePanel(0);
-            UI_SetPanelState(15, 0, 0);
+            if (gaPanelStates[15] == 0)
+            {
+                ExitProcess(4);
+            }
             UI_SetPanelState(1, 1, 0);
             UI_SetPanelState(10, 0, 0);
             AUTOMAP_CenterView(1);

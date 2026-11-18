@@ -1013,12 +1013,19 @@ int __cdecl sub_6FAC8D40()
     return 1;
 }
 
+void __cdecl sub_6FAC9760();
+void __cdecl sub_6FAC9AF0();
+extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
+
 // 1.12a: 0x6FAC8DD0 (__cdecl)
 int __cdecl sub_6FAC8DD0()
 {
     // Cain Identify Items (C2S 0x34)
-    sub_6FAC8450();
-    MSG_SendByteDword(0x34, g_nInteractingNpcGUID);
+    const uint32_t dwNpcGuid = static_cast<uint32_t>(g_nInteractingNpcGUID);
+    sub_6FAC9AF0();
+    if (dwNpcGuid != 0u) {
+        MSG_SendByteDword(0x34, dwNpcGuid);
+    }
     return 1;
 }
 
@@ -1026,7 +1033,8 @@ int __cdecl sub_6FAC8DD0()
 int __cdecl sub_6FAC8EE0()
 {
     // Charsi Imbue / Socket / Personalize prompt
-    sub_6FAC8450();
+    sub_6FAC9760();
+    UI_SetPanelState(D2PANEL_MODITEM, 0, 0);
     return 1;
 }
 
@@ -1034,8 +1042,11 @@ int __cdecl sub_6FAC8EE0()
 int __cdecl sub_6FAC8FF0()
 {
     // Resurrect Mercenary (C2S 0x62)
-    sub_6FAC8450();
-    MSG_SendByteDword(0x62, g_nInteractingNpcGUID);
+    const uint32_t dwNpcGuid = static_cast<uint32_t>(g_nInteractingNpcGUID);
+    sub_6FAC9AF0();
+    if (dwNpcGuid != 0u) {
+        MSG_SendByteDword(0x62, dwNpcGuid);
+    }
     return 1;
 }
 
@@ -1094,9 +1105,12 @@ int __cdecl sub_6FAC9690()
 // 1.12a: 0x6FAC9760 (__cdecl)
 void __cdecl sub_6FAC9760()
 {
+    extern void __fastcall D2Client_CloseNpcGossipSpeech(void);
+    D2Client_CloseNpcGossipSpeech();
     sub_6FAC84D0();
     sub_6FAC84B0();
     sub_6FAC8450();
+    gaPanelStates[D2PANEL_NPCMENU] = 0;
 }
 
 // 1.12a: 0x6FAC97E0 (__cdecl)
@@ -1110,6 +1124,9 @@ void __cdecl sub_6FAC9AF0()
 {
     sub_6FAC9760();
     sub_6FAC8D00();
+    g_nInteractingNpcGUID = 0;
+    g_nInteractingNpcClassId = -1;
+    g_pTradeNpcUnit = nullptr;
 }
 
 // 1.12a: 0x6FAC9B40 (__cdecl)
@@ -1130,17 +1147,25 @@ int __cdecl sub_6FAC9C00()
 // 1.12a: 0x6FAC9D40 (internal entry point)
 int __cdecl sub_6FAC9D00()
 {
+    extern int32_t g_nInvPanelMode;
+    extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
     // Request Trade Inventory (C2S 0x38, mode 1)
-    sub_6FAC8450();
+    sub_6FAC9760();
+    g_nInvPanelMode = sub_6FAC7DF0(g_nInteractingNpcClassId) ? 1 : 3;
     MSG_SendByte3Dwords(0x38, 1, g_nInteractingNpcGUID, 0);
+    UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
     return 1;
 }
 
 int __cdecl sub_6FAC9D40()
 {
+    extern int32_t g_nInvPanelMode;
+    extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
     // Request Gamble Inventory (C2S 0x38, mode 2)
-    sub_6FAC8450();
+    sub_6FAC9760();
+    g_nInvPanelMode = 2;
     MSG_SendByte3Dwords(0x38, 2, g_nInteractingNpcGUID, 0);
+    UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
     return 1;
 }
 
@@ -1173,9 +1198,17 @@ void __cdecl sub_6FACA1F0()
 // 1.12a: 0x6FACA340 (__stdcall)
 int __stdcall sub_6FACA340(int nActTarget)
 {
-    // Travel to Act (Warriv / Meshif / Tyrael)
+    (void)nActTarget;
+    // Travel to Act (Warriv / Meshif / Tyrael): C2S 0x38 nAction=0, nItemGUID=0
+    const uint32_t dwNpcGuid = static_cast<uint32_t>(g_nInteractingNpcGUID);
     sub_6FAC9760();
-    MSG_SendByte3Dwords(0x38, 0, g_nInteractingNpcGUID, nActTarget);
+    g_bInteractingWithNpc = 0;
+    g_nInteractingNpcGUID = 0;
+    g_nInteractingNpcClassId = -1;
+    g_pTradeNpcUnit = nullptr;
+    if (dwNpcGuid != 0u) {
+        MSG_SendByte3Dwords(0x38, 0, dwNpcGuid, 0);
+    }
     return 1;
 }
 
@@ -1312,15 +1345,14 @@ void __cdecl sub_6FACADF0()
 // 1.12a: 0x6FACB280 (__cdecl)
 int __cdecl sub_6FACB280()
 {
-    sub_6FAC8EE0();
-    return 1;
+    return sub_6FACA340(0);
 }
 
 // 1.12a: 0x6FACB2B0 (__cdecl)
-int __cdecl sub_6FACB2B0() { return sub_6FACB280(); }
+int __cdecl sub_6FACB2B0() { return sub_6FACA340(0); }
 
 // 1.12a: 0x6FACB2E0 (__cdecl)
-int __cdecl sub_6FACB2E0() { return sub_6FACB280(); }
+int __cdecl sub_6FACB2E0() { return sub_6FACA340(0); }
 
 // 1.12a: 0x6FACB310 (__cdecl)
 void __cdecl sub_6FACB310()
@@ -1375,40 +1407,261 @@ void __fastcall sub_6FACB610(uint8_t* pPacket)
     g_pHirelingListHead = pEntry;
 }
 
+struct D2MercForHireEntryStrc
+{
+    uint16_t wNameIdx;
+    uint16_t wPad;
+    uint32_t dwMercSeed;
+};
+extern D2MercForHireEntryStrc g_aMercForHireEntries[16];
+extern int32_t  g_nMercForHireCount;
+extern uint16_t g_wMercDeadNameIdx;
+extern uint32_t g_dwMercReviveCost;
+extern int32_t  gbIsExpansion;
+extern void __fastcall D2Client_FormatMercForHireRow(int32_t nIdx, wchar_t* wszOut, int32_t nMaxChars);
+extern int32_t __fastcall UI_WorldUnitToScreen(D2UnitStrc* pUnit, int32_t* pOutScreenX, int32_t* pOutScreenY);
+extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
+extern D2UnitStrc* __fastcall D2Client_FindServerSideUnit(int32_t nUnitId, int32_t nUnitType);
+extern D2UnitStrc* __fastcall D2Client_GetLocalMercUnit(D2UnitStrc* pPlayer);
+extern void __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallbackClassId);
+extern void __fastcall D2Client_OpenNpcSpeechByTblId(D2UnitStrc* pNpc, int32_t nFallbackClassId, uint16_t wStringId);
+
+static uint16_t s_awNpcQuestTopics[6] = {};
+static int32_t  s_nNpcQuestTopicCount = 0;
+static int32_t  s_bNpcHireDialogActive = 0;
+
+void __fastcall NPCMENU_SetServerSpeechTopics(const uint16_t* pwTopics, int32_t nCount)
+{
+    s_nNpcQuestTopicCount = 0;
+    memset(s_awNpcQuestTopics, 0, sizeof(s_awNpcQuestTopics));
+    if (!pwTopics || nCount <= 0) return;
+    for (int32_t i = 0; i < nCount && s_nNpcQuestTopicCount < 6; ++i) {
+        if (pwTopics[i] != 0) {
+            s_awNpcQuestTopics[s_nNpcQuestTopicCount++] = pwTopics[i];
+        }
+    }
+}
+
+int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit);
+
+static D2UnitStrc* NPCMENU_ResolveActiveNpcUnit()
+{
+    if (g_pTradeNpcUnit) return g_pTradeNpcUnit;
+    if (g_nInteractingNpcGUID != 0) {
+        return D2Client_FindServerSideUnit(g_nInteractingNpcGUID, 1 /* UNIT_MONSTER */);
+    }
+    return nullptr;
+}
+
+static void NPCMENU_GetNpcDialogAnchor(D2UnitStrc* pNpcUnit, int32_t* pOutX, int32_t* pOutY)
+{
+    int32_t nSx = 0, nSy = 0;
+    if (pNpcUnit && UI_WorldUnitToScreen(pNpcUnit, &nSx, &nSy) && nSx > 0 && nSy > 0) {
+        *pOutX = nSx;
+        *pOutY = (nSy > 96) ? (nSy - 64) : 48;
+        return;
+    }
+    *pOutX = (gnScreenWidth > 0) ? (gnScreenWidth / 2) : 400;
+    *pOutY = (gnScreenHeight > 0) ? (gnScreenHeight / 3) : 180;
+}
+
+static int __cdecl NPCMENU_BackToMainMenu()
+{
+    s_bNpcHireDialogActive = 0;
+    sub_6FAC84B0();
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    if (pNpc) {
+        sub_6FACCF00(pNpc);
+    } else {
+        sub_6FAC9AF0();
+    }
+    return 1;
+}
+
+static int __cdecl NPCMENU_OnTalkIntro()
+{
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    sub_6FAC84B0();
+    for (int i = 0; i < 45; ++i) {
+        if (g_aNpcGossipDefs[i].wNpcClassId == static_cast<uint16_t>(g_nInteractingNpcClassId)) {
+            const uint16_t wIntroId = g_aNpcGossipDefs[i].wIntroIds[0];
+            g_aNpcGossipDefs[i].bIntroShown = 1;
+            if (wIntroId != 0) {
+                D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, wIntroId);
+                return 1;
+            }
+            break;
+        }
+    }
+    D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
+    return 1;
+}
+
+static int __cdecl NPCMENU_OnTalkGossip()
+{
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    sub_6FAC84B0();
+    D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
+    return 1;
+}
+
+template <int kSlot>
+static int __cdecl NPCMENU_OnTalkQuestTopic()
+{
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    sub_6FAC84B0();
+    if (kSlot < s_nNpcQuestTopicCount && s_awNpcQuestTopics[kSlot] != 0) {
+        D2Client_OpenNpcSpeechByTblId(pNpc, g_nInteractingNpcClassId, s_awNpcQuestTopics[kSlot]);
+    } else {
+        D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
+    }
+    return 1;
+}
+
+template <int kSlot>
+static int __cdecl NPCMENU_OnHireMercCandidate()
+{
+    s_bNpcHireDialogActive = 0;
+    const uint32_t dwNpcGuid = static_cast<uint32_t>(g_nInteractingNpcGUID);
+    const uint16_t wNameIdx = (kSlot < g_nMercForHireCount) ? g_aMercForHireEntries[kSlot].wNameIdx : 0u;
+    sub_6FAC9AF0();
+    if (dwNpcGuid != 0u && wNameIdx != 0u) {
+        MSG_SendByte2Dwords(0x36, dwNpcGuid, static_cast<uint32_t>(wNameIdx));
+    }
+    return 1;
+}
+
+void __fastcall NPCMENU_RefreshHireSubDialog(void)
+{
+    if (!s_bNpcHireDialogActive || !g_bInteractingWithNpc) {
+        return;
+    }
+    sub_6FAC84B0();
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    int32_t nAnchorX = 400, nAnchorY = 180;
+    NPCMENU_GetNpcDialogAnchor(pNpc, &nAnchorX, &nAnchorY);
+    g_pNpcSubDialog = DIALOG_CreateFramed(nAnchorX, nAnchorY, NPCMENU_BackToMainMenu, nullptr, 0, 1, 1, 0, 0, 0, 0);
+    if (!g_pNpcSubDialog) {
+        return;
+    }
+    gaPanelStates[D2PANEL_NPCMENU] = 1;
+    const Unicode* wszTitle = D2LANG_GetStringFromTblIndex(3397); // "hire"
+    if (wszTitle && wszTitle->ch != 0) {
+        DIALOG_AppendLine(g_pNpcSubDialog, 4, wszTitle, 21, 0, 1, nullptr, 0);
+    }
+
+    static int (__cdecl* const s_apfnHireSlots[6])(void) = {
+        NPCMENU_OnHireMercCandidate<0>, NPCMENU_OnHireMercCandidate<1>,
+        NPCMENU_OnHireMercCandidate<2>, NPCMENU_OnHireMercCandidate<3>,
+        NPCMENU_OnHireMercCandidate<4>, NPCMENU_OnHireMercCandidate<5>,
+    };
+    for (int32_t i = 0; i < g_nMercForHireCount && i < 6; ++i) {
+        wchar_t wszRow[96] = {};
+        D2Client_FormatMercForHireRow(i, wszRow, 96);
+        if (wszRow[0] != 0) {
+            DIALOG_AppendLine(g_pNpcSubDialog, 0, reinterpret_cast<const Unicode*>(wszRow), 18, 0, 1, s_apfnHireSlots[i], 1);
+        }
+    }
+
+    const Unicode* wszCancel = D2LANG_GetStringFromTblIndex(3400); // "cancel"
+    if (wszCancel) {
+        DIALOG_AppendLine(g_pNpcSubDialog, 0, wszCancel, 18, 0, 1, NPCMENU_BackToMainMenu, 1);
+    }
+}
+
 // 1.12a: 0x6FACBB80 (__cdecl)
 int __cdecl sub_6FACBB80()
 {
-    // Open Hire Mercenary Selection Dialog
+    // Open Hire Mercenary Selection Dialog & Request Hireling List (C2S 0x38, mode 3)
     sub_6FAC8450();
+    s_bNpcHireDialogActive = 1;
+    if (g_nInteractingNpcGUID != 0) {
+        MSG_SendByte3Dwords(0x38, 3, static_cast<uint32_t>(g_nInteractingNpcGUID), 0);
+    }
+    NPCMENU_RefreshHireSubDialog();
     return 1;
 }
 
 // 1.12a: 0x6FACBE50 (__stdcall)
 int __stdcall sub_6FACBE50(int bFromSubMenu)
 {
-    // Open NPC Talk Sub-Menu (Gossip + Active Quests)
+    (void)bFromSubMenu;
+    // Open NPC Talk Sub-Menu (Introduction + Gossip + Active Quest Speeches + Cancel)
+    s_bNpcHireDialogActive = 0;
     sub_6FAC8450();
-    if (!g_pNpcTextHeader) return 0;
-    int nCount = TEXT_GetMenuType2NodeCount(g_pNpcTextHeader);
-    return nCount > 0;
+    sub_6FAC84B0();
+
+    D2UnitStrc* pNpc = NPCMENU_ResolveActiveNpcUnit();
+    int32_t nAnchorX = 400, nAnchorY = 180;
+    NPCMENU_GetNpcDialogAnchor(pNpc, &nAnchorX, &nAnchorY);
+    g_pNpcSubDialog = DIALOG_CreateFramed(nAnchorX, nAnchorY, NPCMENU_BackToMainMenu, nullptr, 0, 1, 1, 0, 0, 0, 0);
+    if (!g_pNpcSubDialog) {
+        return 0;
+    }
+    gaPanelStates[D2PANEL_NPCMENU] = 1;
+
+    const Unicode* wszTalkHdr = D2LANG_GetStringFromTblIndex(3381); // "talk"
+    if (wszTalkHdr && wszTalkHdr->ch != 0) {
+        DIALOG_AppendLine(g_pNpcSubDialog, 4, wszTalkHdr, 21, 0, 1, nullptr, 0);
+    }
+
+    bool bShowIntro = false;
+    for (int i = 0; i < 45; ++i) {
+        if (g_aNpcGossipDefs[i].wNpcClassId == static_cast<uint16_t>(g_nInteractingNpcClassId)) {
+            if (g_aNpcGossipDefs[i].bIntroShown == 0 && g_aNpcGossipDefs[i].wIntroIds[0] != 0) {
+                bShowIntro = true;
+            }
+            break;
+        }
+    }
+    if (bShowIntro) {
+        if (const Unicode* wszIntro = D2LANG_GetStringFromTblIndex(3399)) { // "introduction"
+            DIALOG_AppendLine(g_pNpcSubDialog, 0, wszIntro, 18, 0, 1, NPCMENU_OnTalkIntro, 1);
+        }
+    }
+
+    static int (__cdecl* const s_apfnTopicSlots[6])(void) = {
+        NPCMENU_OnTalkQuestTopic<0>, NPCMENU_OnTalkQuestTopic<1>,
+        NPCMENU_OnTalkQuestTopic<2>, NPCMENU_OnTalkQuestTopic<3>,
+        NPCMENU_OnTalkQuestTopic<4>, NPCMENU_OnTalkQuestTopic<5>,
+    };
+    for (int32_t t = 0; t < s_nNpcQuestTopicCount && t < 6; ++t) {
+        if (const Unicode* wszTopic = D2LANG_GetStringFromTblIndex(static_cast<short>(s_awNpcQuestTopics[t]))) {
+            if (wszTopic->ch != 0) {
+                DIALOG_AppendLine(g_pNpcSubDialog, 0, wszTopic, 18, 0, 1, s_apfnTopicSlots[t], 1);
+            }
+        }
+    }
+
+    if (const Unicode* wszGossip = D2LANG_GetStringFromTblIndex(3395)) { // "gossip"
+        DIALOG_AppendLine(g_pNpcSubDialog, 0, wszGossip, 18, 0, 1, NPCMENU_OnTalkGossip, 1);
+    }
+
+    if (const Unicode* wszCancel = D2LANG_GetStringFromTblIndex(3400)) { // "cancel"
+        DIALOG_AppendLine(g_pNpcSubDialog, 0, wszCancel, 18, 0, 1, NPCMENU_BackToMainMenu, 1);
+    }
+    return 1;
 }
 
 // 1.12a: 0x6FACC100 (__cdecl)
 int __cdecl sub_6FACC100()
 {
+    if (g_nInteractingNpcGUID != 0) {
+        MSG_SendByte3Dwords(0x38, 0, static_cast<uint32_t>(g_nInteractingNpcGUID), 0);
+    }
     return sub_6FACBE50(0);
 }
 
 // 1.12a: 0x6FACC130 (__stdcall)
 void __stdcall sub_6FACC130(int nTab)
 {
-    // Populate Vendor Tab buttons (Buy/Sell/Repair All)
+    (void)nTab;
 }
 
 // 1.12a: 0x6FACC2E0 (__cdecl)
 int __cdecl sub_6FACC2E0()
 {
-    return sub_6FAC8FF0();
+    return sub_6FACBB80();
 }
 
 // 1.12a: 0x6FACC310 (__cdecl)
@@ -1438,7 +1691,7 @@ int __cdecl sub_6FACC3F0()
 // 1.12a: 0x6FACC510 (__stdcall)
 int __stdcall sub_6FACC510(D2UnitStrc* pNpc, int bGamble)
 {
-    // Initialize Vendor Trade/Gamble UI Session
+    (void)bGamble;
     g_pTradeNpcUnit = pNpc;
     return 1;
 }
@@ -1453,7 +1706,6 @@ int __cdecl sub_6FACC8E0()
 // 1.12a: 0x6FACCC00 (internal entry point)
 int __cdecl sub_6FACCB10()
 {
-    // Evaluate Quest-Driven NPC Menu Overrides
     return 1;
 }
 
@@ -1462,39 +1714,48 @@ int __cdecl sub_6FACCC00()
     return sub_6FACCB10();
 }
 
+static bool NPCMENU_IsQuestCompleted(int nQuestStateFlag)
+{
+    if (!g_pClientQuestRecord) return false;
+    return QUESTRECORD_GetQuestState(g_pClientQuestRecord, nQuestStateFlag, 0) != 0 ||
+           QUESTRECORD_GetQuestState(g_pClientQuestRecord, nQuestStateFlag, 13) != 0;
+}
+
+static bool NPCMENU_IsQuestRewardPending(int nQuestStateFlag)
+{
+    if (!g_pClientQuestRecord) return false;
+    return QUESTRECORD_GetQuestState(g_pClientQuestRecord, nQuestStateFlag, 1) != 0;
+}
+
 // 1.12a: 0x6FACCF00 (__stdcall)
 // 1.12a: 0x6FACD250 (internal entry point)
 int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit)
 {
-    extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
-
     // Build & Open Main Town NPC Interaction Menu Dialog
     int nMenuIdx = sub_6FAC7D50(pNpcUnit);
-    if (nMenuIdx < 0) return 0;
+    if (nMenuIdx < 0 || !g_aNpcMenuDefs[nMenuIdx].bHasMenu) return 0;
+
+    s_bNpcHireDialogActive = 0;
     sub_6FAC9760();
     g_nActiveNpcMenuIdx = nMenuIdx;
     if (pNpcUnit) {
+        g_pTradeNpcUnit = pNpcUnit;
         g_bInteractingWithNpc = 1;
         g_nInteractingNpcGUID = D2UnitView(pNpcUnit)->dwUnitId;
         g_nInteractingNpcClassId = D2UnitView(pNpcUnit)->dwClassId;
     }
     if (!g_pPentagramCel) {
-        g_pPentagramCel = ARCHIVE_LoadCellFileDefault("DATA\\GLOBAL\\UI\\MENU\\pentagram", 0);
+        g_pPentagramCel = ARCHIVE_LoadCellFileDefault("CURSOR\\focus16", 0);
     }
-    RECT rcNpc = { 0 };
-    sub_6FAC8B60(&rcNpc, pNpcUnit);
-    int nAnchorX = (rcNpc.left + rcNpc.right) / 2;
-    int nAnchorY = rcNpc.top;
-    if (nAnchorX <= 0) {
-        nAnchorX = (gnScreenWidth > 0) ? (gnScreenWidth / 2) : 400;
-    }
-    if (nAnchorY <= 0) {
-        nAnchorY = (gnScreenHeight > 0) ? (gnScreenHeight / 3) : 180;
-    }
+
+    int32_t nAnchorX = 400, nAnchorY = 180;
+    NPCMENU_GetNpcDialogAnchor(pNpcUnit, &nAnchorX, &nAnchorY);
+
     g_pNpcMainMenuDialog = DIALOG_CreateFramed(nAnchorX, nAnchorY, sub_6FAC9B40, nullptr, 0, 1, 1, 0, 0, 0, 0);
     if (!g_pNpcMainMenuDialog) {
         return 0;
     }
+    gaPanelStates[D2PANEL_NPCMENU] = 1;
 
     const Unicode* wszNpcName = D2Client_GetNpcDisplayName(pNpcUnit);
     if (wszNpcName && wszNpcName->ch != 0) {
@@ -1519,7 +1780,65 @@ int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit)
         }
     }
 
-    const Unicode* wszCancel = D2LANG_GetStringFromTblIndex(3382);
+    // Evaluate Quest-Gated & Mercenary Revival Dynamic Menu Options (g_aNpcQuestActionDefs)
+    const int32_t nCls = g_nInteractingNpcClassId;
+    const bool bIsExp = (FOG_IsExpansion() && gbIsExpansion != 0);
+    extern D2UnitStrc* gpPlayerUnit;
+
+    // 1. Kashya (150, A1Q2) & Qual-Kehk (515, A5Q2) quest-gated "hire" (3397)
+    if ((nCls == 150 && NPCMENU_IsQuestCompleted(2)) ||
+        (nCls == 515 && bIsExp && NPCMENU_IsQuestCompleted(36))) {
+        if (const Unicode* wszHire = D2LANG_GetStringFromTblIndex(3397)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszHire, 18, 0, 1, sub_6FACBB80, 1);
+        }
+    }
+
+    // 2. Mercenary Captains "Resurrect" (22696 / 22695) when player's merc is dead
+    if ((nCls == 150 || nCls == 198 || nCls == 252 || nCls == 367 || nCls == 521 || nCls == 515) &&
+        g_dwMercReviveCost > 0u && (!gpPlayerUnit || D2Client_GetLocalMercUnit(gpPlayerUnit) == nullptr)) {
+        wchar_t wszResRow[80] = {};
+        const Unicode* pDeadName = g_wMercDeadNameIdx ? D2LANG_GetStringFromTblIndex(static_cast<short>(g_wMercDeadNameIdx)) : nullptr;
+        if (pDeadName && pDeadName->ch != 0) {
+            _snwprintf(wszResRow, 79, L"Resurrect %ls: %u", reinterpret_cast<const wchar_t*>(pDeadName), g_dwMercReviveCost);
+        } else {
+            _snwprintf(wszResRow, 79, L"Resurrect: %u", g_dwMercReviveCost);
+        }
+        wszResRow[79] = 0;
+        DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, reinterpret_cast<const Unicode*>(wszResRow), 18, 0, 1, sub_6FAC8FF0, 1);
+    }
+
+    // 3. Quest-gated Item Rewards: Charsi Imbue (154, A1Q3 -> 4017), Larzuk Sockets (511, A5Q1 -> 22748), Anya Personalize (512, A5Q4 -> 22749)
+    if (nCls == 154 && NPCMENU_IsQuestRewardPending(3)) {
+        if (const Unicode* wszImbue = D2LANG_GetStringFromTblIndex(4017)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszImbue, 18, 0, 1, sub_6FAC8EE0, 1);
+        }
+    } else if (nCls == 511 && bIsExp && NPCMENU_IsQuestRewardPending(35)) {
+        if (const Unicode* wszSock = D2LANG_GetStringFromTblIndex(22748)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszSock, 18, 0, 1, sub_6FAC8EE0, 1);
+        }
+    } else if (nCls == 512 && bIsExp && NPCMENU_IsQuestRewardPending(38)) {
+        if (const Unicode* wszPers = D2LANG_GetStringFromTblIndex(22749)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszPers, 18, 0, 1, sub_6FAC8EE0, 1);
+        }
+    }
+
+    // 4. Quest-gated Act Travel: Warriv1 Go East (155, A1Q6 -> 3382), Meshif1 Sail East (210, A2Q6 -> 3384), Tyrael Travel to Harrogath (367/521, A4Q2 -> 22738)
+    if (nCls == 155 && (NPCMENU_IsQuestCompleted(6) || NPCMENU_IsQuestCompleted(7))) {
+        if (const Unicode* wszEast = D2LANG_GetStringFromTblIndex(3382)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszEast, 18, 0, 1, sub_6FACB2E0, 1);
+        }
+    } else if (nCls == 210 && (NPCMENU_IsQuestCompleted(14) || NPCMENU_IsQuestCompleted(15))) {
+        if (const Unicode* wszSailEast = D2LANG_GetStringFromTblIndex(3384)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszSailEast, 18, 0, 1, sub_6FACB2B0, 1);
+        }
+    } else if ((nCls == 367 || nCls == 521) && bIsExp && (NPCMENU_IsQuestCompleted(26) || NPCMENU_IsQuestCompleted(28))) {
+        if (const Unicode* wszHarrogath = D2LANG_GetStringFromTblIndex(22738)) {
+            DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszHarrogath, 18, 0, 1, sub_6FACB280, 1);
+        }
+    }
+
+    // 5. Cancel (TBL 3400 = "cancel")
+    const Unicode* wszCancel = D2LANG_GetStringFromTblIndex(3400);
     if (wszCancel) {
         DIALOG_AppendLine(g_pNpcMainMenuDialog, 0, wszCancel, 18, 0, 1, sub_6FAC9B40, 1);
     }

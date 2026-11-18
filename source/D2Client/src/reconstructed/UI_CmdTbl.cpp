@@ -2421,11 +2421,28 @@ void __fastcall CMDTBL_OnHelpScreenDown(void)
     UI_TogglePanelWithRule(33, !gbHelpScreenOpen, 0);
 }
 
+struct D2DialogStrc;
+extern D2DialogStrc* __cdecl DIALOG_GetActiveDialog(void);
+extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+extern void __fastcall D2Client_CloseNpcGossipSpeech(void);
+extern int __stdcall sub_6FACCF00(D2UnitStrc* pNpcUnit);
+extern int32_t g_bInteractingWithNpc;
+extern D2UnitStrc* g_pTradeNpcUnit;
+
 // 1.12a: 0x6FB52800 (__fastcall)
 void __fastcall CMDTBL_OnChatInputDown(void)
 {
-    if (gbEscMenuOpen)
+    if (gbEscMenuOpen || gbGoldDialogOpen || DIALOG_GetActiveDialog() != nullptr)
         return;
+    if (D2Client_IsNpcGossipSpeechOpen() != 0)
+    {
+        D2Client_CloseNpcGossipSpeech();
+        if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr)
+        {
+            sub_6FACCF00(g_pTradeNpcUnit);
+        }
+        return;
+    }
     extern void __fastcall UI_TogglePanelWithRule(int32_t nPanelIdx, int32_t bState, int32_t nArg); // 0x6FB3EF00
     UI_TogglePanelWithRule(5, !gbChatBoxOpen, 0);
 }
@@ -2469,8 +2486,19 @@ void __fastcall CMDTBL_OnEscMenuDown(void)
     extern void __stdcall UI_CloseEscOptionsMenu(int32_t bArg); // 0x6FB05560
     extern int32_t __stdcall UI_CloseAllOpenPanels(int32_t bArg); // 0x6FB3B480
     extern void __fastcall UI_OpenEscOptionsMenu(int32_t nType, int32_t nZero); // 0x6FB05610
-    if (gbGoldDialogOpen)
+    if (gbGoldDialogOpen || DIALOG_GetActiveDialog() != nullptr)
         return;
+    if (D2Client_IsNpcGossipSpeechOpen() != 0)
+    {
+        extern DWORD g_dwPanelCloseCooldownTick;
+        D2Client_CloseNpcGossipSpeech();
+        g_dwPanelCloseCooldownTick = GetTickCount() + 500u;
+        if (g_bInteractingWithNpc != 0 && g_pTradeNpcUnit != nullptr)
+        {
+            sub_6FACCF00(g_pTradeNpcUnit);
+        }
+        return;
+    }
     if (NPCMENU_IsActive())
     {
         extern DWORD g_dwPanelCloseCooldownTick;

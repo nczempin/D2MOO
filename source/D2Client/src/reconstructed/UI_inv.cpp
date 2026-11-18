@@ -3411,51 +3411,98 @@ void __stdcall INV_RenderNpcShopPanel()
     INV_RenderInventoryPageItems(pNpc);
     g_nCurrentInvPage = nPrevPage;
 
-    D2Win_10127_SetFont(D2FONT_FONTFORMAL10);
-    if (g_nInvPanelMode == 2)
-    {
-        INV_DrawAsciiTextHelper("Gamble - Right-click item to purchase", nLeft + 140, nTop + 404, 4, TRUE);
-    }
-    else if (INV_HasRepairAllButton())
-    {
-        const bool bHoverRep    = (g_nMouseX >= nLeft + 24  && g_nMouseX <= nLeft + 112 && g_nMouseY >= nTop + 384 && g_nMouseY <= nTop + 418);
-        const bool bHoverRepAll = (g_nMouseX >= nLeft + 124 && g_nMouseX <= nLeft + 244 && g_nMouseY >= nTop + 384 && g_nMouseY <= nTop + 418);
-        RECT rcRep    = { nLeft + 24,  nTop + 386, nLeft + 112, nTop + 416 };
-        RECT rcRepAll = { nLeft + 124, nTop + 386, nLeft + 244, nTop + 416 };
-        D2GFX_DrawBox(rcRep.left, rcRep.top, rcRep.right, rcRep.bottom, (g_nCursorState == 7 || bHoverRep) ? 0x62u : 0x00u, DRAWMODE_TRANS75);
-        D2GFX_DrawBox(rcRepAll.left, rcRepAll.top, rcRepAll.right, rcRepAll.bottom, bHoverRepAll ? 0x62u : 0x00u, DRAWMODE_TRANS75);
-        D2GFX_UtilRect(&rcRep, 0x0Du);
-        D2GFX_UtilRect(&rcRepAll, 0x0Du);
-        INV_DrawAsciiTextHelper((g_nCursorState == 7) ? "Repair*" : "Repair", nLeft + 68, nTop + 406, (g_nCursorState == 7 || bHoverRep) ? 4 : 0, TRUE);
-        INV_DrawAsciiTextHelper("Repair All", nLeft + 184, nTop + 406, bHoverRepAll ? 4 : 0, TRUE);
-
-        if (bHoverRepAll && g_pPlayerUnit)
-        {
-            const int32_t nAllCost = ITEMS_GetAllRepairCosts(
-                nullptr,
-                g_pPlayerUnit,
-                static_cast<int32_t>(pNpc->dwClassId),
-                static_cast<D2C_Difficulties>(g_nGameDifficulty),
-                QUESTRECORD_GetPlayerQuestFlags(g_pPlayerUnit),
-                nullptr);
-            char szRepTip[96] = {};
-            snprintf(szRepTip, sizeof(szRepTip), "Repair All Equipped: %d Gold", nAllCost > 0 ? nAllCost : 0);
-            Unicode wszRepTip[96] = {};
-            Unicode::win2Unicode(wszRepTip, szRepTip, 95);
-            D2Win_10129_DrawFramedText(wszRepTip, nLeft + 184, nTop + 378, 0, 1);
-        }
-    }
-    else
-    {
-        INV_DrawAsciiTextHelper("Right-click to Buy / Sell", nLeft + 140, nTop + 404, 5, TRUE);
-    }
-
     if (g_pBuySellBtnCell)
     {
-        D2GfxDataStrc tClose = {};
-        tClose.pCellFile = g_pBuySellBtnCell;
-        tClose.nFrame = 10;
-        TEXTURE_CelDraw(&tClose, nLeft + 272, nTop + 420, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        const bool bHasRepair = (INV_HasRepairAllButton() != FALSE);
+        D2GfxDataStrc tBtn = {};
+        tBtn.pCellFile = g_pBuySellBtnCell;
+
+        // Expansion Blacksmith Slot 0: Self-framed riveted "Repair All" stone button (frames 18/19)
+        if (g_bExpansionMode && bHasRepair)
+        {
+            tBtn.nFrame = g_bShopSubBtnPressed ? 19 : 18;
+            TEXTURE_CelDraw(&tBtn, nLeft + 64, nTop + 417, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+        }
+
+        // Well 1 (nLeft + 116): Buy (frames 2/3)
+        tBtn.nFrame = (g_nCursorState == 4) ? 3 : 2;
+        TEXTURE_CelDraw(&tBtn, nLeft + 116, nTop + 417, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+
+        // Well 2 (nLeft + 168): Sell (frames 4/5) or Blank stone cap (frame 0) in Gamble mode
+        tBtn.nFrame = (g_nInvPanelMode == 2) ? 0 : ((g_nCursorState == 5) ? 5 : 4);
+        TEXTURE_CelDraw(&tBtn, nLeft + 168, nTop + 417, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+
+        // Well 3 (nLeft + 220): Repair (frames 6/7) on Blacksmiths or Blank stone cap (frame 0)
+        tBtn.nFrame = bHasRepair ? ((g_nCursorState == 7) ? 7 : 6) : 0;
+        TEXTURE_CelDraw(&tBtn, nLeft + 220, nTop + 417, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+
+        // Well 4 (nLeft + 272): Cancel / Close (frames 10/11)
+        tBtn.nFrame = g_bShopCloseBtnDown ? 11 : 10;
+        TEXTURE_CelDraw(&tBtn, nLeft + 272, nTop + 417, 0xFFFFFFFFu, DRAW_MODE_NORMAL, nullptr);
+
+        // Authentic button hover tooltips when no item is held on cursor
+        if (g_pPlayerUnit && (!g_pPlayerUnit->pInventory || !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory)) &&
+            g_nMouseY >= nTop + 385 && g_nMouseY <= nTop + 417)
+        {
+            D2Win_10127_SetFont(D2FONT_FONT16);
+            if (g_bExpansionMode && bHasRepair && g_nMouseX >= nLeft + 64 && g_nMouseX < nLeft + 96)
+            {
+                const int32_t nAllCost = ITEMS_GetAllRepairCosts(
+                    nullptr,
+                    g_pPlayerUnit,
+                    static_cast<int32_t>(pNpc->dwClassId),
+                    static_cast<D2C_Difficulties>(g_nGameDifficulty),
+                    QUESTRECORD_GetPlayerQuestFlags(g_pPlayerUnit),
+                    nullptr);
+                if (nAllCost > 0)
+                {
+                    const Unicode* pFmt = D2LANG_GetStringFromTblIndex(10095); // "Repair all equipment: %d"
+                    wchar_t wszRepTip[96] = {};
+                    if (pFmt && pFmt->ch != 0)
+                    {
+                        _snwprintf(wszRepTip, 95, reinterpret_cast<const wchar_t*>(pFmt), nAllCost);
+                    }
+                    else
+                    {
+                        _snwprintf(wszRepTip, 95, L"Repair all equipment: %d", nAllCost);
+                    }
+                    wszRepTip[95] = 0;
+                    D2Win_10129_DrawFramedText(reinterpret_cast<const Unicode*>(wszRepTip), nLeft + 80, nTop + 378, 0, 1);
+                }
+                else if (const Unicode* pNoRep = D2LANG_GetStringFromTblIndex(10096)) // "No equipped items need repairing"
+                {
+                    D2Win_10129_DrawFramedText(pNoRep, nLeft + 80, nTop + 378, 0, 1);
+                }
+            }
+            else if (g_nMouseX >= nLeft + 116 && g_nMouseX < nLeft + 148)
+            {
+                if (const Unicode* pTip = D2LANG_GetStringFromTblIndex(3335)) // "Buy"
+                {
+                    D2Win_10129_DrawFramedText(pTip, nLeft + 132, nTop + 378, 0, 1);
+                }
+            }
+            else if (g_nInvPanelMode != 2 && g_nMouseX >= nLeft + 168 && g_nMouseX < nLeft + 200)
+            {
+                if (const Unicode* pTip = D2LANG_GetStringFromTblIndex(3336)) // "Sell"
+                {
+                    D2Win_10129_DrawFramedText(pTip, nLeft + 184, nTop + 378, 0, 1);
+                }
+            }
+            else if (bHasRepair && g_nMouseX >= nLeft + 220 && g_nMouseX < nLeft + 252)
+            {
+                if (const Unicode* pTip = D2LANG_GetStringFromTblIndex(3338)) // "Repair"
+                {
+                    D2Win_10129_DrawFramedText(pTip, nLeft + 236, nTop + 378, 0, 1);
+                }
+            }
+            else if (g_nMouseX >= nLeft + 272 && g_nMouseX < nLeft + 304)
+            {
+                if (const Unicode* pTip = D2LANG_GetStringFromTblIndex(4130)) // "Cancel"
+                {
+                    D2Win_10129_DrawFramedText(pTip, nLeft + 288, nTop + 378, 0, 1);
+                }
+            }
+        }
     }
 }
 
@@ -4142,13 +4189,13 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
         if (nX >= g_tInvGridLayout.nLeft && nX <= g_tInvGridLayout.nRight &&
             nY >= g_tInvGridLayout.nTop  && nY <= g_tInvGridLayout.nBottom)
         {
-            if (bRightButton && g_nCursorState == 7)
+            if (bRightButton && (g_nCursorState == 4 || g_nCursorState == 5 || g_nCursorState == 7))
             {
                 g_nCursorState = 0;
                 SMsgBreakHandlerChain(pMsg);
                 return;
             }
-            if ((bRightButton || (pMsg->wParam & MK_CONTROL) != 0) &&
+            if ((bRightButton || (pMsg->wParam & MK_CONTROL) != 0 || (!bRightButton && (g_nCursorState == 5 || g_nCursorState == 7))) &&
                 g_bNpcShopPanelOpen && g_nInvPanelMode >= 1 && g_nInvPanelMode <= 9)
             {
                 D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
@@ -4166,7 +4213,14 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
                         int32_t iy = g_tInvGridLayout.nTop  + UNITS_GetYPosition(pIt) * nCellH;
                         if (nX >= ix && nX < ix + (int32_t)w * nCellW && nY >= iy && nY < iy + (int32_t)h * nCellH)
                         {
-                            INV_InitiateShopItemTransaction(pIt, nY, pNpc, TRUE, nX);
+                            if (!bRightButton && g_nCursorState == 7)
+                            {
+                                NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, pIt->dwUnitId, 0u, 0u);
+                            }
+                            else
+                            {
+                                INV_InitiateShopItemTransaction(pIt, nY, pNpc, TRUE, nX);
+                            }
                             SMsgBreakHandlerChain(pMsg);
                             return;
                         }
@@ -4282,27 +4336,47 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
             }
         }
 
-        // NPC Shop Repair / Repair All action buttons
-        if (!bRightButton && INV_HasRepairAllButton() &&
+        // NPC Shop bottom action buttons: Repair All (64), Buy (116), Sell (168), Repair (220)
+        if (!bRightButton &&
             nY >= nPanelTop + 384 && nY <= nPanelTop + 418 &&
             !INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory))
         {
-            if (nX >= nLeftPanelX + 24 && nX <= nLeftPanelX + 112)
+            const bool bHasRepair = (INV_HasRepairAllButton() != FALSE);
+            if (g_bExpansionMode && bHasRepair && nX >= nLeftPanelX + 64 && nX < nLeftPanelX + 96)
             {
-                g_nCursorState = (g_nCursorState == 7) ? 0 : 7;
+                g_nCursorState = 0;
+                if (D2UnitStrc* pNpc = INV_GetInteractedNpcUnit())
+                {
+                    NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, 0u, 0u, 0x80000000u);
+                    SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
+                }
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+            if (nX >= nLeftPanelX + 116 && nX < nLeftPanelX + 148)
+            {
+                g_nCursorState = (g_nCursorState == 4) ? 0 : 4;
                 SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
                 pMsg->bHandled = TRUE;
                 pMsg->lResult = 0;
                 SMsgBreakHandlerChain(pMsg);
                 return;
             }
-            if (nX >= nLeftPanelX + 124 && nX <= nLeftPanelX + 244)
+            if (g_nInvPanelMode != 2 && nX >= nLeftPanelX + 168 && nX < nLeftPanelX + 200)
             {
-                if (D2UnitStrc* pNpc = INV_GetInteractedNpcUnit())
-                {
-                    NET_SendByteAndFourDwords(0x35u, pNpc->dwUnitId, 0u, 0u, 0x80000000u);
-                    SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
-                }
+                g_nCursorState = (g_nCursorState == 5) ? 0 : 5;
+                SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
+            if (bHasRepair && nX >= nLeftPanelX + 220 && nX < nLeftPanelX + 252)
+            {
+                g_nCursorState = (g_nCursorState == 7) ? 0 : 7;
+                SOUND_PlaySoundEffect(4, NULL, 0, 0, FALSE);
                 pMsg->bHandled = TRUE;
                 pMsg->lResult = 0;
                 SMsgBreakHandlerChain(pMsg);
@@ -4314,6 +4388,14 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
         if (nX >= g_rNpcShopGridRect.left && nX <= g_rNpcShopGridRect.right &&
             nY >= g_rNpcShopGridRect.top  && nY <= g_rNpcShopGridRect.bottom)
         {
+            if (bRightButton && (g_nCursorState == 4 || g_nCursorState == 5 || g_nCursorState == 7))
+            {
+                g_nCursorState = 0;
+                pMsg->bHandled = TRUE;
+                pMsg->lResult = 0;
+                SMsgBreakHandlerChain(pMsg);
+                return;
+            }
             D2UnitStrc* pNpc = INV_GetInteractedNpcUnit();
             D2UnitStrc* pCursorItem = g_pPlayerUnit->pInventory ? INVENTORY_GetCursorItem(g_pPlayerUnit->pInventory) : nullptr;
             if (pNpc && pCursorItem && !bRightButton)
@@ -4336,7 +4418,7 @@ void __stdcall INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg)
                     int32_t iy = g_rNpcShopGridRect.top  + UNITS_GetYPosition(pIt) * 29;
                     if (nX >= ix && nX < ix + (int32_t)w * 29 && nY >= iy && nY < iy + (int32_t)h * 29)
                     {
-                        if (bRightButton || (pMsg->wParam & MK_SHIFT) != 0)
+                        if (bRightButton || (pMsg->wParam & MK_SHIFT) != 0 || g_nCursorState == 4)
                         {
                             INV_InitiateShopItemTransaction(pIt, nY, pNpc, FALSE, nX);
                         }

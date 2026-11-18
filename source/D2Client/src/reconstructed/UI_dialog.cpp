@@ -395,6 +395,7 @@ void __fastcall DIALOG_AutoCalcBounds(D2DialogStrc* pDialog)
     int nTotalHeight = 0;
     int nNonSelectableCount = 0;
     for (int i = 0; i < pDialog->nLineCount; ++i) {
+        D2Win_10127_SetFont(pDialog->aLines[i].nFont);
         int nLineWidth = D2Win_10121_GetTextWidth(reinterpret_cast<const Unicode*>(pDialog->aLines[i].wszText));
         if (nLineWidth > nMaxWidth) {
             nMaxWidth = nLineWidth;
@@ -404,8 +405,11 @@ void __fastcall DIALOG_AutoCalcBounds(D2DialogStrc* pDialog)
         }
         nTotalHeight += pDialog->aLines[i].nLineHeight;
     }
-    nMaxWidth += 20;
-    nTotalHeight += 15;
+    nMaxWidth += 68;
+    if (nMaxWidth < 144) {
+        nMaxWidth = 144;
+    }
+    nTotalHeight += 18;
     D2Win_10127_SetFont(nOldFont);
 
     pDialog->nPosX = pDialog->nAnchorX - (nMaxWidth / 2);
@@ -528,12 +532,28 @@ void __fastcall DIALOG_Render(D2DialogStrc* pDialog)
         if (pDialog->nSelectedIndex == i) {
             if (pDialog->nSelectionCursorMode == 1) {
                 nColor = 3;
-            } else if (pDialog->nSelectionCursorMode == 2 && g_pPentagramCel) {
-                gfxData.pCellFile = g_pPentagramCel;
-                gfxData.nFrame = g_dwPentagramFrame % 7;
-                TEXTURE_CelDraw(&gfxData, nDrawX - 24, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
-                TEXTURE_CelDraw(&gfxData, nDrawX + pLine->nTextWidth + 2, nDrawY + 4, 0xFFFFFFFF, 5, nullptr);
-                g_dwPentagramFrame++;
+            } else if (pDialog->nSelectionCursorMode == 2) {
+                if (!g_pPentagramCel) {
+                    g_pPentagramCel = ARCHIVE_LoadCellFileDefault("CURSOR\\focus16", 0);
+                }
+                if (g_pPentagramCel) {
+                    extern int32_t __stdcall D2CMP_CelFileGetCelsPerDirection(D2CellFileStrc* pCellFile);
+                    int32_t nSpinFrames = D2CMP_CelFileGetCelsPerDirection(g_pPentagramCel);
+                    int32_t nAnimIdx = (nSpinFrames > 0) ? static_cast<int32_t>((GetTickCount() / 60u) % static_cast<uint32_t>(nSpinFrames)) : 0;
+                    gfxData.pCellFile = g_pPentagramCel;
+                    gfxData.nFrame = nAnimIdx;
+                    int32_t nIconW = 16;
+                    if (void* pCelH = D2CMP_CelGetHandle(&gfxData)) {
+                        int32_t nQueryW = D2CMP_CelGetWidth(pCelH);
+                        if (nQueryW > 0 && nQueryW <= 32) {
+                            nIconW = nQueryW;
+                        }
+                    }
+                    TEXTURE_CelDraw(&gfxData, nDrawX - nIconW - 5, nDrawY + 2, 0xFFFFFFFF, 5, nullptr);
+                    gfxData.nFrame = (nSpinFrames > 1) ? (nSpinFrames - 1 - nAnimIdx) : nAnimIdx;
+                    TEXTURE_CelDraw(&gfxData, nDrawX + pLine->nTextWidth + 5, nDrawY + 2, 0xFFFFFFFF, 5, nullptr);
+                    g_dwPentagramFrame++;
+                }
             }
         }
         D2Win_10117_DrawText(reinterpret_cast<const Unicode*>(pLine->wszText), nDrawX, nDrawY, nColor, 0);
@@ -551,12 +571,13 @@ void __stdcall DIALOG_ConsumeMsgAndOptionalCancel(void* pMsg, int bInvokeCancel)
     if (bInvokeCancel) {
         D2DialogStrc* pDialog = g_pActiveDialog;
         if (!pDialog) {
-            FOG_DisplayHalt("%s", Fog_10265(0x1C2));
-            exit(-1);
+            return;
         }
-        if (pDialog->dwFrameCount >= 5 && pDialog->pfnCancel) {
+        if (pDialog->dwFrameCount >= 1 && pDialog->pfnCancel) {
+            extern DWORD g_dwPanelCloseCooldownTick;
             pDialog->pfnCancel();
             UI_StartPanelCloseClickCooldown();
+            g_dwPanelCloseCooldownTick = GetTickCount() + 500u;
         }
     }
 }
@@ -580,8 +601,7 @@ void __stdcall DIALOG_OnMouseButtonUp(void* pMsg)
     static_cast<D2DialogMsgStrc*>(pMsg)->lResult = 0;
     SMsgBreakHandlerChain(pMsg);
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x123));
-        exit(-1);
+        return;
     }
     if (pDialog->bMousePressedInDialog != 1) {
         for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
@@ -596,7 +616,7 @@ void __stdcall DIALOG_OnMouseButtonUp(void* pMsg)
     }
     int nHitLine = DIALOG_HitTestSelectableLine(pDialog, pMsg);
     if (pDialog->nHoveredIndex == nHitLine && nHitLine >= 0 && nHitLine < pDialog->nLineCount) {
-        auto pfnAction = pDialog->aLines[pDialog->nSelectedIndex].pfnAction;
+        auto pfnAction = pDialog->aLines[nHitLine].pfnAction;
         if (pfnAction && pfnAction()) {
             return;
         }
@@ -607,21 +627,27 @@ void __stdcall DIALOG_OnMouseButtonUp(void* pMsg)
 // 1.12a: 0x6FB13290 (__cdecl)
 void __cdecl DIALOG_CloseActive()
 {
-    if (--g_nActiveDialogCount != 0) {
-        FOG_DisplayHalt("%s", Fog_10265(0x441));
-        exit(-1);
-    }
-    if (gaPanelStates[D2PANEL_AUTOMAP]) {
-        WALL2_RegisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
-    }
-    WALL2_UnregisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
-    if (GAME_HasMouseWheelB()) {
-        WALL2_UnregisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
-    }
     D2DialogStrc* pDialog = g_pActiveDialog;
-    s_bDialogCursorInvalidated = 1;
-    g_bDialogBoundsValid = 0;
-    g_bDialogOpen = 0;
+    if (!pDialog || g_nActiveDialogCount <= 0) {
+        g_nActiveDialogCount = 0;
+        g_pActiveDialog = nullptr;
+        g_bDialogOpen = 0;
+        g_bDialogBoundsValid = 0;
+        return;
+    }
+    --g_nActiveDialogCount;
+    if (g_nActiveDialogCount == 0) {
+        if (gaPanelStates[D2PANEL_AUTOMAP]) {
+            WALL2_RegisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
+        }
+        WALL2_UnregisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+        if (GAME_HasMouseWheelB()) {
+            WALL2_UnregisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
+        }
+        s_bDialogCursorInvalidated = 1;
+        g_bDialogBoundsValid = 0;
+        g_bDialogOpen = 0;
+    }
 
     D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList;
     while (pNode) {
@@ -677,7 +703,7 @@ void __cdecl DIALOG_DestroyAll()
 // 1.12a: 0x6FB134E0 (register: eax=pDialog, edi=nKey)
 int32_t __fastcall DIALOG_IsIgnoredMenuHotkey(D2DialogStrc* pDialog, int nKey)
 {
-    if (pDialog->bIgnoreMenuHotkeys) {
+    if (!pDialog || pDialog->bIgnoreMenuHotkeys || gaPanelStates[D2PANEL_CHAT] == 0) {
         return 0;
     }
     if (CMDTBL_HasKeyBound(5, 1) && CMDTBL_GetBoundKey(5, 1) == nKey) {
@@ -704,12 +730,13 @@ void __stdcall DIALOG_OnEscapeKey(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x1C2));
-        exit(-1);
+        return;
     }
-    if (pDialog->dwFrameCount >= 5 && pDialog->pfnCancel) {
+    if (pDialog->dwFrameCount >= 1 && pDialog->pfnCancel) {
+        extern DWORD g_dwPanelCloseCooldownTick;
         pDialog->pfnCancel();
         UI_StartPanelCloseClickCooldown();
+        g_dwPanelCloseCooldownTick = GetTickCount() + 500u;
     }
 }
 
@@ -717,6 +744,9 @@ void __stdcall DIALOG_OnEscapeKey(void* pMsg)
 void __stdcall DIALOG_OnMenuCancelHotkey(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
+    if (!pDialog) {
+        return;
+    }
     if (pDialog->bIgnoreMenuHotkeys || gaPanelStates[D2PANEL_CHAT] == 0) {
         DIALOG_ConsumeMsgAndOptionalCancel(pMsg, pDialog->bCloseOnRightClick == 0);
     }
@@ -735,7 +765,7 @@ D2DialogStrc* __stdcall DIALOG_CreateFramed(
     int bCloseOnRightClick,
     int bIgnoreMenuHotkeys)
 {
-    if (gaPanelStates[D2PANEL_AUTOMAP]) {
+    if (g_nActiveDialogCount == 0 && gaPanelStates[D2PANEL_AUTOMAP]) {
         WALL2_UnregisterMsgHandlerTable(5, WINDOW_GetWindow(), s_aAutomapArrowHandlers);
     }
     INV_ClearHoveredItemState();
@@ -751,6 +781,7 @@ D2DialogStrc* __stdcall DIALOG_CreateFramed(
     if (nAnchorX == 0) {
         return nullptr;
     }
+    const bool bFirstDialog = (g_nActiveDialogCount == 0);
     g_nActiveDialogCount++;
     D2DialogStrc* pDialog = static_cast<D2DialogStrc*>(
         FOG_AllocClientMemory(sizeof(D2DialogStrc), "..\\Source\\D2Client\\UI\\dialog.cpp", 0x3ED, 0));
@@ -777,15 +808,13 @@ D2DialogStrc* __stdcall DIALOG_CreateFramed(
     pDialog->dwCreationTick = GetTickCount();
 
     g_bDialogOpen = 1;
-    DIALOG_BindMenuCancelHotkeys();
-    WALL2_RegisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
-    if (GAME_HasMouseWheelB()) {
-        WALL2_RegisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
-    }
-    g_nDialogModalRefCount++;
-    if (g_nActiveDialogCount != 1) {
-        FOG_DisplayHalt("%s", Fog_10265(0x410));
-        exit(-1);
+    if (bFirstDialog) {
+        DIALOG_BindMenuCancelHotkeys();
+        WALL2_RegisterMsgHandlerTable(14, WINDOW_GetWindow(), s_aDialogMsgHandlers);
+        if (GAME_HasMouseWheelB()) {
+            WALL2_RegisterMsgHandlerTable(1, WINDOW_GetWindow(), s_aDialogWheelHandlers);
+        }
+        g_nDialogModalRefCount++;
     }
     return pDialog;
 }
@@ -871,10 +900,9 @@ void __stdcall DIALOG_OnReturnKey(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x2C8));
-        exit(-1);
+        return;
     }
-    if (pDialog->dwFrameCount < 5 || DIALOG_IsIgnoredMenuHotkey(pDialog, VK_RETURN)) {
+    if (pDialog->dwFrameCount < 1 || DIALOG_IsIgnoredMenuHotkey(pDialog, VK_RETURN)) {
         return;
     }
     if (pDialog->nSelectedIndex >= 0 && pDialog->nSelectedIndex < pDialog->nLineCount) {
@@ -891,13 +919,14 @@ void __stdcall DIALOG_OnReturnKey(void* pMsg)
 int32_t __stdcall DIALOG_UpdateHoveredLine(D2DialogStrc* pDialog, void* pMsg)
 {
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0xE1));
-        exit(-1);
+        return 0;
     }
     int nPrevSelected = pDialog->nSelectedIndex;
     int nHitLine = DIALOG_HitTestSelectableLine(pDialog, pMsg);
-    pDialog->nSelectedIndex = nHitLine;
     pDialog->nHoveredIndex = nHitLine;
+    if (nHitLine != -1) {
+        pDialog->nSelectedIndex = nHitLine;
+    }
     if (nHitLine != nPrevSelected && nHitLine != -1) {
         SOUND_PlaySoundEffect(1, nullptr, 0, 0, 0);
         return 1;
@@ -930,8 +959,7 @@ void __stdcall DIALOG_OnCharKey(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x2EE));
-        exit(-1);
+        return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnKeyDown(pNode->pWidget, pMsg)) {
@@ -961,8 +989,7 @@ void __stdcall DIALOG_OnDownArrow(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x290));
-        exit(-1);
+        return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnDownArrow(pNode->pWidget, pMsg) == 1) {
@@ -980,8 +1007,7 @@ void __stdcall DIALOG_OnUpArrow(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x272));
-        exit(-1);
+        return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnUpArrow(pNode->pWidget, pMsg) == 1) {
@@ -999,8 +1025,7 @@ void __stdcall DIALOG_OnLeftArrow(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x255));
-        exit(-1);
+        return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnRightArrow(pNode->pWidget, pMsg) == 1) {
@@ -1018,8 +1043,7 @@ void __stdcall DIALOG_OnRightArrow(void* pMsg)
     SMsgBreakHandlerChain(pMsg);
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x235));
-        exit(-1);
+        return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
         if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnLeftArrow(pNode->pWidget, pMsg) == 1) {
@@ -1037,8 +1061,7 @@ void __stdcall DIALOG_OnMouseWheel(void* pMsg)
     if (nWheelDelta != 0 && nSteps != 0) {
         D2DialogStrc* pDialog = g_pActiveDialog;
         if (!pDialog) {
-            FOG_DisplayHalt("%s", Fog_10265(0x1F9));
-            exit(-1);
+            return;
         }
         for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {
             if (pNode->pWidget && pNode->pWidget->pVtbl->pfnOnMouseWheel(pNode->pWidget, pMsg) == 1) {
@@ -1057,8 +1080,7 @@ void __stdcall DIALOG_OnMouseButtonDown(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
     if (!pDialog) {
-        FOG_DisplayHalt("%s", Fog_10265(0x15B));
-        exit(-1);
+        return;
     }
     if (pDialog->dwCreationTick + 80 > GetTickCount()) {
         static_cast<D2DialogMsgStrc*>(pMsg)->bHandled = 1;
@@ -1123,7 +1145,7 @@ void __stdcall DIALOG_OnMouseButtonDown(void* pMsg)
 void __stdcall DIALOG_OnMouseMove(void* pMsg)
 {
     D2DialogStrc* pDialog = g_pActiveDialog;
-    if (pDialog->dwCreationTick + 80 > GetTickCount()) {
+    if (!pDialog || pDialog->dwCreationTick + 80 > GetTickCount()) {
         return;
     }
     for (D2DialogWidgetNodeStrc* pNode = pDialog->pWidgetList; pNode; pNode = pNode->pNext) {

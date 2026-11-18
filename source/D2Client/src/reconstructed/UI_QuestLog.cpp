@@ -1628,9 +1628,15 @@ void __stdcall QUESTLOG_TogglePanel(int32_t bCenterCursor)
 
         QUESTLOG_LoadPanelSprites();
         g_nQuestLogOpenState = 2;
+        UI_SetPanelState(15, 0, bCenterCursor);
+        g_dwLastToggleTick = GetTickCount();
         QUESTLOG_SelectPlayerCurrentActTab();
         QUESTLOG_LoadActIconsAndSelectDefaultSocket(g_nCurrentQuestActTab, 0);
         MSG_SendBytePacket(0x40); // C2S_QUESTLOG_REQUEST (0x40)
+        if (bCenterCursor)
+        {
+            SOUND_PlaySoundEffect(4, 0, 0, 0);
+        }
     }
     else
     {
