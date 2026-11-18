@@ -59,16 +59,14 @@ inline int32_t D2Common_10398(int32_t nX1, int32_t nY1, int32_t nX2, int32_t nY2
     return PATH_ComputeSquaredDistance(nX1, nY1, nX2, nY2);
 }
 
+extern void __stdcall D2Client_TeleportUnitToCoordinates(D2UnitStrc* pUnit, int32_t nX, int32_t nY, int32_t bTeleportEffect);
 inline void D2Common_10212(D2DynamicPathStrc* pDynamicPath, D2UnitStrc* pUnit, int32_t a3, int32_t nX, int32_t nY)
 {
+    (void)pDynamicPath;
     (void)a3;
-    if (pDynamicPath)
-    {
-        D2COMMON_10170_PathSetTargetPos(pDynamicPath, nX, nY);
-    }
     if (pUnit)
     {
-        D2COMMON_10212_PATH_SetMoveFlags(pUnit, TRUE);
+        D2Client_TeleportUnitToCoordinates(pUnit, nX, nY, 0);
     }
 }
 
@@ -2982,47 +2980,42 @@ void __fastcall D2Client_TryAttackOrCastOnPlayer(int32_t nTargetUnitType, uint32
 }
 
 // 1.12a: 0x6FAF1D90 (__fastcall)
+extern void __stdcall D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(D2UnitStrc* pUnit, int32_t nArgXOrType, uint32_t dwArgYOrGUID, int32_t nActionCode, BOOL bForce);
 void __fastcall D2Client_ProcessQueuedPlayerAction(D2UnitStrc* pUnit)
 {
-    if (pUnit != gpPlayerUnit)
+    if (!pUnit || pUnit != gpPlayerUnit || pUnit->dwUnitType != UNIT_PLAYER || !pUnit->pPlayerData)
     {
         return;
     }
 
-    D2ClientPlayerQueueDataStrc* pPlayerData = reinterpret_cast<D2ClientPlayerQueueDataStrc*>(UNITS_GetPlayerData(pUnit));
-    if (pPlayerData->bHasQueuedTargetedAction)
+    if (pUnit->pPlayerData->unk0xA8[42] != 0 && pUnit->pPlayerData->unk0xA8[43] != 0)
     {
-        pPlayerData->bHasQueuedTargetedAction = 0;
-        D2UnitStrc* pTarget = D2Client_FindServerSideUnit(pPlayerData->dwQueuedTargetGUID, pPlayerData->dwQueuedTargetType);
-        if (pTarget && (pTarget->dwFlags & UNITFLAG_TARGETABLE))
+        const uint32_t dwActionCode = pUnit->pPlayerData->unk0xA8[43];
+        const int32_t  nTargetType  = static_cast<int32_t>(pUnit->pPlayerData->unk0xA8[44]);
+        const uint32_t dwTargetGUID = pUnit->pPlayerData->unk0xA8[45];
+        pUnit->pPlayerData->unk0xA8[42] = 0;
+        pUnit->pPlayerData->unk0xA8[43] = 0;
+        pUnit->pPlayerData->unk0xA8[44] = 0;
+        pUnit->pPlayerData->unk0xA8[45] = 0;
+
+        D2UnitStrc* pTarget = D2Client_FindServerSideUnit(dwTargetGUID, nTargetType);
+        if (!pTarget)
         {
-            D2Client_ExecuteLocalPlayerTargetedAction(
-                pPlayerData->dwQueuedActionMode,
-                pPlayerData->dwQueuedTargetType,
-                pPlayerData->dwQueuedTargetGUID);
             return;
         }
-
-        if (pPlayerData->dwQueuedTargetType == UNIT_PLAYER || pPlayerData->dwQueuedTargetType == UNIT_MONSTER)
+        if (dwActionCode == 0x13u)
         {
-            int32_t nMouseX = D2Client_GetMouseX_6FB55BC0();
-            int32_t nMouseY = D2Client_GetMouseY_6FB55BD0();
-            int32_t nWorldX = 0;
-            int32_t nWorldY = 0;
-            D2Client_ScreenToWorldCoords_6FB23AD0(nMouseX, nMouseY, &nWorldX, &nWorldY);
-
-            BOOL bRun = D2Client_ShouldPlayerRun_6FB08840();
-            D2Client_ExecuteOrQueuePlayerMoveOrInteract(pUnit, bRun ? PLRMODE_RUN : PLRMODE_WALK, nWorldX, nWorldY);
+            D2Client_InteractWithServerUnit(nTargetType, dwTargetGUID);
         }
-    }
-    else if (pPlayerData->bHasQueuedLocationAction)
-    {
-        pPlayerData->bHasQueuedLocationAction = 0;
-        D2Client_ExecuteOrQueuePlayerMoveOrInteract(
-            pUnit,
-            pPlayerData->dwQueuedLocationMode,
-            pPlayerData->dwQueuedLocationX,
-            pPlayerData->dwQueuedLocationY);
+        else if (dwActionCode == 0x06u)
+        {
+            D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(pUnit, nTargetType, dwTargetGUID, 6, TRUE);
+        }
+        else if (dwActionCode == 0x0Du)
+        {
+            D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(pUnit, nTargetType, dwTargetGUID, 0x0D, TRUE);
+        }
+        return;
     }
 }
 
@@ -3081,6 +3074,8 @@ BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit)
         break;
     }
 
+    extern void __fastcall SCMD_DrainUnitPacketQueue(D2UnitStrc* pUnit);
+
     if (pUnit->dwUnitType == UNIT_PLAYER)
     {
         int32_t nAnimMode = pUnit->dwAnimMode;
@@ -3095,6 +3090,7 @@ BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit)
         {
             D2Client_OnPlayerAnimSequenceFinished_6FB0CF70(pUnit);
         }
+        SCMD_DrainUnitPacketQueue(pUnit);
         return TRUE;
     }
 
@@ -3112,6 +3108,7 @@ BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit)
         {
             D2Client_OnMonsterAnimSequenceFinished_6FAE5D10(pUnit);
         }
+        SCMD_DrainUnitPacketQueue(pUnit);
         return TRUE;
     }
 
@@ -3133,5 +3130,6 @@ BOOL __fastcall D2Client_UpdateSingleUnitPerTick(D2UnitStrc* pUnit)
         }
     }
 
+    SCMD_DrainUnitPacketQueue(pUnit);
     return TRUE;
 }

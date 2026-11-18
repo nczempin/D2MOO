@@ -125,12 +125,17 @@ struct D2WinEditBoxStrc;
 // ============================================================================
 // External Imports (Resolved from imports_map.json & D2MOO headers)
 // ============================================================================
+typedef void (CALLBACK* SMSGHANDLER)(void*);
+
 extern "C" {
     // Storm.dll
-    int32_t __stdcall SFileOpenFileEx(HANDLE hArchive, const char* szFilename, uint32_t dwSearchScope, HANDLE* phFile); // Storm.#268 (0x6FABC2BE)
-    uint32_t __stdcall SFileGetFileSize(HANDLE hFile, uint32_t* lpFileSizeHigh);          // Storm.#265 (0x6FABC2C4)
-    int32_t __stdcall SFileReadFile(HANDLE hFile, void* pBuffer, uint32_t nToRead, uint32_t* pRead, OVERLAPPED* pOverlap); // Storm.#269 (0x6FABC2B2)
-    int32_t __stdcall SFileCloseFile(HANDLE hFile);                                       // Storm.#253 (0x6FABC2B8)
+    int32_t __stdcall SFileOpenFileEx(HANDLE hArchive, const char* szFilename, uint32_t dwSearchScope, HANDLE* phFile);
+    uint32_t __stdcall SFileGetFileSize(HANDLE hFile, uint32_t* lpFileSizeHigh);
+    int32_t __stdcall SFileReadFile(HANDLE hFile, void* pBuffer, uint32_t nToRead, uint32_t* pRead, OVERLAPPED* pOverlap);
+    int32_t __stdcall SFileCloseFile(HANDLE hFile);
+    BOOL __stdcall SRegLoadValue(const char* keyname, const char* valuename, uint32_t nFlags, DWORD* value);
+    BOOL __stdcall SRegSaveValue(const char* keyname, const char* valuename, BYTE flags, DWORD result);
+    int32_t __stdcall SMsgBreakHandlerChain(void* pMsg);
 
     // D2Win.dll
     int32_t __fastcall D2WIN_SetFont(int32_t nFont);                                      // D2Win.#10184 (0x6FABC394)
@@ -447,7 +452,7 @@ void __fastcall PANEL_DrawBeltItemTooltip(int32_t nMouseX /*ecx*/, int32_t nMous
         return;
     }
 
-    int32_t nBeltStartX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 23) : (gnScreenWidth / 2 + 102);
+    int32_t nBeltStartX = gnScreenWidth / 2 + 23;
     if (nMouseX < nBeltStartX || nMouseX > nBeltStartX + 123) {
         return;
     }
@@ -556,8 +561,8 @@ void __fastcall PANEL_DrawBeltSlotsAndPotions()
         g_nEquippedBeltRows = nBeltRows;
     }
 
-    const int32_t nBeltBaseX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 18) : (gnScreenWidth / 2 + 95);
-    const int32_t nSlotBaseX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 23) : (gnScreenWidth / 2 + 102);
+    const int32_t nBeltBaseX = gnScreenWidth / 2 + 18;
+    const int32_t nSlotBaseX = gnScreenWidth / 2 + 23;
     int32_t nBeltTopY = gnScreenHeight - 48;
 
     // If expanded belt panel (0x1F) is open, draw extra belt rows
@@ -741,7 +746,7 @@ void __fastcall PANEL_OnRButtonDown(D2MsgStrc* pMsg /*eax*/)
 
     int32_t nMouseX = (int32_t)D2MsgView(pMsg)->nX;
     int32_t nMouseY = (int32_t)D2MsgView(pMsg)->nY;
-    int32_t nBeltStartX = (gnScreenWidth >= 800) ? (gnScreenWidth / 2 + 23) : (gnScreenWidth / 2 + 102);
+    int32_t nBeltStartX = gnScreenWidth / 2 + 23;
     if (nMouseX < nBeltStartX || nMouseX > nBeltStartX + 123) {
         return;
     }
@@ -1350,13 +1355,70 @@ void __fastcall UI_SendSimulatedMouseMove()
 }
 
 // 1.12a: 0x6FB3B480 (__stdcall)
-void __stdcall UI_CloseAllPanels()
+int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap)
 {
+    extern int32_t __fastcall D2Client_IsNpcGossipSpeechOpen(void);
+    extern void    __fastcall D2Client_CloseNpcGossipSpeech(void);
+    extern int32_t __fastcall D2Client_IsGoldDialogOpen(void);
+    extern void    __fastcall D2Client_CloseGoldDialog(void);
+    extern void    __stdcall  UI_CloseEscOptionsMenu(int32_t bRestorePanels);
+
+    int32_t bClosedAny = 0;
+    if (D2Client_IsGoldDialogOpen() != 0) {
+        D2Client_CloseGoldDialog();
+        bClosedAny = 1;
+    }
+    if (D2Client_IsNpcGossipSpeechOpen() != 0) {
+        D2Client_CloseNpcGossipSpeech();
+        bClosedAny = 1;
+    }
+    if (gaPanelStates[D2PANEL_NPCMENU] != 0) {
+        if (g_nInteractingNpcGUID != 0) {
+            MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, static_cast<uint32_t>(g_nInteractingNpcGUID));
+        }
+        g_bInteractingWithNpc = 0;
+        g_nInteractingNpcGUID = 0;
+        g_nInteractingNpcClassId = 0;
+        g_pTradeNpcUnit = nullptr;
+        UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+        bClosedAny = 1;
+    }
+    if (gaPanelStates[D2PANEL_ESCMENU] != 0) {
+        UI_CloseEscOptionsMenu(0);
+        bClosedAny = 1;
+    }
     for (int32_t i = 1; i < D2PANEL_COUNT; ++i) {
-        if (i != D2PANEL_AUTOMAP && i != D2PANEL_MINIPANEL && i != D2PANEL_SHOWITEMS && gaPanelStates[i] != 0) {
+        if (i == D2PANEL_MINIPANEL || i == D2PANEL_SHOWITEMS) {
+            continue;
+        }
+        if (i == D2PANEL_AUTOMAP && bCloseAutomap == 0) {
+            continue;
+        }
+        if (gaPanelStates[i] != 0) {
+            if (i == D2PANEL_NPCSHOP && g_nInteractingNpcGUID != 0) {
+                MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, static_cast<uint32_t>(g_nInteractingNpcGUID));
+                g_bInteractingWithNpc = 0;
+                g_nInteractingNpcGUID = 0;
+                g_nInteractingNpcClassId = 0;
+                g_pTradeNpcUnit = nullptr;
+            }
+            if (i == D2PANEL_STASH) {
+                MSG_SendByte3Words(0x4Fu, 0x12u, 0u, 0u);
+            } else if (i == D2PANEL_CUBE) {
+                MSG_SendByte3Words(0x4Fu, 0x17u, 0u, 0u);
+            } else if (i == D2PANEL_WAYPOINT && g_dwActiveWaypointGuid != 0u) {
+                MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, 0u);
+            }
             UI_SetPanelState(i, 1, 0);
+            bClosedAny = 1;
         }
     }
+    return bClosedAny;
+}
+
+void __stdcall UI_CloseAllPanels()
+{
+    (void)UI_CloseOpenPanelsCount(0);
 }
 
 // 1.12a: 0x6FB3B520 (__fastcall, 2 stack args: ret 8)
@@ -1942,6 +2004,12 @@ void __fastcall UI_OnPanelOpened(int32_t nPanelId /*eax*/)
         if (!gaPanelStates[D2PANEL_INVENTORY]) {
             UI_SetPanelState(D2PANEL_INVENTORY, 0, 0);
         }
+    } else if (nPanelId == D2PANEL_SKILLSELECT) {
+        if (g_nSpeedBarSide != 1 && g_nSpeedBarSide != 2) {
+            extern void __fastcall D2Client_SetSpeedBarSide(BOOL bLeftSide);
+            g_nSpeedBarSide = 2;
+            D2Client_SetSpeedBarSide(FALSE);
+        }
     }
 }
 
@@ -1991,6 +2059,8 @@ void __fastcall UI_OnPanelClosed(int32_t nPanelId /*eax*/)
         QUESTLOG_ClosePanel(0);
     } else if (nPanelId == D2PANEL_NPCSHOP || nPanelId == D2PANEL_CUBE || nPanelId == D2PANEL_STASH) {
         g_nInvPanelMode = 0;
+    } else if (nPanelId == D2PANEL_SKILLSELECT) {
+        g_nSpeedBarSide = 0;
     }
 }
 
@@ -2377,82 +2447,39 @@ int32_t g_nClientSoundVolume = 100;
 int32_t g_bClientMusicOption = 1;
 int32_t g_nClientGammaPct    = 100;
 int32_t g_bClientScaledWindowOption = 1;
-extern int32_t gbAutomapShowPartyNames;
-
-static void ESCMENU_DrawPanel()
+#pragma pack(push, 1)
+struct D2WinMsgStrc
 {
-    if (!gaPanelStates[D2PANEL_ESCMENU]) {
-        g_bEscOptionsSubmenu = 0;
-        return;
-    }
-    if (!g_pPentSpinCel) {
-        g_pPentSpinCel = ARCHIVE_LoadCellFileDefault("CURSOR\\Pentspin", 0);
-    }
-
-    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
-    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
-    D2GFX_DrawRect(0, 0, nW, nH - 48, 0, 2);
-
-    wchar_t awszDynamicLabels[7][64] = {};
-    const wchar_t* aLabels[7] = {};
-    int32_t nRowCount = 3;
-    int32_t nRowStepY = 46;
-    if (g_bEscOptionsSubmenu != 0) {
-        _snwprintf(awszDynamicLabels[0], 63, L"SOUND VOLUME: %d%%", g_bClientSoundOption ? g_nClientSoundVolume : 0);
-        _snwprintf(awszDynamicLabels[1], 63, L"MUSIC: %ls", (g_bClientSoundOption && g_bClientMusicOption) ? L"ON" : L"OFF");
-        _snwprintf(awszDynamicLabels[2], 63, L"GAMMA: %d%%", g_nClientGammaPct);
-        aLabels[0] = awszDynamicLabels[0];
-        aLabels[1] = awszDynamicLabels[1];
-        aLabels[2] = awszDynamicLabels[2];
-        int32_t nIdx = 3;
-        if (D2GFX_CheckUnitPerspective() || D2GFX_CheckPerspective()) {
-            aLabels[nIdx++] = D2GFX_CheckPerspective() ? L"PERSPECTIVE: ON" : L"PERSPECTIVE: OFF";
-        }
-        aLabels[nIdx++] = g_bClientScaledWindowOption ? L"WINDOW: 1200X900" : L"WINDOW: 800X600";
-        aLabels[nIdx++] = gbAutomapShowPartyNames ? L"AUTOMAP NAMES: ON" : L"AUTOMAP NAMES: OFF";
-        aLabels[nIdx++] = L"PREVIOUS MENU";
-        nRowCount = nIdx;
-        nRowStepY = 38;
-    } else {
-        aLabels[0] = L"OPTIONS";
-        aLabels[1] = L"SAVE AND EXIT GAME";
-        aLabels[2] = L"RETURN TO GAME";
-        nRowCount = 3;
-    }
-
-    const int32_t nCenterX = nW / 2;
-    const int32_t nBaseY = ((nH - 48) / 2) - ((nRowCount - 1) * nRowStepY) / 2;
-    int32_t nSelectedRow = nRowCount - 1;
-    for (int32_t i = 0; i < nRowCount; ++i) {
-        const int32_t nRowY = nBaseY + i * nRowStepY;
-        if (gnMouseY >= nRowY - 24 && gnMouseY <= nRowY + 8 &&
-            gnMouseX >= nCenterX - 230 && gnMouseX <= nCenterX + 230) {
-            nSelectedRow = i;
-        }
-    }
-
-    D2WIN_SetFont(3);
-    for (int32_t i = 0; i < nRowCount; ++i) {
-        const int32_t nRowY = nBaseY + i * nRowStepY;
-        const int32_t nTextW = D2WIN_GetTextWidth(aLabels[i]);
-        D2WIN_DrawText(aLabels[i], nCenterX - (nTextW / 2), nRowY, (i == nSelectedRow) ? 4 : 0, 0);
-        if (i == nSelectedRow && g_pPentSpinCel) {
-            const int32_t nFrames = D2CMP_CelFileGetCelsPerDirection(g_pPentSpinCel);
-            if (nFrames > 0) {
-                const int32_t nLabelHalfW = (nTextW / 2) + 34;
-                D2GfxDataStrc tSpin = {};
-                tSpin.pCellFile = g_pPentSpinCel;
-                tSpin.nFrame = (GetTickCount() / 60) % nFrames;
-                D2GFX_DrawCellContextEx(&tSpin, nCenterX - nLabelHalfW - 18, nRowY + 4, -1, 5, nullptr);
-                D2GFX_DrawCellContextEx(&tSpin, nCenterX + nLabelHalfW - 8, nRowY + 4, -1, 5, nullptr);
-            }
-        }
-    }
-}
+    HWND     hWnd;
+    uint32_t nMessage;
+    uint32_t wParam;
+    uint16_t nX;
+    uint16_t nY;
+    uint32_t dwKeyFlags;
+    int32_t  nUnk14;
+    int32_t  bHandled;
+    int32_t  lResult;
+};
+#pragma pack(pop)
+extern int32_t __fastcall MSG_SendByteWord(uint8_t bOpcode, uint16_t wArg);
+extern int32_t __fastcall MSG_SendByteDword(uint8_t bOpcode, uint32_t dwArg);
+extern int32_t gbAutomapShowPartyNames;
+extern void __cdecl MINIPANEL_LoadAssets(void);
+extern void __cdecl MINIPANEL_FreeAssetsAndSaveRegistry(void);
+extern void __stdcall MINIPANEL_OnLButtonDown(D2WinMsgStrc* pMsg);
+extern void __stdcall MINIPANEL_OnLButtonUp(D2WinMsgStrc* pMsg);
+extern void __cdecl OPTIONS_LoadAllMenuAssets(void);
+extern void __cdecl OPTIONS_FreeAllMenuAssets(void);
+extern void __cdecl OPTIONS_RenderEscMenu(void);
+extern void __cdecl PLRTRADE_RenderAndUpdate(void);
+extern void __stdcall D2Client_InitSpeedBarAndSkillIcons(void);
+extern void __fastcall D2Client_SetSpeedBarSide(BOOL bLeftSide);
 
 // 1.12a: 0x6FB3F480 (__stdcall)
 void __stdcall UI_ReleaseAllAssets()
 {
+    MINIPANEL_FreeAssetsAndSaveRegistry();
+    OPTIONS_FreeAllMenuAssets();
     if (g_pGeneralSkillsCel) { ARCHIVE_FreeCellFile(g_pGeneralSkillsCel); g_pGeneralSkillsCel = nullptr; }
     for (int i = 0; i < 7; ++i) {
         if (g_apClassSkillsCel[i]) { ARCHIVE_FreeCellFile(g_apClassSkillsCel[i]); g_apClassSkillsCel[i] = nullptr; }
@@ -2469,6 +2496,8 @@ void __stdcall UI_ReleaseAllAssets()
     PARTY_FreeNodesAndCellFiles();
     HIREABLES_FreePortraitCellFiles();
     AUTOMAP_FreeAllLayers();
+    extern void __fastcall CMDTBL_ShutdownKeyHandlers(void);
+    CMDTBL_ShutdownKeyHandlers();
     CURSOR_FreeAssets();
     UI_FreeLoadingScreen();
 }
@@ -2514,6 +2543,12 @@ void __stdcall UI_InitAllPanels()
     if (!g_pBuySellBtnCel) {
         g_pBuySellBtnCel = ARCHIVE_LoadCellFileDefault("PANEL\\buysellbtn", 0);
     }
+    D2Client_InitSpeedBarAndSkillIcons();
+    MINIPANEL_LoadAssets();
+    OPTIONS_LoadAllMenuAssets();
+    DWORD bMiniHidden = 0;
+    SRegLoadValue("Diablo II", "Mini Panel", 1, &bMiniHidden);
+    gaPanelStates[D2PANEL_MINIPANEL] = (bMiniHidden == 0) ? 1 : 0;
     CHARSTATS_InitStatPanel();
     INV_InitInventoryLayoutRectsAndGrids();
     PARTY_LoadCellFiles();
@@ -2523,6 +2558,595 @@ void __stdcall UI_InitAllPanels()
     AUTOMAP_Initialize();
     CURSOR_Init();
     CMDTBL_InitKeyBindingsAndHandlers();
+}
+
+// ============================================================================
+// Storm UI / HUD / Open Panel Mouse Routing (WM_LBUTTONDOWN / UP / RBUTTONDOWN)
+// ============================================================================
+extern void    __fastcall D2Client_SetNpcHireSubmenu(int32_t bOpen);
+extern void    __fastcall D2Client_OpenNpcGossipSpeech(D2UnitStrc* pNpc, int32_t nFallbackClassId);
+extern void    __fastcall D2Client_CloseNpcGossipSpeech(void);
+extern int32_t __fastcall D2Client_IsGoldDialogOpen(void);
+extern int32_t __fastcall D2Client_HandleGoldDialogClick(int32_t mx, int32_t my);
+extern int32_t __fastcall D2Client_HandleSpeedBarClick(int32_t mx, int32_t my, int32_t bLeftSide);
+extern int32_t __fastcall CHARSTATS_HandleMouseDown(void* pMsg);
+extern void    __stdcall  QUESTLOG_OnPanelMouseDown(void* pMsg);
+extern void    __stdcall  INV_OnInventoryPanelMouseDown(D2WinMsgStrc* pMsg);
+extern void    __stdcall  INV_OnInventoryGridRightClick(D2WinMsgStrc* pMsg);
+extern void    __stdcall  INV_OnContainerPanelRightClick(D2WinMsgStrc* pMsg);
+extern D2UnitStrc* __fastcall SHOWITEMS_HitTestGroundItemLabel(int32_t nMouseX, int32_t nMouseY);
+extern int32_t g_nSkillTreeTab_6FBA79FC;
+extern int32_t gbAlwaysRun;
+extern int32_t gdwActiveInteractNpcGUID;
+
+static void UI_CloseActiveNpcMenuAndCancel()
+{
+    D2Client_CloseNpcGossipSpeech();
+    D2Client_SetNpcHireSubmenu(0);
+    if (g_nInteractingNpcGUID != 0) {
+        MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, static_cast<uint32_t>(g_nInteractingNpcGUID));
+    }
+    g_bInteractingWithNpc = 0;
+    g_nInteractingNpcGUID = 0;
+    g_nInteractingNpcClassId = 0;
+    gdwActiveInteractNpcGUID = 0;
+    g_pTradeNpcUnit = nullptr;
+    if (gaPanelStates[D2PANEL_NPCMENU] != 0) {
+        UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+    }
+    if (gaPanelStates[D2PANEL_NPCSHOP] != 0) {
+        UI_SetPanelState(D2PANEL_NPCSHOP, 1, 0);
+    }
+}
+
+static bool UI_HandleNpcDialogClick(int32_t mx, int32_t my)
+{
+    if (D2Client_IsNpcGossipSpeechOpen() != 0) {
+        D2Client_CloseNpcGossipSpeech();
+        if (gaPanelStates[D2PANEL_NPCMENU] && !gaPanelStates[D2PANEL_NPCSHOP]) {
+            UI_CloseActiveNpcMenuAndCancel();
+        }
+        return true;
+    }
+    if (!gaPanelStates[D2PANEL_NPCMENU] || gaPanelStates[D2PANEL_NPCSHOP]) {
+        return false;
+    }
+    D2UnitStrc* pNpc = g_pTradeNpcUnit;
+    if (!pNpc && g_nInteractingNpcGUID != 0) {
+        for (int b = 0; b < 128 && !pNpc; ++b) {
+            for (D2UnitStrc* pCur = gapServerSideUnitHashTables[UNIT_MONSTER][b]; pCur != nullptr; pCur = pCur->pListNext) {
+                if ((int32_t)pCur->dwUnitId == g_nInteractingNpcGUID) {
+                    pNpc = pCur;
+                    break;
+                }
+            }
+        }
+    }
+
+    D2NpcDialogRowStrc aRows[12] = {};
+    const int32_t nOptCount = D2Client_BuildNpcDialogRows(pNpc, g_nInteractingNpcClassId, aRows, 12);
+    if (nOptCount <= 0) {
+        UI_CloseActiveNpcMenuAndCancel();
+        return true;
+    }
+
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    int32_t nBoxCenterX = nW / 2;
+    int32_t nBoxTopY = 120;
+    const int32_t nBoxH = 44 + nOptCount * 22;
+    if (pNpc) {
+        int32_t nSx = 0, nSy = 0;
+        if (UI_WorldUnitToScreen(pNpc, &nSx, &nSy)) {
+            nBoxCenterX = nSx;
+            nBoxTopY = (nSy > nBoxH + 35) ? (nSy - nBoxH - 30) : 40;
+        }
+    }
+    if (nBoxTopY + nBoxH > nH - 56) {
+        nBoxTopY = (nH - 56 - nBoxH > 24) ? (nH - 56 - nBoxH) : 24;
+    }
+
+    const Unicode* pNpcName = pNpc ? D2Client_GetNpcDisplayName(pNpc) : nullptr;
+    const wchar_t* wszNpcTitle = (pNpcName && pNpcName[0].ch != 0) ? reinterpret_cast<const wchar_t*>(pNpcName) : L"Townsperson";
+    D2WIN_SetFont(5);
+    int32_t nMaxTextW = D2WIN_GetTextWidth(wszNpcTitle);
+    D2WIN_SetFont(1);
+    for (int32_t i = 0; i < nOptCount; ++i) {
+        const int32_t nOptW = D2WIN_GetTextWidth(aRows[i].wszLabel);
+        if (nOptW > nMaxTextW) nMaxTextW = nOptW;
+    }
+    const int32_t nHalfBoxW = ((nMaxTextW + 64) > 192) ? ((nMaxTextW + 64) / 2) : 96;
+    if (nBoxCenterX < nHalfBoxW + 12) nBoxCenterX = nHalfBoxW + 12;
+    if (nBoxCenterX > nW - nHalfBoxW - 12) nBoxCenterX = nW - nHalfBoxW - 12;
+
+    if (mx < nBoxCenterX - nHalfBoxW || mx > nBoxCenterX + nHalfBoxW || my < nBoxTopY || my > nBoxTopY + nBoxH) {
+        UI_CloseActiveNpcMenuAndCancel();
+        return true;
+    }
+
+    const uint32_t dwNpcGuid = pNpc ? pNpc->dwUnitId : static_cast<uint32_t>(g_nInteractingNpcGUID);
+    for (int32_t i = 0; i < nOptCount; ++i) {
+        const int32_t nRowY = nBoxTopY + 46 + i * 22;
+        if (my >= nRowY - 14 && my <= nRowY + 6) {
+            switch (aRows[i].nAction) {
+            case 1:
+                MSG_SendByte3Dwords(0x38u, 0u, dwNpcGuid, 0u);
+                D2Client_OpenNpcGossipSpeech(pNpc, g_nInteractingNpcClassId);
+                break;
+            case 2:
+                MSG_SendByte3Dwords(0x38u, 1u, dwNpcGuid, 0u);
+                UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+                g_nInvPanelMode = static_cast<int32_t>(aRows[i].dwParam ? aRows[i].dwParam : 1u);
+                UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
+                break;
+            case 3:
+                MSG_SendByte3Dwords(0x38u, 2u, dwNpcGuid, 0u);
+                UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+                g_nInvPanelMode = 2;
+                UI_SetPanelState(D2PANEL_NPCSHOP, 0, 0);
+                break;
+            case 4:
+                MSG_SendByteDword(0x34u, dwNpcGuid);
+                UI_CloseActiveNpcMenuAndCancel();
+                break;
+            case 5:
+                MSG_SendByte3Dwords(0x38u, 3u, dwNpcGuid, 0u);
+                D2Client_SetNpcHireSubmenu(1);
+                break;
+            case 6:
+                MSG_SendByteDword(0x62u, dwNpcGuid);
+                UI_CloseActiveNpcMenuAndCancel();
+                break;
+            case 7:
+                UI_SetPanelState(D2PANEL_NPCMENU, 1, 0);
+                MSG_SendByte3Dwords(0x38u, 0u, dwNpcGuid, 0u);
+                g_bInteractingWithNpc = 0;
+                g_nInteractingNpcGUID = 0;
+                g_nInteractingNpcClassId = 0;
+                gdwActiveInteractNpcGUID = 0;
+                break;
+            case 10:
+                MSG_SendByte2Dwords(0x36u, dwNpcGuid, aRows[i].dwParam);
+                UI_CloseActiveNpcMenuAndCancel();
+                break;
+            case 11:
+                D2Client_SetNpcHireSubmenu(0);
+                break;
+            case 99:
+                UI_CloseActiveNpcMenuAndCancel();
+                break;
+            default:
+                break;
+            }
+            return true;
+        }
+    }
+    return true;
+}
+
+static bool UI_HandleBeltClick(int32_t mx, int32_t my, bool bLeftClick)
+{
+    if (!gpLocalPlayerUnit || !D2UnitView(gpLocalPlayerUnit)->pInventory) {
+        return false;
+    }
+    if (gaPanelStates[D2PANEL_ESCMENU] != 0 || gaPanelStates[D2PANEL_NPCMENU] != 0) {
+        return false;
+    }
+
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    const int32_t nSlotBaseX = nW / 2 + 23;
+    const int32_t nMaxRows = (g_nEquippedBeltRows > 0) ? g_nEquippedBeltRows : 1;
+    const int32_t nBeltRows = (gaPanelStates[D2PANEL_BELT] != 0) ? nMaxRows : 1;
+    const int32_t nTopY = (nBeltRows > 1) ? (nH - 9 - 31 * nBeltRows - 4) : (nH - 48);
+    const int32_t nBottomY = nH - 2;
+
+    if (mx < nSlotBaseX - 2 || mx >= nSlotBaseX + 4 * 31 + 2 || my < nTopY || my > nBottomY) {
+        return false;
+    }
+
+    int32_t nCol = (mx - nSlotBaseX) / 31;
+    if (nCol < 0) nCol = 0;
+    if (nCol > 3) nCol = 3;
+    int32_t nRow = (nH - 9 - my) / 31;
+    if (nRow < 0) nRow = 0;
+    if (nRow >= nBeltRows) nRow = nBeltRows - 1;
+    const int32_t nSlot = nCol + 4 * nRow;
+    if (nSlot < 0 || nSlot >= 4 * nMaxRows) {
+        return true;
+    }
+
+    D2InventoryStrc* pInv = D2UnitView(gpLocalPlayerUnit)->pInventory;
+    D2UnitStrc* pBeltItem = INVENTORY_GetItemFromBeltSlot(pInv, nSlot);
+    D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(pInv);
+
+    if (!bLeftClick) {
+        if (pBeltItem != nullptr && pCursorItem == nullptr) {
+            const int32_t nSubX = UNITS_GetXPosition(gpLocalPlayerUnit);
+            const int32_t nSubY = UNITS_GetYPosition(gpLocalPlayerUnit);
+            const uint32_t dwShiftMerc = ((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 0x8000u : 0u;
+            MSG_SendByte3Dwords(
+                0x26u,
+                D2UnitView(pBeltItem)->dwUnitId,
+                dwShiftMerc,
+                static_cast<uint32_t>((nSubX & 0xFFFF) | ((nSubY & 0xFFFF) << 16)));
+        }
+        return true;
+    }
+
+    if (pCursorItem != nullptr) {
+        if (ITEMS_CheckIfBeltable(pCursorItem)) {
+            if (pBeltItem == nullptr) {
+                MSG_SendByte2Dwords(0x23u, D2UnitView(pCursorItem)->dwUnitId, static_cast<uint32_t>(nSlot));
+            } else {
+                MSG_SendByte2Dwords(0x25u, D2UnitView(pCursorItem)->dwUnitId, D2UnitView(pBeltItem)->dwUnitId);
+            }
+        }
+        return true;
+    }
+
+    if (pBeltItem != nullptr) {
+        MSG_SendByteDword(0x24u, D2UnitView(pBeltItem)->dwUnitId);
+    } else if (nMaxRows > 1) {
+        UI_SetPanelState(D2PANEL_BELT, 2, 0);
+    }
+    return true;
+}
+
+static bool UI_HandleBottomBarClick(int32_t mx, int32_t my)
+{
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    if (my < nH - 48) {
+        return false;
+    }
+
+    const int32_t nBarBaseX = (nW >= 800) ? ((nW / 2) - 400) : ((nW / 2) - 320);
+    const int32_t nLeftSkX  = (nW >= 800) ? (nBarBaseX + 116) : (nBarBaseX + 116);
+    const int32_t nRightSkX = (nW >= 800) ? (nW - 164) : (nW - 164);
+
+    // Left Active Skill button -> toggle Left Speedbar
+    if (mx >= nLeftSkX && mx <= nLeftSkX + 68 && my >= nH - 50) {
+        if (gaPanelStates[D2PANEL_SKILLSELECT] != 0 && g_nSpeedBarSide == 1) {
+            UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+        } else {
+            g_nSpeedBarSide = 1;
+            D2Client_SetSpeedBarSide(TRUE);
+            UI_SetPanelState(D2PANEL_SKILLSELECT, 0, 0);
+        }
+        return true;
+    }
+
+    // Right Active Skill button -> toggle Right Speedbar
+    if (mx >= nRightSkX && mx <= nRightSkX + 68 && my >= nH - 50) {
+        if (gaPanelStates[D2PANEL_SKILLSELECT] != 0 && g_nSpeedBarSide == 2) {
+            UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+        } else {
+            g_nSpeedBarSide = 2;
+            D2Client_SetSpeedBarSide(FALSE);
+            UI_SetPanelState(D2PANEL_SKILLSELECT, 0, 0);
+        }
+        return true;
+    }
+
+    // New Stats "+" button
+    if (gpLocalPlayerUnit && STATLIST_UnitGetStatValue(gpLocalPlayerUnit, STAT_STATPTS, 0) > 0 &&
+        mx >= (nW / 2) - 196 && mx <= (nW / 2) - 166 && my >= nH - 43 && my <= nH - 13) {
+        UI_SetPanelState(D2PANEL_CHAR, 2, 0);
+        return true;
+    }
+
+    // New Skills "+" button
+    if (gpLocalPlayerUnit && STATLIST_UnitGetStatValue(gpLocalPlayerUnit, STAT_SKILLPTS, 0) > 0 &&
+        mx >= (nW / 2) + 164 && mx <= (nW / 2) + 194 && my >= nH - 43 && my <= nH - 13) {
+        UI_SetPanelState(D2PANEL_SKILLTREE, 2, 0);
+        return true;
+    }
+
+    // Run/Walk toggle button
+    const int32_t nStamBaseX = (nW / 2) - 127;
+    if (mx >= nStamBaseX - 22 && mx <= nStamBaseX + 2 && my >= nH - 36) {
+        gbAlwaysRun = (gbAlwaysRun == 0) ? 1 : 0;
+        SRegSaveValue("Diablo II", "Always Run", 0, static_cast<uint32_t>(gbAlwaysRun));
+        return true;
+    }
+
+    // Mini-panel toggle caret button
+    if (mx >= (nW / 2) - 12 && mx <= (nW / 2) + 12 && my >= nH - 42) {
+        UI_ToggleMiniPanel();
+        return true;
+    }
+
+    return true;
+}
+
+static bool UI_DispatchHudOrPanelClick(D2ReconWinMsgViewStrc* pRawMsg, bool bLeftClick)
+{
+    if (!pRawMsg || !gpLocalPlayerUnit) {
+        return false;
+    }
+    if (gaPanelStates[D2PANEL_ESCMENU] != 0) {
+        // Handled by s_aEscOptionsMsgHandlers registered by UI_OpenEscOptionsMenu
+        return false;
+    }
+
+    const int32_t mx = static_cast<int32_t>(static_cast<int16_t>(pRawMsg->nX));
+    const int32_t my = static_cast<int32_t>(static_cast<int16_t>(pRawMsg->nY));
+    const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+
+    D2WinMsgStrc tMsg = {};
+    tMsg.hWnd = pRawMsg->hWnd;
+    tMsg.nMessage = pRawMsg->uMsg;
+    tMsg.wParam = static_cast<uint32_t>(pRawMsg->wParam);
+    tMsg.nX = static_cast<uint16_t>(mx);
+    tMsg.nY = static_cast<uint16_t>(my);
+    tMsg.dwKeyFlags =
+        (((GetKeyState(VK_SHIFT) & 0x8000) != 0 || (pRawMsg->wParam & MK_SHIFT) != 0) ? 4u : 0u) |
+        (((GetKeyState(VK_CONTROL) & 0x8000) != 0 || (pRawMsg->wParam & MK_CONTROL) != 0) ? 8u : 0u) |
+        (((GetKeyState(VK_MENU) & 0x8000) != 0) ? 16u : 0u);
+
+    if (bLeftClick && D2Client_IsGoldDialogOpen() != 0 && D2Client_HandleGoldDialogClick(mx, my) != 0) {
+        return true;
+    }
+    if (bLeftClick && UI_HandleNpcDialogClick(mx, my)) {
+        return true;
+    }
+    if (bLeftClick && gaPanelStates[D2PANEL_MINIPANEL] != 0) {
+        MINIPANEL_OnLButtonDown(&tMsg);
+        if (tMsg.bHandled != 0) {
+            return true;
+        }
+    }
+    if (bLeftClick && mx >= 6 && mx <= 68 && my >= 10 && my <= 62 &&
+        D2UnitView(gpLocalPlayerUnit)->pInventory != nullptr &&
+        INVENTORY_GetCursorItem(D2UnitView(gpLocalPlayerUnit)->pInventory) != nullptr &&
+        D2Client_GetLocalMercUnit(gpLocalPlayerUnit) != nullptr) {
+        MSG_SendByteWord(0x61u, 0u);
+        return true;
+    }
+    if (UI_HandleBeltClick(mx, my, bLeftClick)) {
+        return true;
+    }
+    if (bLeftClick && UI_HandleBottomBarClick(mx, my)) {
+        return true;
+    }
+    if (bLeftClick && gaPanelStates[D2PANEL_SKILLSELECT] != 0) {
+        D2Client_HandleSpeedBarClick(mx, my, (g_nSpeedBarSide == 1) ? 1 : 0);
+        UI_SetPanelState(D2PANEL_SKILLSELECT, 1, 0);
+        return true;
+    }
+
+    // Left-side open panels
+    if (mx < nW / 2 && my < nH - 48) {
+        if (gaPanelStates[D2PANEL_CHAR]) {
+            if (bLeftClick) {
+                CHARSTATS_HandleMouseDown(&tMsg);
+            }
+            return true;
+        }
+        if (gaPanelStates[D2PANEL_QUEST]) {
+            if (bLeftClick) {
+                QUESTLOG_OnPanelMouseDown(&tMsg);
+            }
+            return true;
+        }
+        if (gaPanelStates[D2PANEL_PARTY]) {
+            if (bLeftClick && mx >= 352 && mx <= 396 && my >= 444 && my <= 486) {
+                UI_SetPanelState(D2PANEL_PARTY, 1, 0);
+            }
+            return true;
+        }
+        if (gaPanelStates[D2PANEL_WAYPOINT] || gaPanelStates[0x14]) {
+            if (bLeftClick) {
+                const int32_t nBaseX = (nW >= 800) ? 80 : 0;
+                const int32_t nBaseY = (nH >= 600) ? 60 : 0;
+                if (mx >= nBaseX + 260 && mx <= nBaseX + 308 && my >= nBaseY + 382 && my <= nBaseY + 424) {
+                    if (g_dwActiveWaypointGuid != 0u) {
+                        MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, 0u);
+                    }
+                    UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
+                    return true;
+                }
+                const int32_t nMaxActs = gbIsExpansion ? 5 : 4;
+                if (my >= nBaseY + 10 && my <= nBaseY + 46 && mx >= nBaseX + 4 && mx < nBaseX + 4 + nMaxActs * 62) {
+                    int32_t nTab = (mx - (nBaseX + 4)) / 62;
+                    if (nTab < 0) nTab = 0;
+                    if (nTab >= nMaxActs) nTab = nMaxActs - 1;
+                    g_nSelectedWaypointTab = nTab;
+                    return true;
+                }
+                static const uint32_t kActWpLevels[5][9] = {
+                    { 1, 3, 4, 5, 6, 27, 29, 32, 35 },
+                    { 40, 48, 42, 57, 43, 44, 52, 74, 46 },
+                    { 75, 76, 77, 78, 79, 80, 81, 83, 101 },
+                    { 103, 106, 107, 0, 0, 0, 0, 0, 0 },
+                    { 109, 111, 112, 113, 115, 123, 117, 118, 129 }
+                };
+                static const int32_t kActWpCounts[5]  = { 9, 9, 9, 3, 9 };
+                static const int32_t kActWpBitBase[5] = { 0, 9, 18, 27, 30 };
+                int32_t nActIdx = g_nSelectedWaypointTab;
+                if (nActIdx < 0) nActIdx = 0;
+                if (nActIdx >= nMaxActs) nActIdx = nMaxActs - 1;
+                for (int32_t i = 0; i < kActWpCounts[nActIdx]; ++i) {
+                    const int32_t nRowY = nBaseY + 92 + i * 34;
+                    if (my >= nRowY - 6 && my <= nRowY + 22 && mx >= nBaseX + 40 && mx <= nBaseX + 280) {
+                        const int32_t nWpBit = kActWpBitBase[nActIdx] + i;
+                        const bool bUnlocked = ((g_qwUnlockedWaypointsMask >> nWpBit) & 1ULL) != 0ULL || (nActIdx == 0 && i == 0);
+                        if (bUnlocked) {
+                            MSG_SendByte2Dwords(0x49u, g_dwActiveWaypointGuid, kActWpLevels[nActIdx][i]);
+                            UI_SetPanelState(D2PANEL_WAYPOINT, 1, 0);
+                        }
+                        return true;
+                    }
+                }
+            }
+            return true;
+        }
+        if (gaPanelStates[D2PANEL_NPCSHOP] || gaPanelStates[D2PANEL_STASH] ||
+            gaPanelStates[D2PANEL_CUBE] || gaPanelStates[D2PANEL_MERCINV]) {
+            if (bLeftClick && gaPanelStates[D2PANEL_CUBE] && mx >= 218 && mx <= 278 && my >= 298 && my <= 356) {
+                MSG_SendByte3Words(0x4Fu, 0x18u, 0u, 0u); // Horadric Cube Transmute
+                return true;
+            }
+            if (bLeftClick) {
+                INV_OnInventoryPanelMouseDown(&tMsg);
+            } else {
+                INV_OnContainerPanelRightClick(&tMsg);
+            }
+            return true;
+        }
+    }
+
+    // Right-side open panels
+    if (mx >= nW / 2 && my < nH - 48) {
+        if (gaPanelStates[D2PANEL_INVENTORY]) {
+            if (bLeftClick) {
+                INV_OnInventoryPanelMouseDown(&tMsg);
+            } else {
+                INV_OnInventoryGridRightClick(&tMsg);
+            }
+            return true;
+        }
+        if (gaPanelStates[D2PANEL_SKILLTREE]) {
+            if (bLeftClick) {
+                const int32_t nRightOffX = (nW >= 800) ? ((nW - 800) / 2) : -80;
+                const int32_t nRightOffY = (nH >= 600) ? ((nH - 600) / 2) : -60;
+                if (mx >= nRightOffX + 632 && mx <= nRightOffX + 720 && my >= nRightOffY + 166 && my <= nRightOffY + 490) {
+                    if (my < nRightOffY + 274)      g_nSkillTreeTab_6FBA79FC = 2;
+                    else if (my < nRightOffY + 382) g_nSkillTreeTab_6FBA79FC = 1;
+                    else                            g_nSkillTreeTab_6FBA79FC = 0;
+                } else if (((mx >= nRightOffX + 412 && mx <= nRightOffX + 462) ||
+                            (mx >= nRightOffX + 588 && mx <= nRightOffX + 628)) &&
+                           my >= nRightOffY + 440 && my <= nRightOffY + 482) {
+                    UI_SetPanelState(D2PANEL_SKILLTREE, 1, 0);
+                } else if (sgptDataTables && sgptDataTables->pSkillsTxt && sgptDataTables->pSkillDescTxt) {
+                    const int32_t aSkillColX[3] = { nRightOffX + 415, nRightOffX + 484, nRightOffX + 553 };
+                    const int32_t aSkillRowY[6] = { nRightOffY + 74, nRightOffY + 142, nRightOffY + 210, nRightOffY + 278, nRightOffY + 346, nRightOffY + 414 };
+                    const int32_t nClassId = D2UnitView(gpLocalPlayerUnit)->dwClassId;
+                    int32_t nTab = g_nSkillTreeTab_6FBA79FC;
+                    if (nTab < 0) nTab = 0;
+                    if (nTab > 2) nTab = 2;
+                    const int32_t nPage = nTab + 1;
+                    for (int32_t sId = 0; sId < sgptDataTables->nSkillsTxtRecordCount && sId < 512; ++sId) {
+                        const D2SkillsTxt& sk = sgptDataTables->pSkillsTxt[sId];
+                        if (sk.nCharClass != nClassId || sk.wSkillDesc < 0 || sk.wSkillDesc >= sgptDataTables->nSkillDescTxtRecordCount) {
+                            continue;
+                        }
+                        const D2SkillDescTxt& sd = sgptDataTables->pSkillDescTxt[sk.wSkillDesc];
+                        if (sd.nSkillPage != nPage || sd.nSkillColumn < 1 || sd.nSkillColumn > 3 || sd.nSkillRow < 1 || sd.nSkillRow > 6) {
+                            continue;
+                        }
+                        const int32_t nIconX = aSkillColX[sd.nSkillColumn - 1];
+                        const int32_t nIconY = aSkillRowY[sd.nSkillRow - 1];
+                        if (mx >= nIconX && mx < nIconX + 48 && my >= nIconY && my < nIconY + 48) {
+                            if (STATLIST_UnitGetStatValue(gpLocalPlayerUnit, STAT_SKILLPTS, 0) > 0) {
+                                MSG_SendByteWord(0x3Bu, static_cast<uint16_t>(sId));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+    }
+
+    // World clicks intercepted before GAME_OnLButtonDown:
+    //   1. Dropping an item currently on the cursor onto the ground (C2S 0x17)
+    //   2. Clicking an Alt-highlighted ground item label box (SHOWITEMS_HitTestGroundItemLabel)
+    if (bLeftClick && D2Client_IsLocalPlayerDead() == 0) {
+        if (D2UnitView(gpLocalPlayerUnit)->pInventory != nullptr) {
+            if (D2UnitStrc* pCursorItem = INVENTORY_GetCursorItem(D2UnitView(gpLocalPlayerUnit)->pInventory)) {
+                MSG_SendByteDword(0x17u, D2UnitView(pCursorItem)->dwUnitId);
+                return true;
+            }
+        }
+        if (gaPanelStates[D2PANEL_SHOWITEMS] != 0) {
+            if (D2UnitStrc* pLabelItem = SHOWITEMS_HitTestGroundItemLabel(mx, my)) {
+                const int32_t nDist = UNITS_GetDistanceToOtherUnit(gpLocalPlayerUnit, pLabelItem);
+                if (nDist <= 4) {
+                    MSG_SendByte3Dwords(0x16u, UNIT_ITEM, D2UnitView(pLabelItem)->dwUnitId, 0u);
+                } else {
+                    MSG_SendByte2Dwords(gbAlwaysRun ? 0x04u : 0x02u, UNIT_ITEM, D2UnitView(pLabelItem)->dwUnitId);
+                    MSG_SendByte3Dwords(0x16u, UNIT_ITEM, D2UnitView(pLabelItem)->dwUnitId, 0u);
+                }
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static void __stdcall UI_OnStormLButtonDown(void* pVoidMsg)
+{
+    D2ReconWinMsgViewStrc* pMsg = D2MsgView(pVoidMsg);
+    if (UI_DispatchHudOrPanelClick(pMsg, true)) {
+        pMsg->bHandled = 1;
+        pMsg->nReturnValue = 0;
+        SMsgBreakHandlerChain(pVoidMsg);
+    }
+}
+
+static void __stdcall UI_OnStormRButtonDown(void* pVoidMsg)
+{
+    D2ReconWinMsgViewStrc* pMsg = D2MsgView(pVoidMsg);
+    if (UI_DispatchHudOrPanelClick(pMsg, false)) {
+        pMsg->bHandled = 1;
+        pMsg->nReturnValue = 0;
+        SMsgBreakHandlerChain(pVoidMsg);
+    }
+}
+
+static void __stdcall UI_OnStormLButtonUp(void* pVoidMsg)
+{
+    D2ReconWinMsgViewStrc* pMsg = D2MsgView(pVoidMsg);
+    if (!pMsg || gaPanelStates[D2PANEL_ESCMENU] != 0 || gaPanelStates[D2PANEL_MINIPANEL] == 0) {
+        return;
+    }
+    D2WinMsgStrc tMsg = {};
+    tMsg.hWnd = pMsg->hWnd;
+    tMsg.nMessage = pMsg->uMsg;
+    tMsg.wParam = static_cast<uint32_t>(pMsg->wParam);
+    tMsg.nX = pMsg->nX;
+    tMsg.nY = pMsg->nY;
+    MINIPANEL_OnLButtonUp(&tMsg);
+    if (tMsg.bHandled != 0) {
+        pMsg->bHandled = 1;
+        pMsg->nReturnValue = 0;
+        SMsgBreakHandlerChain(pVoidMsg);
+    }
+}
+
+struct D2SMsgRegEntryStrc
+{
+    uint32_t nType;
+    uint32_t uMsg;
+    SMSGHANDLER pfHandler;
+};
+
+static const D2SMsgRegEntryStrc s_aUiHudPanelMsgHandlers[3] = {
+    { 0u, WM_LBUTTONDOWN, UI_OnStormLButtonDown },
+    { 0u, WM_LBUTTONUP,   UI_OnStormLButtonUp   },
+    { 0u, WM_RBUTTONDOWN, UI_OnStormRButtonDown },
+};
+
+extern void __fastcall WALL2_RegisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+extern void __fastcall WALL2_UnregisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+
+void __fastcall UI_RegisterHudAndPanelMsgHandlers(HWND hWnd)
+{
+    if (hWnd != nullptr) {
+        WALL2_RegisterMsgHandlerTable(3u, hWnd, s_aUiHudPanelMsgHandlers);
+    }
+}
+
+void __fastcall UI_UnregisterHudAndPanelMsgHandlers(HWND hWnd)
+{
+    if (hWnd != nullptr) {
+        WALL2_UnregisterMsgHandlerTable(3u, hWnd, s_aUiHudPanelMsgHandlers);
+    }
 }
 
 // 1.12a: 0x6FB40150 (__fastcall)
@@ -2546,6 +3170,9 @@ void __fastcall UI_RenderHUD()
 
     HIREABLES_DrawAllPortraits();
 
+    extern void __fastcall D2Client_DrawScreenMessageFeed(void);
+    D2Client_DrawScreenMessageFeed();
+
     INV_Render800x600PanelBorderFrame();
 
     CHARSTATS_DrawPanel();
@@ -2562,13 +3189,16 @@ void __fastcall UI_RenderHUD()
     CTRLPNL_RenderRightManaOrb();
     CTRLPNL_RenderLifeManaTooltips();
 
+    PLRTRADE_RenderAndUpdate();
     NPCMENU_DrawActiveDialog();
     D2Client_DrawNpcGossipSpeech();
     D2Client_DrawGoldDialog();
-    ESCMENU_DrawPanel();
-
-    extern void __fastcall D2Client_DrawScreenMessageFeed(void);
-    D2Client_DrawScreenMessageFeed();
+    if (gaPanelStates[D2PANEL_ESCMENU] != 0) {
+        const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+        const int32_t nH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+        D2GFX_DrawRect(0, 0, nW, nH - 48, 0, 2);
+        OPTIONS_RenderEscMenu();
+    }
 
     if (D2Client_IsLocalPlayerDead() != 0 && !gaPanelStates[D2PANEL_ESCMENU]) {
         const int32_t nW = (gnScreenWidth > 0) ? gnScreenWidth : 800;

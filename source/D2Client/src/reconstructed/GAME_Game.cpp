@@ -9,7 +9,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
-#ifndef D2_VERSION_112A
+#ifndef D2_VERSION_MAJOR
 #define D2_VERSION_112A 1
 #define D2_VERSION_MAJOR 1
 #define D2_VERSION_MINOR 12
@@ -17,11 +17,16 @@
 #endif
 
 #include <windows.h>
+#include <tlhelp32.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <math.h>
+#include <algorithm>
+#include <queue>
+#include <vector>
 
 #include <D2BasicTypes.h>
 #include <D2Constants.h>
@@ -30,6 +35,7 @@
 #include <Fog.h>
 #include <Storm.h>
 #include <D2Lang.h>
+#include <D2StrTable.h>
 #include <D2Unicode.h>
 #include <D2Gfx.h>
 #include <Texture.h>
@@ -41,13 +47,20 @@
 #include <D2WinFont.h>
 #include <D2WinPalette.h>
 #include <D2DataTbls.h>
+#include <DataTbls/LevelsIds.h>
 #include <DataTbls/LevelsTbls.h>
 #include <DataTbls/TokenTbls.h>
+#include <D2Collision.h>
 #include <D2Dungeon.h>
 #include <D2Environment.h>
+#include <D2Inventory.h>
+#include <D2Items.h>
 #include <D2Log.h>
+#include <D2QuestRecord.h>
+#include <D2StatList.h>
 #include <Drlg/D2DrlgDrlg.h>
 #include <Drlg/D2DrlgActivate.h>
+#include <Units/UnitRoom.h>
 #include <Units/Units.h>
 #include <Units/Player.h>
 #include <Client.h>
@@ -292,7 +305,7 @@ extern void         __fastcall VIEW_SetViewportRect(D2ViewportStrc* pViewport, i
 extern void         __stdcall  ENV_AllocTileRenderPools(void);                        // 0x6FB6AA60
 extern void         __stdcall  ENV_FreeTileRenderPoolsCheck(void);                    // 0x6FB6B190
 extern void         __stdcall  VIEW_UpdateScreenShake(int32_t* pInOutCameraX, int32_t* pInOutCameraY); // 0x6FB6B4F0
-extern void         __fastcall VIEW_UpdateViewportVisibility(D2ViewportStrc* pViewport, int32_t bSkipUnits); // 0x6FB6B5E0
+extern void         __fastcall VIEW_UpdateViewportVisibility(D2ViewportStrc* pViewport, D2UnitStrc* pPlayer); // 0x6FB6B5E0
 extern void         __fastcall VIEW_RenderViewport(D2ViewportStrc* pViewport);        // 0x6FB6B630
 extern void         __fastcall PALSHIFT_FreeTables(void);                             // 0x6FB6F050
 extern void         __fastcall PALSHIFT_InitTables(void);                             // 0x6FB6F170
@@ -424,7 +437,7 @@ static const D2RenderFrameFn g_apfnRenderFrameModes[3] =              // 0x6FB8F
 };
 static int32_t  g_nJoinStartNetState        = D2CLIENT_STATE_START_NET; // 0x6FB8FFA4 (5)
 static int32_t  g_nTargetFrameTickMs        = 40;                     // 0x6FB8FFA8 (40 ms = 25 Hz)
-static char     g_szGameServerIp[264]       = "207.82.87.243";        // 0x6FB8FFB0
+char            g_szGameServerIp[264]       = "207.82.87.243";        // 0x6FB8FFB0
 static char     g_szBattleNetIp[264]        = "207.82.87.139";        // 0x6FB900B8
 static char     g_szMcpServerIp[264]        = "207.82.87.133";        // 0x6FB901C0
 
@@ -746,7 +759,7 @@ static int32_t               g_bEndGameScreenDismissed = 0;           // 0x6FBCB
 uint8_t                      gnClientDifficulty       = 0;            // 0x6FBCBFF4
 int32_t                      gnGameType               = 0;            // 0x6FBCBFF8
 
-static int32_t               g_bSystemConnected       = 0;            // 0x6FBCC000
+int32_t                      g_bSystemConnected       = 0;            // 0x6FBCC000
 int32_t                      gbActLoadedFlag          = 0;            // 0x6FBCC004
 int32_t                      g_bExitGameFlag          = 0;            // 0x6FBCC008
 int32_t                      gbActUnloadedFlag        = 0;            // 0x6FBCC00C
@@ -902,26 +915,28 @@ void __stdcall GAME_LoadColorTxtFlag(void)
 void __stdcall GAME_PreloadActTileLibrary(uint8_t nAct)
 {
     const uint8_t nActOneBased = static_cast<uint8_t>(nAct + 1);
-    D2TileLibraryHashStrc* pTileLibraryHash = nullptr;
+    D2TileLibraryHashStrc* apTileLibraryHash[32] = {};
     char szTileFileName[60] = {};
 
     for (int32_t nLevelType = 0; nLevelType < 36; ++nLevelType)
     {
         if (DATATBLS_CheckActInLevelTypesTxt(nLevelType, nActOneBased))
         {
+            memset(apTileLibraryHash, 0, sizeof(apTileLibraryHash));
             for (int32_t nFileId = 0; nFileId < 32; ++nFileId)
             {
                 DATATBLS_GetFileNameFromLevelTypeAndFileId(nLevelType, nFileId, szTileFileName);
                 if (szTileFileName[0] != '0' && szTileFileName[0] != '\0')
                 {
-                    D2CMP_10087_LoadTileLibrarySlot(&pTileLibraryHash, szTileFileName);
+                    D2CMP_10087_LoadTileLibrarySlot(apTileLibraryHash, szTileFileName);
                 }
             }
         }
     }
 
-    D2CMP_10087_LoadTileLibrarySlot(&pTileLibraryHash, "data\\global\\tiles\\act1\\barracks\\warp.dt1");
-    D2CMP_10087_LoadTileLibrarySlot(&pTileLibraryHash, "data\\global\\tiles\\act1\\outdoors\\blank.dt1");
+    memset(apTileLibraryHash, 0, sizeof(apTileLibraryHash));
+    D2CMP_10087_LoadTileLibrarySlot(apTileLibraryHash, "data\\global\\tiles\\act1\\barracks\\warp.dt1");
+    D2CMP_10087_LoadTileLibrarySlot(apTileLibraryHash, "data\\global\\tiles\\act1\\outdoors\\blank.dt1");
 }
 
 // 1.12a: 0x6FB29E90
@@ -2577,13 +2592,31 @@ void __stdcall GAME_ReceiveNetworkPackets(void)
             const uint8_t bSysOpcode = aPacketBuffer[0];
             switch (bSysOpcode)
             {
+#ifdef D2_VERSION_110F
+            case 0xAE: // 1.10f system connect
+                g_bSystemConnected = 1;
+                break;
+
+            case 0xAF: // 1.10f system disconnect
+                g_bSystemConnected = 0;
+                if (g_bWindowClosedExit != 0)
+                {
+                    g_bExitGameFlag = 1;
+                }
+                break;
+#else
             case 0xAF: // 0x6FB2BCEC: System connect / compression handshake
                 g_bSystemConnected = 1;
                 break;
 
             case 0xB0: // 0x6FB2BCF8: System disconnect
                 g_bSystemConnected = 0;
+                if (g_bWindowClosedExit != 0)
+                {
+                    g_bExitGameFlag = 1;
+                }
                 break;
+#endif
 
             case 0xB1: // 0x6FB2BD18: No-op in client loop
             case 0xB2: // 0x6FB2BD18: No-op in client loop
@@ -2773,6 +2806,9 @@ BOOL CALLBACK GAME_DisconnectScreenLoop(DWORD dwCount)
     return FALSE;
 }
 
+extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nTileX, int32_t nTileY, int32_t nExplicitLevelId);
+static void GAME_PrestreamTownAndAdjacentWilderness(int32_t nTownLevelId);
+
 // 1.12a: 0x6FB2C320
 void __fastcall GAME_LoadAct(uint8_t nAct, uint32_t dwMapSeed, uint16_t wLevelId, uint32_t dwFlags)
 {
@@ -2780,6 +2816,20 @@ void __fastcall GAME_LoadAct(uint8_t nAct, uint32_t dwMapSeed, uint16_t wLevelId
 
     if (gpClientAct != nullptr)
     {
+        for (int32_t t = 0; t < UNIT_TYPES_COUNT; ++t)
+        {
+            for (int32_t b = 0; b < 128; ++b)
+            {
+                for (D2UnitStrc* pU = gapServerSideUnitHashTables[t][b]; pU != nullptr; pU = pU->pListNext)
+                {
+                    UNITROOM_RemoveUnitFromRoom(pU);
+                }
+                for (D2UnitStrc* pU = gapClientSideUnitHashTables[t][b]; pU != nullptr; pU = pU->pListNext)
+                {
+                    UNITROOM_RemoveUnitFromRoom(pU);
+                }
+            }
+        }
         DUNGEON_FreeAct(gpClientAct);
     }
 
@@ -2813,6 +2863,8 @@ void __fastcall GAME_LoadAct(uint8_t nAct, uint32_t dwMapSeed, uint16_t wLevelId
     AUTOMAP_InitColors();
     LIGHTMAP_InitializeReciprocalTableAndActCallback();
     UI_InitPaletteColors();
+    extern void __fastcall ENV_InitActWeatherPaletteAndOverlays(int32_t nLevelId);
+    ENV_InitActWeatherPaletteAndOverlays(static_cast<int32_t>(wLevelId));
 
     g_dwCurrentTownLevelId = static_cast<uint32_t>(wLevelId);
     GFX_FreeMonsterCofCache();
@@ -2820,6 +2872,8 @@ void __fastcall GAME_LoadAct(uint8_t nAct, uint32_t dwMapSeed, uint16_t wLevelId
     char szCofPath[260] = {};
     wsprintfA(szCofPath, "%s\\%s", "DATA\\GLOBAL", g_aszActMonsterCofFiles[nAct]);
     GFX_LoadPackedCofArchive(&g_MonsterCofCache, szCofPath);
+
+    GAME_PrestreamTownAndAdjacentWilderness(static_cast<int32_t>(wLevelId));
 
     g_nPostActLoadBlackFrames = 1;
     const uint32_t dwGraceTarget = GetTickCount() + 10000u;
@@ -3123,7 +3177,7 @@ void __fastcall GAME_RenderFrame(int32_t bSkipCursor)
     const int32_t nHalfW  = (pView->nScreenRight - pView->nScreenLeft) / 2;
     const int32_t nHalfH  = (pView->nScreenBottom - pView->nScreenTop) / 2;
 
-    int32_t nCameraX = UNITS_GetClientCoordX(gpPlayerUnit) - nHalfW;
+    int32_t nCameraX = UNITS_GetClientCoordX(gpPlayerUnit) + gnViewportShiftOffsetX - nHalfW;
     int32_t nCameraY = UNITS_GetClientCoordY(gpPlayerUnit) - nHalfH;
     VIEW_UpdateScreenShake(&nCameraX, &nCameraY);
 
@@ -3143,7 +3197,7 @@ void __fastcall GAME_RenderFrame(int32_t bSkipCursor)
         pView->dwFlags     |= VIEWFLAG_DIRTY;
     }
 
-    VIEW_UpdateViewportVisibility(pView, 0);
+    VIEW_UpdateViewportVisibility(pView, gpPlayerUnit);
     WEATHER_UpdateParticles();
 
     uint8_t nAmbRed   = 0;
@@ -3219,10 +3273,34 @@ void __stdcall GAME_InitClientState(void)
         g_pClientViewport = VIEW_AllocViewport();
     }
 
-    DWORD dwSavedResolution = 0;
-    SRegLoadValue("Diablo II", "Resolution", 0, &dwSavedResolution);
-    const int32_t nResMode = (dwSavedResolution == 1u) ? D2GAMERES_800x600 : D2GAMERES_640x480;
+    DWORD dwSavedResolution = FOG_IsExpansion() ? 1u : 0u;
+    if (!SRegLoadValue("Diablo II", "Resolution", 0, &dwSavedResolution))
+    {
+        dwSavedResolution = FOG_IsExpansion() ? 1u : 0u;
+    }
+    const int32_t nResMode = (dwSavedResolution != 0u) ? D2GAMERES_800x600 : D2GAMERES_640x480;
     GAME_SetResolutionMode(nResMode);
+
+    extern void __cdecl GFXUTIL_InitDirectionTables(void);
+    extern void __stdcall  QUESTLOG_InitSession(void);
+    extern void __fastcall D2Client_ClearScreenMessages(void);
+    extern void __fastcall D2Client_ClearMercForHireList(void);
+    extern void __fastcall D2Client_ClearPortalInfoTable(void);
+    extern D2BitBufferStrc* g_pPlayerQuestRecord;
+    extern D2BitBufferStrc* g_pGameQuestRecord;
+    GFXUTIL_InitDirectionTables();
+    QUESTLOG_InitSession();
+    D2Client_ClearScreenMessages();
+    D2Client_ClearMercForHireList();
+    D2Client_ClearPortalInfoTable();
+    if (!g_pPlayerQuestRecord)
+    {
+        g_pPlayerQuestRecord = QUESTRECORD_AllocRecord(nullptr);
+    }
+    if (!g_pGameQuestRecord)
+    {
+        g_pGameQuestRecord = QUESTRECORD_AllocRecord(nullptr);
+    }
 
     UI_LoadLoadingScreen();
     UI_StepAndDrawLoadingScreen(1);
@@ -3337,16 +3415,21 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
     BOOL bTickElapsed        = FALSE;
     BOOL bUpdatedProgress    = FALSE;
 
-    // Single-player / local pause handling while minimized or in Esc/NPC menu
+    // Single-player / local pause handling while minimized or in Esc menu
     if (gnGameType == 0 || gnGameType == 1)
     {
-        if (WINDOW_GetState() != 0)
+        const HWND hGameWnd = WINDOW_GetWindow();
+        const bool bMinimizedOrPaused = WINDOW_IsFullScreen()
+            ? (WINDOW_GetState() != 0)
+            : (hGameWnd != nullptr && IsIconic(hGameWnd) != 0);
+        if (bMinimizedOrPaused && g_bExitGameFlag == 0)
         {
             g_tClientTiming.dwLastLogicTickMs = GetTickCount();
             return FALSE;
         }
 
-        if ((g_bEscMenuOpen != 0 || g_bNpcMenuOpen != 0) &&
+        if (g_bEscMenuOpen != 0 &&
+            g_bExitGameFlag == 0 &&
             pSavedPlayer != nullptr &&
             gpPlayerUnit != nullptr &&
             UNITS_GetRoom(gpPlayerUnit) != nullptr)
@@ -3506,11 +3589,17 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
             g_bActionDispatchedThisFrame = 0;
             SELECT_UpdateHoveredUnit();
 
-            if (D2SOUND_IsMusicPlaying())
+            if (bUpdatedProgress)
             {
-                D2SOUND_SmpFadeMasterVolume(180);
-                D2SOUND_StopMusic();
-                D2SOUND_SmpSetMasterVolume(255);
+                extern void __fastcall D2Client_RunNativeAutotestTick(void);
+                D2Client_RunNativeAutotestTick();
+            }
+
+            if (gpPlayerUnit != nullptr && UNITS_GetRoom(gpPlayerUnit) != nullptr)
+            {
+                extern void __fastcall D2Client_UpdateAreaMusic(int32_t nActNo, int32_t nLevelId);
+                const int32_t nCurLvl = DUNGEON_GetLevelIdFromRoom(UNITS_GetRoom(gpPlayerUnit));
+                D2Client_UpdateAreaMusic(g_nCurrentActIndex, nCurLvl);
             }
 
             if (g_nConsecutiveSkippedFrames == 0)
@@ -3538,12 +3627,12 @@ BOOL CALLBACK GAME_FrameLoop(DWORD dwCount)
         }
         else
         {
-            WINDOW_GetState();
+            if (WINDOW_IsFullScreen()) WINDOW_GetState();
         }
     }
     else
     {
-        WINDOW_GetState();
+        if (WINDOW_IsFullScreen()) WINDOW_GetState();
     }
 
     // 6. Continue modal loop while g_bExitGameFlag == 0; otherwise shut down session
@@ -3614,6 +3703,9 @@ int32_t __stdcall GAME_MainLoop(void)
             g_aInGameSMsgTable[i].uMsgOrId,
             g_aInGameSMsgTable[i].pfHandler);
     }
+    extern void __fastcall UI_RegisterHudAndPanelMsgHandlers(HWND hWnd);
+    extern void __fastcall UI_UnregisterHudAndPanelMsgHandlers(HWND hWnd);
+    UI_RegisterHudAndPanelMsgHandlers(hMainWnd);
     GAME_RegisterMouseWheelSupport();
 
     // Establish local/host or remote game connection
@@ -3826,6 +3918,7 @@ int32_t __stdcall GAME_MainLoop(void)
     }
     else
     {
+        UI_UnregisterHudAndPanelMsgHandlers(WINDOW_GetWindow());
         WALL2_UnregisterMsgHandlerTable(10, WINDOW_GetWindow(), g_aInGameSMsgTable);
         GAME_UnregisterMouseWheelSupport();
     }
@@ -3882,27 +3975,66 @@ int32_t __stdcall CUTSCENE_PlayActMovie(int32_t nMovie) { CUTSCENE_PlayCutscene(
 void __fastcall D2Client_InitTileAndSpriteCaches_Adapter(void* pPoolSystem, BOOL bReinit) { (void)pPoolSystem; D2Client_InitTileAndSpriteCaches(bReinit); }
 int32_t __fastcall GAME_SetResolutionMode(int32_t nMode) { WINMAIN_SetResolutionMode(nMode); return 1; }
 void __fastcall GFX_PrecacheNearbyMonsterSprites(int32_t bAsync) { (void)bAsync; }
+extern int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap);
+// STRTABLE_GetLanguage is declared in <D2StrTable.h>
+
 int32_t __fastcall MSG_SendCreateGame_67(const char* szGameName)
 {
-    const uint16_t wCharFlags = gpD2Config_6FBCB908
-        ? gpD2Config_6FBCB908->unpackedCTemp.nCharacterSaveFlags
-        : static_cast<uint16_t>(FOG_IsExpansion() ? 0x20u : 0u);
+    if (gpD2Config_6FBCB908 != nullptr)
+    {
+        if (gpD2Config_6FBCB908->szName[0] != '\0')
+        {
+            SStrCopy(g_szConfigCharName, gpD2Config_6FBCB908->szName, sizeof(g_szConfigCharName));
+        }
+        gnLocalPlayerCharClass = gpD2Config_6FBCB908->unpackedCTemp.nCharacterClassId;
+        gnClientDifficulty     = gpD2Config_6FBCB908->nArenaDifficulty;
+        g_nArenaCharTemplate   = gpD2Config_6FBCB908->nArenaTemplate;
+        if (gpD2Config_6FBCB908->nArenaFlags == 0)
+        {
+            gpD2Config_6FBCB908->nArenaFlags = 0x100004u;
+        }
+        gdwArenaFlags = gpD2Config_6FBCB908->nArenaFlags;
+        gbIsExpansion = ((gpD2Config_6FBCB908->unpackedCTemp.nCharacterSaveFlags & 0x20u) != 0 || FOG_IsExpansion()) ? 1 : 0;
+    }
+    else
+    {
+        if (gdwArenaFlags == 0)
+        {
+            gdwArenaFlags = 0x100004u;
+        }
+        gbIsExpansion = FOG_IsExpansion() ? 1 : 0;
+    }
+
+    char szConnectHost[128] = {};
+    if (GetEnvironmentVariableA("D2MOO_CONNECT_HOST", szConnectHost, sizeof(szConnectHost)) > 0 && szConnectHost[0] != '\0')
+    {
+        return MSG_SendJoinGame_68(1u, 1u);
+    }
+
+    const uint8_t nGameMode =
+        (gnGameType == 0) ? 3u :
+        (gnGameType == 6) ? 1u :
+        (gnGameType == 8) ? 2u : 0u;
+    const uint16_t wArena = gpD2Config_6FBCB908 ? gpD2Config_6FBCB908->wArena : 0u;
+    const uint8_t nLocale = static_cast<uint8_t>(STRTABLE_GetLanguage());
+    const char* szChar = g_szConfigCharName[0] ? g_szConfigCharName : "Hero";
+
     return MSG_SendCreateGame_67(
-        (szGameName && szGameName[0]) ? szGameName : "Game",
-        static_cast<uint8_t>(gnGameType),
+        (szGameName && szGameName[0]) ? szGameName : szChar,
+        nGameMode,
         gnLocalPlayerCharClass,
         static_cast<uint8_t>(g_nArenaCharTemplate),
         gnClientDifficulty,
-        g_szConfigCharName[0] ? g_szConfigCharName : "Hero",
-        wCharFlags,
+        szChar,
+        wArena,
         gdwArenaFlags,
         0,
         0,
-        0);
+        nLocale);
 }
 int32_t __fastcall MSG_SendJoinGame_68(uint32_t dwJoinToken, uint16_t wGameId)
 {
-    return MSG_SendJoinGame_68(dwJoinToken, wGameId, gnLocalPlayerCharClass, 0x0Cu, gdwArenaFlags, 0, g_szConfigCharName[0] ? g_szConfigCharName : "Hero");
+    return MSG_SendJoinGame_68(dwJoinToken, wGameId, gnLocalPlayerCharClass, 0x0Cu, gdwArenaFlags ? gdwArenaFlags : 0x506DFC26u, 0, g_szConfigCharName[0] ? g_szConfigCharName : "Hero");
 }
 int32_t __stdcall MSG_UploadSaveFile_6C(int32_t bLocalOrHost)
 {
@@ -3914,7 +4046,7 @@ int32_t __stdcall MSG_UploadSaveFile_6C(int32_t bLocalOrHost)
     char szSaveDir[MAX_PATH] = {};
     char szSaveFile[MAX_PATH] = {};
     FOG_GetSavePath(szSaveDir, sizeof(szSaveDir));
-    std::snprintf(szSaveFile, sizeof(szSaveFile), "%s%s.d2s", szSaveDir, g_szConfigCharName);
+    snprintf(szSaveFile, sizeof(szSaveFile), "%s%s.d2s", szSaveDir, g_szConfigCharName);
     HANDLE hFile = FOG_CreateFileA(szSaveFile, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE)
     {
@@ -3952,17 +4084,1253 @@ void __stdcall SOUNDCHANNEL_DestroyAllChannels(void) {}
 void __stdcall SOUNDCHANNEL_StopAllChannels(void) {}
 void __stdcall SOUND_StopAllActiveUnitSounds(void) {}
 void __stdcall TEXT_PollBnetRealmChat(void) { sub_6FB35DF0(); }
-int32_t __stdcall UI_CloseOpenPanels(int32_t bPlaySoundOrMoveMouse, int32_t bCloseAutomap) { (void)bPlaySoundOrMoveMouse; (void)bCloseAutomap; UI_CloseAllPanels(); return 1; }
+int32_t __stdcall UI_CloseOpenPanels(int32_t bPlaySoundOrMoveMouse, int32_t bCloseAutomap) { (void)bPlaySoundOrMoveMouse; return UI_CloseOpenPanelsCount(bCloseAutomap); }
 void __fastcall UI_LoadLoadingScreen(void) { UI_InitLoadingScreen(); }
 void __stdcall UI_StepAndDrawLoadingScreen(int32_t bAdvanceFrame) { (void)bAdvanceFrame; UI_StepAndDrawLoadingScreen(); }
 void __stdcall UI_RenderHUD(D2ViewportStrc* pViewport) { (void)pViewport; UI_RenderHUD(); }
 void __stdcall UI_UpdatePanelResolution(void) { UI_CloseMercInteract(); }
-void __fastcall VIEW_UpdateViewportVisibility(D2ViewportStrc* pView, int32_t bArg) { (void)pView; (void)bArg; }
 void __fastcall WALL2_RegisterSingleMsgHandler(HWND hWnd, uint32_t nType, uint32_t uMsg, void (__stdcall* pfHandler)(SMSGHANDLER_PARAMS*))
 {
     WALL2_RegisterSingleMsgHandler(hWnd, nType, uMsg, reinterpret_cast<void (__stdcall*)(SMsgWindowMessage*)>(pfHandler));
 }
-int32_t __fastcall WALL2_RunModalMessageLoop(SMSGIDLEPROC pfIdleCallback) { while (pfIdleCallback && pfIdleCallback(0)) WALL2_PumpWindowMessages(); return 1; }
+int32_t __fastcall WALL2_RunModalMessageLoop(SMSGIDLEPROC pfIdleCallback)
+{
+    DWORD dwCount = 0;
+    while (WALL2_PumpWindowMessages() && pfIdleCallback && !pfIdleCallback(dwCount++))
+    {
+    }
+    return 1;
+}
 void __stdcall WEATHER_FreeEnvironmentCellFiles(void) { ENV_FreeOverlayCellFiles(); }
 void __stdcall WEATHER_InitEnvironmentPools(void) { ENV_CreateAllPools(); }
 void __stdcall WEATHER_UpdateParticles(void) { ENV_UpdateEnvironmentFrame(); }
+
+// =============================================================================
+// Client DRLG Room Streaming & Boundary Prestreaming Helpers
+// =============================================================================
+struct D2AutomapLayerStrc;
+extern D2AutomapLayerStrc* __fastcall AUTOMAP_InitLayer(int32_t nLayerNo);
+
+extern "C" D2ActiveRoomStrc* __fastcall D2Client_SafeStreamRoomAtTile(int32_t nTileX, int32_t nTileY, int32_t nExplicitLevelId)
+{
+    if (!gpClientAct || !gpClientAct->pDrlg)
+    {
+        return nullptr;
+    }
+    if (D2ActiveRoomStrc* pExisting = DUNGEON_FindRoomByTileCoordinates(gpClientAct, nTileX, nTileY))
+    {
+        if (nExplicitLevelId <= 0 || DUNGEON_GetLevelIdFromRoom(pExisting) == nExplicitLevelId)
+        {
+            return pExisting;
+        }
+    }
+
+    D2DrlgStrc* pDrlg = gpClientAct->pDrlg;
+    D2DrlgRoomStrc* pMatchedRoomEx = nullptr;
+    int32_t nMatchedLevelId = 0;
+    D2DrlgLevelStrc* pExplicitInitLvl = nullptr;
+
+    if (nExplicitLevelId > 0)
+    {
+        if (D2DrlgLevelStrc* pExplicitLvl = DRLG_GetLevel(pDrlg, nExplicitLevelId))
+        {
+            if (!pExplicitLvl->pFirstRoomEx)
+            {
+                DRLG_InitLevel(pExplicitLvl);
+            }
+            pExplicitInitLvl = pExplicitLvl;
+            for (D2DrlgRoomStrc* pRoomEx = pExplicitLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+            {
+                if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
+                    nTileX >= pRoomEx->nTileXPos && nTileX < pRoomEx->nTileXPos + pRoomEx->nTileWidth &&
+                    nTileY >= pRoomEx->nTileYPos && nTileY < pRoomEx->nTileYPos + pRoomEx->nTileHeight)
+                {
+                    pMatchedRoomEx = pRoomEx;
+                    nMatchedLevelId = nExplicitLevelId;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!pMatchedRoomEx)
+    {
+        const int32_t nCurPlrLvl = (gpPlayerUnit && UNITS_GetRoom(gpPlayerUnit)) ? DUNGEON_GetLevelIdFromRoom(UNITS_GetRoom(gpPlayerUnit)) : 0;
+        const D2LevelsTxt* pCurPlrLvlTxt = (nCurPlrLvl > 0) ? DATATBLS_GetLevelsTxtRecord(nCurPlrLvl) : nullptr;
+        const bool bPreferCurrentIndoor = (pCurPlrLvlTxt != nullptr && pCurPlrLvlTxt->nIsInside != 0);
+
+        for (int32_t pass = 0; pass < 2 && !pMatchedRoomEx; ++pass)
+        {
+            for (D2DrlgLevelStrc* pLvl = pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
+            {
+                if (pLvl->nLevelId <= 0 || !pLvl->pFirstRoomEx)
+                {
+                    continue;
+                }
+                if (pass == 0 && bPreferCurrentIndoor && pLvl->nLevelId != nCurPlrLvl)
+                {
+                    continue;
+                }
+                if (pass == 0 && !bPreferCurrentIndoor)
+                {
+                    const D2LevelsTxt* pCandTxt = DATATBLS_GetLevelsTxtRecord(pLvl->nLevelId);
+                    if (pCandTxt && pCandTxt->nIsInside != 0)
+                    {
+                        continue;
+                    }
+                }
+                for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+                {
+                    if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
+                        nTileX >= pRoomEx->nTileXPos && nTileX < pRoomEx->nTileXPos + pRoomEx->nTileWidth &&
+                        nTileY >= pRoomEx->nTileYPos && nTileY < pRoomEx->nTileYPos + pRoomEx->nTileHeight)
+                    {
+                        pMatchedRoomEx = pRoomEx;
+                        nMatchedLevelId = pLvl->nLevelId;
+                        break;
+                    }
+                }
+                if (pMatchedRoomEx)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!pMatchedRoomEx)
+    {
+        for (D2DrlgLevelStrc* pLvl = pDrlg->pLevel; pLvl != nullptr; pLvl = pLvl->pNextLevel)
+        {
+            if (pLvl->nLevelId <= 0 || pLvl->pFirstRoomEx != nullptr || pLvl->nWidth <= 0 || pLvl->nHeight <= 0)
+            {
+                continue;
+            }
+            const D2LevelsTxt* pCandTxt = DATATBLS_GetLevelsTxtRecord(pLvl->nLevelId);
+            if (pCandTxt && pCandTxt->nIsInside != 0)
+            {
+                continue;
+            }
+            if (nTileX >= pLvl->nPosX && nTileX < pLvl->nPosX + pLvl->nWidth &&
+                nTileY >= pLvl->nPosY && nTileY < pLvl->nPosY + pLvl->nHeight)
+            {
+                DRLG_InitLevel(pLvl);
+                for (D2DrlgRoomStrc* pRoomEx = pLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+                {
+                    if (pRoomEx->nTileWidth > 0 && pRoomEx->nTileHeight > 0 &&
+                        nTileX >= pRoomEx->nTileXPos && nTileX < pRoomEx->nTileXPos + pRoomEx->nTileWidth &&
+                        nTileY >= pRoomEx->nTileYPos && nTileY < pRoomEx->nTileYPos + pRoomEx->nTileHeight)
+                    {
+                        pMatchedRoomEx = pRoomEx;
+                        nMatchedLevelId = pLvl->nLevelId;
+                        break;
+                    }
+                }
+                if (pMatchedRoomEx)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!pMatchedRoomEx || nMatchedLevelId <= 0)
+    {
+        return nullptr;
+    }
+
+    D2ActiveRoomStrc* pPlayerRoom = gpPlayerUnit ? UNITS_GetRoom(gpPlayerUnit) : nullptr;
+    DUNGEON_SetClientIsInSight(gpClientAct, nMatchedLevelId, pMatchedRoomEx->nTileXPos, pMatchedRoomEx->nTileYPos, pPlayerRoom);
+    D2ActiveRoomStrc* pStreamed = pMatchedRoomEx->pRoom;
+    if (!pStreamed)
+    {
+        pStreamed = DUNGEON_FindRoomByTileCoordinates(gpClientAct, pMatchedRoomEx->nTileXPos, pMatchedRoomEx->nTileYPos);
+    }
+    if (pStreamed)
+    {
+        AUTOMAP_RevealRoomFull(pStreamed);
+    }
+
+    static bool s_bPrestreamingIndoor = false;
+    if (!s_bPrestreamingIndoor && pExplicitInitLvl && pExplicitInitLvl->pFirstRoomEx)
+    {
+        const D2LevelsTxt* pExpTxt = DATATBLS_GetLevelsTxtRecord(nExplicitLevelId);
+        if (pExpTxt && pExpTxt->nIsInside != 0)
+        {
+            s_bPrestreamingIndoor = true;
+            int32_t nSafety = 0;
+            for (D2DrlgRoomStrc* pSubEx = pExplicitInitLvl->pFirstRoomEx; pSubEx != nullptr && nSafety < 96; pSubEx = pSubEx->pDrlgRoomNext, ++nSafety)
+            {
+                if (!pSubEx->pRoom && pSubEx->nTileWidth > 0 && pSubEx->nTileHeight > 0)
+                {
+                    D2Client_SafeStreamRoomAtTile(pSubEx->nTileXPos, pSubEx->nTileYPos, nExplicitLevelId);
+                }
+            }
+            s_bPrestreamingIndoor = false;
+        }
+    }
+
+    return pStreamed;
+}
+
+static int32_t GAME_GetAdjacentWildernessLevelForTown(int32_t nTownLevelId)
+{
+    switch (nTownLevelId)
+    {
+    case LEVEL_ROGUEENCAMPMENT:        return LEVEL_BLOODMOOR;
+    case LEVEL_LUTGHOLEIN:             return LEVEL_ROCKYWASTE;
+    case LEVEL_KURASTDOCKTOWN:         return LEVEL_SPIDERFOREST;
+    case LEVEL_THEPANDEMONIUMFORTRESS: return LEVEL_OUTERSTEPPES;
+    case LEVEL_HARROGATH:              return LEVEL_BLOODYFOOTHILLS;
+    default:                           return 0;
+    }
+}
+
+static void GAME_PrestreamTownAndAdjacentWilderness(int32_t nTownLevelId)
+{
+    if (!gpClientAct || !gpClientAct->pDrlg || nTownLevelId <= 0)
+    {
+        return;
+    }
+
+    D2DrlgLevelStrc* pTownLvl = DRLG_GetLevel(gpClientAct->pDrlg, nTownLevelId);
+    if (!pTownLvl)
+    {
+        return;
+    }
+    if (!pTownLvl->pFirstRoomEx)
+    {
+        DRLG_InitLevel(pTownLvl);
+    }
+
+    const int32_t nWildLevelId = GAME_GetAdjacentWildernessLevelForTown(nTownLevelId);
+    D2DrlgLevelStrc* pWildLvl = (nWildLevelId > 0) ? DRLG_GetLevel(gpClientAct->pDrlg, nWildLevelId) : nullptr;
+    if (pWildLvl && !pWildLvl->pFirstRoomEx)
+    {
+        DRLG_InitLevel(pWildLvl);
+    }
+
+    D2LevelDefBin* pLvlDef = DATATBLS_GetLevelDefRecord(nTownLevelId);
+    const int32_t nLayerNo = (pLvlDef && pLvlDef->dwLayer > 0) ? static_cast<int32_t>(pLvlDef->dwLayer) : nTownLevelId;
+    AUTOMAP_InitLayer(nLayerNo);
+
+    for (D2DrlgRoomStrc* pRoomEx = pTownLvl->pFirstRoomEx; pRoomEx != nullptr; pRoomEx = pRoomEx->pDrlgRoomNext)
+    {
+        D2Client_SafeStreamRoomAtTile(pRoomEx->nTileXPos, pRoomEx->nTileYPos, nTownLevelId);
+        if (pRoomEx->ppRoomsNear && pRoomEx->nRoomsNear > 0)
+        {
+            for (int32_t i = 0; i < pRoomEx->nRoomsNear; ++i)
+            {
+                if (D2DrlgRoomStrc* pNear = pRoomEx->ppRoomsNear[i])
+                {
+                    const int32_t nNearLvl = pNear->pLevel ? pNear->pLevel->nLevelId : 0;
+                    D2Client_SafeStreamRoomAtTile(pNear->nTileXPos, pNear->nTileYPos, nNearLvl);
+                }
+            }
+        }
+    }
+
+    if (pWildLvl && pWildLvl->pFirstRoomEx)
+    {
+        const int32_t nTownMinX = pTownLvl->nPosX - 28;
+        const int32_t nTownMaxX = pTownLvl->nPosX + pTownLvl->nWidth + 28;
+        const int32_t nTownMinY = pTownLvl->nPosY - 28;
+        const int32_t nTownMaxY = pTownLvl->nPosY + pTownLvl->nHeight + 28;
+        for (D2DrlgRoomStrc* pWildRoom = pWildLvl->pFirstRoomEx; pWildRoom != nullptr; pWildRoom = pWildRoom->pDrlgRoomNext)
+        {
+            const int32_t rx0 = pWildRoom->nTileXPos;
+            const int32_t ry0 = pWildRoom->nTileYPos;
+            const int32_t rx1 = rx0 + pWildRoom->nTileWidth;
+            const int32_t ry1 = ry0 + pWildRoom->nTileHeight;
+            if (rx1 >= nTownMinX && rx0 <= nTownMaxX && ry1 >= nTownMinY && ry0 <= nTownMaxY)
+            {
+                D2Client_SafeStreamRoomAtTile(rx0, ry0, nWildLevelId);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Self-Contained Opt-In Verification Harness (D2MOO_NATIVE_AUTOTEST=1)
+// =============================================================================
+extern int32_t __fastcall UI_SetPanelState(int32_t nPanelId, int32_t nAction, int32_t bMoveMouse);
+extern void __stdcall QUESTLOG_TogglePanel(int32_t bPlaySound);
+extern int32_t __stdcall QUESTLOG_ClosePanel(int32_t bPlaySound);
+extern void __fastcall D2Client_InteractWithNPC_6FAE30C0(D2UnitStrc* pNpc);
+extern void __stdcall D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(D2UnitStrc* pUnit, int32_t nArgXOrType, uint32_t dwArgYOrGUID, int32_t nActionCode, BOOL bForce);
+extern int32_t g_nInvPanelMode;
+extern D2UnitStrc* g_pTradeNpcUnit;
+extern int32_t g_bInteractingWithNpc;
+extern int32_t g_nInteractingNpcGUID;
+extern int32_t g_nInteractingNpcClassId;
+extern int32_t gdwActiveInteractNpcGUID;
+extern D2UnitStrc* __fastcall D2Client_FindServerSideUnit(uint32_t dwUnitId, uint32_t dwUnitType);
+extern void __fastcall MSG_GetTrafficCounters(uint32_t* pOutBytesRecv, uint32_t* pOutPktsRecv, uint32_t* pOutBytesSent, uint32_t* pOutPktsSent);
+extern void __fastcall MSG_ResetLastSentPacket(void);
+extern int32_t __fastcall MSG_SendByte2Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2);
+extern int32_t __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3);
+
+static void Autotest_StreamNeighborhoodAroundTile(int32_t nCenterTileX, int32_t nCenterTileY, int32_t nRadiusTiles)
+{
+    if (!gpClientAct) return;
+    for (int32_t dy = -nRadiusTiles; dy <= nRadiusTiles; dy += 4)
+    {
+        for (int32_t dx = -nRadiusTiles; dx <= nRadiusTiles; dx += 4)
+        {
+            D2Client_SafeStreamRoomAtTile(nCenterTileX + dx, nCenterTileY + dy, 0);
+        }
+    }
+}
+
+static bool Autotest_IsSubtileWalkable(int32_t sx, int32_t sy, bool bRequireMargin)
+{
+    if (sx <= 0 || sy <= 0 || !gpClientAct) return false;
+    D2ActiveRoomStrc* pRoom = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, sx, sy);
+    if (!pRoom) pRoom = D2Client_SafeStreamRoomAtTile(sx / 5, sy / 5, 0);
+    if (!pRoom || COLLISION_CheckMaskWithSize(pRoom, sx, sy, COLLISION_UNIT_SIZE_SMALL, COLLIDE_WALL | COLLIDE_NOPLAYER | COLLIDE_OBJECT | COLLIDE_DOOR | COLLIDE_BLANK))
+    {
+        return false;
+    }
+    if (bRequireMargin)
+    {
+        static const int32_t kOffs[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+        for (int32_t i = 0; i < 4; ++i)
+        {
+            const int32_t nx = sx + kOffs[i][0];
+            const int32_t ny = sy + kOffs[i][1];
+            D2ActiveRoomStrc* pAdj = DUNGEON_FindRoomBySubtileCoordinates(gpClientAct, nx, ny);
+            if (!pAdj) pAdj = D2Client_SafeStreamRoomAtTile(nx / 5, ny / 5, 0);
+            if (!pAdj || COLLISION_CheckMask(pAdj, nx, ny, COLLIDE_WALL | COLLIDE_NOPLAYER | COLLIDE_OBJECT | COLLIDE_BLANK))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static void Autotest_FindNearestWalkableSubtile(int32_t nBaseX, int32_t nBaseY, int32_t nMaxRadius, int32_t* pOutX, int32_t* pOutY)
+{
+    *pOutX = nBaseX;
+    *pOutY = nBaseY;
+    for (int32_t pass = 0; pass < 2; ++pass)
+    {
+        const bool bMargin = (pass == 0);
+        for (int32_t r = 0; r <= nMaxRadius; ++r)
+        {
+            for (int32_t dy = -r; dy <= r; ++dy)
+            {
+                for (int32_t dx = -r; dx <= r; ++dx)
+                {
+                    if (abs(dx) != r && abs(dy) != r) continue;
+                    const int32_t sx = nBaseX + dx;
+                    const int32_t sy = nBaseY + dy;
+                    if (Autotest_IsSubtileWalkable(sx, sy, bMargin))
+                    {
+                        *pOutX = sx;
+                        *pOutY = sy;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static bool Autotest_ComputeWalkablePath(int32_t rawStartX, int32_t rawStartY, int32_t rawGoalX, int32_t rawGoalY, std::vector<POINT>& outWaypoints)
+{
+    outWaypoints.clear();
+    if (!gpClientAct || rawStartX <= 0 || rawStartY <= 0 || rawGoalX <= 0 || rawGoalY <= 0) return false;
+
+    GAME_PrestreamTownAndAdjacentWilderness(static_cast<int32_t>(g_dwCurrentTownLevelId ? g_dwCurrentTownLevelId : LEVEL_ROGUEENCAMPMENT));
+    Autotest_StreamNeighborhoodAroundTile(rawStartX / 5, rawStartY / 5, 24);
+    Autotest_StreamNeighborhoodAroundTile(rawGoalX / 5, rawGoalY / 5, 28);
+
+    int32_t startX = rawStartX, startY = rawStartY;
+    int32_t goalX = rawGoalX, goalY = rawGoalY;
+    Autotest_FindNearestWalkableSubtile(rawStartX, rawStartY, 10, &startX, &startY);
+    Autotest_FindNearestWalkableSubtile(rawGoalX, rawGoalY, 10, &goalX, &goalY);
+
+    const int32_t minX = ((startX < goalX ? startX : goalX) - 180) & ~1;
+    const int32_t maxX = ((startX > goalX ? startX : goalX) + 180) & ~1;
+    const int32_t minY = ((startY < goalY ? startY : goalY) - 180) & ~1;
+    const int32_t maxY = ((startY > goalY ? startY : goalY) + 180) & ~1;
+
+    const int32_t gridW = (maxX - minX) / 2 + 1;
+    const int32_t gridH = (maxY - minY) / 2 + 1;
+    if (gridW <= 2 || gridH <= 2 || gridW * gridH > 262144)
+    {
+        outWaypoints.push_back({ goalX, goalY });
+        return true;
+    }
+
+    const int32_t sgx = (startX - minX) / 2;
+    const int32_t sgy = (startY - minY) / 2;
+    const int32_t ggx = (goalX - minX) / 2;
+    const int32_t ggy = (goalY - minY) / 2;
+    const int32_t startIdx = sgy * gridW + sgx;
+
+    static const int32_t kDirs[8][2] = {
+        { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 },
+        { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 }
+    };
+
+    std::vector<int32_t> vParent;
+    int32_t reachedIdx = -1;
+    for (int32_t pass = 0; pass < 2 && reachedIdx < 0; ++pass)
+    {
+        const bool bMargin = (pass == 0);
+        vParent.assign(static_cast<size_t>(gridW * gridH), -1);
+        std::queue<int32_t> q;
+        vParent[startIdx] = startIdx;
+        q.push(startIdx);
+
+        int32_t bestFallbackIdx = startIdx;
+        int64_t bestFallbackDistSq = 0x7FFFFFFFFFFFFFFFLL;
+
+        while (!q.empty())
+        {
+            const int32_t cur = q.front();
+            q.pop();
+            const int32_t cx = cur % gridW;
+            const int32_t cy = cur / gridW;
+            const int64_t ddx = static_cast<int64_t>(cx - ggx);
+            const int64_t ddy = static_cast<int64_t>(cy - ggy);
+            const int64_t d2 = ddx * ddx + ddy * ddy;
+            if (d2 < bestFallbackDistSq)
+            {
+                bestFallbackDistSq = d2;
+                bestFallbackIdx = cur;
+            }
+            if (d2 <= 1)
+            {
+                reachedIdx = cur;
+                break;
+            }
+            const int32_t curSubX = minX + cx * 2;
+            const int32_t curSubY = minY + cy * 2;
+            for (int32_t d = 0; d < 8; ++d)
+            {
+                const int32_t nx = cx + kDirs[d][0];
+                const int32_t ny = cy + kDirs[d][1];
+                if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) continue;
+                const int32_t nIdx = ny * gridW + nx;
+                if (vParent[nIdx] != -1) continue;
+                const int32_t nextSubX = minX + nx * 2;
+                const int32_t nextSubY = minY + ny * 2;
+                const int32_t midSubX = curSubX + kDirs[d][0];
+                const int32_t midSubY = curSubY + kDirs[d][1];
+                if (!Autotest_IsSubtileWalkable(midSubX, midSubY, false) ||
+                    !Autotest_IsSubtileWalkable(nextSubX, nextSubY, bMargin))
+                {
+                    continue;
+                }
+                vParent[nIdx] = cur;
+                q.push(nIdx);
+            }
+        }
+        if (reachedIdx < 0 && pass == 1 && bestFallbackDistSq <= 9)
+        {
+            reachedIdx = bestFallbackIdx;
+        }
+    }
+
+    if (reachedIdx < 0)
+    {
+        outWaypoints.push_back({ goalX, goalY });
+        return false;
+    }
+
+    std::vector<POINT> vDense;
+    int32_t trace = reachedIdx;
+    for (int32_t guard = 0; guard < gridW * gridH; ++guard)
+    {
+        const int32_t tx = minX + (trace % gridW) * 2;
+        const int32_t ty = minY + (trace / gridW) * 2;
+        vDense.push_back({ tx, ty });
+        if (trace == startIdx) break;
+        trace = vParent[trace];
+    }
+    std::reverse(vDense.begin(), vDense.end());
+
+    POINT ptLast = { startX, startY };
+    for (size_t i = 1; i < vDense.size(); ++i)
+    {
+        const double dx = static_cast<double>(vDense[i].x - ptLast.x);
+        const double dy = static_cast<double>(vDense[i].y - ptLast.y);
+        if (sqrt(dx * dx + dy * dy) >= 7.0)
+        {
+            outWaypoints.push_back(vDense[i]);
+            ptLast = vDense[i];
+        }
+    }
+    if (outWaypoints.empty() || outWaypoints.back().x != goalX || outWaypoints.back().y != goalY)
+    {
+        outWaypoints.push_back({ goalX, goalY });
+    }
+    return true;
+}
+
+static bool Autotest_IsCorridorClear(int32_t bx, int32_t by, int32_t nx, int32_t ny, int32_t dMin, int32_t dMax)
+{
+    for (int32_t d = dMin; d <= dMax; d += 2)
+    {
+        const int32_t sx = bx + nx * d;
+        const int32_t sy = by + ny * d;
+        D2ActiveRoomStrc* pRoom = D2Client_SafeStreamRoomAtTile(sx / 5, sy / 5, 0);
+        if (!pRoom || COLLISION_CheckMask(pRoom, sx, sy, COLLIDE_WALL)) return false;
+    }
+    return true;
+}
+
+static bool Autotest_ComputeBloodMoorRoute(POINT aOutWaypoints[4])
+{
+    if (!gpClientAct || !gpClientAct->pDrlg) return false;
+    GAME_PrestreamTownAndAdjacentWilderness(LEVEL_ROGUEENCAMPMENT);
+    D2DrlgLevelStrc* pTownLvl = DRLG_GetLevel(gpClientAct->pDrlg, LEVEL_ROGUEENCAMPMENT);
+    if (!pTownLvl) return false;
+
+    const int32_t nTownCenterX = (pTownLvl->nPosX + pTownLvl->nWidth / 2) * 5;
+    const int32_t nTownCenterY = (pTownLvl->nPosY + pTownLvl->nHeight / 2) * 5;
+    int32_t wp0X = nTownCenterX, wp0Y = nTownCenterY;
+    Autotest_FindNearestWalkableSubtile(nTownCenterX, nTownCenterY, 24, &wp0X, &wp0Y);
+    aOutWaypoints[0] = { wp0X, wp0Y };
+
+    int32_t nBestBridgeX = 0, nBestBridgeY = 0, nBestNormX = 0, nBestNormY = 0, nBestClearScore = -1;
+    for (D2ActiveRoomStrc* pTownRoom = DUNGEON_GetRoomFromAct(gpClientAct); pTownRoom != nullptr; pTownRoom = pTownRoom->pRoomNext)
+    {
+        if (DUNGEON_GetLevelIdFromRoom(pTownRoom) != LEVEL_ROGUEENCAMPMENT) continue;
+        RECT rcT = {};
+        DUNGEON_GetSubtileRect(pTownRoom, &rcT);
+        for (D2ActiveRoomStrc* pMoorRoom = DUNGEON_GetRoomFromAct(gpClientAct); pMoorRoom != nullptr; pMoorRoom = pMoorRoom->pRoomNext)
+        {
+            if (DUNGEON_GetLevelIdFromRoom(pMoorRoom) != LEVEL_BLOODMOOR) continue;
+            RECT rcM = {};
+            DUNGEON_GetSubtileRect(pMoorRoom, &rcM);
+
+            int32_t nx = 0, ny = 0, segStart = 0, segEnd = 0, fixedCoord = 0;
+            bool bVert = false;
+            if (rcT.right == rcM.left && (rcT.bottom < rcM.bottom ? rcT.bottom : rcM.bottom) > (rcT.top > rcM.top ? rcT.top : rcM.top))
+            {
+                nx = 1; ny = 0; bVert = true; fixedCoord = rcT.right;
+                segStart = (rcT.top > rcM.top ? rcT.top : rcM.top) + 2;
+                segEnd   = (rcT.bottom < rcM.bottom ? rcT.bottom : rcM.bottom) - 2;
+            }
+            else if (rcT.left == rcM.right && (rcT.bottom < rcM.bottom ? rcT.bottom : rcM.bottom) > (rcT.top > rcM.top ? rcT.top : rcM.top))
+            {
+                nx = -1; ny = 0; bVert = true; fixedCoord = rcT.left;
+                segStart = (rcT.top > rcM.top ? rcT.top : rcM.top) + 2;
+                segEnd   = (rcT.bottom < rcM.bottom ? rcT.bottom : rcM.bottom) - 2;
+            }
+            else if (rcT.bottom == rcM.top && (rcT.right < rcM.right ? rcT.right : rcM.right) > (rcT.left > rcM.left ? rcT.left : rcM.left))
+            {
+                nx = 0; ny = 1; bVert = false; fixedCoord = rcT.bottom;
+                segStart = (rcT.left > rcM.left ? rcT.left : rcM.left) + 2;
+                segEnd   = (rcT.right < rcM.right ? rcT.right : rcM.right) - 2;
+            }
+            else if (rcT.top == rcM.bottom && (rcT.right < rcM.right ? rcT.right : rcM.right) > (rcT.left > rcM.left ? rcT.left : rcM.left))
+            {
+                nx = 0; ny = -1; bVert = false; fixedCoord = rcT.top;
+                segStart = (rcT.left > rcM.left ? rcT.left : rcM.left) + 2;
+                segEnd   = (rcT.right < rcM.right ? rcT.right : rcM.right) - 2;
+            }
+            else continue;
+
+            for (int32_t t = segStart; t <= segEnd; ++t)
+            {
+                const int32_t bx = bVert ? fixedCoord : t;
+                const int32_t by = bVert ? t : fixedCoord;
+                if (!Autotest_IsCorridorClear(bx, by, nx, ny, -16, 20)) continue;
+                const int32_t px = -ny, py = nx;
+                int32_t nScore = 1;
+                for (int32_t lat = 1; lat <= 4; ++lat)
+                {
+                    if (Autotest_IsCorridorClear(bx + px * lat, by + py * lat, nx, ny, -10, 12)) ++nScore;
+                    if (Autotest_IsCorridorClear(bx - px * lat, by - py * lat, nx, ny, -10, 12)) ++nScore;
+                }
+                if (nScore > nBestClearScore)
+                {
+                    nBestClearScore = nScore;
+                    nBestBridgeX = bx;
+                    nBestBridgeY = by;
+                    nBestNormX = nx;
+                    nBestNormY = ny;
+                }
+            }
+        }
+    }
+    if (nBestClearScore < 0) return false;
+
+    int32_t wp1X = nBestBridgeX - nBestNormX * 28;
+    int32_t wp1Y = nBestBridgeY - nBestNormY * 28;
+    Autotest_FindNearestWalkableSubtile(wp1X, wp1Y, 12, &wp1X, &wp1Y);
+
+    int32_t wp3X = nBestBridgeX + nBestNormX * 20;
+    int32_t wp3Y = nBestBridgeY + nBestNormY * 20;
+    Autotest_StreamNeighborhoodAroundTile(wp3X / 5, wp3Y / 5, 28);
+    Autotest_FindNearestWalkableSubtile(wp3X, wp3Y, 10, &wp3X, &wp3Y);
+
+    aOutWaypoints[1] = { wp1X, wp1Y };
+    aOutWaypoints[2] = { nBestBridgeX - nBestNormX * 8, nBestBridgeY - nBestNormY * 8 };
+    aOutWaypoints[3] = { wp3X, wp3Y };
+    return true;
+}
+
+static D2UnitStrc* Autotest_FindTownVendor()
+{
+    D2UnitStrc* pBest = nullptr;
+    int64_t nBestD2 = 0x7FFFFFFFFFFFFFFFLL;
+    const int32_t px = gpPlayerUnit ? UNITS_GetXPosition(gpPlayerUnit) : 0;
+    const int32_t py = gpPlayerUnit ? UNITS_GetYPosition(gpPlayerUnit) : 0;
+    for (int32_t b = 0; b < 128; ++b)
+    {
+        for (D2UnitStrc* pU = gapServerSideUnitHashTables[UNIT_MONSTER][b]; pU != nullptr; pU = pU->pListNext)
+        {
+            const uint32_t nCls = pU->dwClassId;
+            if (nCls != 148 && nCls != 154 && nCls != 147) continue;
+            const int64_t dx = static_cast<int64_t>(UNITS_GetXPosition(pU) - px);
+            const int64_t dy = static_cast<int64_t>(UNITS_GetYPosition(pU) - py);
+            const int64_t d2 = dx * dx + dy * dy;
+            if (d2 < nBestD2)
+            {
+                nBestD2 = d2;
+                pBest = pU;
+            }
+        }
+    }
+    return pBest;
+}
+
+static void Autotest_CaptureBmp(const char* szOutDir, const char* szFileName)
+{
+    g_nPostActLoadBlackFrames = 0;
+    GAME_RenderFrame(0);
+    HWND hWnd = WINDOW_GetWindow();
+    if (!hWnd) return;
+
+    char szOutPath[MAX_PATH * 2] = {};
+    snprintf(szOutPath, sizeof(szOutPath), "%s\\%s", szOutDir, szFileName);
+
+    int32_t nSurfW = 0, nSurfH = 0;
+    WINDOW_GetDimensions(&nSurfW, &nSurfH);
+    if (nSurfW > 0 && nSurfH > 0)
+    {
+        std::vector<uint8_t> vRgb(static_cast<size_t>(nSurfW) * static_cast<size_t>(nSurfH) * 3u);
+        if (D2GFX_GetBackBuffer(vRgb.data()))
+        {
+            const uint32_t dwRowStride = ((static_cast<uint32_t>(nSurfW) * 3u + 3u) & ~3u);
+            const uint32_t dwImgSize = dwRowStride * static_cast<uint32_t>(nSurfH);
+            std::vector<uint8_t> vBmpRows(dwImgSize, 0u);
+            for (int32_t y = 0; y < nSurfH; ++y)
+            {
+                const uint8_t* pSrc = vRgb.data() + static_cast<size_t>(nSurfH - 1 - y) * static_cast<size_t>(nSurfW) * 3u;
+                uint8_t* pDst = vBmpRows.data() + static_cast<size_t>(y) * dwRowStride;
+                for (int32_t x = 0; x < nSurfW; ++x)
+                {
+                    pDst[x * 3 + 0] = pSrc[x * 3 + 2];
+                    pDst[x * 3 + 1] = pSrc[x * 3 + 1];
+                    pDst[x * 3 + 2] = pSrc[x * 3 + 0];
+                }
+            }
+            BITMAPFILEHEADER bfh = {};
+            bfh.bfType = 0x4D42;
+            bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+            bfh.bfSize = bfh.bfOffBits + dwImgSize;
+            BITMAPINFOHEADER bih = {};
+            bih.biSize = sizeof(BITMAPINFOHEADER);
+            bih.biWidth = nSurfW;
+            bih.biHeight = nSurfH;
+            bih.biPlanes = 1;
+            bih.biBitCount = 24;
+            bih.biCompression = BI_RGB;
+            if (FILE* pFile = fopen(szOutPath, "wb"))
+            {
+                fwrite(&bfh, 1, sizeof(bfh), pFile);
+                fwrite(&bih, 1, sizeof(bih), pFile);
+                fwrite(vBmpRows.data(), 1, dwImgSize, pFile);
+                fclose(pFile);
+                return;
+            }
+        }
+    }
+
+    RECT rcClient = {};
+    if (!GetClientRect(hWnd, &rcClient)) return;
+    const int32_t nW = (rcClient.right - rcClient.left) > 1 ? (rcClient.right - rcClient.left) : 1;
+    const int32_t nH = (rcClient.bottom - rcClient.top) > 1 ? (rcClient.bottom - rcClient.top) : 1;
+    HDC hWndDc = GetDC(hWnd);
+    if (!hWndDc) return;
+    HDC hMemDc = CreateCompatibleDC(hWndDc);
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = nW;
+    bmi.bmiHeader.biHeight = nH;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 24;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* pBits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hWndDc, &bmi, DIB_RGB_COLORS, &pBits, nullptr, 0);
+    if (hMemDc && hBmp && pBits)
+    {
+        HGDIOBJ hOld = SelectObject(hMemDc, hBmp);
+        BitBlt(hMemDc, 0, 0, nW, nH, hWndDc, 0, 0, SRCCOPY);
+        SelectObject(hMemDc, hOld);
+        const uint32_t dwRowStride = ((static_cast<uint32_t>(nW) * 3u + 3u) & ~3u);
+        const uint32_t dwImgSize = dwRowStride * static_cast<uint32_t>(nH);
+        BITMAPFILEHEADER bfh = {};
+        bfh.bfType = 0x4D42;
+        bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+        bfh.bfSize = bfh.bfOffBits + dwImgSize;
+        if (FILE* pFile = fopen(szOutPath, "wb"))
+        {
+            fwrite(&bfh, 1, sizeof(bfh), pFile);
+            fwrite(&bmi.bmiHeader, 1, sizeof(bmi.bmiHeader), pFile);
+            fwrite(pBits, 1, dwImgSize, pFile);
+            fclose(pFile);
+        }
+    }
+    if (hBmp) DeleteObject(hBmp);
+    if (hMemDc) DeleteDC(hMemDc);
+    ReleaseDC(hWnd, hWndDc);
+}
+
+static void Autotest_SimulateClick(int32_t x800, int32_t y600)
+{
+    HWND hWnd = WINDOW_GetWindow();
+    if (!hWnd) return;
+    RECT rcClient = {};
+    int32_t physX = x800, physY = y600;
+    if (GetClientRect(hWnd, &rcClient) && rcClient.right > 0 && rcClient.bottom > 0)
+    {
+        physX = (x800 * rcClient.right) / 800;
+        physY = (y600 * rcClient.bottom) / 600;
+    }
+    const LPARAM lParam = MAKELPARAM(physX, physY);
+    SendMessageA(hWnd, WM_MOUSEMOVE, 0, lParam);
+    SendMessageA(hWnd, WM_LBUTTONDOWN, MK_LBUTTON, lParam);
+    SendMessageA(hWnd, WM_LBUTTONUP, 0, lParam);
+}
+
+static void Autotest_WriteReportJson(const char* szOutDir, uint32_t dwVendorShopItems)
+{
+    int32_t nHashUnits = 0, nActiveNpcs = 0, nActiveMonsters = 0;
+    for (int32_t t = 0; t < UNIT_TYPES_COUNT; ++t)
+    {
+        for (int32_t b = 0; b < 128; ++b)
+        {
+            for (D2UnitStrc* pU = gapServerSideUnitHashTables[t][b]; pU != nullptr; pU = pU->pListNext)
+            {
+                ++nHashUnits;
+                if (t == UNIT_MONSTER)
+                {
+                    D2MonStatsTxt* pMonTxt = DATATBLS_GetMonStatsTxtRecord(pU->dwClassId);
+                    if (pMonTxt && (pMonTxt->dwMonStatsFlags & ((1u << 9) | (1u << 8) | (1u << 24))) != 0) ++nActiveNpcs;
+                    else ++nActiveMonsters;
+                }
+            }
+        }
+    }
+
+    int32_t nEquippedItems = 0, nInventoryItems = 0, nBeltItems = 0;
+    if (gpPlayerUnit && gpPlayerUnit->pInventory)
+    {
+        for (D2UnitStrc* pItem = INVENTORY_GetFirstItem(gpPlayerUnit->pInventory); pItem != nullptr; pItem = INVENTORY_GetNextItem(pItem))
+        {
+            if (!INVENTORY_UnitIsItem(pItem)) continue;
+            if (pItem->dwAnimMode == IMODE_EQUIP) ++nEquippedItems;
+            else if (pItem->dwAnimMode == IMODE_INBELT) ++nBeltItems;
+            else if (pItem->dwAnimMode == IMODE_STORED) ++nInventoryItems;
+        }
+    }
+
+    int32_t nClientTownRooms = 0, nClientMoorRooms = 0;
+    if (gpClientAct)
+    {
+        for (D2ActiveRoomStrc* pR = DUNGEON_GetRoomFromAct(gpClientAct); pR != nullptr; pR = pR->pRoomNext)
+        {
+            const int32_t nLvl = DUNGEON_GetLevelIdFromRoom(pR);
+            if (nLvl == LEVEL_ROGUEENCAMPMENT) ++nClientTownRooms;
+            else if (nLvl == LEVEL_BLOODMOOR) ++nClientMoorRooms;
+        }
+    }
+
+    const int32_t nPlrX = gpPlayerUnit ? UNITS_GetXPosition(gpPlayerUnit) : 0;
+    const int32_t nPlrY = gpPlayerUnit ? UNITS_GetYPosition(gpPlayerUnit) : 0;
+    const int32_t nCurLvl = (gpPlayerUnit && UNITS_GetRoom(gpPlayerUnit)) ? DUNGEON_GetLevelIdFromRoom(UNITS_GetRoom(gpPlayerUnit)) : 0;
+    const int32_t nCharLvl = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_LEVEL, 0) : 1;
+    const int32_t nStatStr = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_STRENGTH, 0) : 0;
+    const int32_t nStatDex = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_DEXTERITY, 0) : 0;
+    const int32_t nStatVit = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_VITALITY, 0) : 0;
+    const int32_t nStatEne = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_ENERGY, 0) : 0;
+    const int32_t nStatHp  = gpPlayerUnit ? (STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_HITPOINTS, 0) >> 8) : 0;
+    const int32_t nStatMp  = gpPlayerUnit ? (STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_MANA, 0) >> 8) : 0;
+    const int32_t nGoldBank = gpPlayerUnit ? STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_GOLDBANK, 0) : 0;
+
+    uint32_t dwBytesRecv = 0, dwPktsRecv = 0, dwSentBytes = 0, dwSentPkts = 0;
+    MSG_GetTrafficCounters(&dwBytesRecv, &dwPktsRecv, &dwSentBytes, &dwSentPkts);
+
+    bool bZeroOriginalDlls = true;
+    int32_t nD2MooModules = 0;
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+    if (hSnap != INVALID_HANDLE_VALUE)
+    {
+        MODULEENTRY32 me = {};
+        me.dwSize = sizeof(me);
+        if (Module32First(hSnap, &me))
+        {
+            do
+            {
+                if (strstr(me.szExePath, "Original112a") != nullptr || strstr(me.szExePath, "targets\\diablo-ii-1.12a") != nullptr)
+                {
+                    bZeroOriginalDlls = false;
+                }
+                if (_stricmp(me.szModule, "D2Client.dll") == 0 || _stricmp(me.szModule, "D2Common.dll") == 0 ||
+                    _stricmp(me.szModule, "D2Game.dll") == 0 || _stricmp(me.szModule, "D2Win.dll") == 0 ||
+                    _stricmp(me.szModule, "D2gfx.dll") == 0 || _stricmp(me.szModule, "D2Gdi.dll") == 0 ||
+                    _stricmp(me.szModule, "D2Glide.dll") == 0 || _stricmp(me.szModule, "D2CMP.dll") == 0 ||
+                    _stricmp(me.szModule, "D2Lang.dll") == 0 || _stricmp(me.szModule, "D2Net.dll") == 0 ||
+                    _stricmp(me.szModule, "D2sound.dll") == 0 || _stricmp(me.szModule, "Fog.dll") == 0 ||
+                    _stricmp(me.szModule, "Storm.dll") == 0 || _stricmp(me.szModule, "D2Launch.dll") == 0)
+                {
+                    ++nD2MooModules;
+                }
+            } while (Module32Next(hSnap, &me));
+        }
+        CloseHandle(hSnap);
+    }
+
+    char szJsonPath[MAX_PATH * 2] = {};
+    snprintf(szJsonPath, sizeof(szJsonPath), "%s\\native_autotest_report.json", szOutDir);
+    if (FILE* pJson = fopen(szJsonPath, "wb"))
+    {
+        fprintf(
+            pJson,
+            "{\n"
+            "  \"charName\": \"%s\",\n"
+            "  \"charClass\": %u,\n"
+            "  \"charLevel\": %d,\n"
+            "  \"clientTicks\": %u,\n"
+            "  \"c2sPacketsSentViaMsgCpp\": %u,\n"
+            "  \"c2sBytesSentViaMsgCpp\": %u,\n"
+            "  \"playerGuid\": %u,\n"
+            "  \"reconstructedLocalPlayerUnitLinked\": %s,\n"
+            "  \"reconstructedUnitHashTableCount\": %d,\n"
+            "  \"playerSubX\": %d,\n"
+            "  \"playerSubY\": %d,\n"
+            "  \"currentLevelId\": %d,\n"
+            "  \"clientTownRoomsLoaded\": %d,\n"
+            "  \"clientBloodMoorRoomsLoaded\": %d,\n"
+            "  \"activeNpcs\": %d,\n"
+            "  \"activeMonsters\": %d,\n"
+            "  \"equippedItems\": %d,\n"
+            "  \"inventoryItems\": %d,\n"
+            "  \"beltItems\": %d,\n"
+            "  \"vendorShopItems\": %u,\n"
+            "  \"stashGold\": %d,\n"
+            "  \"statStrength\": %d,\n"
+            "  \"statDexterity\": %d,\n"
+            "  \"statVitality\": %d,\n"
+            "  \"statEnergy\": %d,\n"
+            "  \"statHitpoints\": %d,\n"
+            "  \"statMana\": %d,\n"
+            "  \"serverMapSeed\": %u,\n"
+            "  \"zeroOriginalBlizzardDlls\": %s,\n"
+            "  \"displayType\": %d,\n"
+            "  \"perspectiveEnabled\": %s,\n"
+            "  \"d2mooCompiledModulesLoaded\": %d\n"
+            "}\n",
+            g_szConfigCharName,
+            static_cast<unsigned int>(gnLocalPlayerCharClass),
+            nCharLvl,
+            gdwClientGameTick,
+            dwSentPkts,
+            dwSentBytes,
+            gpPlayerUnit ? gpPlayerUnit->dwUnitId : 0u,
+            (gpPlayerUnit != nullptr) ? "true" : "false",
+            nHashUnits,
+            nPlrX,
+            nPlrY,
+            nCurLvl,
+            nClientTownRooms,
+            nClientMoorRooms,
+            nActiveNpcs,
+            nActiveMonsters,
+            nEquippedItems,
+            nInventoryItems,
+            nBeltItems,
+            dwVendorShopItems,
+            nGoldBank,
+            nStatStr,
+            nStatDex,
+            nStatVit,
+            nStatEne,
+            nStatHp,
+            nStatMp,
+            g_pActSeeds ? g_pActSeeds->dwInitSeed : 0u,
+            bZeroOriginalDlls ? "true" : "false",
+            static_cast<int32_t>(D2GFX_GetDisplayType()),
+            D2GFX_CheckPerspective() ? "true" : "false",
+            nD2MooModules);
+        fclose(pJson);
+    }
+}
+
+void __fastcall D2Client_RunNativeAutotestTick(void)
+{
+    static int32_t s_nCheckedEnv = 0;
+    static bool s_bEnabled = false;
+    static char s_szOutDir[MAX_PATH] = {};
+    static int32_t s_nPhase = 0;
+    static uint32_t s_dwPhaseTick = 0;
+    static uint32_t s_dwStepSentTick = 0;
+    static uint32_t s_dwVendorGuid = 0;
+    static uint32_t s_dwVendorShopItems = 0;
+    static std::vector<POINT> s_vPath;
+    static size_t s_uPathIdx = 0;
+    static int32_t s_nInteractSubStage = 0;
+    static POINT s_aMoorRoute[4] = {};
+    static bool s_bHasMoorRoute = false;
+
+    if (!s_nCheckedEnv)
+    {
+        s_nCheckedEnv = 1;
+        char szEnv[32] = {};
+        const char* szCmdLine = GetCommandLineA();
+        if ((GetEnvironmentVariableA("D2MOO_NATIVE_AUTOTEST", szEnv, sizeof(szEnv)) > 0 && szEnv[0] != '0') ||
+            (szCmdLine && strstr(szCmdLine, "--autotest-native") != nullptr))
+        {
+            s_bEnabled = true;
+            if (GetEnvironmentVariableA("D2MOO_AUTOTEST_DIR", s_szOutDir, sizeof(s_szOutDir)) == 0 || s_szOutDir[0] == '\0')
+            {
+                GetModuleFileNameA(nullptr, s_szOutDir, sizeof(s_szOutDir));
+                if (char* pSlash = strrchr(s_szOutDir, '\\')) *pSlash = '\0';
+            }
+            else
+            {
+                CreateDirectoryA(s_szOutDir, nullptr);
+            }
+        }
+    }
+    if (!s_bEnabled || !gpPlayerUnit) return;
+
+    const uint32_t dwTick = gdwClientGameTick;
+    switch (s_nPhase)
+    {
+    case 0:
+        if (dwTick >= 8u && UNITS_GetRoom(gpPlayerUnit) != nullptr)
+        {
+            gbAlwaysRun = 1;
+            Autotest_CaptureBmp(s_szOutDir, "native_step1_hud.bmp");
+            s_dwVendorGuid = 0;
+            s_vPath.clear();
+            s_uPathIdx = 0;
+            s_nInteractSubStage = 0;
+            if (D2UnitStrc* pVendor = Autotest_FindTownVendor())
+            {
+                s_dwVendorGuid = pVendor->dwUnitId;
+                int32_t gx = UNITS_GetXPosition(pVendor), gy = UNITS_GetYPosition(pVendor);
+                Autotest_FindNearestWalkableSubtile(gx, gy, 6, &gx, &gy);
+                Autotest_ComputeWalkablePath(UNITS_GetXPosition(gpPlayerUnit), UNITS_GetYPosition(gpPlayerUnit), gx, gy, s_vPath);
+            }
+            s_dwPhaseTick = dwTick;
+            s_dwStepSentTick = 0;
+            s_nPhase = 1;
+        }
+        break;
+
+    case 1:
+    {
+        D2UnitStrc* pVendor = (s_dwVendorGuid != 0) ? D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER) : Autotest_FindTownVendor();
+        if (!pVendor)
+        {
+            if ((dwTick - s_dwPhaseTick) >= 40u) { s_dwPhaseTick = dwTick; s_nPhase = 2; }
+            break;
+        }
+        if (s_dwVendorGuid == 0)
+        {
+            s_dwVendorGuid = pVendor->dwUnitId;
+            int32_t gx = UNITS_GetXPosition(pVendor), gy = UNITS_GetYPosition(pVendor);
+            Autotest_FindNearestWalkableSubtile(gx, gy, 6, &gx, &gy);
+            Autotest_ComputeWalkablePath(UNITS_GetXPosition(gpPlayerUnit), UNITS_GetYPosition(gpPlayerUnit), gx, gy, s_vPath);
+            s_uPathIdx = 0;
+            s_dwStepSentTick = 0;
+        }
+        if (gaPanelStates[8] != 0 || (dwTick - s_dwPhaseTick) >= 260u)
+        {
+            D2Client_InteractWithNPC_6FAE30C0(pVendor);
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 2;
+            break;
+        }
+        if (s_uPathIdx < s_vPath.size())
+        {
+            const int32_t dx = UNITS_GetXPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].x;
+            const int32_t dy = UNITS_GetYPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].y;
+            if (s_dwStepSentTick == 0)
+            {
+                Autotest_StreamNeighborhoodAroundTile(s_vPath[s_uPathIdx].x / 5, s_vPath[s_uPathIdx].y / 5, 24);
+                MSG_ResetLastSentPacket();
+                D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, s_vPath[s_uPathIdx].x, static_cast<uint32_t>(s_vPath[s_uPathIdx].y), 3, TRUE);
+                s_dwStepSentTick = dwTick;
+            }
+            else if ((dx * dx + dy * dy) <= 25 || (dwTick - s_dwStepSentTick) >= 14u)
+            {
+                ++s_uPathIdx;
+                s_dwStepSentTick = 0;
+            }
+        }
+        else if (s_nInteractSubStage == 0)
+        {
+            MSG_ResetLastSentPacket();
+            D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, UNIT_MONSTER, s_dwVendorGuid, 4, TRUE);
+            s_dwStepSentTick = dwTick;
+            s_nInteractSubStage = 1;
+        }
+        else
+        {
+            const int32_t vdx = UNITS_GetXPosition(gpPlayerUnit) - UNITS_GetXPosition(pVendor);
+            const int32_t vdy = UNITS_GetYPosition(gpPlayerUnit) - UNITS_GetYPosition(pVendor);
+            if (((vdx * vdx + vdy * vdy) <= 36 && (dwTick - s_dwStepSentTick) >= 4u) || (dwTick - s_dwStepSentTick) >= 14u)
+            {
+                MSG_ResetLastSentPacket();
+                D2Client_InteractWithNPC_6FAE30C0(pVendor);
+                s_dwPhaseTick = dwTick;
+                s_nPhase = 2;
+            }
+        }
+        break;
+    }
+
+    case 2:
+        if ((dwTick - s_dwPhaseTick) >= 4u)
+        {
+            UI_SetPanelState(8, 0, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step2_npc_dialog.bmp");
+            D2UnitStrc* pVendor = (s_dwVendorGuid != 0) ? D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER) : nullptr;
+            const uint32_t dwMenuAction = (pVendor && pVendor->dwClassId == 147) ? 2u : 1u;
+            if (s_dwVendorGuid != 0)
+            {
+                MSG_ResetLastSentPacket();
+                MSG_SendByte3Dwords(0x38u, dwMenuAction, s_dwVendorGuid, 0u);
+            }
+            UI_SetPanelState(8, 1, 0);
+            g_nInvPanelMode = (dwMenuAction == 2u) ? 2 : 1;
+            UI_SetPanelState(12, 0, 0);
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 3;
+        }
+        break;
+
+    case 3:
+    {
+        D2UnitStrc* pVendor = g_pTradeNpcUnit ? g_pTradeNpcUnit : D2Client_FindServerSideUnit(s_dwVendorGuid, UNIT_MONSTER);
+        uint32_t dwShopCount = 0;
+        if (pVendor && pVendor->pInventory)
+        {
+            for (D2UnitStrc* pItem = INVENTORY_GetFirstItem(pVendor->pInventory); pItem != nullptr; pItem = INVENTORY_GetNextItem(pItem))
+            {
+                if (INVENTORY_UnitIsItem(pItem)) ++dwShopCount;
+            }
+        }
+        if ((dwShopCount >= 10u && (dwTick - s_dwPhaseTick) >= 4u) || (dwTick - s_dwPhaseTick) >= 24u)
+        {
+            s_dwVendorShopItems = dwShopCount;
+            Autotest_SimulateClick(120, 102);
+            Autotest_CaptureBmp(s_szOutDir, "native_step3_vendor_trade.bmp");
+            if (s_dwVendorGuid != 0)
+            {
+                MSG_SendByte2Dwords(0x30u, UNIT_MONSTER, s_dwVendorGuid);
+            }
+            g_bInteractingWithNpc = 0;
+            g_nInteractingNpcGUID = 0;
+            g_nInteractingNpcClassId = 0;
+            gdwActiveInteractNpcGUID = 0;
+            g_pTradeNpcUnit = nullptr;
+            UI_SetPanelState(12, 1, 0);
+            UI_CloseOpenPanelsCount(0);
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 4;
+        }
+        break;
+    }
+
+    case 4:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(2, 0, 0);
+            UI_SetPanelState(4, 0, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step4_char_skill_inv.bmp");
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 5;
+        }
+        break;
+
+    case 5:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(4, 1, 0);
+            UI_SetPanelState(2, 1, 0);
+            QUESTLOG_TogglePanel(0);
+            UI_SetPanelState(15, 0, 0);
+            UI_SetPanelState(1, 1, 0);
+            UI_SetPanelState(10, 0, 0);
+            AUTOMAP_CenterView(1);
+            Autotest_CaptureBmp(s_szOutDir, "native_step5_quest_automap.bmp");
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 6;
+        }
+        break;
+
+    case 6:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(10, 1, 0);
+            QUESTLOG_ClosePanel(0);
+            UI_SetPanelState(15, 1, 0);
+            g_nInvPanelMode = 11;
+            UI_SetPanelState(25, 0, 0);
+            UI_SetPanelState(1, 0, 0);
+            UI_SetPanelState(31, 0, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step6_stash_belt.bmp");
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 7;
+        }
+        break;
+
+    case 7:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(31, 1, 0);
+            UI_SetPanelState(25, 1, 0);
+            g_nInvPanelMode = 12;
+            UI_SetPanelState(26, 0, 0);
+            UI_SetPanelState(1, 0, 0);
+            Autotest_SimulateClick(248, 326);
+            Autotest_CaptureBmp(s_szOutDir, "native_step7_horadric_cube.bmp");
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 8;
+        }
+        break;
+
+    case 8:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(26, 1, 0);
+            UI_SetPanelState(16, 0, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step8_waypoint_menu.bmp");
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 9;
+        }
+        break;
+
+    case 9:
+        if ((dwTick - s_dwPhaseTick) >= 2u)
+        {
+            UI_SetPanelState(16, 1, 0);
+            UI_SetPanelState(36, 0, 0);
+            UI_SetPanelState(1, 0, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step9_mercenary.bmp");
+            UI_CloseOpenPanelsCount(1);
+            g_nInvPanelMode = 0;
+
+            extern void __fastcall UI_OpenEscOptionsMenu(int32_t bSaveAndClosePanels, int32_t nMenuPage);
+            extern void __stdcall UI_CloseEscOptionsMenu(int32_t bRestorePanels);
+            UI_OpenEscOptionsMenu(1, 0);
+            Autotest_CaptureBmp(s_szOutDir, "native_step9b_esc_options.bmp");
+            UI_CloseEscOptionsMenu(0);
+
+            s_vPath.clear();
+            s_uPathIdx = 0;
+            s_dwStepSentTick = 0;
+            s_bHasMoorRoute = Autotest_ComputeBloodMoorRoute(s_aMoorRoute);
+            if (s_bHasMoorRoute)
+            {
+                int32_t curX = UNITS_GetXPosition(gpPlayerUnit);
+                int32_t curY = UNITS_GetYPosition(gpPlayerUnit);
+                for (int32_t leg = 0; leg < 4; ++leg)
+                {
+                    std::vector<POINT> vLeg;
+                    Autotest_ComputeWalkablePath(curX, curY, s_aMoorRoute[leg].x, s_aMoorRoute[leg].y, vLeg);
+                    for (size_t k = 0; k < vLeg.size(); ++k)
+                    {
+                        s_vPath.push_back(vLeg[k]);
+                    }
+                    if (!vLeg.empty())
+                    {
+                        curX = vLeg.back().x;
+                        curY = vLeg.back().y;
+                    }
+                    else
+                    {
+                        curX = s_aMoorRoute[leg].x;
+                        curY = s_aMoorRoute[leg].y;
+                    }
+                }
+            }
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 10;
+        }
+        break;
+
+    case 10:
+        if (s_bHasMoorRoute && !s_vPath.empty())
+        {
+            const int32_t nCurLvl = UNITS_GetRoom(gpPlayerUnit) ? DUNGEON_GetLevelIdFromRoom(UNITS_GetRoom(gpPlayerUnit)) : 0;
+            if (s_uPathIdx < s_vPath.size())
+            {
+                const int32_t dx = UNITS_GetXPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].x;
+                const int32_t dy = UNITS_GetYPosition(gpPlayerUnit) - s_vPath[s_uPathIdx].y;
+                if (s_dwStepSentTick == 0)
+                {
+                    Autotest_StreamNeighborhoodAroundTile(s_vPath[s_uPathIdx].x / 5, s_vPath[s_uPathIdx].y / 5, 24);
+                    MSG_ResetLastSentPacket();
+                    D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(gpPlayerUnit, s_vPath[s_uPathIdx].x, static_cast<uint32_t>(s_vPath[s_uPathIdx].y), 3, TRUE);
+                    s_dwStepSentTick = dwTick;
+                }
+                else if ((dx * dx + dy * dy) <= 25 || (dwTick - s_dwStepSentTick) >= 14u)
+                {
+                    ++s_uPathIdx;
+                    s_dwStepSentTick = 0;
+                }
+            }
+            else
+            {
+                if (nCurLvl == LEVEL_BLOODMOOR || dwTick >= 850u)
+                {
+                    s_dwPhaseTick = dwTick;
+                    s_nPhase = 11;
+                    break;
+                }
+                Autotest_ComputeWalkablePath(UNITS_GetXPosition(gpPlayerUnit), UNITS_GetYPosition(gpPlayerUnit), s_aMoorRoute[3].x, s_aMoorRoute[3].y, s_vPath);
+                s_uPathIdx = 0;
+                s_dwStepSentTick = 0;
+            }
+            if ((nCurLvl == LEVEL_BLOODMOOR && s_uPathIdx + 1 >= s_vPath.size()) || dwTick >= 850u)
+            {
+                s_dwPhaseTick = dwTick;
+                s_nPhase = 11;
+            }
+        }
+        else
+        {
+            s_dwPhaseTick = dwTick;
+            s_nPhase = 11;
+        }
+        break;
+
+    case 11:
+        if ((dwTick - s_dwPhaseTick) >= 5u)
+        {
+            Autotest_CaptureBmp(s_szOutDir, "native_step10_blood_moor.bmp");
+            Autotest_WriteReportJson(s_szOutDir, s_dwVendorShopItems);
+            s_nPhase = 12;
+            MSG_SendLeaveGame_69();
+            g_bExitAppFlag = 1;
+            g_bExitGameFlag = 1;
+        }
+        break;
+
+    default:
+        break;
+    }
+}

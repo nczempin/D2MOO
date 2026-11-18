@@ -764,7 +764,7 @@ static D2OptionsMenuHeaderStrc g_tVideoMenuExpHeader = { 8, 45, 34, 49, 36, 0 };
 // 0x6FB9C550
 static D2OptionsMenuItemStrc g_aVideoMenuExpItems[8] = {
     { -1, 0, 0, "VideoOptions", nullptr,                    nullptr,                        nullptr,                    nullptr,   0,  0, 0, { "", "", "", "" },                nullptr, { nullptr, nullptr, nullptr, nullptr } },
-    {  1, 1, 0, "Resolution",   nullptr,                    OPTIONS_OnChangeResolution,     OPTIONS_InitResolution,     nullptr,   2,  0, 0, { "640x480", "800x600", "", "" },  nullptr, { nullptr, nullptr, nullptr, nullptr } },
+    {  1, 1, 0, "Resolution",   nullptr,                    OPTIONS_OnChangeResolution,     OPTIONS_InitResolution,     nullptr,   2,  1, 0, { "640x480", "800x600", "", "" },  nullptr, { nullptr, nullptr, nullptr, nullptr } },
     {  1, 0, 0, "LightQuality", nullptr,                    OPTIONS_OnChangeLightQuality,   OPTIONS_InitLightQuality,   nullptr,   3,  2, 0, { "Low", "Medium", "High", "" },   nullptr, { nullptr, nullptr, nullptr, nullptr } },
     {  1, 0, 0, "BlendShadow",  nullptr,                    OPTIONS_OnChangeBlendShadows,   OPTIONS_InitBlendShadows,   nullptr,   2,  1, 0, { "SmallOff", "SmallOn", "", "" }, nullptr, { nullptr, nullptr, nullptr, nullptr } },
     {  1, 0, 0, "Perspective",  OPTIONS_CanUsePerspective,  OPTIONS_OnChangePerspective,    OPTIONS_InitPerspective,    nullptr,   2,  1, 0, { "SmallOff", "SmallOn", "", "" }, nullptr, { nullptr, nullptr, nullptr, nullptr } },
@@ -2993,8 +2993,15 @@ void __fastcall OPTIONS_OnSelectOptionsSubMenu(D2OptionsMenuItemStrc* pItem, D2W
 // 1.12a: 0x6FB05CF0
 void __cdecl OPTIONS_ApplyRegistryResolution(void)
 {
-    int32_t nRes = 0;
-    SRegLoadValue("Diablo II", "Resolution", 0, &nRes);
+    int32_t nRes = FOG_IsExpansion() ? 1 : 0;
+    if (!SRegLoadValue("Diablo II", "Resolution", 0, &nRes))
+    {
+        nRes = FOG_IsExpansion() ? 1 : 0;
+    }
+    if (!FOG_IsExpansion())
+    {
+        nRes = 0;
+    }
     GAME_SetResolutionMode((nRes == 1) ? 2 : 0);
 }
 
@@ -3185,7 +3192,15 @@ void __fastcall MINIPANEL_ExecuteButtonAction(int32_t nBtnAction)
 // 1.12a: 0x6FB06120
 void __fastcall OPTIONS_InitResolution(D2OptionsMenuItemStrc* pItem)
 {
-    SRegLoadValue("Diablo II", "Resolution", 0, &pItem->nCurrentState);
+    pItem->nCurrentState = FOG_IsExpansion() ? 1 : 0;
+    if (!SRegLoadValue("Diablo II", "Resolution", 0, &pItem->nCurrentState))
+    {
+        pItem->nCurrentState = FOG_IsExpansion() ? 1 : 0;
+    }
+    if (!FOG_IsExpansion())
+    {
+        pItem->nCurrentState = 0;
+    }
     GAME_SetResolutionMode((pItem->nCurrentState == 1) ? 2 : 0);
 }
 
@@ -4150,10 +4165,20 @@ extern int __fastcall sub_6FACEAC0(D2UnitStrc* pUnit);
 extern void __cdecl sub_6FACA1F0(void);
 extern void __stdcall sub_6FB24E20(void);
 
+extern int32_t g_nEquippedBeltRows;
+extern void __fastcall D2Client_CloseNpcGossipSpeech(void);
 void __stdcall CFGCONTROLS_SetOpenState(BOOL bInit) { sub_6FB261D0(bInit); }
-int32_t __cdecl CTRLPNL_GetEquippedBeltRows(void) { return 2; }
-BOOL __fastcall CUNIT_HasActiveInteract(D2UnitStrc* pUnit) { return sub_6FACEAC0(pUnit) == 0; }
-void __cdecl NPCMENU_CloseActiveMenu(void) { sub_6FACA1F0(); }
+int32_t __cdecl CTRLPNL_GetEquippedBeltRows(void) { return (g_nEquippedBeltRows > 0) ? g_nEquippedBeltRows : 1; }
+BOOL __fastcall CUNIT_HasActiveInteract(D2UnitStrc* pUnit) { return sub_6FACEAC0(pUnit) != 0; }
+void __cdecl NPCMENU_CloseActiveMenu(void)
+{
+    D2Client_CloseNpcGossipSpeech();
+    if (gaPanelStates[23] != 0)
+    {
+        gaPanelStates[23] = 0;
+    }
+    sub_6FACA1F0();
+}
 int32_t __cdecl SOUNDCHANNEL_Toggle3DSound(void) { return 0; }
 int32_t __cdecl SOUNDCHANNEL_ToggleEAX(void) { return 0; }
 void __stdcall TEXT_ClearChatAndCfgControls(void) { sub_6FB24E20(); }

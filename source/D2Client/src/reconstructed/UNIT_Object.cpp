@@ -1621,11 +1621,10 @@ uint8_t __fastcall D2Client_ObjClientFn13_FrozenAnyaQuestCheck(D2UnitStrc* pObje
 
         if (pPlayer->dwUnitType == UNIT_PLAYER && pPlayer->pPlayerData)
         {
-            uint32_t* pPlayerClientFields = (uint32_t*)((uint8_t*)pPlayer->pPlayerData + 0x150);
-            pPlayerClientFields[0] = 0;
-            pPlayerClientFields[1] = 0;
-            pPlayerClientFields[2] = 0;
-            pPlayerClientFields[3] = 0;
+            pPlayer->pPlayerData->unk0xA8[42] = 0;
+            pPlayer->pPlayerData->unk0xA8[43] = 0;
+            pPlayer->pPlayerData->unk0xA8[44] = 0;
+            pPlayer->pPlayerData->unk0xA8[45] = 0;
         }
     }
 

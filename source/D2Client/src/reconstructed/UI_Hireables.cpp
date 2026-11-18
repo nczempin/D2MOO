@@ -418,7 +418,8 @@ static uint8_t g_bCloudsInitialized     = 0;               // 0x6FBCB9DC
 static int32_t g_bStarsInitialized      = 0;               // 0x6FBCB9D8
 static int32_t g_bPartyNeedUiSync       = 0;
 static int32_t g_nPartyClearedHover[4]  = { 0 };
-static uint8_t g_aTileRenderPoolDesc[64]= { 0 };
+// Must match sizeof(D2ShadowLightGammaPaletteStrc) = 49 * 64 * sizeof(PALETTEENTRY) = 12544 bytes (0x3100).
+static uint8_t g_aTileRenderPoolDesc[49 * 64 * 4] = { 0 };
 static int32_t g_bDisableSummitBg       = 0;
 static int32_t g_nSummitBaseY           = 0;
 static int32_t g_aStarX[256]            = { 0 };

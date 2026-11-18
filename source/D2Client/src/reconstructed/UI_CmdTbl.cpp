@@ -287,7 +287,7 @@ extern int32_t gnViewportHeight;                // 0x6FBCD524
 extern int32_t gnCameraShakeType;               // 0x6FBCC028
 extern int32_t gnViewAdjustMode;                // 0x6FBCC1D0
 extern int32_t gnViewAdjustOffset;              // 0x6FBCC1D4
-extern int32_t gbEscMenuOpen;                   // 0x6FBCC008
+#define gbEscMenuOpen         (gaPanelStates[9])
 extern int32_t gbGoldDialogOpen;                // 0x6FBB5490
 extern int32_t gaPanelStates[38];               // 0x6FBB2B58
 #define gabPanelStates        gaPanelStates
@@ -635,9 +635,17 @@ void __fastcall CURSOR_FreeAssets(void)
             gapCursorCellFiles[i] = NULL;
         }
     }
-    HWND hWnd = WINDOW_GetWindow();
-    extern void __fastcall INPUT_UnregisterCallbacks(int32_t nCount, HWND hWnd, D2InputCallbackStrc* pTable); // 0x6FB1D0A0
-    INPUT_UnregisterCallbacks(3, hWnd, gCursorMouseMoveCallbacks);
+    if (gCursorDescTable[7].nAnimId != 7)
+    {
+        HWND hWnd = WINDOW_GetWindow();
+        if (hWnd != NULL)
+        {
+            extern void __fastcall INPUT_UnregisterCallbacks(int32_t nCount, HWND hWnd, D2InputCallbackStrc* pTable); // 0x6FB1D0A0
+            INPUT_UnregisterCallbacks(3, hWnd, gCursorMouseMoveCallbacks);
+        }
+        gCursorDescTable[7].nAnimId = 7;
+        gnCursorState = 0;
+    }
 }
 
 // 1.12a: 0x6FB4EDF0 (__fastcall)
@@ -645,8 +653,7 @@ void __fastcall CURSOR_ResetToDefault(void)
 {
     if (gCursorDescTable[7].nAnimId == 7)
     {
-        FOG_DisplayHalt(__FILE__, 0xDF);
-        exit(-1);
+        return;
     }
     if (gnCursorState == 6)
     {
@@ -1238,6 +1245,9 @@ int32_t __stdcall CMDTBL_OnKeyDown(D2WindowMsgStrc* pMsg)
 
     int32_t nCmdId = gKeyBindings[nIndex].nCommandId;
     if (nCmdId < 0 || nCmdId >= 57)
+        return 0;
+
+    if (gbEscOptionsOpen && nCmdId != 56 && nCmdId != 42)
         return 0;
 
     if (!gCmdDispatchTable[nCmdId].bAllowInChat && (pMsg->dwKeyFlags & 0x40000000) != 0)
@@ -2455,11 +2465,18 @@ void __fastcall CMDTBL_OnCharacterScreenDown(void)
 void __fastcall CMDTBL_OnEscMenuDown(void)
 {
     extern int32_t __fastcall NPCMENU_IsActive(void); // 0x6FAC7C90
+    extern void __cdecl NPCMENU_CloseActiveMenu(void); // 0x6FACA1F0
     extern void __stdcall UI_CloseEscOptionsMenu(int32_t bArg); // 0x6FB05560
     extern int32_t __stdcall UI_CloseAllOpenPanels(int32_t bArg); // 0x6FB3B480
     extern void __fastcall UI_OpenEscOptionsMenu(int32_t nType, int32_t nZero); // 0x6FB05610
-    if (NPCMENU_IsActive() || gbGoldDialogOpen)
+    if (gbGoldDialogOpen)
         return;
+    if (NPCMENU_IsActive())
+    {
+        NPCMENU_CloseActiveMenu();
+        UI_CloseAllOpenPanels(0);
+        return;
+    }
     if (gbEscOptionsOpen)
     {
         UI_CloseEscOptionsMenu(1);

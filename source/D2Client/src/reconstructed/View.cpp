@@ -410,59 +410,6 @@ void __fastcall PLAYER_UpdateCameraOffsets(void)
 {
 }
 
-// 0x6FB2CA10 (GAME/Game.cpp)
-void __fastcall VIEW_RenderViewportForCustomLoop(int32_t bSkipWorldRender)
-{
-    D2ViewportStrc* pViewport = static_cast<D2ViewportStrc*>(gpClientViewport);
-    if (gpClientPlayer == nullptr || pViewport == nullptr)
-    {
-        return;
-    }
-
-    VIEW_UpdateCameraShake(pViewport);
-
-    int32_t nTargetIsoX = UNITS_GetClientCoordX(gpClientPlayer);
-    int32_t nTargetIsoY = UNITS_GetClientCoordY(gpClientPlayer);
-    if (nTargetIsoX == 0 && nTargetIsoY == 0)
-    {
-        const int32_t nPrecisionX = UNITS_GetPrecisionX(gpClientPlayer);
-        const int32_t nPrecisionY = UNITS_GetPrecisionY(gpClientPlayer);
-        DUNGEON_GameCoordsToSubtileDrawPosition(
-            nPrecisionX >> 16,
-            nPrecisionY >> 16,
-            &nTargetIsoX,
-            &nTargetIsoY);
-    }
-
-    nTargetIsoX += gnCameraScreenSkewX;
-    nTargetIsoY += gnCameraScreenSkewY;
-
-    const int32_t nHalfWidth = (pViewport->nScreenRight - pViewport->nScreenLeft) / 2;
-    const int32_t nHalfHeight = (pViewport->nScreenBottom - pViewport->nScreenTop) / 2;
-    const int32_t nNewOffsetX = nTargetIsoX + gnCameraShakeOffsetX - nHalfWidth;
-    const int32_t nNewOffsetY = nTargetIsoY + gnCameraShakeOffsetY - nHalfHeight;
-
-    if (pViewport->nCameraTargetIsoX != nTargetIsoX ||
-        pViewport->nCameraTargetIsoY != nTargetIsoY ||
-        pViewport->nViewOffsetX != nNewOffsetX ||
-        pViewport->nViewOffsetY != nNewOffsetY)
-    {
-        pViewport->nCameraTargetIsoX = nTargetIsoX;
-        pViewport->nCameraTargetIsoY = nTargetIsoY;
-        pViewport->nViewOffsetX = nNewOffsetX;
-        pViewport->nViewOffsetY = nNewOffsetY;
-        pViewport->dwFlags |= VIEWFLAG_DIRTY;
-    }
-
-    VIEW_UpdateViewportVisibility(pViewport, gpClientPlayer);
-    PLAYER_UpdateCameraOffsets();
-
-    if (!bSkipWorldRender)
-    {
-        VIEW_RenderViewport(pViewport);
-    }
-}
-
 // 0x6FB2CE10 (GAME/Game.cpp)
 // Per-tick (25 Hz) DRLG room streaming, tile animation, and day/night cycle update:
 //   1. Animates lava/water/torch tiles via D2Common.#10928 (DUNGEON_AnimateTiles)

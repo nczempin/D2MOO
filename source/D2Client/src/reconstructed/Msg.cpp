@@ -112,13 +112,23 @@ enum D2C2SPacketOpcodes : uint8_t
     C2S_MERCITEM                = 0x61, // 3 bytes: [0x61, uint16_t wBodyLoc]
     C2S_RESURRECTMERC           = 0x62, // 5 bytes: [0x62, uint32_t dwNpcGUID]
     C2S_BELTSHIFTCLICK          = 0x63, // 5 bytes: [0x63, uint32_t dwItemGUID]
+#ifdef D2_VERSION_110F
+    C2S_WARDENRESPONSE          = 0x66,
+    C2S_CREATEGAME              = 0x66, // 46 bytes (0x2E) in D2MOO 1.10f Server.cpp
+    C2S_JOINGAME                = 0x67, // 29 bytes (0x1D)
+    C2S_LEAVEGAME               = 0x68, // 1 byte:  [0x68]
+    C2S_JOINACTCOMPLETE         = 0x6A, // 1 byte:  [0x6A]
+    C2S_UPLOADSAVECHUNK         = 0x6B, // varlen:  [0x6B, uint8_t nChunkLen, uint32_t dwTotalSaveSize, uint8_t abChunk[]]
+    C2S_PING                    = 0x6C, // 13 bytes:[0x6C, uint32_t dwTickCount, uint32_t dwDelayDiff, uint32_t dwZero]
+#else
     C2S_WARDENRESPONSE          = 0x66, // varlen:  [0x66, uint16_t wPayloadLen, uint8_t abPayload[]]
-    C2S_CREATEGAME              = 0x67, // 29 bytes
-    C2S_JOINGAME                = 0x68, // 37 bytes
+    C2S_CREATEGAME              = 0x67, // 46 bytes (0x2E)
+    C2S_JOINGAME                = 0x68, // 37 bytes (0x25 in 1.12a; 0x1D in 1.13+)
     C2S_LEAVEGAME               = 0x69, // 1 byte:  [0x69]
     C2S_JOINACTCOMPLETE         = 0x6B, // 1 byte:  [0x6B]
     C2S_UPLOADSAVECHUNK         = 0x6C, // varlen:  [0x6C, uint8_t nChunkLen, uint32_t dwTotalSaveSize, uint8_t abChunk[]]
     C2S_PING                    = 0x6D, // 13 bytes:[0x6D, uint32_t dwTickCount, uint32_t dwDelayDiff, uint32_t dwZero]
+#endif
 };
 
 // =============================================================================
@@ -292,11 +302,17 @@ int32_t __fastcall MSG_Send6A(void)
 
 // 0x6FB29420
 // Sends 0x69 (C2S_LEAVEGAME). Waits up to 2000ms for the send queue to flush first.
+extern int32_t gnGameType;
+D2GAME_DLL_DECL void __fastcall GAME_ProcessNetworkMessages();
 int32_t __fastcall MSG_SendLeaveGame_69(void)
 {
     const uint32_t dwStart = GetTickCount();
     while (D2NET_10023_GetSendQueueBacklog() != 0)
     {
+        if (gnGameType == 0 || gnGameType == 1)
+        {
+            GAME_ProcessNetworkMessages();
+        }
         if (GetTickCount() - dwStart >= 2000)
         {
             break;
@@ -315,6 +331,10 @@ int32_t __fastcall MSG_SendLeaveGame_69(void)
     const uint32_t dwFlushStart = GetTickCount();
     while (D2NET_10023_GetSendQueueBacklog() != 0)
     {
+        if (gnGameType == 0 || gnGameType == 1)
+        {
+            GAME_ProcessNetworkMessages();
+        }
         if (GetTickCount() - dwFlushStart >= 2000)
         {
             break;
@@ -390,7 +410,7 @@ int32_t __fastcall MSG_SendCreateGame_67(
     abPacket[0x2C] = nUnk2C;
     abPacket[0x2D] = nLocale;
 
-    const int32_t nSent = CLIENT_Send(0, abPacket, 0x1D);
+    const int32_t nSent = CLIENT_Send(0, abPacket, sizeof(abPacket));
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;
@@ -704,6 +724,7 @@ int32_t __fastcall MSG_SendJoinGame_68(
     uint8_t nLocale,
     const char* szCharName)
 {
+#ifdef D2_VERSION_112A
     uint8_t abPacket[0x25] = { 0 };
     abPacket[0] = C2S_JOINGAME;
     *reinterpret_cast<uint32_t*>(&abPacket[0x01]) = dwServerHash;
@@ -718,8 +739,23 @@ int32_t __fastcall MSG_SendJoinGame_68(
         strncpy(reinterpret_cast<char*>(&abPacket[0x15]), szCharName, 15);
         abPacket[0x24] = 0;
     }
-
     const int32_t nSent = CLIENT_Send(0, abPacket, 0x25);
+#else
+    (void)dwArenaFlags;
+    uint8_t abPacket[0x1D] = { 0 };
+    abPacket[0] = C2S_JOINGAME;
+    *reinterpret_cast<uint32_t*>(&abPacket[0x01]) = dwServerHash;
+    *reinterpret_cast<uint16_t*>(&abPacket[0x05]) = wServerToken;
+    abPacket[0x07] = nCharClass;
+    *reinterpret_cast<uint32_t*>(&abPacket[0x08]) = dwClientVersion;
+    abPacket[0x0C] = nLocale;
+    if (szCharName != nullptr)
+    {
+        strncpy(reinterpret_cast<char*>(&abPacket[0x0D]), szCharName, 15);
+        abPacket[0x1C] = 0;
+    }
+    const int32_t nSent = CLIENT_Send(0, abPacket, 0x1D);
+#endif
     if (nSent != 0)
     {
         g_dwBytesSent += nSent;

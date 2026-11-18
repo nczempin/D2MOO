@@ -222,19 +222,22 @@ int32_t __stdcall WINDOW_GetState()
     }
 
     gbWindowState_6FA8D850 = bPaused;
-    if (bPaused)
+    if (!gbIsWindowed)
     {
-        ShowWindow(ghWnd, SW_MINIMIZE);
-        WINDOW_ShowAll();
-        while (ShowCursor(1) < 0);
-    }
-    else
-    {
-        WINDOW_UpdatePlacement();
-        while (ShowCursor(0) >= 0);
+        if (bPaused)
+        {
+            ShowWindow(ghWnd, SW_MINIMIZE);
+            WINDOW_ShowAll();
+            while (ShowCursor(1) < 0);
+        }
+        else
+        {
+            WINDOW_UpdatePlacement();
+            while (ShowCursor(0) >= 0);
+        }
     }
 
-    gpGraphicsInterface->pfPauseSurface(ghWnd, gnResolutionMode, gbWindowState_6FA8D850);
+    gpGraphicsInterface->pfPauseSurface(ghWnd, gnResolutionMode, gbIsWindowed ? 0 : gbWindowState_6FA8D850);
 
     if (!gbWindowState_6FA8D850)
     {
@@ -310,8 +313,11 @@ int32_t __stdcall WINDOW_Resize(D2GameResolutionMode nResolution, int32_t bForce
 {
     D2_ASSERT(gpGraphicsInterface);
 
-    if (!bForceResize && nResolution == gnResolutionMode)
+    const bool bOldIs800 = (gnResolutionMode == D2GAMERES_800x600 || gnResolutionMode == NUM_GAME_RESOLUTIONS);
+    const bool bNewIs800 = (nResolution == D2GAMERES_800x600 || nResolution == NUM_GAME_RESOLUTIONS);
+    if (!bForceResize && (nResolution == gnResolutionMode || (bOldIs800 && bNewIs800)))
     {
+        gnResolutionMode = nResolution;
         return 1;
     }
 
@@ -340,18 +346,24 @@ int32_t __stdcall WINDOW_Resize(D2GameResolutionMode nResolution, int32_t bForce
             exit(-1);
         }
 
-        //dword_6FA8D740 = Rect.bottom;
+        const int32_t nTargetClientW = Rect.right;
+        const int32_t nTargetClientH = Rect.bottom;
+        RECT curClient = {};
+        GetClientRect(ghWnd, &curClient);
+        if ((curClient.right - curClient.left) != nTargetClientW || (curClient.bottom - curClient.top) != nTargetClientH)
+        {
+            AdjustWindowRectEx(&Rect, WS_OVERLAPPEDWINDOW, 0, WS_EX_APPWINDOW);
 
-        AdjustWindowRectEx(&Rect, WS_OVERLAPPEDWINDOW, 0, WS_EX_APPWINDOW);
+            const int32_t nWidth = Rect.right - Rect.left;
+            const int32_t nHeight = Rect.bottom - Rect.top;
 
-        const int32_t nWidth = Rect.right - Rect.left;
-        const int32_t nHeight = Rect.bottom - Rect.top;
-        //dword_6FA8D740 = nHeight - dword_6FA8D740;
+            RECT desktopRect = {};
+            GetClientRect(GetDesktopWindow(), &desktopRect);
+            const int32_t nX = std::max((desktopRect.right - nWidth) / 2, 0l);
+            const int32_t nY = std::max((desktopRect.bottom - nHeight) / 2, 0l);
 
-        RECT ClientRect = {};
-        GetClientRect(GetDesktopWindow(), &ClientRect);
-
-        SetWindowPos(ghWnd, HWND_NOTOPMOST, 0, 0, nWidth, nHeight, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE);
+            SetWindowPos(ghWnd, HWND_NOTOPMOST, nX, nY, nWidth, nHeight, SWP_NOACTIVATE | SWP_NOZORDER);
+        }
     }
 
     const int32_t bResult = gpGraphicsInterface->pfChangeRes(ghWnd, nResolution);

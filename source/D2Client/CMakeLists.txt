@@ -20,7 +20,6 @@ target_link_libraries(${D2ClientImplName}
 
 target_sources(${D2ClientImplName}
   PRIVATE
-    src/D2Client.cpp
     src/reconstructed/CORE_WinMain.cpp
     src/reconstructed/DRAW_dLightMap.cpp
     src/reconstructed/ENGINE_Gfx.cpp

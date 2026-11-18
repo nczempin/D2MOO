@@ -891,7 +891,7 @@ static int32_t              gnWaypointEntryCount_6FBCB95A       = 0;  // 0x6FBCB
 static int32_t              gnActiveDestWaypointCount_6FBCB95E  = 0;  // 0x6FBCB95E
 
 extern int32_t              gbIs800x600Mode_6FBCB980;            // 0x6FBCB980
-static HINSTANCE            ghD2ClientInstance_6FBCBCC0         = nullptr; // 0x6FBCBCC0
+HINSTANCE                   ghD2ClientInstance_6FBCBCC0         = nullptr; // 0x6FBCBCC0
 extern int32_t              gnServerWorldStateInit_6FBCBCE0;     // 0x6FBCBCE0
 // [aliased] gnUiPanelOffsetX_6FBCBD28
 // [aliased] gnUiPanelOffsetY_6FBCBD2C
@@ -2710,7 +2710,6 @@ D2ConfigStrc* __stdcall WINMAIN_GetConfig(void)
     return gpD2Config_6FBCB908;
 }
 
-#ifdef D2CLIENT_PURE_WINMAIN_EXPORTS
 // 1.12a: 0x6FAC2100 (__stdcall; Export @10003 D2Client_10003)
 extern "C" D2CLIENT_DLL_DECL void __stdcall D2Client_10003(void)
 {
@@ -2721,7 +2720,6 @@ extern "C" D2CLIENT_DLL_DECL void __stdcall D2Client_10003(void)
     }
     WINDOW_ShowAll();
 }
-#endif
 
 // 1.12a: 0x6FAC2120 (__stdcall: [esp+4] = pArgs, [esp+8] = szExtra)
 BOOL __stdcall WINMAIN_CmdArg_SetDefaultCmdLine_6FAC2120(D2StormCmdCallbackArgsStrc* pArgs, const char* szExtra)
@@ -2943,9 +2941,15 @@ int32_t __fastcall WINMAIN_RunClient(D2ConfigStrc* pConfig, HINSTANCE hModule)
 
     D2Win_10015();
     D2Win_10014_SetWndProc(MSG_MainWindowProc);
+    extern int32_t __fastcall WALL2_InitDefaultWindowMsgHandlers(HWND hWnd);
+    extern void __fastcall WALL2_ShutdownDefaultWindowMsgHandlers(HWND hWnd);
+    if (HWND hMainWnd = WINDOW_GetWindow())
+    {
+        WALL2_InitDefaultWindowMsgHandlers(hMainWnd);
+    }
 
     const BOOL bIsExpansion = FOG_IsExpansion();
-    if (!STRTABLE_Initialize(reinterpret_cast<int>(D2Win_GetArchive()), nullptr, bIsExpansion))
+    if (!STRTABLE_Initialize(0, nullptr, bIsExpansion))
     {
         return 0;
     }
@@ -2975,6 +2979,10 @@ int32_t __fastcall WINMAIN_RunClient(D2ConfigStrc* pConfig, HINSTANCE hModule)
         }
     } while (nState != 1);
 
+    if (HWND hMainWnd = WINDOW_GetWindow())
+    {
+        WALL2_ShutdownDefaultWindowMsgHandlers(hMainWnd);
+    }
     D2Win_10016();
     DATATBLS_UnloadAllBins();
     STRTABLE_Destroy();
@@ -3004,29 +3012,33 @@ int32_t __fastcall WINMAIN_RunClient(D2ConfigStrc* pConfig, HINSTANCE hModule)
 // 1.12a: 0x6FAC2630 (custom: esi = nResolutionMode -> __fastcall)
 void __fastcall WINMAIN_SetResolutionMode(int32_t nResolutionMode)
 {
-    if (nResolutionMode == D2GFX_GetResolutionMode())
-    {
-        return;
-    }
-
+    const D2GameResolutionMode eTargetRes = (nResolutionMode == 0) ? D2GAMERES_640x480 : D2GAMERES_800x600;
     if (nResolutionMode == 0)
     {
-        gnScreenWidth_6FB8C6E0  = 640;
-        gnScreenHeight_6FB8C6E4 = 480;
+        gnScreenWidth_6FB8C6E0   = 640;
+        gnScreenHeight_6FB8C6E4  = 480;
         gbIs800x600Mode_6FBCB980 = 0;
     }
-    else if (nResolutionMode == 2)
+    else
     {
-        gnScreenWidth_6FB8C6E0  = 800;
-        gnScreenHeight_6FB8C6E4 = 600;
+        gnScreenWidth_6FB8C6E0   = 800;
+        gnScreenHeight_6FB8C6E4  = 600;
         gbIs800x600Mode_6FBCB980 = 1;
     }
 
     gnWorldViewportWidth_6FBCD528  = gnScreenWidth_6FB8C6E0;
-    gnWorldViewportHeight_6FBCD524 = gnScreenHeight_6FB8C6E4 - 40;
+    gnWorldViewportHeight_6FBCD524 = gnScreenHeight_6FB8C6E4 - 48;
     gnScreenPitch_6FB8C6E8         = gnScreenWidth_6FB8C6E0;
 
-    D2Win_10005(static_cast<D2GameResolutionMode>(nResolutionMode));
+    extern void __fastcall D2Client_SyncResolutionMetrics(int32_t nWidth, int32_t nHeight);
+    D2Client_SyncResolutionMetrics(gnScreenWidth_6FB8C6E0, gnScreenHeight_6FB8C6E4);
+    const D2GameResolutionMode eCurGfxRes = D2GFX_GetResolutionMode();
+    const bool bCurIs800 = (eCurGfxRes == D2GAMERES_800x600 || eCurGfxRes == NUM_GAME_RESOLUTIONS);
+    const bool bTargetIs800 = (eTargetRes != D2GAMERES_640x480);
+    if (bCurIs800 != bTargetIs800)
+    {
+        D2Win_10005(eTargetRes);
+    }
     VIEW_ApplyResolutionViewShift(gnViewShiftMode_6FBCC1D0);
     INV_OnResolutionModeChanged(1);
     UI_OnResolutionModeChanged();
@@ -5064,15 +5076,18 @@ void __stdcall ENV_UpdateWeatherCycleMachine(D2SeedStrc* pSeed)
     const uint32_t uRem   = static_cast<uint32_t>(gnWeatherPhaseRemTicks_6FBD36AC);
     const uint32_t uTotal = static_cast<uint32_t>(gnWeatherPhaseTotalTicks_6FBD36A8);
 
-    if (nPhase == 1)
+    if (uTotal > 0u)
     {
-        gnCurrentTargetParticles_6FBCB7A8 =
-            static_cast<int32_t>(((uTotal - uRem) * static_cast<uint32_t>(gnMaxTargetParticles_6FBCB788)) / uTotal);
-    }
-    else if (nPhase == 3)
-    {
-        gnCurrentTargetParticles_6FBCB7A8 =
-            static_cast<int32_t>((static_cast<uint32_t>(gnMaxTargetParticles_6FBCB788) * uRem) / uTotal);
+        if (nPhase == 1)
+        {
+            gnCurrentTargetParticles_6FBCB7A8 =
+                static_cast<int32_t>(((uTotal - uRem) * static_cast<uint32_t>(gnMaxTargetParticles_6FBCB788)) / uTotal);
+        }
+        else if (nPhase == 3)
+        {
+            gnCurrentTargetParticles_6FBCB7A8 =
+                static_cast<int32_t>((static_cast<uint32_t>(gnMaxTargetParticles_6FBCB788) * uRem) / uTotal);
+        }
     }
 
     gfCurrentRainIntensity_6FBCB768 = static_cast<float>(gnCurrentTargetParticles_6FBCB7A8) * gfInv256_6FB87598;
@@ -6919,7 +6934,6 @@ BOOL __stdcall WINMAIN_IsAnyUIBlockingStateActive(void)
 // VA Range: 0x6FB4E940 .. 0x6FB53650 (9 functions)
 // =============================================================================
 
-#ifdef D2CLIENT_PURE_WINMAIN_EXPORTS
 // 1.12a: 0x6FB4E940 (__stdcall; Export @10002 D2Client_10002)
 extern "C" D2CLIENT_DLL_DECL uint8_t __stdcall D2Client_10002(int32_t nUnused, int32_t nIndex)
 {
@@ -6942,8 +6956,6 @@ extern "C" D2CLIENT_DLL_DECL int32_t __stdcall D2Client_10001(int32_t nUnused)
     return gnServerWorldStateInit_6FBCBCE0;
 }
 
-#endif // D2CLIENT_PURE_WINMAIN_EXPORTS
-
 // 1.12a: 0x6FB4E990 (custom: eax = pPacket -> __fastcall)
 void __fastcall GAME_HandleServerWorldFlagsPacket(const uint8_t* pPacket)
 {
@@ -6951,23 +6963,19 @@ void __fastcall GAME_HandleServerWorldFlagsPacket(const uint8_t* pPacket)
     gnServerWorldStateInit_6FBCBCE0 = 1;
 }
 
-#ifdef D2CLIENT_PURE_WINMAIN_EXPORTS
 // 1.12a: 0x6FB535D0 (__stdcall; Export @10004 QueryInterface)
 extern "C" D2CLIENT_DLL_DECL D2ClientInterfaceStrc* __stdcall QueryInterface(void)
 {
     return &gD2ClientInterface_6FB8D020;
 }
 
-// 1.12a: 0x6FB535E0 (WINAPI / __stdcall)
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+void __fastcall QUESTFX_DispatchSpecialEvent(uint8_t nEventIndex)
 {
-    (void)fdwReason;
-    (void)lpvReserved;
-    ghD2ClientInstance_6FBCBCC0 = hinstDLL;
-    return TRUE;
+    if (nEventIndex < 20 && gpfnQuestClientEventTable_6FBA8AE0[nEventIndex] != nullptr)
+    {
+        gpfnQuestClientEventTable_6FBA8AE0[nEventIndex]();
+    }
 }
-
-#endif // D2CLIENT_PURE_WINMAIN_EXPORTS
 
 // 1.12a: 0x6FB53600 (__fastcall: ecx = pConfig)
 int32_t __fastcall D2ClientInterface_Entry(D2ConfigStrc* pConfig)
@@ -7014,8 +7022,8 @@ extern int32_t __stdcall GAME_LeaveSinglePlayerServer(void);
 extern int32_t __stdcall GAME_MainLoop(void);
 extern int32_t __stdcall GAME_WaitJoinScreen(void);
 extern int32_t __stdcall GAME_LeaveGameCleanupState(void);
-extern void __stdcall NET_InitializeSessionByGameType(void);
-extern void __stdcall NET_ShutdownClientAndServer(void);
+extern int32_t __stdcall NET_InitializeSessionByGameType(void);
+extern int32_t __stdcall NET_ShutdownClientAndServer(void);
 extern void __fastcall MSG_SendPing_6D(void);
 extern void __fastcall RECORD_LoadFromFile(void);
 extern void __stdcall GAME_RequestExitGame(void);
@@ -7061,8 +7069,8 @@ void __stdcall CLIENT_CleanupRegistryState(void) { GAME_LeaveSinglePlayerServer(
 int32_t __stdcall CLIENT_StateHandler_ExitOrLeave_6FB2D2D0(void) { return GAME_MainLoop(); }
 int32_t __stdcall CLIENT_StateHandler_GameLoop_6FB2A690(void) { return GAME_WaitJoinScreen(); }
 int32_t __stdcall CLIENT_StateHandler_InitSession_6FB2BC80(void) { return GAME_LeaveGameCleanupState(); }
-int32_t __stdcall CLIENT_StateHandler_PrepareNet_6FAEBBF0(void) { NET_InitializeSessionByGameType(); return 1; }
-int32_t __stdcall CLIENT_StateHandler_StartNet_6FAEBBB0(void) { NET_ShutdownClientAndServer(); return 1; }
+int32_t __stdcall CLIENT_StateHandler_PrepareNet_6FAEBBF0(void) { return NET_InitializeSessionByGameType(); }
+int32_t __stdcall CLIENT_StateHandler_StartNet_6FAEBBB0(void) { return NET_ShutdownClientAndServer(); }
 BOOL __stdcall GAME_CutsceneKeepAliveCallback(void) { MSG_SendPing_6D(); return TRUE; }
 void __stdcall GAME_InitRandomSeed(void) { RECORD_LoadFromFile(); }
 void __stdcall GAME_OnCutsceneCompleted(void) { GAME_RequestExitGame(); }

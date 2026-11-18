@@ -62,6 +62,16 @@ static int32_t     g_bLockTargetHold         = 0;        // 0x6FBCBF7C
 extern D2UnitStrc* gpClientPlayer;                       // 0x6FBCC3D0
 extern int32_t     gnMouseScreenX;                       // 0x6FBCC3C8
 extern int32_t     gnMouseScreenY;                       // 0x6FBCC3CC
+extern int32_t     gnMouseX;                             // 0x6FBB1638
+extern int32_t     gnMouseY;                             // 0x6FBB1634
+extern int32_t     gnScreenWidth;                        // 0x6FB8C6E0
+extern int32_t     gnScreenHeight;                       // 0x6FB8C6E4
+extern int32_t     gnOpenPanelMode;                      // 0x6FBCC1D0
+extern int32_t     gaPanelStates[38];                    // 0x6FBB2B58
+extern D2UnitStrc* gapServerSideUnitHashTables[6][128];  // 0x6FBCA960
+extern "C" BOOL __stdcall D2GFX_CheckPerspective(void);
+void __stdcall SCALE_ScalePerspectivePosition(int nXPos, int nYPos, int nAngle, int* pXAdjust, int* pYAdjust, BOOL bOrder);
+extern const Unicode* __fastcall D2Client_GetNpcDisplayName(D2UnitStrc* pUnit);
 
 // Forward declarations
 D2UnitStrc* __fastcall UNIT_GetClientPlayer(void);                                // 0x6FB0B3E0
@@ -445,17 +455,31 @@ void __fastcall SELECT_UpdateHoveredUnit(void)
 {
     extern void* gpClientViewport; // 0x6FBCC1E0
 
+    gnMouseScreenX = gnMouseX;
+    gnMouseScreenY = gnMouseY;
+    g_nHoverCandidateCount = 0;
+
     if (!g_bSelectionEnabled || gpClientViewport == nullptr)
     {
         SELECT_ClearSelectedUnit();
-        g_nHoverCandidateCount = 0;
+        return;
+    }
+
+    const int32_t nScrW = (gnScreenWidth > 0) ? gnScreenWidth : 800;
+    const int32_t nScrH = (gnScreenHeight > 0) ? gnScreenHeight : 600;
+    if (gaPanelStates[9] != 0 || gaPanelStates[23] != 0 || gnOpenPanelMode == 3 ||
+        (gnOpenPanelMode == 1 && gnMouseScreenX >= nScrW / 2) ||
+        (gnOpenPanelMode == 2 && gnMouseScreenX <= nScrW / 2) ||
+        gnMouseScreenY >= nScrH - 48)
+    {
+        SELECT_ClearSelectedUnit();
         return;
     }
 
     // When Alt (Highlight Items) is held, item label boxes handle their own selection
-    if (g_bHighlightItemsHold)
+    if (g_bHighlightItemsHold || gaPanelStates[13] != 0)
     {
-        g_nHoverCandidateCount = 0;
+        SELECT_ClearSelectedUnit();
         return;
     }
 
@@ -463,8 +487,38 @@ void __fastcall SELECT_UpdateHoveredUnit(void)
     if (pPlayer == nullptr)
     {
         SELECT_ClearSelectedUnit();
-        g_nHoverCandidateCount = 0;
         return;
+    }
+
+    const int32_t nPlrSubX = UNITS_GetXPosition(pPlayer);
+    const int32_t nPlrSubY = UNITS_GetYPosition(pPlayer);
+    static const uint32_t kCandidateTypes[5] = { UNIT_MONSTER, UNIT_OBJECT, UNIT_ITEM, UNIT_TILE, UNIT_PLAYER };
+    for (int32_t t = 0; t < 5 && g_nHoverCandidateCount < 64; ++t)
+    {
+        const uint32_t nType = kCandidateTypes[t];
+        for (int32_t b = 0; b < 128 && g_nHoverCandidateCount < 64; ++b)
+        {
+            for (D2UnitStrc* pU = gapServerSideUnitHashTables[nType][b]; pU != nullptr && g_nHoverCandidateCount < 64; pU = pU->pListNext)
+            {
+                if (pU == pPlayer)
+                {
+                    continue;
+                }
+                const int32_t ux = UNITS_GetXPosition(pU);
+                const int32_t uy = UNITS_GetYPosition(pU);
+                if (ux <= 0 && uy <= 0)
+                {
+                    continue;
+                }
+                const int32_t dxSub = ux - nPlrSubX;
+                const int32_t dySub = uy - nPlrSubY;
+                if (dxSub * dxSub + dySub * dySub > 42 * 42)
+                {
+                    continue;
+                }
+                g_apHoverCandidates[g_nHoverCandidateCount++] = pU;
+            }
+        }
     }
 
     int32_t nIsoCursorX = gnMouseScreenX;
@@ -474,6 +528,10 @@ void __fastcall SELECT_UpdateHoveredUnit(void)
     int32_t nWorldCursorX = 0;
     int32_t nWorldCursorY = 0;
     SELECT_ScreenToWorldCoords(&nWorldCursorX, &nWorldCursorY);
+
+    const int32_t* pViewInts = static_cast<const int32_t*>(gpClientViewport);
+    const int32_t nViewOffsetX = pViewInts[9];  // +0x24 nViewOffsetX
+    const int32_t nViewOffsetY = pViewInts[10]; // +0x28 nViewOffsetY
 
     D2UnitStrc* pBestStrictUnit = nullptr;
     int32_t     nBestStrictDist = 0x7FFFFFFF;
@@ -521,14 +579,80 @@ void __fastcall SELECT_UpdateHoveredUnit(void)
                 nBestStrictDist = nDist;
                 pBestStrictUnit = pCand;
             }
+            continue;
         }
-        // Pass B: Relaxed bounding-box fallback for monsters and players
-        else if ((pCand->dwUnitType == UNIT_MONSTER || pCand->dwUnitType == UNIT_PLAYER) &&
-                 UNIT_HitTest(pCand, nIsoCursorX, nIsoCursorY, 0))
+
+        // Pass B: Relaxed bounding-box / screen-anchor fallback for selectable units (including UNIT_TILE warps)
+        bool bSelectableFallback = false;
+        int32_t nHitOffsetY = -14;
+        int32_t nMaxScreenDistSq = 44 * 44;
+        if (pCand->dwUnitType == UNIT_MONSTER)
         {
-            if (nDist <= nBestBBoxDist)
+            if (pCand->dwAnimMode != MONMODE_DEAD && pCand->dwAnimMode != MONMODE_DEATH)
             {
-                nBestBBoxDist = nDist;
+                D2MonStats2Txt* pMon2 = UNITS_GetMonStats2TxtRecordFromMonsterId(pCand->dwClassId);
+                const Unicode* pName = D2Client_GetNpcDisplayName(pCand);
+                if ((!pMon2 || (pMon2->dwFlags & (MONSTATS2FLAG_ISSEL | MONSTATS2FLAG_ALSEL)) != 0) &&
+                    pName != nullptr && pName[0].ch != 0)
+                {
+                    bSelectableFallback = true;
+                    nHitOffsetY = -28;
+                    nMaxScreenDistSq = 48 * 48;
+                }
+            }
+        }
+        else if (pCand->dwUnitType == UNIT_OBJECT)
+        {
+            D2ObjectsTxt* pObjTxt = DATATBLS_GetObjectsTxtRecord(pCand->dwClassId);
+            const uint32_t nModeIdx = (pCand->dwAnimMode < 8) ? pCand->dwAnimMode : 0;
+            const Unicode* pName = D2Client_GetNpcDisplayName(pCand);
+            if (pObjTxt != nullptr && pObjTxt->nSelectable[nModeIdx] != 0 && pName != nullptr && pName[0].ch != 0)
+            {
+                bSelectableFallback = true;
+                nHitOffsetY = -14;
+                nMaxScreenDistSq = 46 * 46;
+            }
+        }
+        else if (pCand->dwUnitType == UNIT_ITEM)
+        {
+            bSelectableFallback = true;
+            nHitOffsetY = -10;
+            nMaxScreenDistSq = 36 * 36;
+        }
+        else if (pCand->dwUnitType == UNIT_TILE)
+        {
+            const Unicode* pName = D2Client_GetNpcDisplayName(pCand);
+            if (pName != nullptr && pName[0].ch != 0)
+            {
+                bSelectableFallback = true;
+                nHitOffsetY = -18;
+                nMaxScreenDistSq = 56 * 56;
+            }
+        }
+        else if (pCand->dwUnitType == UNIT_PLAYER && pCand->dwAnimMode == PLRMODE_DEAD)
+        {
+            bSelectableFallback = true;
+            nHitOffsetY = -12;
+            nMaxScreenDistSq = 40 * 40;
+        }
+
+        if (bSelectableFallback)
+        {
+            int nDrawX = UNITS_GetXPosition(pCand);
+            int nDrawY = UNITS_GetYPosition(pCand);
+            DUNGEON_GameSubtileToClientCoords(&nDrawX, &nDrawY);
+            int nScrX = nDrawX - nViewOffsetX;
+            int nScrY = nDrawY - nViewOffsetY;
+            if (D2GFX_CheckPerspective())
+            {
+                SCALE_ScalePerspectivePosition(nScrX, nScrY, 0, &nScrX, &nScrY, 0);
+            }
+            const int32_t dx = gnMouseScreenX - nScrX;
+            const int32_t dy = gnMouseScreenY - (nScrY + nHitOffsetY);
+            const int32_t d2 = dx * dx + dy * dy;
+            if (d2 < nMaxScreenDistSq && d2 < nBestBBoxDist)
+            {
+                nBestBBoxDist = d2;
                 pBestBBoxUnit = pCand;
             }
         }
@@ -536,7 +660,4 @@ void __fastcall SELECT_UpdateHoveredUnit(void)
 
     D2UnitStrc* pWinner = (pBestStrictUnit != nullptr) ? pBestStrictUnit : pBestBBoxUnit;
     SELECT_SetSelectedUnit(pWinner);
-
-    // Reset candidate list for the next frame
-    g_nHoverCandidateCount = 0;
 }

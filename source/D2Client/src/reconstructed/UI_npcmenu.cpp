@@ -928,7 +928,7 @@ void __cdecl sub_6FAC84D0()
 // 1.12a: 0x6FAC8530 (__stdcall)
 int __stdcall sub_6FAC8530(D2UnitStrc* pPlayer, D2UnitStrc* pItem, int nTransactionType)
 {
-    if (!pItem) return 0;
+    if (!pItem || !g_pClientQuestRecord) return 0;
     if (!ITEMS_IsNotQuestItem(pItem)) return 0;
     return ITEMS_GetTransactionCost(pPlayer, pItem, 0, g_pClientQuestRecord, g_nInteractingNpcClassId, nTransactionType);
 }
@@ -1156,7 +1156,7 @@ int __cdecl sub_6FAC9D90()
 int __stdcall sub_6FAC9E00(D2UnitStrc* pPlayer, D2UnitStrc* pItem, int nMode, int a4, int a5, int a6)
 {
     // Execute Buy (0x32), Sell (0x33), Repair (0x35), or Identify/Charge
-    if (!pPlayer || !pItem) return 0;
+    if (!pPlayer || !pItem || !g_pClientQuestRecord) return 0;
     return ITEMS_GetTransactionCost(pPlayer, pItem, 0, g_pClientQuestRecord, g_nInteractingNpcClassId, nMode);
 }
 
@@ -1837,7 +1837,8 @@ int __fastcall sub_6FACEAA0(D2UnitStrc* pUnit)
 // 1.12a: 0x6FACEAC0 (register: eax=pUnit)
 int __fastcall sub_6FACEAC0(D2UnitStrc* pUnit)
 {
-    return pUnit != nullptr;
+    extern int32_t __fastcall D2Client_IsUnitDeadOrDying(D2UnitStrc* pUnit);
+    return pUnit ? D2Client_IsUnitDeadOrDying(pUnit) : 0;
 }
 
 // 1.12a: 0x6FACEB00 (register: eax=pUnit)

@@ -345,6 +345,10 @@ static BOOL __fastcall D2GDI_ChangeRes(HWND hWnd, D2GameResolutionMode nResoluti
 	{
 		gnCropRight = 800;
 	}
+	if (hWnd && ghPalette)
+	{
+		D2GDI_Blit();
+	}
 	return TRUE;
 }
 
@@ -385,6 +389,10 @@ static BOOL __fastcall D2GDI_CreateSurface(HWND hWnd, D2GameResolutionMode nReso
 	else
 	{
 		gnCropRight = 800;
+	}
+	if (hWnd && ghPalette)
+	{
+		D2GDI_Blit();
 	}
 	return TRUE;
 }

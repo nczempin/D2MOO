@@ -1,22 +1,15 @@
 #include <Windows.h>
 
+extern HINSTANCE ghD2ClientInstance_6FBCBCC0;
+
 // NOLINTBEGIN(bugprone-branch-clone)
 BOOL __stdcall DllMain(HINSTANCE hModule, DWORD dwReason, void* lpReserved)
 {
-	switch (dwReason)
+	(void)lpReserved;
+	if (dwReason == DLL_PROCESS_ATTACH)
 	{
-	case DLL_PROCESS_ATTACH:
-		break;
-	case DLL_PROCESS_DETACH:
-		break;
-	case DLL_THREAD_ATTACH:
-		break;
-	case DLL_THREAD_DETACH:
-		break;
-	default:
-		break;
+		ghD2ClientInstance_6FBCBCC0 = hModule;
 	}
-
 	return TRUE;
 }
 // NOLINTEND(bugprone-branch-clone)

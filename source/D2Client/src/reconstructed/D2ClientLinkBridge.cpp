@@ -1099,7 +1099,7 @@ int32_t __stdcall Bridge_D2CMP_CelHitTestPixel(void* pCelContext, int32_t nLocal
 
 int32_t __stdcall Bridge_D2CMP_DeleteCellFile(D2CellFileStrc* pCellFile)
 {
-    return pCellFile ? D2CMP_CelFileFree(pCellFile) : 0;
+    return pCellFile ? D2CMP_CelFileFreeSerialized(pCellFile) : 0;
 }
 #pragma comment(linker, "/alternatename:_D2CMP_DeleteCellFile@4=_Bridge_D2CMP_DeleteCellFile@4")
 
@@ -2153,7 +2153,7 @@ void * __fastcall ARCHIVE_LoadFile(unsigned int a0, char const * a1, unsigned lo
 }
 void * __fastcall ARCHIVE_LoadFileToBuffer(char const * a0, void * a1, unsigned long * a2)
 {
-    HANDLE h = nullptr; if (!SFileOpenFile((char*)a0, (int)(intptr_t)&h) || !h) return nullptr; DWORD sz = (DWORD)SFileGetFileSize((int)(intptr_t)h, nullptr); DWORD rd = 0; if (a1) SFileReadFile((int)(intptr_t)h, (int)(intptr_t)a1, (int)sz, (int)(intptr_t)&rd, 0); SFileCloseFile(h); if (a2) *a2 = rd; return a1;
+    (void)a1; HANDLE h = nullptr; if (!SFileOpenFile((char*)a0, (int)(intptr_t)&h) || !h) return nullptr; DWORD sz = (DWORD)SFileGetFileSize((int)(intptr_t)h, nullptr); void* buf = FOG_AllocClientMemory((int)sz, __FILE__, __LINE__, 0); DWORD rd = 0; SFileReadFile((int)(intptr_t)h, (int)(intptr_t)buf, (int)sz, (int)(intptr_t)&rd, 0); SFileCloseFile(h); if (a2) *a2 = rd; return buf;
 }
 void * __fastcall ARCHIVE_LoadFileToMemory(struct HD2ARCHIVE__ * a0, char const * a1, unsigned int * a2, int a3)
 {
@@ -2185,7 +2185,8 @@ void __fastcall CMDTBL_PickUpSlotItemToCursor(struct D2UnitStrc * a0)
 }
 int __fastcall CUNIT_HasActiveInteract(void)
 {
-    return g_bInteractingWithNpc;
+    extern int32_t __fastcall D2Client_IsUnitDeadOrDying(D2UnitStrc* pUnit);
+    return gpPlayerUnit ? D2Client_IsUnitDeadOrDying(gpPlayerUnit) : 0;
 }
 int __fastcall CUNIT_HasCursorItem(void)
 {
@@ -2223,17 +2224,41 @@ int __fastcall D2Client_CanStartChanneledSkill(struct D2UnitStrc * a0, struct D2
 {
     (void)a0; (void)a1; return 0;
 }
+struct D2BridgePlayerModeChangeStrc
+{
+    int32_t  nSkillIdOrXOrType;
+    uint32_t dwOwnerOrYOrGUID;
+    int32_t  nTargetXOrTypeOrHit;
+    uint32_t dwTargetYOrGUID;
+    int32_t  nReserved10;
+    int32_t  nSkillLevel;
+    int32_t  nReserved18;
+};
+struct D2PlayerModeChangeStrc;
+extern BOOL __fastcall D2Client_ExecutePlayerModeTransition(int32_t nTransitionType, D2UnitStrc* pPlayerUnit, D2PlayerModeChangeStrc* pModeChange, BOOL bAllowInterrupt);
+extern void __stdcall D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(D2UnitStrc* pUnit, int32_t nArgXOrType, uint32_t dwArgYOrGUID, int32_t nActionCode, BOOL bForce);
+extern void __fastcall D2Client_SetPlayerNeutralModeAndSyncPos(D2UnitStrc* pPlayerUnit, int32_t nNeutralMode, BOOL bSyncPosition);
+extern void __fastcall D2Client_ExecuteMonsterModeTransition(D2UnitStrc* pUnit, int32_t nNewMode, int32_t nTargetX, int32_t nTargetY);
+extern BOOL __stdcall D2Client_ChangeItemUnitModeCallback(D2UnitStrc* pItem, int32_t nMode);
+extern void __fastcall D2Client_SendPacket01_WalkToLocation_6FB6ED00(int32_t nX, int32_t nY);
+extern void __fastcall D2Client_SendPacket02_WalkToEntity_6FB6E730(int32_t nTargetType, uint32_t dwTargetId);
+extern void __fastcall D2Client_SendPacket03_RunToLocation_6FB6ED30(int32_t nX, int32_t nY);
+extern void __fastcall D2Client_SendPacket04_RunToEntity_6FB6E770(int32_t nTargetType, uint32_t dwTargetId);
+
 void __fastcall D2Client_ChangeObjectAnimMode_6FAEB3C0(struct D2UnitStrc * a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (!a0) return;
+    UNITS_ChangeAnimMode(a0, a1);
+    GFX_InitUnitCompositeGfx(a0);
 }
 int __fastcall D2Client_CheckPlayerCanOperateObject_6FAF0C30(int a0)
 {
-    (void)a0; return 0;
+    (void)a0; return 1;
 }
 int __fastcall D2Client_CheckPlayerRosterFlag_6FAE0830(unsigned int a0, unsigned int a1, int a2)
 {
-    (void)a0; (void)a1; (void)a2; return 0;
+    (void)a2;
+    return ROSTER_CanPlayerLootCorpse(a0, a1);
 }
 void __fastcall D2Client_ClearPlayerMapWaypoints_6FAE0490(struct D2UnitStrc * a0)
 {
@@ -2245,23 +2270,150 @@ struct D2UnitStrc * __fastcall D2Client_CreateClientMissile_6FAD4B20(struct D2Cl
 }
 void __fastcall D2Client_DispatchItemModeChange_6FB45810(struct D2UnitStrc * a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (a0) D2Client_ChangeItemUnitModeCallback(a0, a1);
 }
 void __fastcall D2Client_DispatchMonsterModeChange_6FAE48D0(struct D2UnitStrc * a0, int a1)
 {
-    (void)a0; (void)a1;
+    if (a0) D2Client_ExecuteMonsterModeTransition(a0, a1, UNITS_GetXPosition(a0), UNITS_GetYPosition(a0));
 }
 void __fastcall D2Client_DispatchMonsterMoveOrSkill_6FAE5100(struct D2UnitStrc * a0, int a1, int a2, unsigned int a3, int a4, int a5)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5;
+    if (!a0) return;
+    int32_t nTx = a4;
+    int32_t nTy = a5;
+    if (a3 != 0 && a3 != 0xFFFFFFFFu)
+    {
+        if (D2UnitStrc* pTarget = D2Client_FindServerSideUnit(a3, (uint32_t)a2))
+        {
+            nTx = UNITS_GetXPosition(pTarget);
+            nTy = UNITS_GetYPosition(pTarget);
+        }
+    }
+    D2Client_ExecuteMonsterModeTransition(a0, a1, nTx, nTy);
 }
 void __fastcall D2Client_DispatchPlayerModeChange_6FB0A820(struct D2UnitStrc * a0, int a1, int a2, int a3, unsigned int a4, int a5, int a6, int a7)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7;
+    if (!a0 || a0->dwUnitType != UNIT_PLAYER)
+        return;
+
+    const BOOL bInTown = (UNITS_GetRoom(a0) && DUNGEON_IsRoomInTown(UNITS_GetRoom(a0))) ? TRUE : FALSE;
+    const int32_t nNeutralMode = bInTown ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL;
+
+    if (a1 == PLRMODE_NEUTRAL || a1 == PLRMODE_TOWNNEUTRAL)
+    {
+        D2Client_SetPlayerNeutralModeAndSyncPos(a0, nNeutralMode, FALSE);
+        return;
+    }
+
+    D2BridgePlayerModeChangeStrc tMc = {};
+    if (a1 == PLRMODE_WALK || a1 == PLRMODE_TOWNWALK)
+    {
+        if (a2 != 0)
+        {
+            tMc.nSkillIdOrXOrType = a3;
+            tMc.dwOwnerOrYOrGUID  = a4;
+            if (D2Client_ExecutePlayerModeTransition(0, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE) && a7 && a0 == gpPlayerUnit)
+            {
+                D2Client_SendPacket02_WalkToEntity_6FB6E730(a3, a4);
+            }
+        }
+        else
+        {
+            tMc.nSkillIdOrXOrType = a5;
+            tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(a6);
+            if (D2Client_ExecutePlayerModeTransition(1, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE) && a7 && a0 == gpPlayerUnit)
+            {
+                D2Client_SendPacket01_WalkToLocation_6FB6ED00(a5, a6);
+            }
+        }
+        return;
+    }
+
+    if (a1 == PLRMODE_RUN || a1 == 23 || a1 == 24)
+    {
+        if (a2 != 0 || a1 == 24)
+        {
+            tMc.nSkillIdOrXOrType = a3;
+            tMc.dwOwnerOrYOrGUID  = a4;
+            if (D2Client_ExecutePlayerModeTransition(24, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE) && a7 && a0 == gpPlayerUnit)
+            {
+                D2Client_SendPacket04_RunToEntity_6FB6E770(a3, a4);
+            }
+        }
+        else
+        {
+            tMc.nSkillIdOrXOrType = a5;
+            tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(a6);
+            if (D2Client_ExecutePlayerModeTransition(23, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE) && a7 && a0 == gpPlayerUnit)
+            {
+                D2Client_SendPacket03_RunToLocation_6FB6ED30(a5, a6);
+            }
+        }
+        return;
+    }
+
+    if (a1 == PLRMODE_ATTACK1 || a1 == PLRMODE_ATTACK2 || a1 == PLRMODE_CAST ||
+        a1 == PLRMODE_THROW   || a1 == PLRMODE_KICK    || a1 == PLRMODE_SEQUENCE)
+    {
+        if (a7 && a0 == gpPlayerUnit)
+        {
+            if (a2 != 0)
+            {
+                D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(a0, a3, a4, (a0->dwFlags & 0x80u) ? 0x0D : 0x06, TRUE);
+            }
+            else
+            {
+                D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(a0, a5, static_cast<uint32_t>(a6), 0x05, TRUE);
+            }
+        }
+        else
+        {
+            UNITS_ChangeAnimMode(a0, a1);
+            GFX_InitUnitCompositeGfx(a0);
+        }
+        return;
+    }
+
+    if (a1 == PLRMODE_DEATH)
+    {
+        tMc.nSkillIdOrXOrType = UNITS_GetXPosition(a0);
+        tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(UNITS_GetYPosition(a0));
+        D2Client_ExecutePlayerModeTransition(8, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+        return;
+    }
+    if (a1 == PLRMODE_DEAD)
+    {
+        D2Client_ExecutePlayerModeTransition(9, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+        return;
+    }
+    if (a1 == PLRMODE_GETHIT)
+    {
+        tMc.nSkillIdOrXOrType = UNITS_GetXPosition(a0);
+        tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(UNITS_GetYPosition(a0));
+        D2Client_ExecutePlayerModeTransition(6, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+        return;
+    }
+    if (a1 == PLRMODE_BLOCK)
+    {
+        tMc.nSkillIdOrXOrType = UNITS_GetXPosition(a0);
+        tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(UNITS_GetYPosition(a0));
+        D2Client_ExecutePlayerModeTransition(18, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+        return;
+    }
+
+    UNITS_ChangeAnimMode(a0, a1);
+    GFX_InitUnitCompositeGfx(a0);
 }
 int __fastcall D2Client_DispatchUnitModeChange_6FAF1450(int a0, struct D2UnitStrc * a1, void * a2, int a3)
 {
-    (void)a2;(void)a3; if (a1) D2Client_DispatchUnitModeChange(a1, a0); return 1;
+    if (!a1)
+        return 0;
+    if (a1->dwUnitType == UNIT_PLAYER && a2 != nullptr)
+    {
+        return D2Client_ExecutePlayerModeTransition(a0, a1, static_cast<D2PlayerModeChangeStrc*>(a2), a3);
+    }
+    D2Client_DispatchUnitModeChange(a1, a0);
+    return 1;
 }
 extern void __fastcall PANEL_DrawSkillIcon(int32_t nSkillId, int32_t nX, int32_t nY);
 int32_t g_anSkillHotkeyId[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
@@ -3477,14 +3629,14 @@ void __stdcall D2Client_BuildFullItemTooltipText(
     D2UnitStrc* pPlr = gpPlayerUnit ? gpPlayerUnit : pOwnerUnit;
 
     // Shop Buy / Sell price line
-    if (bShowShopPrice && pPlr)
+    if (bShowShopPrice && pPlr && g_pPlayerQuestRecord)
     {
         const BOOL bInStore = ITEMS_CheckItemFlag(pItem, IFLAG_INSTORE, __LINE__, __FILE__);
         const int32_t nCost = ITEMS_GetTransactionCost(
             pPlr,
             pItem,
             static_cast<D2C_Difficulties>(nDifficulty),
-            nullptr,
+            g_pPlayerQuestRecord,
             nVendorId,
             bInStore ? TRANSACTIONTYPE_BUY : TRANSACTIONTYPE_SELL);
         if (nCost > 0)
@@ -3905,7 +4057,9 @@ struct D2UnitStrc * __fastcall D2Client_FindServerSideUnit(unsigned int a0, int 
 }
 void __fastcall D2Client_ForcePlayerToNeutralMode_6FB09AA0(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (!a0) return;
+    const BOOL bInTown = (UNITS_GetRoom(a0) && DUNGEON_IsRoomInTown(UNITS_GetRoom(a0))) ? TRUE : FALSE;
+    D2Client_SetPlayerNeutralModeAndSyncPos(a0, bInTown ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL, FALSE);
 }
 void __fastcall D2Client_FreeClientUnit(struct D2UnitStrc * a0)
 {
@@ -5142,7 +5296,8 @@ struct Unicode const * __fastcall D2Client_GetNpcDisplayName(struct D2UnitStrc *
 }
 int __fastcall D2Client_GetPlayerSkillActionMode_6FB0B5B0(struct D2UnitStrc * a0)
 {
-    (void)a0; return 0;
+    (void)a0;
+    return PLRMODE_ATTACK1;
 }
 struct D2UnitStrc * __fastcall D2Client_GetPlayerUnit(void)
 {
@@ -5278,9 +5433,28 @@ int __fastcall D2Client_GetUnitY_6FAB15C0(struct D2UnitStrc * a0)
 {
     return a0 ? UNITS_GetYPosition(a0) : 0;
 }
+extern void __fastcall D2Client_SpawnMonsterAttackMissile(D2UnitStrc* pUnit);
+extern int32_t g_bLeftMouseHeld;
+extern int32_t g_bRightMouseHeld;
+extern int32_t gbAlwaysRun;
+extern int32_t gbRunLock;
+extern uint32_t g_dwActiveWaypointGuid;
+extern int32_t gdwActiveInteractNpcGUID;
+extern int32_t __fastcall MSG_SendByte3Dwords(uint8_t bOpcode, uint32_t dw1, uint32_t dw2, uint32_t dw3);
+
 void __fastcall D2Client_InteractWithNPC_6FAE30C0(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (!a0) return;
+    MSG_SendByte2Dwords(0x13u, UNIT_MONSTER, a0->dwUnitId);
+    MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, a0->dwUnitId);
+    g_pTradeNpcUnit = a0;
+    g_bInteractingWithNpc = 1;
+    g_nInteractingNpcGUID = static_cast<int32_t>(a0->dwUnitId);
+    g_nInteractingNpcClassId = a0->dwClassId;
+    gdwActiveInteractNpcGUID = static_cast<int32_t>(a0->dwUnitId);
+    D2Client_SetNpcHireSubmenu(0);
+    D2Client_CloseNpcGossipSpeech();
+    UI_SetPanelState(D2PANEL_NPCMENU, 0, 0);
 }
 int __fastcall D2Client_IsCommandHeld(int a0)
 {
@@ -5292,11 +5466,12 @@ int __fastcall D2Client_IsCurrentSkillUsable(void)
 }
 int __fastcall D2Client_IsInTownOrTownSkillRestricted_6FB0B900(struct D2UnitStrc * a0, int a1)
 {
-    (void)a0; (void)a1; return 0;
+    (void)a1;
+    return (a0 && UNITS_GetRoom(a0) && DUNGEON_IsRoomInTown(UNITS_GetRoom(a0))) ? 1 : 0;
 }
 int __cdecl D2Client_IsPlayerMouseButtonHeld_6FB08BF0(void)
 {
-    return 0;
+    return (g_bLeftMouseHeld != 0 || g_bRightMouseHeld != 0) ? 1 : 0;
 }
 int __fastcall D2Client_IsSoundLooping_6FAE20B0(int a0)
 {
@@ -5316,7 +5491,10 @@ void __cdecl D2Client_NotifySoundSystemPlayerTeleported_6FAE1240(void)
 }
 void __fastcall D2Client_OnItemAnimSequenceFinished_6FB450B0(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0 && a0->dwAnimMode == IMODE_DROPPING)
+    {
+        D2Client_ChangeItemUnitModeCallback(a0, IMODE_ONGROUND);
+    }
 }
 int __fastcall D2Client_OnMissileAnimSequenceFinished_6FAD2F50(struct D2UnitStrc * a0)
 {
@@ -5324,19 +5502,42 @@ int __fastcall D2Client_OnMissileAnimSequenceFinished_6FAD2F50(struct D2UnitStrc
 }
 void __fastcall D2Client_OnMonsterAnimSequenceFinished_6FAE5D10(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) D2Client_SpawnMonsterAttackMissile(a0);
 }
 void __fastcall D2Client_OnNpcInfoPacket(unsigned char * a0)
 {
-    (void)a0;
+    if (!a0 || a0[1] != UNIT_MONSTER) return;
+    uint32_t dwNpcGuid = 0;
+    memcpy(&dwNpcGuid, a0 + 2, sizeof(uint32_t));
+    if (dwNpcGuid == 0) return;
+    MSG_SendByte2Dwords(0x2Fu, UNIT_MONSTER, dwNpcGuid);
+    D2UnitStrc* pNpc = D2Client_FindServerSideUnit(dwNpcGuid, UNIT_MONSTER);
+    if (pNpc)
+    {
+        g_pTradeNpcUnit = pNpc;
+        g_nInteractingNpcClassId = pNpc->dwClassId;
+    }
+    g_bInteractingWithNpc = 1;
+    g_nInteractingNpcGUID = static_cast<int32_t>(dwNpcGuid);
+    gdwActiveInteractNpcGUID = static_cast<int32_t>(dwNpcGuid);
+    D2Client_SetNpcHireSubmenu(0);
+    D2Client_CloseNpcGossipSpeech();
+    if (gaPanelStates[D2PANEL_NPCSHOP] == 0)
+    {
+        UI_SetPanelState(D2PANEL_NPCMENU, 0, 0);
+    }
 }
 void __fastcall D2Client_OnObjectAnimEnd(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0 && a0->dwAnimMode == OBJMODE_OPERATING)
+    {
+        UNITS_ChangeAnimMode(a0, OBJMODE_OPENED);
+        GFX_InitUnitCompositeGfx(a0);
+    }
 }
 void __fastcall D2Client_OnPlayerAnimSequenceFinished_6FB0CF70(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) D2Client_ForcePlayerToNeutralMode_6FB09AA0(a0);
 }
 void __fastcall D2Client_OnWeaponSwitchPacket(void)
 {
@@ -5344,7 +5545,7 @@ void __fastcall D2Client_OnWeaponSwitchPacket(void)
 }
 void __fastcall D2Client_OpenCorpseInventory_6FB08730(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) MSG_SendByte2Dwords(0x13u, UNIT_PLAYER, a0->dwUnitId);
 }
 void __fastcall D2Client_OpenSpecialQuestDialog_6FB1EBF0(struct D2UnitStrc * a0, int a1)
 {
@@ -5352,7 +5553,18 @@ void __fastcall D2Client_OpenSpecialQuestDialog_6FB1EBF0(struct D2UnitStrc * a0,
 }
 void __fastcall D2Client_OperateObjectClientSide(struct D2UnitStrc * a0, struct D2UnitStrc * a1)
 {
-    (void)a0; (void)a1;
+    (void)a0;
+    if (!a1) return;
+    MSG_SendByte2Dwords(0x13u, UNIT_OBJECT, a1->dwUnitId);
+    if (a1->dwClassId == 267) // Town Bank / Stash
+    {
+        g_nInvPanelMode = 11;
+        UI_SetPanelState(D2PANEL_STASH, 0, 0);
+    }
+    else if (a1->pObjectData && a1->pObjectData->pObjectTxt && (a1->pObjectData->pObjectTxt->nSubClass & 0x20) != 0)
+    {
+        g_dwActiveWaypointGuid = a1->dwUnitId;
+    }
 }
 void __fastcall D2Client_PlayDelayedSound(int a0, int a1)
 {
@@ -5703,7 +5915,7 @@ void __stdcall D2Client_ShakeScreen_6FAC5E60(int a0, int a1)
 }
 int __cdecl D2Client_ShouldPlayerRun_6FB08840(void)
 {
-    return 0;
+    return (gbAlwaysRun != 0 || gbRunLock != 0) ? 1 : 0;
 }
 int __fastcall D2Client_StartChanneledSkillAnim(struct D2UnitStrc * a0, struct D2SkillStrc * a1, int a2, int a3)
 {
@@ -5731,11 +5943,14 @@ int __fastcall D2Client_TryCastFriendlyTargetedSkill_6FB0BE20(struct D2UnitStrc 
 }
 void __fastcall D2Client_TryPickUpGroundItem_6FB0A2D0(int a0, unsigned int a1)
 {
-    (void)a0; (void)a1;
+    (void)a0;
+    const uint32_t dwToCursor = (gaPanelStates[D2PANEL_INVENTORY] != 0) ? 1u : 0u;
+    MSG_SendByte3Dwords(0x16u, UNIT_ITEM, a1, dwToCursor);
 }
 void __fastcall D2Client_TryTakeWarpTile_6FB09140(int a0, unsigned int a1)
 {
-    (void)a0; (void)a1;
+    (void)a0;
+    MSG_SendByte2Dwords(0x13u, UNIT_TILE, a1);
 }
 void __stdcall D2Client_UpdateEnvironmentSoundCoords_6FB71700(int a0, int a1)
 {
@@ -5757,25 +5972,10 @@ void __fastcall D2Client_UpdateObjectPerTick(struct D2UnitStrc * a0)
 {
     if (a0) D2Client_UpdateObjectUnitPerTick(a0);
 }
-extern int32_t __fastcall CLTSKILL_DoUsedSkill(struct D2UnitStrc* pUnit);
-extern void __stdcall CLTSKILL_ProcessActiveStatesDoFuncs(struct D2UnitStrc* pUnit);
+extern void __fastcall D2Client_UpdatePlayerUnitPerTick(struct D2UnitStrc* pPlayerUnit);
 void __fastcall D2Client_UpdatePlayerUnitPerTick_6FB0D140(struct D2UnitStrc * a0)
 {
-    if (!a0) return;
-    UNITS_UpdateFrame(a0);
-    if ((a0->dwFlags & UNITFLAG_SKSRVDOFUNC) == 0)
-    {
-        const uint8_t nEvent = a0->nActionFrame;
-        if (nEvent == 1 || nEvent == 2 || nEvent == 3)
-        {
-            a0->nActionFrame = 0;
-            CLTSKILL_DoUsedSkill(a0);
-        }
-    }
-    if (STATES_IsAnyGfxStateFlagSet(a0))
-    {
-        CLTSKILL_ProcessActiveStatesDoFuncs(a0);
-    }
+    if (a0) D2Client_UpdatePlayerUnitPerTick(a0);
 }
 void __stdcall D2Client_UpdateUnitAnimGraphics_6FB42000(struct D2UnitStrc * a0, int a1)
 {
@@ -5862,13 +6062,26 @@ void __fastcall HIREABLES_OnTogglePortraitsDown(void)
 {
     HIREABLES_CyclePortraitDisplayMode();
 }
+struct D2SMsgRegEntryStrc;
+struct SMsgWindowMessage;
+extern void __fastcall WALL2_UnregisterSingleMsgHandler(HWND hWnd, uint32_t nType, uint32_t uMsgOrId, void (__stdcall* pfHandler)(SMsgWindowMessage*));
+extern void __fastcall WALL2_RegisterSingleMsgHandler(HWND hWnd, uint32_t nType, uint32_t uMsgOrId, void (__stdcall* pfHandler)(SMsgWindowMessage*));
+extern void __fastcall WALL2_UnregisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+extern void __fastcall WALL2_RegisterMsgHandlerTable(uint32_t nCount, HWND hWnd, const D2SMsgRegEntryStrc* pEntries);
+
 void __fastcall INPUT_RegisterCallbacks(int a0, struct HWND__ * a1, struct D2InputCallbackStrc * a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    if (a0 > 0 && a1 != nullptr && a2 != nullptr)
+    {
+        WALL2_RegisterMsgHandlerTable(static_cast<uint32_t>(a0), a1, reinterpret_cast<const D2SMsgRegEntryStrc*>(a2));
+    }
 }
 void __fastcall INPUT_UnregisterCallbacks(int a0, struct HWND__ * a1, struct D2InputCallbackStrc * a2)
 {
-    (void)a0; (void)a1; (void)a2;
+    if (a0 > 0 && a1 != nullptr && a2 != nullptr)
+    {
+        WALL2_UnregisterMsgHandlerTable(static_cast<uint32_t>(a0), a1, reinterpret_cast<const D2SMsgRegEntryStrc*>(a2));
+    }
 }
 void __fastcall INV_DrawItemHoverTooltip(struct D2UnitStrc * a0, int a1, int a2, int a3, int a4)
 {
@@ -6112,9 +6325,18 @@ void __fastcall NET_SendVariablePacket(unsigned char a0, void const * a1, int a2
 {
     if (a2 < 0 || a2 > 500) return; uint8_t pkt[512]; pkt[0] = a0; if (a1 && a2 > 0) memcpy(&pkt[1], a1, (size_t)a2); MSG_SendPacket(pkt, (size_t)(a2 + 1));
 }
+extern int32_t __fastcall PANEL_UseBeltItemInSlot(int32_t nBeltSlot);
+extern void __fastcall D2Client_SelectActiveSkill(int32_t nHotkeySlot);
+extern void __stdcall D2Client_BindSkillHotkeyFromSpeedBarOrActive(int32_t nHotkeySlot);
+extern int32_t __fastcall D2Client_AssignSkillHotkeyAtHover(int32_t nSlot);
+extern void __fastcall D2Client_FreePlayerUnitClientSide(D2UnitStrc* pPlayerUnit);
+extern void __fastcall D2Client_InitPlayerUnitClientSide(D2UnitStrc* pPlayerUnit, D2ActiveRoomStrc* pRoom, int32_t nX, int32_t nY);
+extern int32_t __stdcall UI_CloseOpenPanelsCount(int32_t bCloseAutomap);
+extern void __fastcall D2Client_ChangeUnitModeWithHitOverlayAndSound(D2UnitStrc* pUnit, int32_t nMode);
+
 int __fastcall NPCMENU_IsActive(void)
 {
-    return 0;
+    return (gaPanelStates[D2PANEL_NPCMENU] != 0 || D2Client_IsNpcGossipSpeechOpen() != 0) ? 1 : 0;
 }
 void __fastcall NPCMENU_ResetState(void)
 {
@@ -6158,7 +6380,8 @@ unsigned char * __fastcall PALSHIFT_GetMonsterPalette(int a0, int a1)
 }
 void __fastcall PANEL_UseBeltPotionSlot(struct D2InventoryStrc * a0, struct D2UnitStrc * a1, int a2, int a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3;
+    (void)a0; (void)a1; (void)a2;
+    PANEL_UseBeltItemInSlot(a3);
 }
 void __fastcall PARTICLE_FreeList(void * * a0)
 {
@@ -6214,11 +6437,20 @@ int __fastcall PLAYERLIST_TestRelationFlag(unsigned int a0, unsigned int a1, uns
 }
 void __fastcall PLAYER_ActivateSkillHotkey(int a0)
 {
-    (void)a0;
+    D2Client_SelectActiveSkill(a0);
+    if (a0 >= 0 && a0 < 16 && g_anSkillHotkeyId[a0] >= 0)
+    {
+        if (g_abSkillHotkeyLeft[a0])
+            D2Client_SetLeftSkillForLocalPlayer(g_anSkillHotkeyId[a0], (int32_t)g_adwSkillHotkeyOwner[a0]);
+        else
+            D2Client_SetRightSkillForLocalPlayer(g_anSkillHotkeyId[a0], (int32_t)g_adwSkillHotkeyOwner[a0]);
+    }
 }
 void __stdcall PLAYER_AssignSkillHotkeyFromBar(int a0)
 {
-    (void)a0;
+    extern int32_t g_nSpeedBarSide;
+    D2Client_BindSkillHotkeySlot(a0, 1, (g_nSpeedBarSide == 1) ? 1 : 0);
+    D2Client_BindSkillHotkeyFromSpeedBarOrActive(a0);
 }
 void __stdcall PLAYER_CycleActiveSkillHotkey(int a0)
 {
@@ -6229,96 +6461,20 @@ void __fastcall PLAYER_FreeClientPlayer(struct D2UnitStrc * a0)
 {
     if (!a0)
         return;
-    if (gpClientAct && UNITS_GetRoom(a0))
-        UNITROOM_RemoveUnitFromRoom(a0);
-    if (a0->pDynamicPath)
-    {
-        PATH_FreeDynamicPath(nullptr, a0->pDynamicPath);
-        a0->pDynamicPath = nullptr;
-    }
-    if (a0->pInventory)
-    {
-        D2Client_StripAndFreeUnitInventoryItems(a0);
-        if (a0->pInventory)
-        {
-            INVENTORY_FreeInventory(a0->pInventory);
-            a0->pInventory = nullptr;
-        }
-    }
-    UNITS_FreePlayerData(nullptr, a0);
+    D2Client_FreePlayerUnitClientSide(a0);
     GFX_FreeUnitGfxData(a0);
 }
 struct D2UnitStrc * __stdcall PLAYER_GetLocalPlayer(void)
 {
     return gpPlayerUnit;
 }
-static void __fastcall Bridge_ClientPlayerStatChangeCallback(
-    D2GameStrc* pGame,
-    D2UnitStrc* pOwner,
-    D2UnitStrc* pOther,
-    int32_t nLayer_StatId,
-    int32_t nPreviousValue,
-    int32_t nNewValue)
-{
-    (void)pGame;
-    (void)pOther;
-    (void)nPreviousValue;
-    if (!pOwner || pOwner->dwUnitType != UNIT_PLAYER)
-    {
-        return;
-    }
-
-    const int32_t nStatId = nLayer_StatId >> 16;
-    const int32_t nSkillId = static_cast<uint16_t>(nLayer_StatId);
-    if (nStatId == STAT_ITEM_NONCLASSSKILL || nStatId == STAT_ITEM_SINGLESKILL)
-    {
-        if (nSkillId <= 0 || !sgptDataTables || nSkillId >= sgptDataTables->nSkillsTxtRecordCount)
-        {
-            return;
-        }
-        const D2SkillsTxt* pSkillsTxt = &sgptDataTables->pSkillsTxt[nSkillId];
-        if (nStatId == STAT_ITEM_SINGLESKILL && static_cast<int32_t>(pOwner->dwClassId) != static_cast<int32_t>(pSkillsTxt->nCharClass))
-        {
-            return;
-        }
-
-        D2SkillStrc* pSkill = SKILLS_GetSkillById(pOwner, nSkillId, D2UnitInvalidGUID);
-        if (nNewValue > 0)
-        {
-            if (!pSkill)
-            {
-                pSkill = SKILLS_AddSkill(pOwner, nSkillId);
-                SKILLS_AssignSkill(pOwner, nSkillId, 0, FALSE, __FILE__, __LINE__);
-            }
-            SKILLS_RefreshSkill(pOwner, nSkillId);
-        }
-        else if (pSkill != nullptr)
-        {
-            SKILLS_RefreshSkill(pOwner, nSkillId);
-            const int32_t nBaseLvl = SKILLS_GetSkillLevel(pOwner, pSkill, FALSE);
-            const int32_t nTotalLvl = SKILLS_GetSkillLevel(pOwner, pSkill, TRUE);
-            if (nTotalLvl <= 0)
-            {
-                if (UNITS_GetLeftSkill(pOwner) == pSkill)
-                {
-                    SKILLS_SetLeftActiveSkill(pOwner, 0, D2UnitInvalidGUID);
-                }
-                if (UNITS_GetRightSkill(pOwner) == pSkill)
-                {
-                    SKILLS_SetRightActiveSkill(pOwner, 0, D2UnitInvalidGUID);
-                }
-            }
-            if (nBaseLvl <= 0 && nTotalLvl <= 0)
-            {
-                SKILLS_AssignSkill(pOwner, nSkillId, 0, TRUE, __FILE__, __LINE__);
-            }
-        }
-    }
-}
 
 void __fastcall PLAYER_InitClientPlayer(struct D2UnitStrc * a0, struct D2ActiveRoomStrc * a1, int a2, int a3)
 {
-    if (!a0) return; UNITS_AllocPlayerData(a0); if (!a0->pInventory) a0->pInventory = INVENTORY_AllocInventory(nullptr, a0); if (!a0->pSkills) a0->pSkills = SKILLS_AllocSkillList(a0->pMemoryPool); SKILLS_InitSkillList(a0); if (!STATLIST_GetStatListFromUnitAndFlag(a0, 1)) { STATLIST_AllocStatListEx(a0, 1, Bridge_ClientPlayerStatChangeCallback, nullptr); STATLIST_SetUnitStat(a0, STAT_VELOCITYPERCENT, 100, 0); STATLIST_SetUnitStat(a0, STAT_ATTACKRATE, 100, 0); STATLIST_SetUnitStat(a0, STAT_OTHER_ANIMRATE, 100, 0); } if (!a0->pDynamicPath) PATH_AllocDynamicPath(nullptr, a1, a2, a3, a0, FALSE); if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1); a0->dwFlags |= (UNITFLAG_TARGETABLE | UNITFLAG_CANBEATTACKED | UNITFLAG_ISVALIDTARGET); UNITS_ChangeAnimMode(a0, (a1 && DUNGEON_IsRoomInTown(a1)) ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL); GFX_InitUnitCompositeGfx(a0);
+    if (!a0) return;
+    D2Client_InitPlayerUnitClientSide(a0, a1, a2, a3);
+    if (a1 && !UNITS_GetRoom(a0)) UNITROOM_AddUnitToRoom(a0, a1);
+    GFX_InitUnitCompositeGfx(a0);
 }
 void __fastcall PLAYER_ResetSkillState(struct D2UnitStrc * a0, int a1)
 {
@@ -6398,7 +6554,10 @@ void __stdcall SKILLS_SpawnHomingMissileFromSkill(struct D2UnitStrc * a0, struct
 }
 void __fastcall SMSG_RegisterWindowMsg(struct HWND__ * a0, unsigned int a1, unsigned int a2, void * a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3;
+    if (a0 != nullptr && a3 != nullptr)
+    {
+        WALL2_RegisterSingleMsgHandler(a0, a1, a2, reinterpret_cast<void (__stdcall*)(SMsgWindowMessage*)>(a3));
+    }
 }
 void __fastcall SMSG_RunModalLoop(void * a0)
 {
@@ -6406,7 +6565,10 @@ void __fastcall SMSG_RunModalLoop(void * a0)
 }
 void __fastcall SMSG_UnregisterWindowMsg(struct HWND__ * a0, unsigned int a1, unsigned int a2, void * a3)
 {
-    (void)a0; (void)a1; (void)a2; (void)a3;
+    if (a0 != nullptr && a3 != nullptr)
+    {
+        WALL2_UnregisterSingleMsgHandler(a0, a1, a2, reinterpret_cast<void (__stdcall*)(SMsgWindowMessage*)>(a3));
+    }
 }
 int __fastcall SOUND_PickRandomVariant(int a0)
 {
@@ -6460,11 +6622,13 @@ void __stdcall UI_ClearTooltipRegions(void)
 }
 int __stdcall UI_CloseAllOpenPanels(int a0)
 {
-    (void)a0; UI_CloseAllPanels(); return 1;
+    (void)a0;
+    return UI_CloseOpenPanelsCount(0);
 }
 void __stdcall UI_CloseConflictingPanels(int a0, int a1)
 {
-    (void)a0; (void)a1; UI_CloseAllPanels();
+    (void)a0;
+    (void)UI_CloseOpenPanelsCount(a1);
 }
 int __stdcall UI_HandleBeltMouseClick(struct D2WinMsgStrc * a0)
 {
@@ -6472,7 +6636,7 @@ int __stdcall UI_HandleBeltMouseClick(struct D2WinMsgStrc * a0)
 }
 int __fastcall UI_IsAnyModalOrShopOpen(void)
 {
-    return 0;
+    return (gaPanelStates[D2PANEL_ESCMENU] != 0 || gaPanelStates[D2PANEL_NPCMENU] != 0 || gaPanelStates[D2PANEL_NPCSHOP] != 0) ? 1 : 0;
 }
 struct D2CellFileStrc * __fastcall UI_LoadPanelCelAsset(char const * a0)
 {
@@ -6492,19 +6656,97 @@ void __stdcall UI_ResetRightPanelLayout(void)
 }
 void __fastcall UI_SetPanelVisible(int a0, int a1, int a2)
 {
-    UI_SetPanelState(a0, a1, a2);
+    UI_SetPanelState(a0, a1 ? 0 : 1, a2);
 }
 void __fastcall UI_TogglePanelWithRule(int a0, int a1, int a2)
 {
-    UI_SetPanelState(a0, a1, a2);
+    UI_SetPanelState(a0, a1 ? 0 : 1, a2);
 }
 void __fastcall UNITMODE_ClearActionFrame(struct D2UnitStrc * a0)
 {
-    (void)a0;
+    if (a0) a0->nActionFrame = 0;
 }
 int __fastcall UNITMODE_DispatchClientEvent(struct D2UnitStrc * a0, int a1, int a2, int a3, struct D2UnitStrc * a4, int a5, int a6)
 {
-    (void)a2;(void)a3;(void)a4;(void)a5;(void)a6; if (a0) D2Client_DispatchUnitModeChange(a0, a1); return 1;
+    (void)a5; (void)a6;
+    if (!a0)
+        return 0;
+
+    if (a0->dwUnitType == UNIT_PLAYER)
+    {
+        D2BridgePlayerModeChangeStrc tMc = {};
+        if (a1 == 0x0D || a1 == 7 || a1 == PLRMODE_NEUTRAL || a1 == PLRMODE_TOWNNEUTRAL)
+        {
+            const BOOL bInTown = (UNITS_GetRoom(a0) && DUNGEON_IsRoomInTown(UNITS_GetRoom(a0))) ? TRUE : FALSE;
+            D2Client_SetPlayerNeutralModeAndSyncPos(a0, bInTown ? PLRMODE_TOWNNEUTRAL : PLRMODE_NEUTRAL, FALSE);
+            return 1;
+        }
+        if (a1 == 0x01 || a1 == PLRMODE_WALK || a1 == PLRMODE_TOWNWALK)
+        {
+            if (a4 != nullptr)
+            {
+                tMc.nSkillIdOrXOrType = static_cast<int32_t>(a4->dwUnitType);
+                tMc.dwOwnerOrYOrGUID  = a4->dwUnitId;
+                return D2Client_ExecutePlayerModeTransition(0, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+            }
+            if (a2 != 0 || a3 != 0)
+            {
+                tMc.nSkillIdOrXOrType = a2;
+                tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(a3);
+                return D2Client_ExecutePlayerModeTransition(1, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+            }
+        }
+        if (a1 == 0x17 || a1 == PLRMODE_RUN)
+        {
+            if (a4 != nullptr)
+            {
+                tMc.nSkillIdOrXOrType = static_cast<int32_t>(a4->dwUnitType);
+                tMc.dwOwnerOrYOrGUID  = a4->dwUnitId;
+                return D2Client_ExecutePlayerModeTransition(24, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+            }
+            if (a2 != 0 || a3 != 0)
+            {
+                tMc.nSkillIdOrXOrType = a2;
+                tMc.dwOwnerOrYOrGUID  = static_cast<uint32_t>(a3);
+                return D2Client_ExecutePlayerModeTransition(23, a0, reinterpret_cast<D2PlayerModeChangeStrc*>(&tMc), TRUE);
+            }
+        }
+        D2Client_DispatchPlayerModeChange_6FB0A820(
+            a0,
+            a1,
+            (a4 != nullptr) ? 1 : 0,
+            a4 ? static_cast<int>(a4->dwUnitType) : 0,
+            a4 ? a4->dwUnitId : 0u,
+            a2,
+            a3,
+            0);
+        return 1;
+    }
+
+    if (a0->dwUnitType == UNIT_MONSTER)
+    {
+        int32_t nTx = a2;
+        int32_t nTy = a3;
+        if (a4 != nullptr)
+        {
+            nTx = UNITS_GetXPosition(a4);
+            nTy = UNITS_GetYPosition(a4);
+        }
+        else if (nTx == 0 && nTy == 0)
+        {
+            nTx = UNITS_GetXPosition(a0);
+            nTy = UNITS_GetYPosition(a0);
+        }
+        if (a1 == 0x17) // Monster run flag in S2C 0x67 / 0x68
+        {
+            a1 = MONMODE_RUN;
+        }
+        D2Client_ExecuteMonsterModeTransition(a0, a1, nTx, nTy);
+        return 1;
+    }
+
+    D2Client_DispatchUnitModeChange(a0, a1);
+    return 1;
 }
 void __fastcall UNITMODE_OnModeChangeComplete(int a0, struct D2UnitStrc * a1)
 {
@@ -6516,7 +6758,7 @@ void __fastcall UNITMODE_QueuePendingPlayerAction(struct D2UnitStrc * a0, int a1
 }
 void __fastcall UNITMODE_SetPlayerMoveMode(int a0)
 {
-    (void)a0;
+    if (gpPlayerUnit) D2Client_ChangeUnitModeWithHitOverlayAndSound(gpPlayerUnit, a0);
 }
 void __fastcall UNITMODE_UpdateUnitFrame(struct D2UnitStrc * a0)
 {

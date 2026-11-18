@@ -3393,7 +3393,7 @@ extern D2UnitStrc* __fastcall MISSILE_SpawnLobMissileToSkillTarget(D2UnitStrc* p
 extern D2UnitStrc* __fastcall MISSILE_SpawnParabolicLobMissile(D2UnitStrc* pOrigin, int32_t nMissileId, int32_t nX, int32_t nY, int32_t nTargetX, int32_t nTargetY, int32_t nSkillId, int32_t nSkillLevel, int32_t nExtra); // 0x6FADB4B0
 
 // Globals aliased by UNIT_MissileHandlers.cpp
-int32_t gnFrameDeltaTicks = 1; // 0x6FBB32DC
+int32_t gnFrameDeltaTicks = 0; // 0x6FBB32DC (.bss zero -> D2Common_10226 default 1024 velocity scale)
 uint32_t gdwScreenShakeStartTick = 0; // 0x6FBAD104
 int32_t gnScreenShakeFadeInMs = 0;    // 0x6FBAD108
 int32_t gnScreenShakeHoldMs = 0;      // 0x6FBAD10C

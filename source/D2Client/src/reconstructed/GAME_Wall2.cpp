@@ -252,6 +252,10 @@ void __fastcall WALL2_UnregisterSingleMsgHandler(HWND hWnd, uint32_t nType, uint
         FOG_DisplayHalt("hWnd != NULL", "..\\Source\\D2Client\\GAME\\Wall2.cpp", 343);
         exit(-1);
     }
+    if (pfHandler == nullptr)
+    {
+        return;
+    }
 
     switch (nType)
     {
@@ -284,6 +288,10 @@ void __fastcall WALL2_RegisterSingleMsgHandler(HWND hWnd, uint32_t nType, uint32
     {
         FOG_DisplayHalt("hWnd != NULL", "..\\Source\\D2Client\\GAME\\Wall2.cpp", 310);
         exit(-1);
+    }
+    if (pfHandler == nullptr)
+    {
+        return;
     }
 
     switch (nType)
@@ -433,6 +441,21 @@ LRESULT __stdcall WALL2_MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 {
     BOOL bHandled = FALSE;
     LRESULT lResult = 0;
+
+    if (uMsg == WM_MOUSEMOVE ||
+        uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP ||
+        uMsg == WM_RBUTTONDOWN || uMsg == WM_RBUTTONUP ||
+        uMsg == WM_MBUTTONDOWN || uMsg == WM_MBUTTONUP)
+    {
+        extern int32_t gnMouseX;
+        extern int32_t gnMouseY;
+        extern int32_t gnMouseScreenX;
+        extern int32_t gnMouseScreenY;
+        gnMouseX = static_cast<int16_t>(LOWORD(lParam));
+        gnMouseY = static_cast<int16_t>(HIWORD(lParam));
+        gnMouseScreenX = gnMouseX;
+        gnMouseScreenY = gnMouseY;
+    }
 
     RECORD_ProcessWindowMessage(uMsg, lParam);
 

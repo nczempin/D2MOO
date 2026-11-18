@@ -26,6 +26,13 @@
 #include <D2WinArchive.h>
 #include <D2Unicode.h>
 #include <D2Lang.h>
+#include <D2Config.h>
+#include <Storm.h>
+#include <Window.h>
+#include <Client.h>
+#include <Server.h>
+#include <GAME/Game.h>
+#include <PLAYER/PlrSave.h>
 
 struct D2RoomExStrc;
 struct D2StormMsgStrc;
@@ -238,8 +245,20 @@ uint8_t __fastcall OBJECTS_OperateAncientStatue(D2UnitStrc* pObject)
 // ============================================================================
 
 extern int32_t gaPanelStates[38];
+extern int32_t g_bSystemConnected;
+extern int32_t g_bQuickExitRequested;
+extern D2ConfigStrc* gpD2Config_6FBCB908;
+extern char g_szGameServerIp[264];
+extern int32_t __stdcall WINMAIN_PopClientState(void);
+extern int32_t __fastcall WALL2_RunModalMessageLoop(SMSGIDLEPROC pfIdleCallback);
+extern void __stdcall GAME_ReceiveNetworkPackets(void);
+
 static int32_t g_bSinglePlayerServerRunning = 0;
 static int32_t g_bConnectionTimedOut = 0;
+static uint32_t s_dwHandshakeStartTick = 0;
+static uint32_t s_dwDisconnectStartTick = 0;
+static D2GameDataTableStrc s_tLocalGameDataTable;
+static uint32_t s_adwLocalGameList[8] = {};
 
 // 1.12a: 0x6FAEB9E0 (__stdcall)
 int32_t __stdcall NET_HasConnectionTimedOut(void)
@@ -254,7 +273,8 @@ int32_t __stdcall GAME_LeaveSinglePlayerServer(void)
         return 0;
     }
     g_bSinglePlayerServerRunning = 0;
-    // Tail-calls D2Game_10050 (#10036)
+    D2GAME_10036_PLRSAVE_EnableSaveFileWriting(1);
+    D2Game_10050();
     return 1;
 }
 
@@ -262,53 +282,147 @@ int32_t __stdcall GAME_LeaveSinglePlayerServer(void)
 int32_t __stdcall GAME_StepSinglePlayerServer(void)
 {
     g_bSinglePlayerServerRunning = 1;
-    // Tail-calls D2Game_10046 (#10046)
+    D2Game_10046();
     return 1;
 }
 
 // 1.12a: 0x6FAEBA20 (__stdcall)
-int32_t __stdcall NET_WaitForConnectStep(int32_t nUnused)
+BOOL CALLBACK NET_WaitForConnectStep(DWORD dwCount)
 {
-    (void)nUnused;
-    // Polls WINDOW_GetState and D2NET_10017; sets 0x6FBC47A0 = 1 on disconnect
-    return 1;
+    (void)dwCount;
+    if (WINDOW_IsFullScreen()) {
+        WINDOW_GetState();
+    }
+    const int32_t nState = D2NET_10017();
+    if (nState == 0) {
+        Sleep(1);
+        return FALSE;
+    }
+    if (nState < 0) {
+        g_bQuickExitRequested = 1;
+    }
+    return TRUE;
 }
 
 // 1.12a: 0x6FAEBA80 (custom: eax = szServerIp, ecx = nMode)
 int32_t __fastcall NET_ConnectClientToServer(int32_t nMode, const char* szServerIp)
 {
-    (void)nMode;
-    (void)szServerIp;
-    // Calls CLIENT_Initialize(nMode, szServerIp) and runs modal wait loop with NET_WaitForConnectStep
+    CLIENT_Initialize(nMode, szServerIp);
+    WALL2_RunModalMessageLoop(NET_WaitForConnectStep);
     return 1;
 }
 
 // 1.12a: 0x6FAEBAA0 (__stdcall)
-int32_t __stdcall NET_WaitForDisconnectStep(int32_t nUnused)
+BOOL CALLBACK NET_WaitForDisconnectStep(DWORD dwCount)
 {
-    (void)nUnused;
-    // Processes remaining network messages for up to 10,000 ms (0x2710) or until 0x6FBCC000 == 0
-    return 1;
+    (void)dwCount;
+    if (gnGameType == 0 || gnGameType == 1) {
+        GAME_ProcessNetworkMessages();
+        GAME_UpdateClients(0, 1);
+    }
+    GAME_ReceiveNetworkPackets();
+    if (g_bSystemConnected == 0 || !D2NET_10025()) {
+        return TRUE;
+    }
+    const uint32_t dwTimeoutMs = (gnGameType == 0 || gnGameType == 1) ? 150u : 10000u;
+    if (GetTickCount() - s_dwDisconnectStartTick >= dwTimeoutMs) {
+        g_bSystemConnected = 0;
+        return TRUE;
+    }
+    Sleep(1);
+    return FALSE;
 }
 
 // 1.12a: 0x6FAEBB10 (__stdcall)
-int32_t __stdcall NET_WaitForInitialHandshakeStep(int32_t nUnused)
+BOOL CALLBACK NET_WaitForInitialHandshakeStep(DWORD dwCount)
 {
-    (void)nUnused;
-    // Waits up to 10,000 ms for D2NET_10025 and CLIENT_DequeueSystemPacket until 0x6FBCC000 != 0
-    return 1;
+    (void)dwCount;
+    if (gnGameType == 0 || gnGameType == 1) {
+        GAME_ProcessNetworkMessages();
+        GAME_UpdateGamesProgress(1);
+        GAME_UpdateClients(0, 0);
+    }
+    GAME_ReceiveNetworkPackets();
+    if (g_bSystemConnected != 0) {
+        return TRUE;
+    }
+    if (GetTickCount() - s_dwHandshakeStartTick >= 10000u) {
+        g_bConnectionTimedOut = 1;
+        g_bQuickExitRequested = 1;
+        return TRUE;
+    }
+    Sleep(1);
+    return FALSE;
 }
 
 // 1.12a: 0x6FAEBBB0 (__stdcall)
-void __stdcall NET_ShutdownClientAndServer(void)
+int32_t __stdcall NET_ShutdownClientAndServer(void)
 {
-    // Runs NET_WaitForDisconnectStep modal loop, calls CLIENT_Release and SERVER_Release
+    s_dwDisconnectStartTick = GetTickCount();
+    WALL2_RunModalMessageLoop(NET_WaitForDisconnectStep);
+    CLIENT_Release();
+
+    char szConnectHost[64] = {};
+    const bool bHasConnectHost =
+        (GetEnvironmentVariableA("D2MOO_CONNECT_HOST", szConnectHost, sizeof(szConnectHost)) > 0 && szConnectHost[0] != '\0');
+    if (!bHasConnectHost && (gnGameType == 0 || gnGameType == 1 || gnGameType == 6 || gnGameType == 8)) {
+        GAME_LeaveSinglePlayerServer();
+        SERVER_Release();
+    }
+    return WINMAIN_PopClientState();
 }
 
 // 1.12a: 0x6FAEBBF0 (__stdcall)
-void __stdcall NET_InitializeSessionByGameType(void)
+int32_t __stdcall NET_InitializeSessionByGameType(void)
 {
-    // Initializes SERVER_Initialize, CLIENT_Initialize, and GAME_InitGameDataTable based on game type (0x6FBCBFF8)
+    g_bSystemConnected = 0;
+    g_bConnectionTimedOut = 0;
+    g_bQuickExitRequested = 0;
+
+    if (gpD2Config_6FBCB908 != nullptr) {
+        if (gpD2Config_6FBCB908->dwSeed == 0) {
+            char szSeedEnv[64] = {};
+            if (GetEnvironmentVariableA("D2MOO_FIXED_SEED", szSeedEnv, sizeof(szSeedEnv)) > 0 && szSeedEnv[0] != '\0') {
+                gpD2Config_6FBCB908->dwSeed = static_cast<uint32_t>(strtoul(szSeedEnv, nullptr, 0));
+            }
+        }
+        if (gpD2Config_6FBCB908->dwSeed != 0) {
+            GAME_SetInitSeed(static_cast<int32_t>(gpD2Config_6FBCB908->dwSeed));
+        }
+    }
+
+    char szConnectHost[64] = {};
+    if (GetEnvironmentVariableA("D2MOO_CONNECT_HOST", szConnectHost, sizeof(szConnectHost)) > 0 && szConnectHost[0] != '\0') {
+        NET_ConnectClientToServer(0, szConnectHost);
+    } else if (gnGameType == 0) {
+        SERVER_Initialize(1, 1);
+        CLIENT_Initialize(1, nullptr);
+        SERVER_SetHackListEnabled(FALSE);
+        memset(s_adwLocalGameList, 0, sizeof(s_adwLocalGameList));
+        GAME_InitGameDataTable(&s_tLocalGameDataTable, s_adwLocalGameList);
+        GAME_StepSinglePlayerServer();
+    } else if (gnGameType == 1) {
+        SERVER_Initialize(2, 1);
+        CLIENT_Initialize(2, nullptr);
+        SERVER_SetHackListEnabled(FALSE);
+        memset(s_adwLocalGameList, 0, sizeof(s_adwLocalGameList));
+        GAME_InitGameDataTable(&s_tLocalGameDataTable, s_adwLocalGameList);
+        GAME_StepSinglePlayerServer();
+    } else if (gnGameType == 6 || gnGameType == 8) {
+        SERVER_Initialize(0, 1);
+        SERVER_SetMaxClientsPerGame(8);
+        SERVER_SetHackListEnabled(FALSE);
+        memset(s_adwLocalGameList, 0, sizeof(s_adwLocalGameList));
+        GAME_InitGameDataTable(&s_tLocalGameDataTable, s_adwLocalGameList);
+        GAME_StepSinglePlayerServer();
+        NET_ConnectClientToServer(0, g_szGameServerIp[0] ? g_szGameServerIp : "127.0.0.1");
+    } else {
+        NET_ConnectClientToServer(0, g_szGameServerIp);
+    }
+
+    s_dwHandshakeStartTick = GetTickCount();
+    WALL2_RunModalMessageLoop(NET_WaitForInitialHandshakeStep);
+    return WINMAIN_PopClientState();
 }
 
 // ============================================================================
@@ -338,7 +452,10 @@ void __stdcall UI_DrawScreenFadeBox(void)
         gdwScreenFadeEndTick = 0;
         return;
     }
-    // Draws alpha fade box over viewport using D2GFX_DrawBoxAlpha
+    const int32_t nAlpha = static_cast<int32_t>(((gdwScreenFadeEndTick - dwNow) * 255u) / 500u);
+    if (nAlpha > 0) {
+        D2GFX_DrawBox(0, 0, gnViewportWidth, gnViewportHeight, 0, DRAWMODE_TRANS50);
+    }
 }
 
 // 1.12a: 0x6FAEBDB0 (custom: eax = nSplitMode, ecx = nMouseX, edi = nMouseY)

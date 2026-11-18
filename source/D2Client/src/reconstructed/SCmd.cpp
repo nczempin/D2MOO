@@ -178,10 +178,10 @@ void __fastcall ROSTERPETS_AddOrUpdateFullPet(int32_t nPetType, uint32_t dwPetUn
 // =============================================================================
 
 // 0x6FB14330
-// Allocates or grows `pUnit->pPacketQueue` (+0xD8) in increments of 4 slots (32 bytes/slot).
+// Allocates or grows `pUnit->pPacketList` (+0xD8) in increments of 4 slots (32 bytes/slot).
 void __fastcall SCMD_GrowUnitPacketQueue(D2UnitStrc* pUnit)
 {
-    D2UnitPacketQueueStrc** ppQueue = reinterpret_cast<D2UnitPacketQueueStrc**>(reinterpret_cast<uint8_t*>(pUnit) + 0xD8);
+    D2UnitPacketQueueStrc** ppQueue = reinterpret_cast<D2UnitPacketQueueStrc**>(&pUnit->pPacketList);
     D2UnitPacketQueueStrc* pQueue = *ppQueue;
 
     if (pQueue == nullptr)
@@ -210,7 +210,7 @@ void __fastcall SCMD_GrowUnitPacketQueue(D2UnitStrc* pUnit)
 }
 
 // 0x6FB142B0
-// Frees `pUnit->pPacketQueue` (+0xD8) when a unit is destroyed or recycled.
+// Frees `pUnit->pPacketList` (+0xD8) when a unit is destroyed or recycled.
 void __fastcall SCMD_FreeUnitPacketQueue(D2UnitStrc* pUnit)
 {
     if (pUnit == nullptr)
@@ -218,7 +218,7 @@ void __fastcall SCMD_FreeUnitPacketQueue(D2UnitStrc* pUnit)
         return;
     }
 
-    D2UnitPacketQueueStrc** ppQueue = reinterpret_cast<D2UnitPacketQueueStrc**>(reinterpret_cast<uint8_t*>(pUnit) + 0xD8);
+    D2UnitPacketQueueStrc** ppQueue = reinterpret_cast<D2UnitPacketQueueStrc**>(&pUnit->pPacketList);
     D2UnitPacketQueueStrc* pQueue = *ppQueue;
     if (pQueue != nullptr)
     {
@@ -232,7 +232,7 @@ void __fastcall SCMD_FreeUnitPacketQueue(D2UnitStrc* pUnit)
 }
 
 // 0x6FB14AE0
-// Enqueues a 32-byte unit movement/event packet (0x0C..0x10, 0x67..0x6D) onto `pUnit->pPacketQueue`.
+// Enqueues a 32-byte unit movement/event packet (0x0C..0x10, 0x67..0x6D) onto `pUnit->pPacketList`.
 void __fastcall SCMD_QueueUnitPacket(D2UnitStrc* pUnit, const uint8_t* pPacket, size_t nPacketSize)
 {
     if (pUnit == nullptr || nPacketSize > 32)
@@ -240,11 +240,11 @@ void __fastcall SCMD_QueueUnitPacket(D2UnitStrc* pUnit, const uint8_t* pPacket, 
         return;
     }
 
-    D2UnitPacketQueueStrc* pQueue = *reinterpret_cast<D2UnitPacketQueueStrc**>(reinterpret_cast<uint8_t*>(pUnit) + 0xD8);
+    D2UnitPacketQueueStrc* pQueue = reinterpret_cast<D2UnitPacketQueueStrc*>(pUnit->pPacketList);
     if (pQueue == nullptr || pQueue->nQueuedCount >= pQueue->nAllocatedCount)
     {
         SCMD_GrowUnitPacketQueue(pUnit);
-        pQueue = *reinterpret_cast<D2UnitPacketQueueStrc**>(reinterpret_cast<uint8_t*>(pUnit) + 0xD8);
+        pQueue = reinterpret_cast<D2UnitPacketQueueStrc*>(pUnit->pPacketList);
     }
 
     uint8_t* pSlot = &pQueue->pBuffer[pQueue->nQueuedCount * 32];
@@ -253,7 +253,7 @@ void __fastcall SCMD_QueueUnitPacket(D2UnitStrc* pUnit, const uint8_t* pPacket, 
 }
 
 // 0x6FB14190
-// Drains `pUnit->pPacketQueue` at the end of `UNITMODE_UpdateClientUnit` (0x6FAF1EE0 at 0x6FAF2033)
+// Drains `pUnit->pPacketList` at the end of `UNITMODE_UpdateClientUnit` (0x6FAF1EE0 at 0x6FAF2033)
 // and invokes `sgptSCmdTable[bOpcode].pfUnitHandler(pUnit, pSlot)` for each queued packet.
 extern const D2SCmdTableStrc sgptSCmdTable[0xAF];
 
@@ -264,7 +264,7 @@ void __fastcall SCMD_DrainUnitPacketQueue(D2UnitStrc* pUnit)
         return;
     }
 
-    D2UnitPacketQueueStrc* pQueue = *reinterpret_cast<D2UnitPacketQueueStrc**>(reinterpret_cast<uint8_t*>(pUnit) + 0xD8);
+    D2UnitPacketQueueStrc* pQueue = reinterpret_cast<D2UnitPacketQueueStrc*>(pUnit->pPacketList);
     if (pQueue == nullptr || pQueue->nQueuedCount == 0)
     {
         return;
@@ -337,12 +337,11 @@ void __fastcall SCMD_Handler04_LoadComplete(uint8_t* pPacket)
     D2UnitStrc* pPlayer = UNIT_GetClientPlayer();
     if (pPlayer != nullptr && pPlayer->pPlayerData != nullptr)
     {
-        // Clear pending movement/action slots at pPlayerData+0x150..+0x15C
-        uint32_t* pPending = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(pPlayer->pPlayerData) + 0x150);
-        pPending[0] = 0;
-        pPending[1] = 0;
-        pPending[2] = 0;
-        pPending[3] = 0;
+        // Clear pending movement/action slots at pPlayerData->unk0xA8[42..45] (+0x150..+0x15C)
+        pPlayer->pPlayerData->unk0xA8[42] = 0;
+        pPlayer->pPlayerData->unk0xA8[43] = 0;
+        pPlayer->pPlayerData->unk0xA8[44] = 0;
+        pPlayer->pPlayerData->unk0xA8[45] = 0;
     }
 }
 
@@ -358,6 +357,8 @@ void __fastcall SCMD_Handler05_UnloadComplete(uint8_t* pPacket)
 void __fastcall SCMD_Handler06_GameLogoutSuccess(uint8_t* pPacket)
 {
     (void)pPacket;
+    extern void __stdcall GAME_SetExitGameFlag(void);
+    GAME_SetExitGameFlag();
 }
 
 // 0x6FB14920 (0x07: S2C_ADDROOM - 6 bytes)
@@ -461,9 +462,21 @@ void __fastcall SCMD_Handler0A_RemoveUnit(uint8_t* pPacket)
 // 0x6FB17B60 .. 0x6FB17A30 (0x0C .. 0x10: Deferred Unit Event Handlers)
 void __fastcall SCMD_UnitHandler0C_GameHandshake(D2UnitStrc* pUnit, uint8_t* pPacket)
 {
-    const int32_t nTargetX = *reinterpret_cast<uint16_t*>(&pPacket[6]);
-    const int32_t nTargetY = 0;
-    UNITMODE_DispatchClientEvent(pUnit, pPacket[8], nTargetX, nTargetY, nullptr, 0, 0);
+    // D2GSPacketSrv0C (9B): [0]=0x0C, [1]=nUnitType, [2..5]=dwUnitGUID, [6]=nAnimMode, [7]=nHitClass, [8]=nLife
+    if (pUnit == nullptr)
+    {
+        return;
+    }
+    pUnit->dwLastHitClass = pPacket[7];
+    STATLIST_SetUnitStat(pUnit, STAT_HITPOINTS, static_cast<int32_t>(pPacket[8]) << 8, 0);
+    if (pPacket[8] == 0 && pUnit->dwUnitType == UNIT_MONSTER)
+    {
+        UNITMODE_DispatchClientEvent(pUnit, MONMODE_DEATH, 0, 0, nullptr, 0, 0);
+    }
+    else
+    {
+        UNITMODE_DispatchClientEvent(pUnit, pPacket[6], 0, 0, nullptr, 0, 0);
+    }
 }
 
 void __fastcall SCMD_UnitHandler0D_PlayerStop(D2UnitStrc* pUnit, uint8_t* pPacket)
@@ -823,8 +836,8 @@ void __fastcall SCMD_UnitHandler6D_MonsterStop(D2UnitStrc* pMonster, uint8_t* pP
     const uint8_t nLifePct = pPacket[9];
 
     UNITMODE_CheckPositionDrift(pMonster, nX, nY);
-    STATLIST_SetUnitStat(pMonster, STAT_HITPOINTS, nLifePct, 0);
-    UNITMODE_DispatchClientEvent(pMonster, 0x09, nX, nY, nullptr, 0, 0);
+    STATLIST_SetUnitStat(pMonster, STAT_HITPOINTS, static_cast<int32_t>(nLifePct) << 8, 0);
+    UNITMODE_DispatchClientEvent(pMonster, MONMODE_NEUTRAL, nX, nY, nullptr, 0, 0);
 }
 
 // 0x6FB165F0 (0x9C: S2C_ITEMACTIONWORLD - variable length)
@@ -954,9 +967,69 @@ void __fastcall SCMD_HandlerAC_AssignNPC(uint8_t* pPacket)
 
 // Additional Reconstructed S->C Packet Handlers (0x0B .. 0xAE)
 
+// 1.12a: 0x6FB15C40 (0x0B: S2C_GAMEHANDSHAKE - 6 bytes)
+extern D2UnitStrc* gpPlayerUnit;
+extern uint8_t gnLocalPlayerCharClass;
+extern int32_t gbStandStillHeld;
+extern void __fastcall UI_ShutdownGameSession(void);
+extern void __fastcall UI_ResetSessionState(void);
+extern void __stdcall UI_InitAllPanels(void);
+
 static void __fastcall SCMD_Handler0B_GameHandshake(uint8_t* pPacket)
 {
-    (void)pPacket;
+    if (pPacket == nullptr)
+    {
+        return;
+    }
+    const uint8_t  nUnitType  = pPacket[1];
+    const uint32_t dwUnitGUID = *reinterpret_cast<uint32_t*>(&pPacket[2]);
+    D2UnitStrc* pUnit = UNIT_FindClientUnit(static_cast<int32_t>(dwUnitGUID), nUnitType);
+    if (pUnit == nullptr)
+    {
+        return;
+    }
+    if (gpPlayerUnit != nullptr && gpPlayerUnit != pUnit)
+    {
+        UI_ShutdownGameSession();
+    }
+    if (pUnit->pDynamicPath != nullptr)
+    {
+        PATH_SetType(pUnit->pDynamicPath, 0);
+    }
+    gnLocalPlayerCharClass = static_cast<uint8_t>(pUnit->dwClassId);
+    gbStandStillHeld       = 0;
+    gpPlayerUnit           = pUnit;
+    UI_ResetSessionState();
+    UI_InitAllPanels();
+}
+
+struct D2SrvTradePartnerPacketStrc;
+extern void __fastcall PLRTRADE_OnRecvPartnerInfoPacket(const D2SrvTradePartnerPacketStrc* pPacket);
+extern void __fastcall PLRTRADE_SetGoldOffer(uint8_t bIsLocalOffer, int32_t nUnusedEdx, int32_t nGoldAmount);
+extern void __fastcall QUESTFX_DispatchSpecialEvent(uint8_t nEventIndex);
+
+static void __fastcall SCMD_Handler78_TradePartnerInfo(uint8_t* pPacket)
+{
+    if (pPacket != nullptr)
+    {
+        PLRTRADE_OnRecvPartnerInfoPacket(reinterpret_cast<const D2SrvTradePartnerPacketStrc*>(pPacket));
+    }
+}
+
+static void __fastcall SCMD_Handler79_GoldInTrade(uint8_t* pPacket)
+{
+    if (pPacket != nullptr)
+    {
+        PLRTRADE_SetGoldOffer(pPacket[1], 0, *reinterpret_cast<const int32_t*>(&pPacket[2]));
+    }
+}
+
+static void __fastcall SCMD_Handler89_SpecialQuestEvent(uint8_t* pPacket)
+{
+    if (pPacket != nullptr)
+    {
+        QUESTFX_DispatchSpecialEvent(pPacket[1]);
+    }
 }
 
 static void __fastcall SCMD_Handler0E_ObjectState(uint8_t* pPacket)
@@ -2223,8 +2296,8 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x75 */ { SCMD_Handler75_PlayerPartyInfo,        13,  nullptr }, // 0x6FB15FE0: PlayerPartyInfo
     /* 0x76 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB17C70: PlayerInSight
     /* 0x77 */ { SCMD_Handler77_UpdateUI,                2,  nullptr }, // 0x6FB14FA0: TradeAction / UpdateUI
-    /* 0x78 */ { SCMD_Handler_NoOp,                     21,  nullptr }, // 0x6FB15060: TradeAccepted
-    /* 0x79 */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB150A0: GoldInTrade
+    /* 0x78 */ { SCMD_Handler78_TradePartnerInfo,       21,  nullptr }, // 0x6FB15060: TradeAccepted
+    /* 0x79 */ { SCMD_Handler79_GoldInTrade,             6,  nullptr }, // 0x6FB150A0: GoldInTrade
     /* 0x7A */ { SCMD_Handler7A_PetAction,              13,  nullptr }, // 0x6FB15270: PetAction
     /* 0x7B */ { SCMD_Handler7B_AssignSkillHotkey,       8,  nullptr }, // 0x6FB177D0: AssignSkillHotkey
     /* 0x7C */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB15000: UseScroll
@@ -2240,7 +2313,7 @@ const D2SCmdTableStrc sgptSCmdTable[0xAF] =
     /* 0x86 */ { nullptr,                                0,  nullptr },
     /* 0x87 */ { nullptr,                                0,  nullptr },
     /* 0x88 */ { nullptr,                                0,  nullptr },
-    /* 0x89 */ { SCMD_Handler_NoOp,                      2,  nullptr }, // 0x6FB14DF0: SpecialQuestEvent
+    /* 0x89 */ { SCMD_Handler89_SpecialQuestEvent,       2,  nullptr }, // 0x6FB14DF0: SpecialQuestEvent
     /* 0x8A */ { SCMD_Handler_NoOp,                      6,  nullptr }, // 0x6FB15160: NpcWantsInteract
     /* 0x8B */ { SCMD_Handler8B_PlayerPartyRelationship, 6,  nullptr }, // 0x6FB15F80: PlayerPartyRelationship
     /* 0x8C */ { SCMD_Handler8C_PlayerRelationshipUpdate,11, nullptr }, // 0x6FB15F50: PlayerRelationshipUpdate

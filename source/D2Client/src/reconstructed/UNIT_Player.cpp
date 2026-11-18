@@ -389,7 +389,7 @@ static inline void D2Client_SetPlayerQueuedActionInline(D2UnitStrc* pUnit, uint3
 {
     if (pUnit && pUnit->dwUnitType == UNIT_PLAYER && pUnit->pPlayerData)
     {
-        pUnit->pPlayerData->unk0xA8[42] = 1;            // +0x150: bQueuedActionReady
+        pUnit->pPlayerData->unk0xA8[42] = 0;            // +0x150: bQueuedActionReady (set to 1 when approach path finishes)
         pUnit->pPlayerData->unk0xA8[43] = dwActionCode; // +0x154: dwQueuedActionCode (0x06, 0x0D, 0x13)
         pUnit->pPlayerData->unk0xA8[44] = dwArg0;       // +0x158: dwQueuedTargetType
         pUnit->pPlayerData->unk0xA8[45] = dwArg1;       // +0x15C: dwQueuedTargetGUID
@@ -468,6 +468,10 @@ void __fastcall D2Client_UpdateUnitDungeonPops(D2UnitStrc* pUnit)
     const int32_t nX = D2Client_GetUnitSubtileXInline(pUnit);
     const int32_t nY = D2Client_GetUnitSubtileYInline(pUnit);
     D2ActiveRoomStrc* pRoom = UNITS_GetRoom(pUnit);
+    if (!pRoom)
+    {
+        return;
+    }
     const BOOL bRoomInvalid = UNITS_IsCurrentRoomInvalid(pUnit);
     DUNGEON_UpdatePops(pRoom, nX, nY, bRoomInvalid);
 }
@@ -2019,6 +2023,7 @@ void __fastcall D2Client_HandleLocalPlayerMouseInputState(
         return;
 
     case UNIT_TILE: // jt[5] = 0x6FB0BEC0
+        gdwCurTickMs_6FBB32A4 = GetTickCount();
         if (gdwCurTickMs_6FBB32A4 < gdwNextWarpClickTick_6FBB32E0)
         {
             return;
@@ -3601,15 +3606,101 @@ extern D2UnitStrc* __fastcall SELECT_AcquireSkillTarget(int32_t bTargetCorpses, 
 extern void __fastcall GFX_FreeComponentCellData(D2UnitStrc* pUnit, int nComponent);
 
 BOOL __stdcall D2Client_AreUnitsHostile_6FACF980(D2UnitStrc* pTarget, D2UnitStrc* pAttacker) { return D2Client_AreUnitsHostileOrAttackable(pTarget, pAttacker); }
-BOOL __stdcall D2Client_CanPlayerStartSkillWithMode_6FACEB20(D2UnitStrc* pUnit, D2SkillStrc* pSkill) { (void)pSkill; return sub_6FACEB20(pUnit) != nullptr; }
+extern int32_t __stdcall D2Client_CanPlayerInitiateAction(D2UnitStrc* pUnit, int32_t nArg);
+BOOL __stdcall D2Client_CanPlayerStartSkillWithMode_6FACEB20(D2UnitStrc* pUnit, D2SkillStrc* pSkill) { (void)pSkill; return pUnit ? D2Client_CanPlayerInitiateAction(pUnit, 0) : FALSE; }
 BOOL __fastcall D2Client_CanUseSkillInTown_6FB096C0(D2SkillStrc* pSkill) { return D2Client_CanUseSkillInCurrentRoom(pSkill); }
 void __cdecl D2Client_ClearMouseHoldState_6FB29F80(void) { GAME_ResetAllMouseStates(); }
 void __fastcall D2Client_ClearUnitComponentGfx_6FB41550(D2UnitStrc* pUnit, uint8_t nComp) { GFX_FreeComponentCellData(pUnit, nComp); }
 BOOL __stdcall D2Client_ComputePlayerStepMoveTarget_6FB09710(D2UnitStrc* pUnit, D2PlayerActionStateStrc* pAction) { return D2Client_ComputePlayerStepMoveTarget(pUnit, reinterpret_cast<D2PlayerActionStrc*>(pAction)); }
+extern void __fastcall D2Client_SendPacket01_WalkToLocation_6FB6ED00(int32_t nX, int32_t nY);
+extern void __fastcall D2Client_SendPacket02_WalkToEntity_6FB6E730(int32_t nTargetType, uint32_t dwTargetId);
+extern void __fastcall D2Client_SendPacket03_RunToLocation_6FB6ED30(int32_t nX, int32_t nY);
+extern void __fastcall D2Client_SendPacket04_RunToEntity_6FB6E770(int32_t nTargetType, uint32_t dwTargetId);
+
 void __stdcall D2Client_ExecuteLocalPlayerUnitOrLocationAction_6FAF14C0(D2UnitStrc* pUnit, int32_t nArgXOrType, uint32_t dwArgYOrGUID, int32_t nActionCode, BOOL bForce)
 {
-    (void)pUnit; (void)bForce;
-    D2Client_ExecuteLocalPlayerTargetedAction(nActionCode, nArgXOrType, dwArgYOrGUID);
+    if (!pUnit)
+    {
+        return;
+    }
+
+    D2PlayerModeChangeStrc tModeChange = {};
+    tModeChange.nSkillIdOrXOrType = nArgXOrType;
+    tModeChange.dwOwnerOrYOrGUID  = dwArgYOrGUID;
+
+    switch (nActionCode)
+    {
+    case 1: // C2S 0x01: Walk to location
+        if (D2Client_ExecutePlayerModeTransition(1, pUnit, &tModeChange, bForce) && pUnit == gpPlayerUnit)
+        {
+            D2Client_SendPacket01_WalkToLocation_6FB6ED00(nArgXOrType, static_cast<int32_t>(dwArgYOrGUID));
+        }
+        break;
+
+    case 2: // C2S 0x02: Walk to target unit
+        if (D2Client_ExecutePlayerModeTransition(0, pUnit, &tModeChange, bForce) && pUnit == gpPlayerUnit)
+        {
+            D2Client_SendPacket02_WalkToEntity_6FB6E730(nArgXOrType, dwArgYOrGUID);
+        }
+        break;
+
+    case 3: // C2S 0x03: Run to location
+        if (D2Client_ExecutePlayerModeTransition(23, pUnit, &tModeChange, bForce) && pUnit == gpPlayerUnit)
+        {
+            D2Client_SendPacket03_RunToLocation_6FB6ED30(nArgXOrType, static_cast<int32_t>(dwArgYOrGUID));
+        }
+        break;
+
+    case 4: // C2S 0x04: Run to target unit
+        if (D2Client_ExecutePlayerModeTransition(24, pUnit, &tModeChange, bForce) && pUnit == gpPlayerUnit)
+        {
+            D2Client_SendPacket04_RunToEntity_6FB6E770(nArgXOrType, dwArgYOrGUID);
+        }
+        break;
+
+    case 5: // C2S 0x05: Left skill on location
+        D2Client_DispatchLocalSkillTransitionAndSendPacket(
+            pUnit,
+            UNITS_GetLeftSkill(pUnit),
+            "..\\Source\\D2Client\\UNIT\\UnitMode.cpp",
+            812,
+            21,
+            nArgXOrType,
+            dwArgYOrGUID,
+            0x05,
+            FALSE);
+        break;
+
+    case 6: // C2S 0x06: Left skill on target unit
+        D2Client_DispatchLocalSkillTransitionAndSendPacket(
+            pUnit,
+            UNITS_GetLeftSkill(pUnit),
+            "..\\Source\\D2Client\\UNIT\\UnitMode.cpp",
+            822,
+            22,
+            nArgXOrType,
+            dwArgYOrGUID,
+            0x06,
+            TRUE);
+        break;
+
+    case 0x0D: // C2S 0x0D: Right skill on target unit (from queued action)
+        D2Client_DispatchLocalSkillTransitionAndSendPacket(
+            pUnit,
+            UNITS_GetRightSkill(pUnit),
+            "..\\Source\\D2Client\\UNIT\\UnitMode.cpp",
+            840,
+            22,
+            nArgXOrType,
+            dwArgYOrGUID,
+            0x0D,
+            TRUE);
+        break;
+
+    default:
+        D2Client_ExecuteLocalPlayerTargetedAction(nActionCode, nArgXOrType, dwArgYOrGUID);
+        break;
+    }
 }
 D2UnitStrc* __fastcall D2Client_FindUnitInHashTable_6FACE550(D2UnitStrc** ppHash, int32_t dwGUID, int32_t nType)
 {

@@ -9,6 +9,7 @@ UnimplementedOrdinal_10258=UnimplementedOrdinal @10258;   FOG_10258 @10258 ;gcsC
     gdwInvBitMasks              @10260
 UnimplementedOrdinal ;   FOG_10261 @10261 ;gfTimeCritic
 UnimplementedOrdinal ;   FOG_10264 @10264 ;gqwCriticalS
+    FOG_GetCallerReturnAddress @10265 NONAME
     FOG_SOCKET_CloseSocket @10000 NONAME
     FOG_SOCKET_WSAStartup @10001 NONAME
     FOG_SOCKET_WSACleanup @10002 NONAME

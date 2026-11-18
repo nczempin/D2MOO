@@ -304,10 +304,15 @@ static inline BOOL ITEMS_CanSocketFillerFitIntoItem(D2UnitStrc* pHostItem, D2Uni
     return ITEMS_IsSocketable(pHostItem) && ITEMS_IsSocketFiller(pFillerItem);
 }
 
+extern D2BitBufferStrc* g_pPlayerQuestRecord;
 static inline D2BitBufferStrc* QUESTRECORD_GetPlayerQuestFlags(D2UnitStrc* pPlayer)
 {
-    D2PlayerDataStrc* pPlayerData = UNITS_GetPlayerData(pPlayer);
-    return pPlayerData ? pPlayerData->pQuestData[g_nGameDifficulty] : nullptr;
+    D2PlayerDataStrc* pPlayerData = pPlayer ? UNITS_GetPlayerData(pPlayer) : nullptr;
+    if (pPlayerData && pPlayerData->pQuestData[g_nGameDifficulty])
+    {
+        return pPlayerData->pQuestData[g_nGameDifficulty];
+    }
+    return g_pPlayerQuestRecord;
 }
 
 // ============================================================================

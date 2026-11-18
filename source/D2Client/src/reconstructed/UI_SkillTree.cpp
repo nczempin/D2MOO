@@ -728,8 +728,9 @@ void __stdcall CTRLPNL_RenderBottomBar()
             D2GfxDataStrc tPnl = {};
             tPnl.pCellFile = s_pCtrlPnl640Cell;
             tPnl.nFrame = f;
+            const int32_t nDrawY = (f == 0 || f == nFrames - 1) ? (nH - 1) : nH;
+            TEXTURE_CelDraw(&tPnl, nCurX, nDrawY, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
             D2CellFileStrc* pCell = D2CMP_CelGetHandle(&tPnl);
-            TEXTURE_CelDraw(&tPnl, nCurX, nH, 0xFFFFFFFFu, DRAWMODE_NORMAL, nullptr);
             if (pCell) nCurX += D2CMP_CelGetWidth(pCell);
         }
     }
@@ -766,7 +767,7 @@ void __stdcall CTRLPNL_RenderBottomBar()
         }
     }
 
-    // Central Mini-Panel Toggle & 8-button Mini-Panel
+    // Central Mini-Panel Toggle & Reconstructed Mini-Panel (UI_options.cpp: MINIPANEL_Render)
     const int32_t bMiniOpen = (gaPanelStates[D2PANEL_MINIPANEL] != 0) ? 1 : 0;
     if (s_pMenuBtnCell)
     {
@@ -774,48 +775,25 @@ void __stdcall CTRLPNL_RenderBottomBar()
     }
     if (bMiniOpen)
     {
-        const int32_t nMiniX = (nW / 2) - 72;
-        const int32_t nMiniY = nH - 74;
-        if (s_pMiniPanelCell)
-        {
-            GAME_DrawSingleCelTopLeft(s_pMiniPanelCell, nMiniX, nMiniY, 0);
-        }
-        if (s_pMiniPanelBtnCell)
-        {
-            const bool aActive[8] = {
-                gaPanelStates[D2PANEL_CHAR] != 0,
-                gaPanelStates[D2PANEL_INVENTORY] != 0,
-                gaPanelStates[D2PANEL_SKILLTREE] != 0,
-                gaPanelStates[D2PANEL_AUTOMAP] != 0,
-                gaPanelStates[D2PANEL_MSGLOG] != 0,
-                gaPanelStates[D2PANEL_QUEST] != 0,
-                gaPanelStates[D2PANEL_PARTY] != 0,
-                gaPanelStates[D2PANEL_ESCMENU] != 0,
-            };
-            for (int32_t i = 0; i < 8; ++i)
-            {
-                GAME_DrawSingleCelTopLeft(s_pMiniPanelBtnCell, nMiniX + 3 + i * 18, nMiniY + 3, i * 2 + (aActive[i] ? 1 : 0));
-            }
-        }
-        if (!gaPanelStates[D2PANEL_ESCMENU] && gnMouseX >= nMiniX && gnMouseX < nMiniX + 144 && gnMouseY >= nMiniY - 4 && gnMouseY < nMiniY + 27)
-        {
-            static const char* const kMiniTooltips[8] = {
-                "Character Screen (C)",
-                "Inventory Screen (I)",
-                "Skill Tree (T)",
-                "Automap (Tab)",
-                "Message Log (M)",
-                "Quest Log (Q)",
-                "Party Screen (P)",
-                "Game Menu (Esc)",
-            };
-            int32_t nIdx = (gnMouseX - (nMiniX + 2)) / 18;
-            if (nIdx < 0) nIdx = 0;
-            if (nIdx > 7) nIdx = 7;
-            Unicode wszTip[64] = {};
-            Unicode::win2Unicode(wszTip, kMiniTooltips[nIdx], 63);
-            D2Win_10127_SetFont(D2FONT_FONTFORMAL12);
-            D2Win_10129_DrawFramedText(wszTip, nW / 2, nMiniY - 12, 0, 1);
-        }
+        extern void __cdecl MINIPANEL_Render(void);
+        MINIPANEL_Render();
+    }
+
+    // Red "+" New Stats / New Skills indicator buttons on bottom HUD bar when unspent points > 0
+    const int32_t nStatPts = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_STATPTS, 0);
+    const int32_t nSkillPts = STATLIST_UnitGetStatValue(gpPlayerUnit, STAT_SKILLPTS, 0);
+    if (nStatPts > 0 && !gaPanelStates[D2PANEL_CHAR])
+    {
+        D2GFX_DrawBox((nW / 2) - 194, nH - 41, (nW / 2) - 168, nH - 15, 0x62u, DRAWMODE_NORMAL);
+        static const Unicode s_wszPlus[2] = { Unicode('+'), Unicode(0) };
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        D2Win_10117_DrawText(s_wszPlus, (nW / 2) - 186, nH - 21, 0, FALSE);
+    }
+    if (nSkillPts > 0 && !gaPanelStates[D2PANEL_SKILLTREE])
+    {
+        D2GFX_DrawBox((nW / 2) + 166, nH - 41, (nW / 2) + 192, nH - 15, 0x62u, DRAWMODE_NORMAL);
+        static const Unicode s_wszPlus[2] = { Unicode('+'), Unicode(0) };
+        D2Win_10127_SetFont(D2FONT_FONT16);
+        D2Win_10117_DrawText(s_wszPlus, (nW / 2) + 174, nH - 21, 0, FALSE);
     }
 }
